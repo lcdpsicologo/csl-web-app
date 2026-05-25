@@ -1,0 +1,11 @@
+<svg width="180" height="44" viewBox="0 0 180 44" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Tiza Education</title>
+  <desc id="desc">Logo de Tiza Education</desc>
+  <rect x="1" y="1" width="42" height="42" rx="12" fill="#0891B2"/>
+  <path d="M14 29.5L22 10.5L30 29.5" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M17.2 23.3H26.8" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M34 12.5V31.5" stroke="#A7F3D0" stroke-width="3.2" stroke-linecap="round"/>
+  <path d="M11 33.5H34" stroke="#CFFAFE" stroke-width="2.4" stroke-linecap="round"/>
+  <text x="55" y="19" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">Tiza</text>
+  <text x="55" y="35" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">Education</text>
+</svg>

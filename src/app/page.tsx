@@ -460,15 +460,19 @@ export default function ColegioDashboard() {
       {/* Valores Institucionales */}
       <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row items-center gap-6">
         <div className="flex-1">
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Valores Institucionales</h2>
+          <h2 className="text-xl font-bold text-slate-800 mb-2">Colegio San Lucas de Lo Espejo</h2>
           <p className="text-sm text-slate-600 mb-4">
-            Plataforma integral de gestión escolar de Tiza Education. Nuestro sistema centraliza la información de los estudiantes para una toma de decisiones más efectiva.
+            Plataforma de orientación y seguimiento escolar para el Colegio San Lucas de Lo Espejo. Los datos, cursos, bitácoras e intervenciones visibles corresponden a este establecimiento.
           </p>
+          <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Software por</span>
+            <img src="/tiza-education-logo.svg" alt="Logo Tiza Education" className="h-7 w-auto" />
+          </div>
         </div>
         <div className="w-full md:w-1/2 flex justify-center">
           <img 
             src="/emblema-valores.png" 
-            alt="Valores Colegio San Lucas" 
+            alt="Valores Colegio San Lucas de Lo Espejo" 
             className="max-h-64 object-contain rounded-xl"
             onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
@@ -674,8 +678,8 @@ export default function ColegioDashboard() {
     return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <div className="flex flex-col gap-2">
-          <h2 className="text-xl font-bold text-slate-800">Bitácora de registros SOY+</h2>
-          <p className="text-sm text-slate-500">Clases e intervenciones desde orientación con evidencia, planificación y seguimiento por estado.</p>
+          <h2 className="text-xl font-bold text-slate-800">Bitácora SOY+ del Colegio San Lucas de Lo Espejo</h2>
+          <p className="text-sm text-slate-500">Clases e intervenciones desde orientación del Colegio San Lucas de Lo Espejo, con evidencia, planificación y seguimiento por estado.</p>
         </div>
 
         <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -1122,14 +1126,14 @@ export default function ColegioDashboard() {
               <span className="text-white font-bold text-lg absolute z-0">SL</span>
               <img 
                 src="/logo-san-lucas.png" 
-                alt="Logo Tiza Education" 
+                alt="Logo Colegio San Lucas de Lo Espejo" 
                 className="w-full h-full object-cover relative z-10 p-1"
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
             </div>
             <div>
-              <h1 className="font-bold text-lg text-slate-800 leading-tight">Tiza Education</h1>
-              <p className="text-xs font-medium text-slate-500">Colegio San Lucas (Demo)</p>
+              <h1 className="font-bold text-lg text-slate-800 leading-tight">Colegio San Lucas</h1>
+              <p className="text-xs font-medium text-slate-500">Lo Espejo</p>
             </div>
           </div>
         </div>
@@ -1187,13 +1191,13 @@ export default function ColegioDashboard() {
                   <span className="text-white font-bold text-lg absolute z-0">SL</span>
                   <img
                     src="/logo-san-lucas.png"
-                    alt="Logo Tiza Education"
+                    alt="Logo Colegio San Lucas de Lo Espejo"
                     className="w-full h-full object-cover relative z-10 p-1"
                     onError={(e) => { e.currentTarget.style.display = 'none'; }}
                   />
                 </div>
                 <div className="min-w-0">
-                  <h1 className="font-bold text-lg text-slate-800 leading-tight truncate">Tiza Education</h1>
+                  <h1 className="font-bold text-lg text-slate-800 leading-tight truncate">Colegio San Lucas de Lo Espejo</h1>
                   <p className="text-xs font-medium text-slate-500 truncate">{navigation.find(n => n.id === currentView)?.name || currentView}</p>
                 </div>
               </div>
@@ -1230,6 +1234,10 @@ export default function ColegioDashboard() {
             </nav>
 
             <div className="hidden xl:flex items-center gap-4">
+              <div className="hidden 2xl:flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Software por</span>
+                <img src="/tiza-education-logo.svg" alt="Logo Tiza Education" className="h-7 w-auto" />
+              </div>
             <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
               <Bell className="w-5 h-5" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
