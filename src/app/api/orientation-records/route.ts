@@ -1,6 +1,33 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 
-const STORAGE_KEY = "csl:orientation-records";
+type OrientationRecord = {
+  id: number;
+  sem: string;
+  date: string;
+  cycle: string;
+  course: string;
+  action: string;
+  topic: string;
+  status: string;
+  observations: string;
+  evidenceLink: string;
+  planningLink: string;
+};
+
+type OrientationRecordRow = {
+  id: number;
+  sem: string | null;
+  date: string;
+  cycle: string;
+  course: string;
+  action: string;
+  topic: string | null;
+  status: string;
+  observations: string | null;
+  evidence_link: string | null;
+  planning_link: string | null;
+};
 
 const INITIAL_ORIENTATION_RECORDS = [
   {
@@ -96,49 +123,77 @@ const INITIAL_ORIENTATION_RECORDS = [
   },
 ];
 
-const getKvConfig = () => {
-  const url = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+const getSupabaseClient = () => {
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !token) return null;
-  return { token, url: url.replace(/\/$/, "") };
-};
-
-const kvRequest = async (command: string[]) => {
-  const config = getKvConfig();
-  if (!config) return null;
-
-  const response = await fetch(config.url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${config.token}`,
-      "Content-Type": "application/json",
+  if (!url || !key) return null;
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
     },
-    body: JSON.stringify(command),
-    cache: "no-store",
   });
-
-  if (!response.ok) {
-    throw new Error(`KV request failed with status ${response.status}`);
-  }
-
-  return response.json() as Promise<{ result: unknown }>;
 };
+
+const toClientRecord = (row: OrientationRecordRow): OrientationRecord => ({
+  id: row.id,
+  sem: row.sem || "",
+  date: row.date,
+  cycle: row.cycle,
+  course: row.course,
+  action: row.action,
+  topic: row.topic || "",
+  status: row.status,
+  observations: row.observations || "",
+  evidenceLink: row.evidence_link || "",
+  planningLink: row.planning_link || "",
+});
+
+const toDatabaseRow = (record: OrientationRecord) => ({
+  id: record.id,
+  sem: record.sem,
+  date: record.date,
+  cycle: record.cycle,
+  course: record.course,
+  action: record.action,
+  topic: record.topic,
+  status: record.status,
+  observations: record.observations,
+  evidence_link: record.evidenceLink,
+  planning_link: record.planningLink,
+});
 
 export async function GET() {
-  try {
-    const kvResponse = await kvRequest(["GET", STORAGE_KEY]);
-    const storedRecords = kvResponse?.result;
-
-    return NextResponse.json({
-      records: storedRecords ? JSON.parse(String(storedRecords)) : INITIAL_ORIENTATION_RECORDS,
-      persistent: Boolean(getKvConfig()),
-    });
-  } catch {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
     return NextResponse.json({
       records: INITIAL_ORIENTATION_RECORDS,
       persistent: false,
+      backend: "local",
     });
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("orientation_records")
+      .select("id, sem, date, cycle, course, action, topic, status, observations, evidence_link, planning_link")
+      .order("date", { ascending: false })
+      .order("id", { ascending: false });
+
+    if (error) throw error;
+
+    return NextResponse.json({
+      records: data?.map(toClientRecord) || INITIAL_ORIENTATION_RECORDS,
+      persistent: true,
+      backend: "supabase",
+    });
+  } catch (error) {
+    return NextResponse.json({
+      records: INITIAL_ORIENTATION_RECORDS,
+      persistent: false,
+      backend: "local",
+      error: error instanceof Error ? error.message : "Unable to load Supabase records",
+    }, { status: 503 });
   }
 }
 
@@ -150,10 +205,34 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "records must be an array" }, { status: 400 });
   }
 
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return NextResponse.json({ ok: false, persistent: false, backend: "local" }, { status: 503 });
+  }
+
   try {
-    await kvRequest(["SET", STORAGE_KEY, JSON.stringify(records)]);
-    return NextResponse.json({ ok: true, persistent: Boolean(getKvConfig()) });
-  } catch {
-    return NextResponse.json({ ok: false, persistent: false }, { status: 503 });
+    const typedRecords = records as OrientationRecord[];
+    const { error } = await supabase
+      .from("orientation_records")
+      .upsert(typedRecords.map(toDatabaseRow), { onConflict: "id" });
+
+    if (error) throw error;
+
+    const incomingIds = typedRecords.map((record) => record.id);
+    const deleteQuery = supabase.from("orientation_records").delete();
+    const { error: deleteError } = incomingIds.length > 0
+      ? await deleteQuery.not("id", "in", `(${incomingIds.join(",")})`)
+      : await deleteQuery.gt("id", 0);
+
+    if (deleteError) throw deleteError;
+
+    return NextResponse.json({ ok: true, persistent: true, backend: "supabase" });
+  } catch (error) {
+    return NextResponse.json({
+      ok: false,
+      persistent: false,
+      backend: "local",
+      error: error instanceof Error ? error.message : "Unable to save Supabase records",
+    }, { status: 503 });
   }
 }
