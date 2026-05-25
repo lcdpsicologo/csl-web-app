@@ -1,22 +1,19 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Home, 
   BookOpen, 
-  Users, 
   UsersRound, 
   Calendar, 
-  Lightbulb, 
   Plus, 
   X, 
   Search, 
   Bell, 
-  MoreVertical,
   CheckCircle2,
   AlertCircle,
+  BarChart3,
   FileText,
-  MessageSquare,
   FolderOpen,
   Cloud,
   ExternalLink,
@@ -24,7 +21,9 @@ import {
   ClipboardList,
   User,
   ChevronRight,
-  ArrowLeft
+  ArrowLeft,
+  Trash2,
+  Link as LinkIcon
 } from 'lucide-react';
 
 // --- MOCK DATA ---
@@ -53,7 +52,27 @@ const REUNIONES = [
   { id: 3, date: '2026-05-08T09:00:00', title: 'Reunión Equipo de Gestión', type: 'Directiva', status: 'Programado' },
 ];
 
-const COURSES = [
+type StudentRecord = {
+  id: number;
+  name: string;
+  status: string;
+  notesCount: number;
+  lastNote: string;
+};
+
+type CourseRecord = {
+  id: number;
+  name: string;
+  studentsCount: number;
+  equipoAula: {
+    profesorJefe: string;
+    pie: string;
+    inspector: string;
+  };
+  students: StudentRecord[];
+};
+
+const COURSES: CourseRecord[] = [
   { 
     id: 1, 
     name: '1° Medio A', 
@@ -103,28 +122,228 @@ const DRIVE_FOLDERS = [
   { id: 4, name: 'Protocolos de Convivencia Escolar.pdf', type: 'file', shared: true, link: '#' },
 ];
 
+const ORIENTATION_ACTIONS = [
+  'Soy amable',
+  'Soy correcto',
+  'Tengo propósito',
+  'Soy responsable',
+  'Tengo afán de superación',
+  'Soy entusiasta',
+  'Soy constructivo',
+  'Hago las cosas bien',
+  'Consejo de Curso',
+  'Intervención Formativa',
+  'Intervención estudiantes',
+  'Intervención apoderados',
+];
+
+const ORIENTATION_CYCLES = [
+  {
+    name: '1° Ciclo',
+    description: 'PreK a 4° Básico',
+    courses: ['Pre Kinder A', 'Pre Kinder B', 'Kinder A', 'Kinder B', '1° Básico A', '1° Básico B', '2° Básico A', '2° Básico B', '3° Básico A', '3° Básico B', '4° Básico A', '4° Básico B'],
+  },
+  {
+    name: '2° Ciclo',
+    description: '5° a 8° Básico',
+    courses: ['5° Básico A', '5° Básico B', '6° Básico A', '6° Básico B', '7° Básico A', '7° Básico B', '8° Básico A', '8° Básico B'],
+  },
+  {
+    name: 'Enseñanza Media',
+    description: 'I° a IV° Medio',
+    courses: ['I° Medio A', 'I° Medio B', 'II° Medio A', 'II° Medio B', 'III° Medio A', 'III° Medio B', 'IV° Medio A', 'IV° Medio B'],
+  },
+];
+
+const INITIAL_ORIENTATION_RECORDS = [
+  {
+    id: 1,
+    sem: '18/05 al 22/05 (Semana 12)',
+    date: '2026-05-19',
+    cycle: '1° Ciclo',
+    course: 'Pre Kinder B',
+    action: 'Hago las cosas bien',
+    topic: 'Sesión 4',
+    status: 'Realizado',
+    observations: 'La araña hacendosa',
+    evidenceLink: 'https://canva.link/x83vxwd4h45p6gb',
+    planningLink: 'https://drive.google.com/',
+  },
+  {
+    id: 2,
+    sem: '18/05 al 22/05 (Semana 12)',
+    date: '2026-05-20',
+    cycle: '1° Ciclo',
+    course: 'Pre Kinder C',
+    action: 'Hago las cosas bien',
+    topic: 'Sesión 4',
+    status: 'Realizado',
+    observations: 'La araña hacendosa',
+    evidenceLink: 'https://canva.link/x83vxwd4h45p6gb',
+    planningLink: 'https://drive.google.com/',
+  },
+  {
+    id: 3,
+    sem: '18/05 al 22/05 (Semana 12)',
+    date: '2026-05-21',
+    cycle: '1° Ciclo',
+    course: 'Kinder A',
+    action: 'Hago las cosas bien',
+    topic: 'Sesión 3',
+    status: 'Pendiente',
+    observations: 'El desorden de Franklin',
+    evidenceLink: 'https://canva.link/i4asqi5qao0qr9t',
+    planningLink: '',
+  },
+  {
+    id: 4,
+    sem: '18/05 al 22/05 (Semana 12)',
+    date: '2026-05-22',
+    cycle: '1° Ciclo',
+    course: 'Kinder C',
+    action: 'Intervención Formativa',
+    topic: 'Sesión 1',
+    status: 'Realizado',
+    observations: 'Kinder C juega con cuidado y buen trato',
+    evidenceLink: 'https://canva.link/la4qtzcfajo6rcc',
+    planningLink: 'https://drive.google.com/',
+  },
+  {
+    id: 5,
+    sem: '18/05 al 22/05 (Semana 12)',
+    date: '2026-05-18',
+    cycle: '1° Ciclo',
+    course: '1° Básico A',
+    action: 'Intervención Formativa',
+    topic: 'Sesión 1',
+    status: 'Realizado',
+    observations: 'Devolución de prueba DIA socioemocional',
+    evidenceLink: 'https://canva.link/y860v75hqwkhdd4p',
+    planningLink: 'https://drive.google.com/',
+  },
+  {
+    id: 6,
+    sem: '18/05 al 22/05 (Semana 12)',
+    date: '2026-05-22',
+    cycle: '1° Ciclo',
+    course: '2° Básico A',
+    action: 'Intervención Formativa',
+    topic: 'Sesión 1',
+    status: 'Pendiente',
+    observations: 'Devolución de prueba DIA socioemocional',
+    evidenceLink: 'https://canva.link/e75srmdmto1vsms',
+    planningLink: '',
+  },
+  {
+    id: 7,
+    sem: '18/05 al 22/05 (Semana 12)',
+    date: '2026-05-18',
+    cycle: '1° Ciclo',
+    course: '4° Básico A',
+    action: 'Intervención Formativa',
+    topic: 'Sesión 1',
+    status: 'Realizado',
+    observations: 'Devolución de prueba DIA socioemocional. Durante la clase acompaña Subdirectora Valeska, Profesora Catalina y Orientador.',
+    evidenceLink: 'https://canva.link/irg9u9ntpra8vyp',
+    planningLink: 'https://drive.google.com/',
+  },
+];
+
+const ORIENTATION_STORAGE_KEY = 'csl-orientation-records';
+type OrientationRecord = (typeof INITIAL_ORIENTATION_RECORDS)[number];
+type OrientationRecordField = keyof Omit<OrientationRecord, 'id'>;
+
 export default function ColegioDashboard() {
   const [currentView, setCurrentView] = useState('inicio');
   const [isModalOpen, setIsModalOpen] = useState(false);
   
   // State for data
   const [bitacora, setBitacora] = useState(INITIAL_BITACORA);
-  const [selectedCourse, setSelectedCourse] = useState<any>(null);
-  const [selectedStudent, setSelectedStudent] = useState<any>(null);
+  const [orientationRecords, setOrientationRecords] = useState(INITIAL_ORIENTATION_RECORDS);
+  const [orientationStorageReady, setOrientationStorageReady] = useState(false);
+  const [orientationPersistence, setOrientationPersistence] = useState<'loading' | 'cloud' | 'local'>('loading');
+  const [selectedCourse, setSelectedCourse] = useState<CourseRecord | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
 
   // Modal Form State
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [newNoteContent, setNewNoteContent] = useState('');
   const [newNoteType, setNewNoteType] = useState('Registro');
   const [newNoteTags, setNewNoteTags] = useState('');
+  const [newOrientationRecord, setNewOrientationRecord] = useState({
+    sem: '',
+    date: new Date().toISOString().slice(0, 10),
+    cycle: '1° Ciclo',
+    course: 'Pre Kinder A',
+    action: 'Soy amable',
+    topic: 'Sesión 1',
+    status: 'Pendiente',
+    observations: '',
+    evidenceLink: '',
+    planningLink: '',
+  });
 
   const navigation = [
     { id: 'inicio', name: 'Dashboard Principal', icon: Home },
     { id: 'cursos', name: 'Cursos & Estudiantes', icon: GraduationCap },
+    { id: 'orientacion', name: 'Orientación SOY+', icon: BarChart3 },
     { id: 'bitacora', name: 'Mi Bitácora Diaria', icon: BookOpen },
     { id: 'reuniones', name: 'Reuniones & Talleres', icon: UsersRound },
     { id: 'archivos', name: 'Archivos & Drive', icon: Cloud },
   ];
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadSavedRecords = async () => {
+      try {
+        const response = await fetch('/api/orientation-records', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Unable to load orientation records');
+        const data = await response.json();
+
+        if (!isMounted) return;
+        setOrientationRecords(Array.isArray(data.records) ? data.records : INITIAL_ORIENTATION_RECORDS);
+        setOrientationPersistence(data.persistent ? 'cloud' : 'local');
+      } catch {
+        const savedRecords = window.localStorage.getItem(ORIENTATION_STORAGE_KEY);
+        if (!isMounted) return;
+
+        if (savedRecords) {
+          setOrientationRecords(JSON.parse(savedRecords));
+        }
+        setOrientationPersistence('local');
+      } finally {
+        if (isMounted) setOrientationStorageReady(true);
+      }
+    };
+
+    loadSavedRecords();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!orientationStorageReady) return;
+    window.localStorage.setItem(ORIENTATION_STORAGE_KEY, JSON.stringify(orientationRecords));
+
+    const saveRecords = window.setTimeout(async () => {
+      try {
+        const response = await fetch('/api/orientation-records', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ records: orientationRecords }),
+        });
+        const data = await response.json();
+        setOrientationPersistence(data.persistent ? 'cloud' : 'local');
+      } catch {
+        setOrientationPersistence('local');
+      }
+    }, 500);
+
+    return () => window.clearTimeout(saveRecords);
+  }, [orientationRecords, orientationStorageReady]);
 
   const handleSaveBitacora = (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,6 +370,53 @@ export default function ColegioDashboard() {
     if (currentView !== 'bitacora') setCurrentView('bitacora');
   };
 
+  const handleSaveOrientationRecord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newOrientationRecord.course || !newOrientationRecord.action || !newOrientationRecord.observations.trim()) return;
+
+    setOrientationRecords([
+      { id: Date.now(), ...newOrientationRecord },
+      ...orientationRecords,
+    ]);
+    setNewOrientationRecord({
+      sem: '',
+      date: new Date().toISOString().slice(0, 10),
+      cycle: '1° Ciclo',
+      course: 'Pre Kinder A',
+      action: 'Soy amable',
+      topic: 'Sesión 1',
+      status: 'Pendiente',
+      observations: '',
+      evidenceLink: '',
+      planningLink: '',
+    });
+  };
+
+  const handleDeleteOrientationRecord = (recordId: number) => {
+    setOrientationRecords(orientationRecords.filter(record => record.id !== recordId));
+  };
+
+  const handleUpdateOrientationRecord = (recordId: number, field: OrientationRecordField, value: string) => {
+    setOrientationRecords(orientationRecords.map(record => {
+      if (record.id !== recordId) return record;
+
+      const updatedRecord = { ...record, [field]: value };
+      if (field === 'cycle') {
+        updatedRecord.course = ORIENTATION_CYCLES.find(cycle => cycle.name === value)?.courses[0] || record.course;
+      }
+
+      return updatedRecord;
+    }));
+  };
+
+  const updateOrientationField = (field: string, value: string) => {
+    const nextRecord = { ...newOrientationRecord, [field]: value };
+    if (field === 'cycle') {
+      nextRecord.course = ORIENTATION_CYCLES.find(cycle => cycle.name === value)?.courses[0] || '';
+    }
+    setNewOrientationRecord(nextRecord);
+  };
+
   const getNoteTypeIcon = (type: string) => {
     switch(type) {
       case 'Incidencia': return <AlertCircle className="w-5 h-5 text-red-500" />;
@@ -175,6 +441,15 @@ export default function ColegioDashboard() {
       case 'Convivencia': return 'bg-red-100 text-red-700';
       case 'PIE': return 'bg-purple-100 text-purple-700';
       default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  const getInterventionStatusColor = (status: string) => {
+    switch(status) {
+      case 'Realizado': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'Pendiente': return 'bg-amber-100 text-amber-800 border-amber-200';
+      case 'Reprogramado': return 'bg-blue-100 text-blue-800 border-blue-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
     }
   };
 
@@ -233,7 +508,7 @@ export default function ColegioDashboard() {
   );
 
   const ViewCursos = () => {
-    if (selectedStudent) {
+    if (selectedStudent && selectedCourse) {
       return (
         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
           <button onClick={() => setSelectedStudent(null)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm">
@@ -323,7 +598,7 @@ export default function ColegioDashboard() {
               </div>
 
               <div className="space-y-2">
-                {selectedCourse.students?.map((student: any) => (
+                {selectedCourse.students?.map((student) => (
                   <div 
                     key={student.id} 
                     onClick={() => setSelectedStudent(student)}
@@ -382,6 +657,332 @@ export default function ColegioDashboard() {
             </div>
           ))}
         </div>
+      </div>
+    );
+  };
+
+  const ViewOrientacion = () => {
+    const totalRealizadas = orientationRecords.filter(record => record.status === 'Realizado').length;
+    const totalPendientes = orientationRecords.filter(record => record.status === 'Pendiente').length;
+    const recordsWithPlanning = orientationRecords.filter(record => record.planningLink).length;
+    const currentCycleCourses = ORIENTATION_CYCLES.find(cycle => cycle.name === newOrientationRecord.cycle)?.courses || [];
+
+    const countRecords = (course: string, action: string) => (
+      orientationRecords.filter(record => record.course === course && record.action === action).length
+    );
+
+    return (
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="flex flex-col gap-2">
+          <h2 className="text-xl font-bold text-slate-800">Bitácora de registros SOY+</h2>
+          <p className="text-sm text-slate-500">Clases e intervenciones desde orientación con evidencia, planificación y seguimiento por estado.</p>
+        </div>
+
+        <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-cyan-50 text-cyan-700 flex items-center justify-center">
+                <ClipboardList className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-800">Registros de orientación</h3>
+                <p className="text-xs text-slate-500">Agrega, modifica y elimina registros directamente desde esta bitácora.</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
+              <div className="rounded-lg bg-slate-50 px-3 py-2 border border-slate-100">
+                <p className="text-[10px] font-bold uppercase text-slate-400">Total</p>
+                <p className="text-lg font-bold text-slate-800">{orientationRecords.length}</p>
+              </div>
+              <div className="rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-100">
+                <p className="text-[10px] font-bold uppercase text-emerald-600">Realizadas</p>
+                <p className="text-lg font-bold text-emerald-800">{totalRealizadas}</p>
+              </div>
+              <div className="rounded-lg bg-amber-50 px-3 py-2 border border-amber-100">
+                <p className="text-[10px] font-bold uppercase text-amber-600">Pendientes</p>
+                <p className="text-lg font-bold text-amber-800">{totalPendientes}</p>
+              </div>
+              <div className="rounded-lg bg-blue-50 px-3 py-2 border border-blue-100">
+                <p className="text-[10px] font-bold uppercase text-blue-600">Planif.</p>
+                <p className="text-lg font-bold text-blue-800">{recordsWithPlanning}</p>
+              </div>
+              <div className={`rounded-lg px-3 py-2 border ${orientationPersistence === 'cloud' ? 'bg-cyan-50 border-cyan-100' : 'bg-slate-50 border-slate-100'}`}>
+                <p className={`text-[10px] font-bold uppercase ${orientationPersistence === 'cloud' ? 'text-cyan-700' : 'text-slate-400'}`}>Guardado</p>
+                <p className={`text-sm font-bold ${orientationPersistence === 'cloud' ? 'text-cyan-800' : 'text-slate-700'}`}>
+                  {orientationPersistence === 'loading' ? 'Cargando' : orientationPersistence === 'cloud' ? 'Nube' : 'Local'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveOrientationRecord} className="bg-slate-50/70 border-b border-slate-100 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+              <input
+                type="text"
+                value={newOrientationRecord.sem}
+                onChange={(e) => updateOrientationField('sem', e.target.value)}
+                placeholder="SEM"
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <input
+                type="date"
+                value={newOrientationRecord.date}
+                onChange={(e) => updateOrientationField('date', e.target.value)}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                required
+              />
+              <select
+                value={newOrientationRecord.cycle}
+                onChange={(e) => updateOrientationField('cycle', e.target.value)}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                {ORIENTATION_CYCLES.map(cycle => <option key={cycle.name}>{cycle.name}</option>)}
+              </select>
+              <select
+                value={newOrientationRecord.course}
+                onChange={(e) => updateOrientationField('course', e.target.value)}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                {currentCycleCourses.map(course => <option key={course}>{course}</option>)}
+              </select>
+              <select
+                value={newOrientationRecord.action}
+                onChange={(e) => updateOrientationField('action', e.target.value)}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                {ORIENTATION_ACTIONS.map(action => <option key={action}>{action}</option>)}
+              </select>
+              <input
+                type="text"
+                value={newOrientationRecord.topic}
+                onChange={(e) => updateOrientationField('topic', e.target.value)}
+                placeholder="Tema / comentario"
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <select
+                value={newOrientationRecord.status}
+                onChange={(e) => updateOrientationField('status', e.target.value)}
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                <option>Realizado</option>
+                <option>Pendiente</option>
+                <option>Reprogramado</option>
+              </select>
+              <input
+                type="url"
+                value={newOrientationRecord.evidenceLink}
+                onChange={(e) => updateOrientationField('evidenceLink', e.target.value)}
+                placeholder="Link evidencia"
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <input
+                type="url"
+                value={newOrientationRecord.planningLink}
+                onChange={(e) => updateOrientationField('planningLink', e.target.value)}
+                placeholder="Link planificación"
+                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              />
+              <input
+                type="text"
+                value={newOrientationRecord.observations}
+                onChange={(e) => updateOrientationField('observations', e.target.value)}
+                placeholder="Observaciones"
+                className="md:col-span-2 xl:col-span-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                required
+              />
+              <button
+                type="submit"
+                className="inline-flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow-sm transition-all"
+              >
+                <Plus className="w-4 h-4" /> Agregar
+              </button>
+            </div>
+          </form>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1620px] border-collapse text-sm">
+              <thead>
+                <tr>
+                  {['SEM', 'Fecha', 'Ciclo', 'Curso', 'Acción / Fortaleza', 'Tema / Comentario', 'Estado', 'Observaciones', 'Link evidencia', 'Planificación', ''].map(header => (
+                    <th key={header || 'acciones'} className="bg-sky-700 border border-sky-200 px-3 py-3 text-left text-xs font-bold uppercase text-white">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {orientationRecords.map(record => (
+                  <tr key={record.id} className="odd:bg-white even:bg-slate-50/50 hover:bg-cyan-50/40 transition-colors">
+                    <td className="border border-slate-200 p-1.5">
+                      <input
+                        value={record.sem}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'sem', e.target.value)}
+                        placeholder="Sin semana"
+                        className="w-full min-w-44 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                      />
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <input
+                        type="date"
+                        value={record.date}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'date', e.target.value)}
+                        className="w-full min-w-36 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                      />
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <select
+                        value={record.cycle}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'cycle', e.target.value)}
+                        className="w-full min-w-36 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                      >
+                        {ORIENTATION_CYCLES.map(cycle => <option key={cycle.name}>{cycle.name}</option>)}
+                      </select>
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <select
+                        value={record.course}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'course', e.target.value)}
+                        className="w-full min-w-40 rounded-md border border-transparent bg-transparent px-2 py-1.5 font-semibold text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                      >
+                        {(ORIENTATION_CYCLES.find(cycle => cycle.name === record.cycle)?.courses || currentCycleCourses).map(course => <option key={course}>{course}</option>)}
+                      </select>
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <select
+                        value={record.action}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'action', e.target.value)}
+                        className="w-full min-w-52 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                      >
+                        {ORIENTATION_ACTIONS.map(action => <option key={action}>{action}</option>)}
+                      </select>
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <input
+                        value={record.topic}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'topic', e.target.value)}
+                        className="w-full min-w-36 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                      />
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <select
+                        value={record.status}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'status', e.target.value)}
+                        className={`w-full min-w-32 rounded-md border px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-100 ${getInterventionStatusColor(record.status)}`}
+                      >
+                        <option>Realizado</option>
+                        <option>Pendiente</option>
+                        <option>Reprogramado</option>
+                      </select>
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <textarea
+                        value={record.observations}
+                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'observations', e.target.value)}
+                        rows={2}
+                        className="w-full min-w-72 resize-y rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                      />
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <div className="flex min-w-56 items-center gap-2">
+                        <input
+                          value={record.evidenceLink}
+                          onChange={(e) => handleUpdateOrientationRecord(record.id, 'evidenceLink', e.target.value)}
+                          placeholder="Link evidencia"
+                          className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-blue-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                        />
+                        {record.evidenceLink && (
+                          <a href={record.evidenceLink} target="_blank" rel="noreferrer" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-blue-600 hover:bg-blue-50" title="Abrir evidencia">
+                            <LinkIcon className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="border border-slate-200 p-1.5">
+                      <div className="flex min-w-56 items-center gap-2">
+                        <input
+                          value={record.planningLink}
+                          onChange={(e) => handleUpdateOrientationRecord(record.id, 'planningLink', e.target.value)}
+                          placeholder="Link planificación"
+                          className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-blue-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
+                        />
+                        {record.planningLink && (
+                          <a href={record.planningLink} target="_blank" rel="noreferrer" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-blue-600 hover:bg-blue-50" title="Abrir planificación">
+                            <FileText className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
+                    </td>
+                    <td className="border border-slate-200 px-3 py-2 text-center">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteOrientationRecord(record.id)}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                        aria-label={`Eliminar registro de ${record.course}`}
+                        title="Eliminar registro"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
+            <BarChart3 className="w-5 h-5 text-cyan-600" />
+            <div>
+              <h3 className="font-bold text-slate-800">Dashboard de intervenciones por ciclo</h3>
+              <p className="text-xs text-slate-500">Conteo automático por curso y tipo de acción.</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <div className="min-w-[1120px] divide-y divide-slate-100">
+              {ORIENTATION_CYCLES.map(cycle => (
+                <div key={cycle.name} className="p-5">
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-md bg-cyan-50 px-3 py-2">
+                    <FolderOpen className="w-4 h-4 text-cyan-700" />
+                    <span className="text-sm font-bold text-slate-800">{cycle.name}</span>
+                    <span className="text-xs text-slate-500">{cycle.description}</span>
+                  </div>
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th className="sticky left-0 z-10 bg-slate-50 border border-sky-100 px-3 py-3 text-left font-bold text-slate-700 min-w-44">Curso</th>
+                        {ORIENTATION_ACTIONS.map(action => (
+                          <th key={action} className="bg-sky-600 border border-sky-200 px-3 py-3 text-center text-xs font-bold text-white min-w-32">
+                            {action}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {cycle.courses.map(course => (
+                        <tr key={course}>
+                          <td className="sticky left-0 z-10 bg-white border border-sky-100 px-3 py-2 font-bold text-slate-700">{course}</td>
+                          {ORIENTATION_ACTIONS.map(action => {
+                            const count = countRecords(course, action);
+                            return (
+                              <td
+                                key={`${course}-${action}`}
+                                className={`border border-sky-100 px-3 py-2 text-center font-semibold ${count > 0 ? 'bg-emerald-100 text-emerald-900' : 'bg-white text-slate-500'}`}
+                              >
+                                {count}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
       </div>
     );
   };
@@ -512,9 +1113,9 @@ export default function ColegioDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex">
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
       {/* SIDEBAR */}
-      <aside className="w-72 bg-white border-r border-slate-200 hidden md:flex flex-col h-screen sticky top-0 shadow-[4px_0_24px_rgba(0,0,0,0.02)] z-10">
+      <aside className="hidden">
         <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center shadow-inner overflow-hidden relative">
@@ -578,14 +1179,57 @@ export default function ColegioDashboard() {
       {/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {/* HEADER */}
-        <header className="h-20 bg-white/80 backdrop-blur-md border-b border-slate-200 flex items-center justify-between px-6 sticky top-0 z-20">
-          <div className="flex items-center gap-4">
-            <h1 className="text-2xl font-bold text-slate-800 capitalize tracking-tight">
-              {navigation.find(n => n.id === currentView)?.name || currentView}
-            </h1>
-          </div>
+        <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-20">
+          <div className="px-4 md:px-6 py-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center shadow-inner overflow-hidden relative shrink-0">
+                  <span className="text-white font-bold text-lg absolute z-0">SL</span>
+                  <img
+                    src="/logo-san-lucas.png"
+                    alt="Logo Tiza Education"
+                    className="w-full h-full object-cover relative z-10 p-1"
+                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                  />
+                </div>
+                <div className="min-w-0">
+                  <h1 className="font-bold text-lg text-slate-800 leading-tight truncate">Tiza Education</h1>
+                  <p className="text-xs font-medium text-slate-500 truncate">{navigation.find(n => n.id === currentView)?.name || currentView}</p>
+                </div>
+              </div>
+              <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors xl:hidden">
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+              </button>
+            </div>
 
-          <div className="flex items-center gap-4">
+            <nav className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
+              {navigation.map((item) => {
+                const isActive = currentView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      setCurrentView(item.id);
+                      if (item.id !== 'cursos') {
+                        setSelectedCourse(null);
+                        setSelectedStudent(null);
+                      }
+                    }}
+                    className={`shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                      isActive
+                        ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/20'
+                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.name}
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="hidden xl:flex items-center gap-4">
             <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
               <Bell className="w-5 h-5" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
@@ -597,17 +1241,19 @@ export default function ColegioDashboard() {
               <Plus className="w-4 h-4" />
               Registro en Bitácora
             </button>
+            </div>
           </div>
         </header>
 
         {/* CONTENT AREA */}
-        <div className="flex-1 overflow-y-auto p-6 md:p-8">
-          <div className="max-w-5xl mx-auto">
-            {currentView === 'inicio' && <ViewInicio />}
-            {currentView === 'bitacora' && <ViewBitacora />}
-            {currentView === 'cursos' && <ViewCursos />}
-            {currentView === 'reuniones' && <ViewReuniones />}
-            {currentView === 'archivos' && <ViewArchivos />}
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
+          <div className={`${currentView === 'orientacion' ? 'max-w-none' : 'max-w-5xl'} mx-auto`}>
+            {currentView === 'inicio' && ViewInicio()}
+            {currentView === 'bitacora' && ViewBitacora()}
+            {currentView === 'cursos' && ViewCursos()}
+            {currentView === 'orientacion' && ViewOrientacion()}
+            {currentView === 'reuniones' && ViewReuniones()}
+            {currentView === 'archivos' && ViewArchivos()}
           </div>
         </div>
       </main>
