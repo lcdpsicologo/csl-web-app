@@ -1184,7 +1184,7 @@ export default function ColegioDashboard() {
       <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
         {/* HEADER */}
         <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-20">
-          <div className="px-4 md:px-6 py-3 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="px-4 md:px-6 py-3 flex flex-col gap-3">
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center shadow-inner overflow-hidden relative shrink-0">
@@ -1207,7 +1207,24 @@ export default function ColegioDashboard() {
               </button>
             </div>
 
-            <nav className="flex items-center gap-2 overflow-x-auto pb-1 xl:pb-0">
+            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
+              <select
+                value={currentView}
+                onChange={(e) => {
+                  setCurrentView(e.target.value);
+                  if (e.target.value !== 'cursos') {
+                    setSelectedCourse(null);
+                    setSelectedStudent(null);
+                  }
+                }}
+                className="lg:hidden w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+              >
+                {navigation.map(item => (
+                  <option key={item.id} value={item.id}>{item.name}</option>
+                ))}
+              </select>
+
+            <nav className="hidden lg:grid grid-cols-6 gap-2">
               {navigation.map((item) => {
                 const isActive = currentView === item.id;
                 return (
@@ -1220,35 +1237,36 @@ export default function ColegioDashboard() {
                         setSelectedStudent(null);
                       }
                     }}
-                    className={`shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                    className={`min-w-0 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
                       isActive
                         ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/20'
                         : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                     }`}
                   >
-                    <item.icon className="w-4 h-4" />
-                    {item.name}
+                    <item.icon className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{item.name}</span>
                   </button>
                 );
               })}
             </nav>
 
-            <div className="hidden xl:flex items-center gap-4">
+            <div className="hidden xl:flex items-center gap-3">
               <div className="hidden 2xl:flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Software por</span>
                 <img src="/tiza-education-logo.svg" alt="Logo Tiza Education" className="h-7 w-auto" />
               </div>
-            <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-            </button>
-            <button 
-              onClick={() => setIsModalOpen(true)}
-              className="hidden sm:flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-5 py-2.5 rounded-xl font-semibold text-sm shadow-sm shadow-cyan-600/20 transition-all hover:shadow-md hover:shadow-cyan-600/30 active:scale-95"
-            >
-              <Plus className="w-4 h-4" />
-              Registro en Bitácora
-            </button>
+              <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
+                <Bell className="w-5 h-5" />
+                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+              </button>
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="hidden sm:flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-sm shadow-cyan-600/20 transition-all hover:shadow-md hover:shadow-cyan-600/30 active:scale-95"
+              >
+                <Plus className="w-4 h-4" />
+                Registro
+              </button>
+            </div>
             </div>
           </div>
         </header>
