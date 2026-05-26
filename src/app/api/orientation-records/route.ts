@@ -188,6 +188,7 @@ export async function GET() {
       backend: "supabase",
     });
   } catch (error) {
+    console.error("Supabase orientation records load failed", error);
     return NextResponse.json({
       records: INITIAL_ORIENTATION_RECORDS,
       persistent: false,
@@ -228,6 +229,7 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ ok: true, persistent: true, backend: "supabase" });
   } catch (error) {
+    console.error("Supabase orientation records save failed", error);
     return NextResponse.json({
       ok: false,
       persistent: false,
