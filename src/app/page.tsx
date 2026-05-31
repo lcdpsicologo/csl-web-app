@@ -1,930 +1,587 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { 
-  Home, 
-  BookOpen, 
-  UsersRound, 
-  Calendar, 
-  Plus, 
-  X, 
-  Search, 
-  Bell, 
-  CheckCircle2,
-  AlertCircle,
+import Image from "next/image";
+import React, { useEffect, useState } from "react";
+import {
+  ArrowDownToLine,
+  ArrowUpRight,
   BarChart3,
+  BookOpen,
+  Building2,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  ClipboardList,
+  Database,
+  FileSpreadsheet,
   FileText,
   FolderOpen,
-  Cloud,
-  ExternalLink,
   GraduationCap,
-  ClipboardList,
-  User,
-  ChevronRight,
-  ArrowLeft,
+  Home,
+  Lock,
+  MessageSquareText,
+  Plus,
+  Save,
+  Search,
+  Settings,
+  ShieldCheck,
+  Sparkles,
   Trash2,
-  Link as LinkIcon
-} from 'lucide-react';
+  Upload,
+  UserRound,
+  UsersRound,
+  Wand2,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 
-// --- MOCK DATA ---
-const INITIAL_BITACORA = [
-  { 
-    id: 1, 
-    date: '2026-05-06T08:30:00', 
-    type: 'Registro', 
-    title: 'Revisión de asistencia semanal', 
-    content: 'Se revisó la asistencia de los primeros medios. Se detectaron 3 casos de inasistencia reiterada que serán derivados a inspectoría.', 
-    tags: ['Rutina', 'Asistencia'] 
+type EntityId =
+  | "students"
+  | "courses"
+  | "cases"
+  | "logs"
+  | "interviews"
+  | "protocols"
+  | "orientation"
+  | "workshops"
+  | "documents";
+
+type ViewId = "dashboard" | "import" | "settings" | EntityId;
+
+type DataRecord = {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  [key: string]: string;
+};
+
+type DataStore = Record<EntityId, DataRecord[]>;
+
+type FieldDef = {
+  key: string;
+  label: string;
+  required?: boolean;
+  type?: "date" | "textarea" | "select";
+  options?: string[];
+  aliases: string[];
+};
+
+type EntityConfig = {
+  id: EntityId;
+  label: string;
+  singular: string;
+  icon: LucideIcon;
+  description: string;
+  fields: FieldDef[];
+};
+
+type ParsedSheet = {
+  fileName: string;
+  headers: string[];
+  rows: Record<string, string>[];
+  delimiter: string;
+};
+
+type ImportPlan = {
+  entity: EntityId;
+  confidence: number;
+  mapping: Record<string, string>;
+  notes: string[];
+};
+
+const STORAGE_KEY = "tiza-education-store-v1";
+const PROFILE_KEY = "tiza-education-profile-v1";
+
+const nowIso = () => new Date().toISOString();
+const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+const normalize = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const entityConfigs: Record<EntityId, EntityConfig> = {
+  students: {
+    id: "students",
+    label: "Estudiantes",
+    singular: "estudiante",
+    icon: UserRound,
+    description: "Ficha base de estudiantes. Desde aquí nacen casos, bitácoras, entrevistas y alertas.",
+    fields: [
+      { key: "fullName", label: "Nombre completo", required: true, aliases: ["nombre", "estudiante", "alumno", "nombre completo", "full name"] },
+      { key: "course", label: "Curso", required: true, aliases: ["curso", "grado", "nivel", "class", "course"] },
+      { key: "rut", label: "RUT / ID", aliases: ["rut", "run", "id", "identificador", "matricula"] },
+      { key: "guardian", label: "Apoderado/a", aliases: ["apoderado", "apoderada", "tutor", "guardian", "madre", "padre"] },
+      { key: "phone", label: "Teléfono", aliases: ["telefono", "celular", "fono", "phone"] },
+      { key: "email", label: "Correo", aliases: ["correo", "email", "mail"] },
+      { key: "notes", label: "Notas", type: "textarea", aliases: ["notas", "observaciones", "comentarios", "antecedentes"] },
+    ],
   },
-  { 
-    id: 2, 
-    date: '2026-05-05T14:30:00', 
-    type: 'Acuerdo', 
-    title: 'Coordinación Equipo PIE', 
-    content: 'Reunión con educadoras diferenciales para ajustar adecuaciones curriculares del 2° Medio B.', 
-    tags: ['PIE', 'Coordinación'] 
+  courses: {
+    id: "courses",
+    label: "Cursos",
+    singular: "curso",
+    icon: BookOpen,
+    description: "Cursos o grupos de la institución. Útiles para reportes y planificación grupal.",
+    fields: [
+      { key: "name", label: "Curso", required: true, aliases: ["curso", "nombre curso", "grado", "nivel"] },
+      { key: "headTeacher", label: "Profesor/a jefe", aliases: ["profesor jefe", "profesora jefe", "docente", "tutor"] },
+      { key: "cycle", label: "Ciclo", aliases: ["ciclo", "nivel", "etapa"] },
+      { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "comentarios"] },
+    ],
+  },
+  cases: {
+    id: "cases",
+    label: "Casos",
+    singular: "caso",
+    icon: FileText,
+    description: "Casos individuales o grupales con prioridad, estado y trazabilidad.",
+    fields: [
+      { key: "student", label: "Estudiante / grupo", required: true, aliases: ["estudiante", "alumno", "nombre", "grupo", "curso"] },
+      { key: "title", label: "Motivo / título", required: true, aliases: ["motivo", "caso", "titulo", "situacion", "problema"] },
+      { key: "category", label: "Categoría", type: "select", options: ["Convivencia", "Socioemocional", "Académico", "Asistencia", "Familiar", "PIE/NEE", "Otro"], aliases: ["categoria", "tipo", "area"] },
+      { key: "priority", label: "Prioridad", type: "select", options: ["Baja", "Media", "Alta", "Crítica"], aliases: ["prioridad", "urgencia", "riesgo"] },
+      { key: "status", label: "Estado", type: "select", options: ["Abierto", "En seguimiento", "Derivado", "Cerrado"], aliases: ["estado", "status"] },
+      { key: "responsible", label: "Responsable", aliases: ["responsable", "profesional", "asignado"] },
+      { key: "description", label: "Descripción", type: "textarea", aliases: ["descripcion", "observaciones", "detalle", "relato"] },
+    ],
+  },
+  logs: {
+    id: "logs",
+    label: "Bitácoras",
+    singular: "bitácora",
+    icon: ClipboardList,
+    description: "Registros profesionales breves vinculados a estudiantes, cursos o casos.",
+    fields: [
+      { key: "date", label: "Fecha", type: "date", required: true, aliases: ["fecha", "dia", "date"] },
+      { key: "student", label: "Estudiante / curso", required: true, aliases: ["estudiante", "curso", "grupo", "alumno"] },
+      { key: "type", label: "Tipo de registro", type: "select", options: ["Seguimiento", "Entrevista", "Observación", "Crisis", "Coordinación", "Otro"], aliases: ["tipo", "registro", "accion"] },
+      { key: "professional", label: "Profesional", aliases: ["profesional", "responsable", "autor"] },
+      { key: "description", label: "Descripción", type: "textarea", required: true, aliases: ["descripcion", "observaciones", "detalle", "bitacora"] },
+      { key: "agreements", label: "Acuerdos", type: "textarea", aliases: ["acuerdos", "compromisos", "tareas"] },
+    ],
+  },
+  interviews: {
+    id: "interviews",
+    label: "Entrevistas",
+    singular: "entrevista",
+    icon: MessageSquareText,
+    description: "Entrevistas y actas con participantes, acuerdos y seguimiento.",
+    fields: [
+      { key: "date", label: "Fecha", type: "date", required: true, aliases: ["fecha", "date"] },
+      { key: "participant", label: "Participante principal", required: true, aliases: ["participante", "apoderado", "estudiante", "entrevistado"] },
+      { key: "student", label: "Estudiante asociado", aliases: ["estudiante", "alumno"] },
+      { key: "reason", label: "Motivo", required: true, aliases: ["motivo", "tema", "razon"] },
+      { key: "status", label: "Estado", type: "select", options: ["Agendada", "Realizada", "Reprogramada", "Cerrada"], aliases: ["estado", "status"] },
+      { key: "agreements", label: "Acuerdos", type: "textarea", aliases: ["acuerdos", "compromisos"] },
+    ],
+  },
+  protocols: {
+    id: "protocols",
+    label: "Protocolos",
+    singular: "protocolo",
+    icon: ShieldCheck,
+    description: "Protocolos y derivaciones con responsables, plazos y estado.",
+    fields: [
+      { key: "title", label: "Protocolo / derivación", required: true, aliases: ["protocolo", "derivacion", "titulo", "tipo"] },
+      { key: "student", label: "Estudiante / grupo", aliases: ["estudiante", "alumno", "curso", "grupo"] },
+      { key: "status", label: "Estado", type: "select", options: ["Activado", "En análisis", "En seguimiento", "Cerrado"], aliases: ["estado", "status"] },
+      { key: "dueDate", label: "Plazo", type: "date", aliases: ["plazo", "fecha limite", "vencimiento"] },
+      { key: "responsible", label: "Responsable", aliases: ["responsable", "profesional"] },
+      { key: "notes", label: "Notas", type: "textarea", aliases: ["notas", "observaciones", "descripcion"] },
+    ],
+  },
+  orientation: {
+    id: "orientation",
+    label: "Orientación",
+    singular: "clase de orientación",
+    icon: UsersRound,
+    description: "Plan anual, clases, talleres formativos y seguimiento de implementación.",
+    fields: [
+      { key: "date", label: "Fecha", type: "date", aliases: ["fecha", "date"] },
+      { key: "course", label: "Curso", required: true, aliases: ["curso", "nivel", "grado"] },
+      { key: "topic", label: "Tema / clase", required: true, aliases: ["tema", "clase", "sesion", "actividad"] },
+      { key: "axis", label: "Eje", aliases: ["eje", "unidad", "area"] },
+      { key: "status", label: "Estado", type: "select", options: ["Planificada", "Realizada", "Pendiente", "Reprogramada"], aliases: ["estado", "status"] },
+      { key: "evidence", label: "Evidencia / enlace", aliases: ["evidencia", "link", "enlace", "url"] },
+      { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "descripcion"] },
+    ],
+  },
+  workshops: {
+    id: "workshops",
+    label: "Talleres",
+    singular: "taller",
+    icon: GraduationCap,
+    description: "Talleres para estudiantes, apoderados, docentes o grupos focales.",
+    fields: [
+      { key: "date", label: "Fecha", type: "date", aliases: ["fecha"] },
+      { key: "title", label: "Nombre del taller", required: true, aliases: ["taller", "nombre", "titulo", "actividad"] },
+      { key: "audience", label: "Participantes", aliases: ["participantes", "audiencia", "grupo", "curso"] },
+      { key: "responsible", label: "Responsable", aliases: ["responsable", "profesional"] },
+      { key: "status", label: "Estado", type: "select", options: ["Planificado", "Realizado", "Pendiente"], aliases: ["estado"] },
+      { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas"] },
+    ],
+  },
+  documents: {
+    id: "documents",
+    label: "Documentos",
+    singular: "documento",
+    icon: FolderOpen,
+    description: "Índice documental seguro. Puedes registrar enlaces de Drive, archivos y plantillas.",
+    fields: [
+      { key: "title", label: "Nombre del documento", required: true, aliases: ["documento", "nombre", "titulo", "archivo"] },
+      { key: "folder", label: "Carpeta", aliases: ["carpeta", "area", "categoria"] },
+      { key: "confidentiality", label: "Confidencialidad", type: "select", options: ["Interno", "Reservado", "Confidencial", "Altamente sensible"], aliases: ["confidencialidad", "privacidad"] },
+      { key: "relatedTo", label: "Relacionado con", aliases: ["estudiante", "curso", "caso", "relacionado"] },
+      { key: "url", label: "Enlace", aliases: ["url", "link", "enlace", "drive"] },
+      { key: "notes", label: "Notas", type: "textarea", aliases: ["notas", "observaciones"] },
+    ],
+  },
+};
+
+const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
+  { id: "dashboard", label: "Inicio", icon: Home },
+  { id: "import", label: "Importar con IA", icon: Wand2 },
+  { id: "students", label: "Estudiantes", icon: UserRound },
+  { id: "courses", label: "Cursos", icon: BookOpen },
+  { id: "cases", label: "Casos", icon: FileText },
+  { id: "logs", label: "Bitácoras", icon: ClipboardList },
+  { id: "interviews", label: "Entrevistas", icon: MessageSquareText },
+  { id: "protocols", label: "Protocolos", icon: ShieldCheck },
+  { id: "orientation", label: "Orientación", icon: UsersRound },
+  { id: "workshops", label: "Talleres", icon: GraduationCap },
+  { id: "documents", label: "Documentos", icon: FolderOpen },
+  { id: "settings", label: "Configuración", icon: Settings },
+];
+
+const emptyStore = (): DataStore => ({
+  students: [],
+  courses: [],
+  cases: [],
+  logs: [],
+  interviews: [],
+  protocols: [],
+  orientation: [],
+  workshops: [],
+  documents: [],
+});
+
+const parseCsv = (text: string): { headers: string[]; rows: Record<string, string>[]; delimiter: string } => {
+  const delimiter = text.includes("\t") ? "\t" : text.includes(";") ? ";" : ",";
+  const lines: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let quoted = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (char === '"' && quoted && next === '"') {
+      field += '"';
+      i += 1;
+    } else if (char === '"') {
+      quoted = !quoted;
+    } else if (char === delimiter && !quoted) {
+      row.push(field.trim());
+      field = "";
+    } else if ((char === "\n" || char === "\r") && !quoted) {
+      if (char === "\r" && next === "\n") i += 1;
+      row.push(field.trim());
+      if (row.some(Boolean)) lines.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += char;
+    }
   }
-];
+  row.push(field.trim());
+  if (row.some(Boolean)) lines.push(row);
 
-const REUNIONES = [
-  { id: 1, date: '2026-05-06T15:00:00', title: 'Entrevista Apoderado - Martín Soto', type: 'Apoderados', status: 'Pendiente' },
-  { id: 2, date: '2026-05-07T10:00:00', title: 'Taller para Padres: Prevención Cyberbullying', type: 'Taller', status: 'Programado' },
-  { id: 3, date: '2026-05-08T09:00:00', title: 'Reunión Equipo de Gestión', type: 'Directiva', status: 'Programado' },
-];
+  const headers = (lines[0] || []).map((header, index) => header || `Columna ${index + 1}`);
+  const rows = lines.slice(1).map((values) =>
+    headers.reduce<Record<string, string>>((acc, header, index) => {
+      acc[header] = values[index] || "";
+      return acc;
+    }, {})
+  );
 
-type StudentRecord = {
-  id: number;
-  name: string;
-  status: string;
-  notesCount: number;
-  lastNote: string;
+  return { headers, rows, delimiter };
 };
 
-type CourseRecord = {
-  id: number;
-  name: string;
-  studentsCount: number;
-  equipoAula: {
-    profesorJefe: string;
-    pie: string;
-    inspector: string;
-  };
-  students: StudentRecord[];
-};
+const inferImportPlan = (sheet: ParsedSheet): ImportPlan => {
+  const normalizedHeaders = sheet.headers.map(normalize);
+  let best: ImportPlan = { entity: "students", confidence: 0, mapping: {}, notes: [] };
 
-const COURSES: CourseRecord[] = [
-  { 
-    id: 1, 
-    name: '1° Medio A', 
-    studentsCount: 35, 
-    equipoAula: {
-      profesorJefe: 'María González (Historia)',
-      pie: 'Carlos Mendoza (Ed. Diferencial)',
-      inspector: 'Juan Pérez (Patio Central)'
-    },
-    students: [
-      { id: 101, name: 'Martín Soto', status: 'En seguimiento', notesCount: 3, lastNote: 'Problemas de integración en recreos.' },
-      { id: 102, name: 'Sofía Castro', status: 'Regular', notesCount: 0, lastNote: '' },
-      { id: 103, name: 'Lucas Valdés', status: 'PIE', notesCount: 1, lastNote: 'Adecuación en Matemáticas.' },
-    ]
-  },
-  { 
-    id: 2, 
-    name: '2° Medio B', 
-    studentsCount: 32, 
-    equipoAula: {
-      profesorJefe: 'Roberto Díaz (Matemáticas)',
-      pie: 'Ana Silva (Psicopedagoga)',
-      inspector: 'Luisa Tapia (Patio Norte)'
-    },
-    students: [
-      { id: 201, name: 'Diego Torres', status: 'Convivencia', notesCount: 4, lastNote: 'Citación a apoderado pendiente.' },
-      { id: 202, name: 'Valentina Ruiz', status: 'Regular', notesCount: 0, lastNote: '' },
-    ]
-  },
-  { 
-    id: 3, 
-    name: '8° Básico C', 
-    studentsCount: 38, 
-    equipoAula: {
-      profesorJefe: 'Carmen Rojas (Lenguaje)',
-      pie: 'Carlos Mendoza (Ed. Diferencial)',
-      inspector: 'Juan Pérez (Patio Central)'
-    },
-    students: []
-  },
-];
+  Object.values(entityConfigs).forEach((config) => {
+    const mapping: Record<string, string> = {};
+    let score = 0;
 
-const DRIVE_FOLDERS = [
-  { id: 1, name: 'Planificaciones 2026', type: 'folder', shared: true, link: '#' },
-  { id: 2, name: 'Formatos de Entrevistas a Apoderados', type: 'folder', shared: true, link: '#' },
-  { id: 3, name: 'Registros Equipo PIE', type: 'folder', shared: false, link: '#' },
-  { id: 4, name: 'Protocolos de Convivencia Escolar.pdf', type: 'file', shared: true, link: '#' },
-];
+    config.fields.forEach((field) => {
+      const matchIndex = normalizedHeaders.findIndex((header) =>
+        field.aliases.some((alias) => header === normalize(alias) || header.includes(normalize(alias)) || normalize(alias).includes(header))
+      );
+      if (matchIndex >= 0) {
+        mapping[field.key] = sheet.headers[matchIndex];
+        score += field.required ? 3 : 1;
+      }
+    });
 
-const ORIENTATION_ACTIONS = [
-  'Soy amable',
-  'Soy correcto',
-  'Tengo propósito',
-  'Soy responsable',
-  'Tengo afán de superación',
-  'Soy entusiasta',
-  'Soy constructivo',
-  'Hago las cosas bien',
-  'Consejo de Curso',
-  'Intervención Formativa',
-  'Intervención estudiantes',
-  'Intervención apoderados',
-];
+    const requiredFields = config.fields.filter((field) => field.required);
+    const requiredHits = requiredFields.filter((field) => mapping[field.key]).length;
+    const requiredPenalty = requiredFields.length - requiredHits;
+    const confidence = Math.max(0, Math.round(((score - requiredPenalty * 2) / (config.fields.length + requiredFields.length * 2)) * 100));
 
-const ORIENTATION_CYCLES = [
-  {
-    name: '1° Ciclo',
-    description: 'PreK a 4° Básico',
-    courses: ['Pre Kinder A', 'Pre Kinder B', 'Kinder A', 'Kinder B', '1° Básico A', '1° Básico B', '2° Básico A', '2° Básico B', '3° Básico A', '3° Básico B', '4° Básico A', '4° Básico B'],
-  },
-  {
-    name: '2° Ciclo',
-    description: '5° a 8° Básico',
-    courses: ['5° Básico A', '5° Básico B', '6° Básico A', '6° Básico B', '7° Básico A', '7° Básico B', '8° Básico A', '8° Básico B'],
-  },
-  {
-    name: 'Enseñanza Media',
-    description: 'I° a IV° Medio',
-    courses: ['I° Medio A', 'I° Medio B', 'II° Medio A', 'II° Medio B', 'III° Medio A', 'III° Medio B', 'IV° Medio A', 'IV° Medio B'],
-  },
-];
-
-const INITIAL_ORIENTATION_RECORDS = [
-  {
-    id: 1,
-    sem: '18/05 al 22/05 (Semana 12)',
-    date: '2026-05-19',
-    cycle: '1° Ciclo',
-    course: 'Pre Kinder B',
-    action: 'Hago las cosas bien',
-    topic: 'Sesión 4',
-    status: 'Realizado',
-    observations: 'La araña hacendosa',
-    evidenceLink: 'https://canva.link/x83vxwd4h45p6gb',
-    planningLink: 'https://drive.google.com/',
-  },
-  {
-    id: 2,
-    sem: '18/05 al 22/05 (Semana 12)',
-    date: '2026-05-20',
-    cycle: '1° Ciclo',
-    course: 'Pre Kinder C',
-    action: 'Hago las cosas bien',
-    topic: 'Sesión 4',
-    status: 'Realizado',
-    observations: 'La araña hacendosa',
-    evidenceLink: 'https://canva.link/x83vxwd4h45p6gb',
-    planningLink: 'https://drive.google.com/',
-  },
-  {
-    id: 3,
-    sem: '18/05 al 22/05 (Semana 12)',
-    date: '2026-05-21',
-    cycle: '1° Ciclo',
-    course: 'Kinder A',
-    action: 'Hago las cosas bien',
-    topic: 'Sesión 3',
-    status: 'Pendiente',
-    observations: 'El desorden de Franklin',
-    evidenceLink: 'https://canva.link/i4asqi5qao0qr9t',
-    planningLink: '',
-  },
-  {
-    id: 4,
-    sem: '18/05 al 22/05 (Semana 12)',
-    date: '2026-05-22',
-    cycle: '1° Ciclo',
-    course: 'Kinder C',
-    action: 'Intervención Formativa',
-    topic: 'Sesión 1',
-    status: 'Realizado',
-    observations: 'Kinder C juega con cuidado y buen trato',
-    evidenceLink: 'https://canva.link/la4qtzcfajo6rcc',
-    planningLink: 'https://drive.google.com/',
-  },
-  {
-    id: 5,
-    sem: '18/05 al 22/05 (Semana 12)',
-    date: '2026-05-18',
-    cycle: '1° Ciclo',
-    course: '1° Básico A',
-    action: 'Intervención Formativa',
-    topic: 'Sesión 1',
-    status: 'Realizado',
-    observations: 'Devolución de prueba DIA socioemocional',
-    evidenceLink: 'https://canva.link/y860v75hqwkhdd4p',
-    planningLink: 'https://drive.google.com/',
-  },
-  {
-    id: 6,
-    sem: '18/05 al 22/05 (Semana 12)',
-    date: '2026-05-22',
-    cycle: '1° Ciclo',
-    course: '2° Básico A',
-    action: 'Intervención Formativa',
-    topic: 'Sesión 1',
-    status: 'Pendiente',
-    observations: 'Devolución de prueba DIA socioemocional',
-    evidenceLink: 'https://canva.link/e75srmdmto1vsms',
-    planningLink: '',
-  },
-  {
-    id: 7,
-    sem: '18/05 al 22/05 (Semana 12)',
-    date: '2026-05-18',
-    cycle: '1° Ciclo',
-    course: '4° Básico A',
-    action: 'Intervención Formativa',
-    topic: 'Sesión 1',
-    status: 'Realizado',
-    observations: 'Devolución de prueba DIA socioemocional. Durante la clase acompaña Subdirectora Valeska, Profesora Catalina y Orientador.',
-    evidenceLink: 'https://canva.link/irg9u9ntpra8vyp',
-    planningLink: 'https://drive.google.com/',
-  },
-];
-
-const ORIENTATION_STORAGE_KEY = 'csl-orientation-records';
-type OrientationRecord = (typeof INITIAL_ORIENTATION_RECORDS)[number];
-type OrientationRecordField = keyof Omit<OrientationRecord, 'id'>;
-
-export default function ColegioDashboard() {
-  const [currentView, setCurrentView] = useState('inicio');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  
-  // State for data
-  const [bitacora, setBitacora] = useState(INITIAL_BITACORA);
-  const [orientationRecords, setOrientationRecords] = useState(INITIAL_ORIENTATION_RECORDS);
-  const [orientationStorageReady, setOrientationStorageReady] = useState(false);
-  const [orientationPersistence, setOrientationPersistence] = useState<'loading' | 'cloud' | 'local'>('loading');
-  const [selectedCourse, setSelectedCourse] = useState<CourseRecord | null>(null);
-  const [selectedStudent, setSelectedStudent] = useState<StudentRecord | null>(null);
-
-  // Modal Form State
-  const [newNoteTitle, setNewNoteTitle] = useState('');
-  const [newNoteContent, setNewNoteContent] = useState('');
-  const [newNoteType, setNewNoteType] = useState('Registro');
-  const [newNoteTags, setNewNoteTags] = useState('');
-  const [newOrientationRecord, setNewOrientationRecord] = useState({
-    sem: '',
-    date: new Date().toISOString().slice(0, 10),
-    cycle: '1° Ciclo',
-    course: 'Pre Kinder A',
-    action: 'Soy amable',
-    topic: 'Sesión 1',
-    status: 'Pendiente',
-    observations: '',
-    evidenceLink: '',
-    planningLink: '',
+    if (confidence > best.confidence) {
+      best = {
+        entity: config.id,
+        confidence,
+        mapping,
+        notes: [
+          `${Object.keys(mapping).length} columnas reconocidas para ${config.label}.`,
+          requiredPenalty ? `Faltan ${requiredPenalty} campos requeridos por mapear.` : "Campos requeridos detectados.",
+        ],
+      };
+    }
   });
 
-  const navigation = [
-    { id: 'inicio', name: 'Dashboard Principal', icon: Home },
-    { id: 'cursos', name: 'Cursos & Estudiantes', icon: GraduationCap },
-    { id: 'orientacion', name: 'Orientación SOY+', icon: BarChart3 },
-    { id: 'bitacora', name: 'Mi Bitácora Diaria', icon: BookOpen },
-    { id: 'reuniones', name: 'Reuniones & Talleres', icon: UsersRound },
-    { id: 'archivos', name: 'Archivos & Drive', icon: Cloud },
-  ];
+  return best;
+};
 
-  useEffect(() => {
-    let isMounted = true;
+const recordsToCsv = (records: DataRecord[], fields: FieldDef[]) => {
+  const headers = fields.map((field) => field.label);
+  const rows = records.map((record) =>
+    fields.map((field) => {
+      const value = record[field.key] || "";
+      return /[",;\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+    })
+  );
+  return [headers, ...rows].map((row) => row.join(",")).join("\n");
+};
 
-    const loadSavedRecords = async () => {
-      try {
-        const response = await fetch('/api/orientation-records', { cache: 'no-store' });
-        if (!response.ok) throw new Error('Unable to load orientation records');
-        const data = await response.json();
+function downloadText(fileName: string, content: string, type = "text/plain;charset=utf-8") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
-        if (!isMounted) return;
-        setOrientationRecords(Array.isArray(data.records) ? data.records : INITIAL_ORIENTATION_RECORDS);
-        setOrientationPersistence(data.persistent ? 'cloud' : 'local');
-      } catch {
-        const savedRecords = window.localStorage.getItem(ORIENTATION_STORAGE_KEY);
-        if (!isMounted) return;
-
-        if (savedRecords) {
-          setOrientationRecords(JSON.parse(savedRecords));
-        }
-        setOrientationPersistence('local');
-      } finally {
-        if (isMounted) setOrientationStorageReady(true);
-      }
-    };
-
-    loadSavedRecords();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!orientationStorageReady) return;
-    window.localStorage.setItem(ORIENTATION_STORAGE_KEY, JSON.stringify(orientationRecords));
-
-    const saveRecords = window.setTimeout(async () => {
-      try {
-        const response = await fetch('/api/orientation-records', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ records: orientationRecords }),
-        });
-        const data = await response.json();
-        setOrientationPersistence(data.persistent ? 'cloud' : 'local');
-      } catch {
-        setOrientationPersistence('local');
-      }
-    }, 500);
-
-    return () => window.clearTimeout(saveRecords);
-  }, [orientationRecords, orientationStorageReady]);
-
-  const handleSaveBitacora = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newNoteTitle.trim() || !newNoteContent.trim()) return;
-
-    const newEntry = {
-      id: Date.now(),
-      date: new Date().toISOString(),
-      type: newNoteType,
-      title: newNoteTitle,
-      content: newNoteContent,
-      tags: newNoteTags.split(',').map(tag => tag.trim()).filter(Boolean)
-    };
-
-    setBitacora([newEntry, ...bitacora]);
-    setIsModalOpen(false);
-    
-    // Reset Form
-    setNewNoteTitle('');
-    setNewNoteContent('');
-    setNewNoteType('Registro');
-    setNewNoteTags('');
-    
-    if (currentView !== 'bitacora') setCurrentView('bitacora');
+function StatCard({ label, value, detail, icon: Icon, accent = "teal" }: { label: string; value: number; detail: string; icon: LucideIcon; accent?: "teal" | "blue" | "amber" | "violet" | "rose" }) {
+  const accents = {
+    teal: "bg-teal-50 text-teal-700 ring-teal-100",
+    blue: "bg-blue-50 text-blue-700 ring-blue-100",
+    amber: "bg-amber-50 text-amber-700 ring-amber-100",
+    violet: "bg-violet-50 text-violet-700 ring-violet-100",
+    rose: "bg-rose-50 text-rose-700 ring-rose-100",
   };
 
-  const handleSaveOrientationRecord = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newOrientationRecord.course || !newOrientationRecord.action || !newOrientationRecord.observations.trim()) return;
-
-    setOrientationRecords([
-      { id: Date.now(), ...newOrientationRecord },
-      ...orientationRecords,
-    ]);
-    setNewOrientationRecord({
-      sem: '',
-      date: new Date().toISOString().slice(0, 10),
-      cycle: '1° Ciclo',
-      course: 'Pre Kinder A',
-      action: 'Soy amable',
-      topic: 'Sesión 1',
-      status: 'Pendiente',
-      observations: '',
-      evidenceLink: '',
-      planningLink: '',
-    });
-  };
-
-  const handleDeleteOrientationRecord = (recordId: number) => {
-    setOrientationRecords(orientationRecords.filter(record => record.id !== recordId));
-  };
-
-  const handleUpdateOrientationRecord = (recordId: number, field: OrientationRecordField, value: string) => {
-    setOrientationRecords(orientationRecords.map(record => {
-      if (record.id !== recordId) return record;
-
-      const updatedRecord = { ...record, [field]: value };
-      if (field === 'cycle') {
-        updatedRecord.course = ORIENTATION_CYCLES.find(cycle => cycle.name === value)?.courses[0] || record.course;
-      }
-
-      return updatedRecord;
-    }));
-  };
-
-  const updateOrientationField = (field: string, value: string) => {
-    const nextRecord = { ...newOrientationRecord, [field]: value };
-    if (field === 'cycle') {
-      nextRecord.course = ORIENTATION_CYCLES.find(cycle => cycle.name === value)?.courses[0] || '';
-    }
-    setNewOrientationRecord(nextRecord);
-  };
-
-  const getNoteTypeIcon = (type: string) => {
-    switch(type) {
-      case 'Incidencia': return <AlertCircle className="w-5 h-5 text-red-500" />;
-      case 'Acuerdo': return <CheckCircle2 className="w-5 h-5 text-green-500" />;
-      case 'Registro': return <ClipboardList className="w-5 h-5 text-blue-500" />;
-      default: return <FileText className="w-5 h-5 text-gray-500" />;
-    }
-  };
-
-  const getNoteTypeColor = (type: string) => {
-    switch(type) {
-      case 'Incidencia': return 'bg-red-50 text-red-700 border-red-200';
-      case 'Acuerdo': return 'bg-green-50 text-green-700 border-green-200';
-      case 'Registro': return 'bg-blue-50 text-blue-700 border-blue-200';
-      default: return 'bg-gray-50 text-gray-700 border-gray-200';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch(status) {
-      case 'En seguimiento': return 'bg-orange-100 text-orange-700';
-      case 'Convivencia': return 'bg-red-100 text-red-700';
-      case 'PIE': return 'bg-purple-100 text-purple-700';
-      default: return 'bg-slate-100 text-slate-700';
-    }
-  };
-
-  const getInterventionStatusColor = (status: string) => {
-    switch(status) {
-      case 'Realizado': return 'bg-emerald-100 text-emerald-800 border-emerald-200';
-      case 'Pendiente': return 'bg-amber-100 text-amber-800 border-amber-200';
-      case 'Reprogramado': return 'bg-blue-100 text-blue-800 border-blue-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
-  // --- VISTAS ---
-
-  const ViewInicio = () => (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      {/* Valores Institucionales */}
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col md:flex-row items-center gap-6">
-        <div className="flex-1">
-          <h2 className="text-xl font-bold text-slate-800 mb-2">Colegio San Lucas de Lo Espejo</h2>
-          <p className="text-sm text-slate-600 mb-4">
-            Plataforma de orientación y seguimiento escolar para el Colegio San Lucas de Lo Espejo. Los datos, cursos, bitácoras e intervenciones visibles corresponden a este establecimiento.
-          </p>
-          <div className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Software por</span>
-            <img src="/tiza-education-logo.svg" alt="Logo Tiza Education" className="h-7 w-auto" />
-          </div>
+  return (
+    <section className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_rgba(15,23,42,0.09)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm font-black text-slate-600">{label}</p>
+          <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{value}</p>
+          <p className="mt-1 text-xs font-semibold text-slate-500">{detail}</p>
         </div>
-        <div className="w-full md:w-1/2 flex justify-center">
-          <img 
-            src="/emblema-valores.png" 
-            alt="Valores Colegio San Lucas de Lo Espejo" 
-            className="max-h-64 object-contain rounded-xl"
-            onError={(e) => { e.currentTarget.style.display = 'none'; }}
-          />
+        <div className={`grid h-12 w-12 place-items-center rounded-2xl ring-1 ${accents[accent]}`}>
+          <Icon className="h-6 w-6" />
         </div>
       </div>
+    </section>
+  );
+}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all cursor-pointer" onClick={() => setCurrentView('bitacora')}>
-          <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Registros en Bitácora</p>
-            <h3 className="text-3xl font-bold text-slate-800">{bitacora.length}</h3>
+function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (view: ViewId) => void }) {
+  return (
+    <aside className="fixed inset-y-0 left-0 hidden w-[304px] flex-col bg-[#00364a] text-white shadow-2xl lg:flex">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(45,212,191,.36),transparent_30%),radial-gradient(circle_at_82%_22%,rgba(14,165,233,.18),transparent_25%),linear-gradient(180deg,#07384b,#002b3e_58%,#012536)]" />
+      <div className="relative flex h-full flex-col">
+        <div className="px-6 py-6">
+          <div className="rounded-2xl border border-white/15 bg-white/95 p-3 shadow-2xl shadow-cyan-950/20">
+            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={210} height={64} priority />
           </div>
-          <div className="bg-blue-50 p-4 rounded-xl group-hover:bg-blue-100 transition-colors">
-            <ClipboardList className="w-6 h-6 text-blue-600" />
-          </div>
-        </div>
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all cursor-pointer" onClick={() => setCurrentView('reuniones')}>
-          <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Entrevistas / Talleres</p>
-            <h3 className="text-3xl font-bold text-slate-800">{REUNIONES.length}</h3>
-          </div>
-          <div className="bg-orange-50 p-4 rounded-xl group-hover:bg-orange-100 transition-colors">
-            <UsersRound className="w-6 h-6 text-orange-600" />
+          <div className="mt-4 flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-2 text-xs font-bold text-cyan-50/90">
+            <Sparkles className="h-4 w-4 text-teal-200" />
+            Plataforma lista para datos reales
           </div>
         </div>
-        <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center justify-between group hover:shadow-md transition-all cursor-pointer" onClick={() => setCurrentView('cursos')}>
-          <div>
-            <p className="text-sm font-medium text-slate-500 mb-1">Cursos Asignados</p>
-            <h3 className="text-3xl font-bold text-slate-800">{COURSES.length}</h3>
-          </div>
-          <div className="bg-cyan-50 p-4 rounded-xl group-hover:bg-cyan-100 transition-colors">
-            <GraduationCap className="w-6 h-6 text-cyan-600" />
+        <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
+          {viewNav.map((item) => {
+            const Icon = item.icon;
+            const active = activeView === item.id;
+            return (
+              <button
+                key={item.id}
+                onClick={() => onNavigate(item.id)}
+                className={`flex h-12 w-full items-center gap-3 rounded-xl px-4 text-left text-sm font-black transition ${
+                  active ? "bg-teal-400 text-slate-950 shadow-lg shadow-teal-950/25" : "text-cyan-50/90 hover:bg-white/10 hover:text-white"
+                }`}
+              >
+                <Icon className="h-5 w-5" />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="m-5 rounded-2xl border border-white/15 bg-white/8 p-4 shadow-xl shadow-cyan-950/20">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/10">
+              <Building2 className="h-6 w-6 text-cyan-50" />
+            </div>
+            <div>
+              <p className="text-sm font-black">Institución activa</p>
+              <p className="text-xs text-cyan-50/70">Configurable en ajustes</p>
+            </div>
           </div>
         </div>
+      </div>
+    </aside>
+  );
+}
+
+function Topbar({
+  query,
+  setQuery,
+  activeLabel,
+}: {
+  query: string;
+  setQuery: (value: string) => void;
+  activeLabel: string;
+}) {
+  return (
+    <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl lg:pl-[304px]">
+      <div className="flex min-h-20 items-center gap-4 px-4 py-3 sm:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+            <Database className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-black tracking-tight text-slate-950">{activeLabel}</p>
+            <p className="text-xs font-semibold text-slate-500">Datos reales ingresados por tu equipo</p>
+          </div>
+        </div>
+        <div className="ml-auto flex w-full max-w-xl items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+          <Search className="h-5 w-5 text-slate-400" />
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar dentro de tus datos..."
+            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
+          />
+          {query ? (
+            <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-700">
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: () => void; entity: EntityConfig }) {
+  const Icon = entity.icon;
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
+      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+        <Icon className="h-8 w-8" />
+      </div>
+      <h2 className="mt-5 text-xl font-black text-slate-950">Todavía no hay {entity.label.toLowerCase()}</h2>
+      <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+        Empieza ingresando un registro manualmente o importa una planilla CSV/TSV exportada desde Google Sheets.
+      </p>
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white">
+          <Plus className="h-5 w-5" /> Agregar {entity.singular}
+        </button>
+        <button onClick={onImport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-5 py-3 font-bold text-slate-700">
+          <Upload className="h-5 w-5" /> Importar planilla
+        </button>
       </div>
     </div>
   );
+}
 
-  const ViewCursos = () => {
-    if (selectedStudent && selectedCourse) {
-      return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <button onClick={() => setSelectedStudent(null)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm">
-            <ArrowLeft className="w-4 h-4" /> Volver a {selectedCourse.name}
-          </button>
-          
-          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center">
-                  <User className="w-8 h-8 text-slate-400" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-800">{selectedStudent.name}</h2>
-                  <div className="flex items-center gap-3 mt-2">
-                    <span className={`text-xs font-bold px-2.5 py-1 rounded-md ${getStatusColor(selectedStudent.status)}`}>
-                      {selectedStudent.status}
-                    </span>
-                    <span className="text-sm text-slate-500">Curso: {selectedCourse.name}</span>
-                  </div>
-                </div>
-              </div>
-              <button className="bg-cyan-50 text-cyan-700 hover:bg-cyan-100 px-4 py-2 rounded-xl font-semibold text-sm transition-colors flex items-center gap-2">
-                <Plus className="w-4 h-4" /> Nueva Anotación
-              </button>
-            </div>
-            
-            <div className="mt-8 border-t border-slate-100 pt-6">
-              <h3 className="text-lg font-bold text-slate-800 mb-4">Historial y Seguimiento</h3>
-              {selectedStudent.notesCount > 0 ? (
-                <div className="space-y-4">
-                  <div className="p-4 rounded-xl border border-slate-100 bg-slate-50 relative">
-                    <div className="absolute -left-[5px] top-5 w-2.5 h-2.5 rounded-full bg-cyan-500 shadow-sm" />
-                    <p className="text-xs font-semibold text-cyan-600 mb-1">Última actualización</p>
-                    <p className="text-sm text-slate-700">{selectedStudent.lastNote}</p>
-                  </div>
-                  {/* More mock history could go here */}
-                </div>
-              ) : (
-                <p className="text-sm text-slate-500 italic">No hay anotaciones registradas para este estudiante.</p>
-              )}
-            </div>
+function EntityView({
+  entity,
+  records,
+  query,
+  onAdd,
+  onDelete,
+  onExport,
+  onImport,
+}: {
+  entity: EntityConfig;
+  records: DataRecord[];
+  query: string;
+  onAdd: () => void;
+  onDelete: (id: string) => void;
+  onExport: () => void;
+  onImport: () => void;
+}) {
+  const searchable = normalize(query);
+  const filtered = records.filter((record) =>
+    !searchable || Object.values(record).some((value) => normalize(String(value)).includes(searchable))
+  );
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+        <div>
+          <div className="flex items-center gap-3">
+            <entity.icon className="h-7 w-7 text-teal-700" />
+            <h1 className="text-3xl font-black tracking-tight text-slate-950">{entity.label}</h1>
           </div>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">{entity.description}</p>
         </div>
-      );
-    }
-
-    if (selectedCourse) {
-      return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-          <button onClick={() => setSelectedCourse(null)} className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors font-medium text-sm">
-            <ArrowLeft className="w-4 h-4" /> Volver a Mis Cursos
+        <div className="flex flex-wrap gap-3">
+          <button onClick={onImport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700">
+            <Upload className="h-5 w-5" /> Importar
           </button>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1 space-y-6">
-              {/* Información del Curso y Equipo de Aula */}
-              <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-                <h2 className="text-2xl font-bold text-slate-800 mb-1">{selectedCourse.name}</h2>
-                <p className="text-slate-500 text-sm mb-6">{selectedCourse.studentsCount} Estudiantes matriculados</p>
-                
-                <h3 className="text-sm font-bold text-slate-800 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Equipo de Aula</h3>
-                <div className="space-y-4">
-                  <div>
-                    <p className="text-xs text-slate-400 font-semibold">Profesor(a) Jefe</p>
-                    <p className="text-sm font-medium text-slate-700">{selectedCourse.equipoAula.profesorJefe}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400 font-semibold">Profesional PIE</p>
-                    <p className="text-sm font-medium text-slate-700">{selectedCourse.equipoAula.pie}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-400 font-semibold">Inspector(a) de Patio</p>
-                    <p className="text-sm font-medium text-slate-700">{selectedCourse.equipoAula.inspector}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-bold text-slate-800">Nómina de Estudiantes</h3>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input type="text" placeholder="Buscar estudiante..." className="pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                {selectedCourse.students?.map((student) => (
-                  <div 
-                    key={student.id} 
-                    onClick={() => setSelectedStudent(student)}
-                    className="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:border-cyan-200 hover:bg-cyan-50/30 transition-all cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 group-hover:bg-cyan-100 group-hover:text-cyan-600 transition-colors">
-                        <User className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-800">{student.name}</p>
-                        <p className="text-xs text-slate-500">{student.notesCount} anotaciones</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${getStatusColor(student.status)}`}>
-                        {student.status}
-                      </span>
-                      <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-cyan-500" />
-                    </div>
-                  </div>
-                ))}
-                {selectedCourse.students?.length === 0 && (
-                  <p className="text-sm text-slate-500 text-center py-8">No hay estudiantes cargados en este curso.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // List of courses
-    return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold text-slate-800">Cursos Asignados</h2>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {COURSES.map(course => (
-            <div 
-              key={course.id} 
-              onClick={() => setSelectedCourse(course)}
-              className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 hover:shadow-md hover:border-cyan-200 transition-all cursor-pointer group"
-            >
-              <div className="flex items-center justify-between mb-4">
-                <div className="p-3 bg-cyan-50 text-cyan-600 rounded-xl group-hover:bg-cyan-600 group-hover:text-white transition-colors">
-                  <GraduationCap className="w-6 h-6" />
-                </div>
-                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
-                  {course.studentsCount} Alumnos
-                </span>
-              </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-1">{course.name}</h3>
-              <p className="text-sm text-slate-500 truncate">Prof. Jefe: {course.equipoAula.profesorJefe}</p>
-            </div>
-          ))}
+          <button onClick={onExport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700">
+            <ArrowDownToLine className="h-5 w-5" /> Exportar
+          </button>
+          <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-4 py-3 font-bold text-white">
+            <Plus className="h-5 w-5" /> Agregar
+          </button>
         </div>
       </div>
-    );
-  };
 
-  const ViewOrientacion = () => {
-    const totalRealizadas = orientationRecords.filter(record => record.status === 'Realizado').length;
-    const totalPendientes = orientationRecords.filter(record => record.status === 'Pendiente').length;
-    const recordsWithPlanning = orientationRecords.filter(record => record.planningLink).length;
-    const currentCycleCourses = ORIENTATION_CYCLES.find(cycle => cycle.name === newOrientationRecord.cycle)?.courses || [];
-
-    const countRecords = (course: string, action: string) => (
-      orientationRecords.filter(record => record.course === course && record.action === action).length
-    );
-
-    return (
-      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        <div className="flex flex-col gap-2">
-          <h2 className="text-xl font-bold text-slate-800">Bitácora SOY+ del Colegio San Lucas de Lo Espejo</h2>
-          <p className="text-sm text-slate-500">Clases e intervenciones desde orientación del Colegio San Lucas de Lo Espejo, con evidencia, planificación y seguimiento por estado.</p>
-        </div>
-
-        <section className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-cyan-50 text-cyan-700 flex items-center justify-center">
-                <ClipboardList className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-bold text-slate-800">Registros de orientación</h3>
-                <p className="text-xs text-slate-500">Agrega, modifica y elimina registros directamente desde esta bitácora.</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-center">
-              <div className="rounded-lg bg-slate-50 px-3 py-2 border border-slate-100">
-                <p className="text-[10px] font-bold uppercase text-slate-400">Total</p>
-                <p className="text-lg font-bold text-slate-800">{orientationRecords.length}</p>
-              </div>
-              <div className="rounded-lg bg-emerald-50 px-3 py-2 border border-emerald-100">
-                <p className="text-[10px] font-bold uppercase text-emerald-600">Realizadas</p>
-                <p className="text-lg font-bold text-emerald-800">{totalRealizadas}</p>
-              </div>
-              <div className="rounded-lg bg-amber-50 px-3 py-2 border border-amber-100">
-                <p className="text-[10px] font-bold uppercase text-amber-600">Pendientes</p>
-                <p className="text-lg font-bold text-amber-800">{totalPendientes}</p>
-              </div>
-              <div className="rounded-lg bg-blue-50 px-3 py-2 border border-blue-100">
-                <p className="text-[10px] font-bold uppercase text-blue-600">Planif.</p>
-                <p className="text-lg font-bold text-blue-800">{recordsWithPlanning}</p>
-              </div>
-              <div className={`rounded-lg px-3 py-2 border ${orientationPersistence === 'cloud' ? 'bg-cyan-50 border-cyan-100' : 'bg-slate-50 border-slate-100'}`}>
-                <p className={`text-[10px] font-bold uppercase ${orientationPersistence === 'cloud' ? 'text-cyan-700' : 'text-slate-400'}`}>Guardado</p>
-                <p className={`text-sm font-bold ${orientationPersistence === 'cloud' ? 'text-cyan-800' : 'text-slate-700'}`}>
-                  {orientationPersistence === 'loading' ? 'Cargando' : orientationPersistence === 'cloud' ? 'Nube' : 'Local'}
-                </p>
-              </div>
-            </div>
+      {records.length === 0 ? (
+        <EmptyState entity={entity} onAdd={onAdd} onImport={onImport} />
+      ) : (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 px-5 py-4 text-sm font-semibold text-slate-600">
+            Mostrando {filtered.length} de {records.length} registros
           </div>
-
-          <form onSubmit={handleSaveOrientationRecord} className="bg-slate-50/70 border-b border-slate-100 p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
-              <input
-                type="text"
-                value={newOrientationRecord.sem}
-                onChange={(e) => updateOrientationField('sem', e.target.value)}
-                placeholder="SEM"
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="date"
-                value={newOrientationRecord.date}
-                onChange={(e) => updateOrientationField('date', e.target.value)}
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                required
-              />
-              <select
-                value={newOrientationRecord.cycle}
-                onChange={(e) => updateOrientationField('cycle', e.target.value)}
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                {ORIENTATION_CYCLES.map(cycle => <option key={cycle.name}>{cycle.name}</option>)}
-              </select>
-              <select
-                value={newOrientationRecord.course}
-                onChange={(e) => updateOrientationField('course', e.target.value)}
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                {currentCycleCourses.map(course => <option key={course}>{course}</option>)}
-              </select>
-              <select
-                value={newOrientationRecord.action}
-                onChange={(e) => updateOrientationField('action', e.target.value)}
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                {ORIENTATION_ACTIONS.map(action => <option key={action}>{action}</option>)}
-              </select>
-              <input
-                type="text"
-                value={newOrientationRecord.topic}
-                onChange={(e) => updateOrientationField('topic', e.target.value)}
-                placeholder="Tema / comentario"
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <select
-                value={newOrientationRecord.status}
-                onChange={(e) => updateOrientationField('status', e.target.value)}
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                <option>Realizado</option>
-                <option>Pendiente</option>
-                <option>Reprogramado</option>
-              </select>
-              <input
-                type="url"
-                value={newOrientationRecord.evidenceLink}
-                onChange={(e) => updateOrientationField('evidenceLink', e.target.value)}
-                placeholder="Link evidencia"
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="url"
-                value={newOrientationRecord.planningLink}
-                onChange={(e) => updateOrientationField('planningLink', e.target.value)}
-                placeholder="Link planificación"
-                className="px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              />
-              <input
-                type="text"
-                value={newOrientationRecord.observations}
-                onChange={(e) => updateOrientationField('observations', e.target.value)}
-                placeholder="Observaciones"
-                className="md:col-span-2 xl:col-span-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-                required
-              />
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-lg font-semibold text-sm shadow-sm transition-all"
-              >
-                <Plus className="w-4 h-4" /> Agregar
-              </button>
-            </div>
-          </form>
-
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1620px] border-collapse text-sm">
-              <thead>
+            <table className="w-full min-w-[900px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
-                  {['SEM', 'Fecha', 'Ciclo', 'Curso', 'Acción / Fortaleza', 'Tema / Comentario', 'Estado', 'Observaciones', 'Link evidencia', 'Planificación', ''].map(header => (
-                    <th key={header || 'acciones'} className="bg-sky-700 border border-sky-200 px-3 py-3 text-left text-xs font-bold uppercase text-white">
-                      {header}
-                    </th>
+                  {entity.fields.slice(0, 6).map((field) => (
+                    <th key={field.key} className="px-5 py-4 font-black">{field.label}</th>
                   ))}
+                  <th className="px-5 py-4 font-black">Actualizado</th>
+                  <th className="px-5 py-4" />
                 </tr>
               </thead>
-              <tbody>
-                {orientationRecords.map(record => (
-                  <tr key={record.id} className="odd:bg-white even:bg-slate-50/50 hover:bg-cyan-50/40 transition-colors">
-                    <td className="border border-slate-200 p-1.5">
-                      <input
-                        value={record.sem}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'sem', e.target.value)}
-                        placeholder="Sin semana"
-                        className="w-full min-w-44 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      />
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <input
-                        type="date"
-                        value={record.date}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'date', e.target.value)}
-                        className="w-full min-w-36 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      />
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <select
-                        value={record.cycle}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'cycle', e.target.value)}
-                        className="w-full min-w-36 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      >
-                        {ORIENTATION_CYCLES.map(cycle => <option key={cycle.name}>{cycle.name}</option>)}
-                      </select>
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <select
-                        value={record.course}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'course', e.target.value)}
-                        className="w-full min-w-40 rounded-md border border-transparent bg-transparent px-2 py-1.5 font-semibold text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      >
-                        {(ORIENTATION_CYCLES.find(cycle => cycle.name === record.cycle)?.courses || currentCycleCourses).map(course => <option key={course}>{course}</option>)}
-                      </select>
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <select
-                        value={record.action}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'action', e.target.value)}
-                        className="w-full min-w-52 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      >
-                        {ORIENTATION_ACTIONS.map(action => <option key={action}>{action}</option>)}
-                      </select>
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <input
-                        value={record.topic}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'topic', e.target.value)}
-                        className="w-full min-w-36 rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      />
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <select
-                        value={record.status}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'status', e.target.value)}
-                        className={`w-full min-w-32 rounded-md border px-2 py-1.5 text-xs font-bold outline-none focus:ring-2 focus:ring-cyan-100 ${getInterventionStatusColor(record.status)}`}
-                      >
-                        <option>Realizado</option>
-                        <option>Pendiente</option>
-                        <option>Reprogramado</option>
-                      </select>
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <textarea
-                        value={record.observations}
-                        onChange={(e) => handleUpdateOrientationRecord(record.id, 'observations', e.target.value)}
-                        rows={2}
-                        className="w-full min-w-72 resize-y rounded-md border border-transparent bg-transparent px-2 py-1.5 text-slate-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                      />
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <div className="flex min-w-56 items-center gap-2">
-                        <input
-                          value={record.evidenceLink}
-                          onChange={(e) => handleUpdateOrientationRecord(record.id, 'evidenceLink', e.target.value)}
-                          placeholder="Link evidencia"
-                          className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-blue-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                        />
-                        {record.evidenceLink && (
-                          <a href={record.evidenceLink} target="_blank" rel="noreferrer" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-blue-600 hover:bg-blue-50" title="Abrir evidencia">
-                            <LinkIcon className="w-4 h-4" />
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                    <td className="border border-slate-200 p-1.5">
-                      <div className="flex min-w-56 items-center gap-2">
-                        <input
-                          value={record.planningLink}
-                          onChange={(e) => handleUpdateOrientationRecord(record.id, 'planningLink', e.target.value)}
-                          placeholder="Link planificación"
-                          className="w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-blue-700 outline-none focus:border-cyan-300 focus:bg-white focus:ring-2 focus:ring-cyan-100"
-                        />
-                        {record.planningLink && (
-                          <a href={record.planningLink} target="_blank" rel="noreferrer" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-blue-600 hover:bg-blue-50" title="Abrir planificación">
-                            <FileText className="w-4 h-4" />
-                          </a>
-                        )}
-                      </div>
-                    </td>
-                    <td className="border border-slate-200 px-3 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteOrientationRecord(record.id)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
-                        aria-label={`Eliminar registro de ${record.course}`}
-                        title="Eliminar registro"
-                      >
-                        <Trash2 className="w-4 h-4" />
+              <tbody className="divide-y divide-slate-100">
+                {filtered.map((record) => (
+                  <tr key={record.id} className="hover:bg-teal-50/40">
+                    {entity.fields.slice(0, 6).map((field) => (
+                      <td key={field.key} className="max-w-[260px] truncate px-5 py-4">
+                        {record[field.key] || <span className="text-slate-300">Sin dato</span>}
+                      </td>
+                    ))}
+                    <td className="px-5 py-4 text-xs text-slate-500">{new Date(record.updatedAt).toLocaleString("es-CL")}</td>
+                    <td className="px-5 py-4">
+                      <button onClick={() => onDelete(record.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50">
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </td>
                   </tr>
@@ -933,447 +590,620 @@ export default function ColegioDashboard() {
             </table>
           </div>
         </section>
+      )}
+    </div>
+  );
+}
 
-        <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100 flex items-center gap-3">
-            <BarChart3 className="w-5 h-5 text-cyan-600" />
-            <div>
-              <h3 className="font-bold text-slate-800">Dashboard de intervenciones por ciclo</h3>
-              <p className="text-xs text-slate-500">Conteo automático por curso y tipo de acción.</p>
-            </div>
+function RecordDialog({
+  entity,
+  onClose,
+  onSave,
+}: {
+  entity: EntityConfig;
+  onClose: () => void;
+  onSave: (record: DataRecord) => void;
+}) {
+  const [form, setForm] = useState<Record<string, string>>(() =>
+    entity.fields.reduce<Record<string, string>>((acc, field) => {
+      acc[field.key] = field.type === "date" ? new Date().toISOString().slice(0, 10) : "";
+      return acc;
+    }, {})
+  );
+
+  const canSave = entity.fields.filter((field) => field.required).every((field) => form[field.key]?.trim());
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4 backdrop-blur-sm">
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+        <div className="flex items-start justify-between border-b border-slate-100 p-6">
+          <div>
+            <h2 className="text-2xl font-black">Agregar {entity.singular}</h2>
+            <p className="mt-1 text-sm text-slate-600">Este registro se guardará en el almacenamiento local del navegador.</p>
           </div>
-          <div className="overflow-x-auto">
-            <div className="min-w-[1120px] divide-y divide-slate-100">
-              {ORIENTATION_CYCLES.map(cycle => (
-                <div key={cycle.name} className="p-5">
-                  <div className="mb-3 inline-flex items-center gap-2 rounded-md bg-cyan-50 px-3 py-2">
-                    <FolderOpen className="w-4 h-4 text-cyan-700" />
-                    <span className="text-sm font-bold text-slate-800">{cycle.name}</span>
-                    <span className="text-xs text-slate-500">{cycle.description}</span>
-                  </div>
-                  <table className="w-full border-collapse text-sm">
-                    <thead>
-                      <tr>
-                        <th className="sticky left-0 z-10 bg-slate-50 border border-sky-100 px-3 py-3 text-left font-bold text-slate-700 min-w-44">Curso</th>
-                        {ORIENTATION_ACTIONS.map(action => (
-                          <th key={action} className="bg-sky-600 border border-sky-200 px-3 py-3 text-center text-xs font-bold text-white min-w-32">
-                            {action}
-                          </th>
-                        ))}
-                      </tr>
+          <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="grid gap-4 p-6 md:grid-cols-2">
+          {entity.fields.map((field) => (
+            <label key={field.key} className={field.type === "textarea" ? "md:col-span-2" : ""}>
+              <span className="text-sm font-bold text-slate-700">
+                {field.label} {field.required ? <span className="text-red-500">*</span> : null}
+              </span>
+              {field.type === "textarea" ? (
+                <textarea
+                  value={form[field.key]}
+                  onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
+                  className="mt-2 h-28 w-full resize-none rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-teal-600"
+                />
+              ) : field.type === "select" ? (
+                <select
+                  value={form[field.key]}
+                  onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
+                  className="mt-2 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm outline-none focus:border-teal-600"
+                >
+                  <option value="">Seleccionar</option>
+                  {field.options?.map((option) => <option key={option}>{option}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={field.type || "text"}
+                  value={form[field.key]}
+                  onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
+                  className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-teal-600"
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end gap-3 border-t border-slate-100 p-6">
+          <button onClick={onClose} className="rounded-lg border border-slate-200 px-5 py-3 font-bold">Cancelar</button>
+          <button
+            disabled={!canSave}
+            onClick={() => onSave({ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...form })}
+            className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            <Save className="h-5 w-5" /> Guardar
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ImportView({
+  parsed,
+  plan,
+  setPlan,
+  onFile,
+  onText,
+  onConfirm,
+}: {
+  parsed: ParsedSheet | null;
+  plan: ImportPlan | null;
+  setPlan: (plan: ImportPlan) => void;
+  onFile: (file: File) => void;
+  onText: (text: string) => void;
+  onConfirm: () => void;
+}) {
+  const [paste, setPaste] = useState("");
+  const entity = plan ? entityConfigs[plan.entity] : null;
+
+  return (
+    <div>
+      <div className="mb-6">
+        <div className="flex items-center gap-3">
+          <Wand2 className="h-8 w-8 text-teal-700" />
+          <h1 className="text-3xl font-black tracking-tight text-slate-950">Importar con IA local</h1>
+        </div>
+        <p className="mt-2 max-w-3xl text-sm text-slate-600">
+          Sube un CSV/TSV exportado desde Google Sheets o pega una tabla. El asistente interpreta encabezados,
+          sugiere el módulo correcto y mapea columnas. No se inventan datos: solo se carga lo que venga en tu archivo.
+        </p>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-black">1. Cargar archivo o pegar datos</h2>
+          <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-teal-300 bg-teal-50/50 p-8 text-center">
+            <FileSpreadsheet className="h-12 w-12 text-teal-700" />
+            <span className="mt-3 font-black text-slate-950">Subir CSV / TSV</span>
+            <span className="mt-1 text-sm text-slate-600">Google Sheets: Archivo → Descargar → CSV o TSV</span>
+            <input
+              type="file"
+              accept=".csv,.tsv,.txt,.xlsx"
+              className="hidden"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) onFile(file);
+              }}
+            />
+          </label>
+          <div className="mt-6">
+            <label className="text-sm font-bold text-slate-700">O pega aquí datos copiados desde Sheets</label>
+            <textarea
+              value={paste}
+              onChange={(event) => setPaste(event.target.value)}
+              className="mt-2 h-44 w-full resize-none rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-teal-600"
+              placeholder={"Nombre\tCurso\tRUT\nMaría...\t2° Medio A\t..."}
+            />
+            <button
+              onClick={() => onText(paste)}
+              disabled={!paste.trim()}
+              className="mt-3 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white disabled:bg-slate-300"
+            >
+              Interpretar tabla pegada
+            </button>
+          </div>
+          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+            <p className="font-black">Sobre archivos .xlsx</p>
+            <p className="mt-1">Por ahora esta versión interpreta CSV/TSV en el navegador. Para Google Sheets, descarga como CSV/TSV. Si me envías tus archivos, puedo ajustar el importador a tus columnas reales.</p>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-black">2. Revisión antes de importar</h2>
+          {!parsed || !plan || !entity ? (
+            <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
+              Carga o pega una planilla para ver la interpretación.
+            </div>
+          ) : (
+            <div className="mt-5 space-y-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-500">Archivo</p>
+                  <p className="mt-1 truncate font-black">{parsed.fileName}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-500">Filas detectadas</p>
+                  <p className="mt-1 text-2xl font-black">{parsed.rows.length}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 p-4">
+                  <p className="text-xs font-bold text-slate-500">Confianza</p>
+                  <p className="mt-1 text-2xl font-black">{plan.confidence}%</p>
+                </div>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-bold text-slate-700">Importar como</span>
+                <select
+                  value={plan.entity}
+                  onChange={(event) => {
+                    const entityId = event.target.value as EntityId;
+                    setPlan({ ...plan, entity: entityId, mapping: inferImportPlan(parsed).entity === entityId ? inferImportPlan(parsed).mapping : {} });
+                  }}
+                  className="mt-2 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm outline-none focus:border-teal-600"
+                >
+                  {Object.values(entityConfigs).map((config) => <option key={config.id} value={config.id}>{config.label}</option>)}
+                </select>
+              </label>
+
+              <div>
+                <h3 className="mb-3 font-black">Mapeo de columnas</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  {entity.fields.map((field) => (
+                    <label key={field.key} className="block rounded-lg border border-slate-100 p-3">
+                      <span className="text-xs font-bold text-slate-600">
+                        {field.label} {field.required ? <span className="text-red-500">*</span> : null}
+                      </span>
+                      <select
+                        value={plan.mapping[field.key] || ""}
+                        onChange={(event) => setPlan({ ...plan, mapping: { ...plan.mapping, [field.key]: event.target.value } })}
+                        className="mt-2 w-full rounded-lg border border-slate-200 bg-white p-2 text-sm outline-none focus:border-teal-600"
+                      >
+                        <option value="">No importar</option>
+                        {parsed.headers.map((header) => <option key={header} value={header}>{header}</option>)}
+                      </select>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h3 className="mb-3 font-black">Vista previa</h3>
+                <div className="max-h-60 overflow-auto rounded-lg border border-slate-200">
+                  <table className="w-full min-w-[640px] text-left text-xs">
+                    <thead className="bg-slate-50">
+                      <tr>{parsed.headers.map((header) => <th key={header} className="px-3 py-2">{header}</th>)}</tr>
                     </thead>
                     <tbody>
-                      {cycle.courses.map(course => (
-                        <tr key={course}>
-                          <td className="sticky left-0 z-10 bg-white border border-sky-100 px-3 py-2 font-bold text-slate-700">{course}</td>
-                          {ORIENTATION_ACTIONS.map(action => {
-                            const count = countRecords(course, action);
-                            return (
-                              <td
-                                key={`${course}-${action}`}
-                                className={`border border-sky-100 px-3 py-2 text-center font-semibold ${count > 0 ? 'bg-emerald-100 text-emerald-900' : 'bg-white text-slate-500'}`}
-                              >
-                                {count}
-                              </td>
-                            );
-                          })}
+                      {parsed.rows.slice(0, 5).map((row, index) => (
+                        <tr key={index} className="border-t border-slate-100">
+                          {parsed.headers.map((header) => <td key={header} className="px-3 py-2">{row[header]}</td>)}
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              ))}
+              </div>
+
+              <button onClick={onConfirm} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white">
+                <Check className="h-5 w-5" /> Confirmar importación
+              </button>
             </div>
-          </div>
-        </div>
-
+          )}
+        </section>
       </div>
-    );
-  };
+    </div>
+  );
+}
 
-  const ViewBitacora = () => (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+function ActionTile({
+  icon: Icon,
+  title,
+  body,
+  cta,
+  onClick,
+}: {
+  icon: LucideIcon;
+  title: string;
+  body: string;
+  cta: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-[0_18px_45px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-[0_24px_55px_rgba(15,23,42,0.08)]"
+    >
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Bitácora Diaria</h2>
-          <p className="text-sm text-slate-500">Registra y haz seguimiento de tus actividades diarias.</p>
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+          <Icon className="h-5 w-5" />
         </div>
-        <button 
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 rounded-xl font-semibold text-sm shadow-sm transition-all"
-        >
-          <Plus className="w-4 h-4" /> Nuevo Registro
-        </button>
+        <ArrowUpRight className="h-5 w-5 text-slate-300 transition group-hover:text-teal-700" />
       </div>
-
-      <div className="space-y-4">
-        {bitacora.map(note => (
-          <div key={note.id} className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 hover:shadow-md transition-shadow">
-            <div className="flex items-start gap-4">
-              <div className={`p-3 rounded-xl ${getNoteTypeColor(note.type).replace('text-', 'bg-').replace('50', '100').split(' ')[0]}`}>
-                {getNoteTypeIcon(note.type)}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                    {new Date(note.date).toLocaleDateString('es-CL', { weekday: 'long', day: '2-digit', month: 'long', hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${getNoteTypeColor(note.type)}`}>
-                    {note.type}
-                  </span>
-                </div>
-                <h3 className="text-lg font-bold text-slate-800">{note.title}</h3>
-                <p className="text-sm text-slate-600 mt-2 leading-relaxed">{note.content}</p>
-                <div className="flex items-center gap-2 mt-4 flex-wrap">
-                  {note.tags.map(tag => (
-                    <span key={tag} className="text-[11px] font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-md">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
+      <h3 className="mt-5 text-base font-black text-slate-950">{title}</h3>
+      <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{body}</p>
+      <span className="mt-5 text-sm font-black text-teal-700">{cta}</span>
+    </button>
   );
+}
 
-  const ViewReuniones = () => (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-slate-800">Reuniones y Talleres</h2>
-          <p className="text-sm text-slate-500">Gestión de entrevistas con apoderados y actividades grupales.</p>
-        </div>
-        <button className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl font-semibold text-sm transition-all">
-          <Calendar className="w-4 h-4" /> Agendar
-        </button>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-        <div className="divide-y divide-slate-100">
-          {REUNIONES.map(reunion => (
-            <div key={reunion.id} className="p-5 flex items-center justify-between hover:bg-slate-50 transition-colors">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
-                  <UsersRound className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-slate-800">{reunion.title}</h3>
-                  <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                    <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(reunion.date).toLocaleString('es-CL')}</span>
-                    <span className="px-2 py-0.5 bg-slate-100 rounded-md font-medium">{reunion.type}</span>
-                  </div>
-                </div>
-              </div>
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${
-                reunion.status === 'Programado' ? 'bg-blue-100 text-blue-700' : 'bg-orange-100 text-orange-700'
-              }`}>
-                {reunion.status}
-              </span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-
-  const ViewArchivos = () => (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-lg font-bold text-slate-800">Repositorio Institucional</h2>
-            <p className="text-sm text-slate-500">Enlaces directos a carpetas y documentos en Google Drive.</p>
-          </div>
-          <button className="flex items-center gap-2 bg-blue-50 text-blue-700 hover:bg-blue-100 px-4 py-2 rounded-xl font-semibold text-sm transition-colors">
-            <ExternalLink className="w-4 h-4" />
-            Abrir Drive
-          </button>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {DRIVE_FOLDERS.map(item => (
-            <a 
-              key={item.id}
-              href={item.link} 
-              target="_blank" 
-              rel="noreferrer"
-              className="flex items-center gap-4 p-4 rounded-xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/50 transition-all group"
-            >
-              <div className={`p-3 rounded-xl ${item.type === 'folder' ? 'bg-amber-100 text-amber-600' : 'bg-blue-100 text-blue-600'}`}>
-                {item.type === 'folder' ? <FolderOpen className="w-6 h-6" /> : <FileText className="w-6 h-6" />}
-              </div>
-              <div className="overflow-hidden">
-                <h3 className="font-semibold text-slate-800 truncate group-hover:text-blue-700 transition-colors">{item.name}</h3>
-                <p className="text-xs text-slate-500">{item.shared ? 'Compartido con el equipo' : 'Privado'}</p>
-              </div>
-            </a>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view: ViewId) => void }) {
+  const total = Object.values(store).reduce((sum, records) => sum + records.length, 0);
+  const activeEntities = Object.values(store).filter((records) => records.length > 0).length;
+  const readiness = Math.round((activeEntities / Object.keys(entityConfigs).length) * 100);
+  const latest = Object.entries(store)
+    .flatMap(([entity, records]) => records.map((record) => ({ entity: entity as EntityId, record })))
+    .sort((a, b) => b.record.updatedAt.localeCompare(a.record.updatedAt))
+    .slice(0, 6);
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900 flex flex-col">
-      {/* SIDEBAR */}
-      <aside className="hidden">
-        <div className="p-6 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center shadow-inner overflow-hidden relative">
-              <span className="text-white font-bold text-lg absolute z-0">SL</span>
-              <img 
-                src="/logo-san-lucas.png" 
-                alt="Logo Colegio San Lucas de Lo Espejo" 
-                className="w-full h-full object-cover relative z-10 p-1"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-              />
+    <div className="space-y-7">
+      <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_28px_70px_rgba(15,23,42,0.18)] sm:p-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(45,212,191,.32),transparent_28%),radial-gradient(circle_at_85%_30%,rgba(59,130,246,.24),transparent_30%),linear-gradient(135deg,#062f42,#081827_68%,#020617)]" />
+        <div className="relative grid gap-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-cyan-50">
+              <CheckCircle2 className="h-4 w-4 text-teal-200" />
+              Operativo, sin datos ficticios
             </div>
-            <div>
-              <h1 className="font-bold text-lg text-slate-800 leading-tight">Colegio San Lucas</h1>
-              <p className="text-xs font-medium text-slate-500">Lo Espejo</p>
+          <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl">Centro de mando para orientación y convivencia escolar</h1>
+          <p className="mt-4 max-w-3xl text-sm leading-6 text-cyan-50/80 sm:text-base">
+            Base lista para empezar a ingresar información real. Los datos se guardan localmente en este navegador hasta conectar Supabase/Auth.
+          </p>
+          <div className="mt-6 flex flex-wrap gap-3">
+          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-5 py-3 font-black text-slate-950 shadow-lg shadow-teal-950/30">
+            <Wand2 className="h-5 w-5" /> Importar planilla
+          </button>
+          <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 font-black text-white hover:bg-white/15">
+            <Plus className="h-5 w-5" /> Ingresar datos
+          </button>
+        </div>
+          </div>
+          <div className="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-black text-cyan-50/80">Preparacion de datos</p>
+                <p className="mt-1 text-4xl font-black">{readiness}%</p>
+              </div>
+              <BarChart3 className="h-10 w-10 text-teal-200" />
+            </div>
+            <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/15">
+              <div className="h-full rounded-full bg-teal-300" style={{ width: `${readiness}%` }} />
+            </div>
+            <div className="mt-5 grid gap-3 text-sm text-cyan-50/80">
+              <div className="flex justify-between gap-4"><span>Registros reales cargados</span><strong className="text-white">{total}</strong></div>
+              <div className="flex justify-between gap-4"><span>Modulos con informacion</span><strong className="text-white">{activeEntities}/{Object.keys(entityConfigs).length}</strong></div>
+              <div className="flex justify-between gap-4"><span>Privacidad actual</span><strong className="text-white">Local</strong></div>
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="p-4 flex-1 overflow-y-auto">
-          <p className="px-4 text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-3">Módulos</p>
-          <nav className="space-y-1">
-            {navigation.map((item) => {
-              const isActive = currentView === item.id;
+      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+        <StatCard label="Estudiantes" value={store.students.length} detail="Registros reales" icon={UserRound} />
+        <StatCard label="Cursos" value={store.courses.length} detail="Cursos creados" icon={BookOpen} />
+        <StatCard label="Casos" value={store.cases.length} detail="Casos ingresados" icon={FileText} />
+        <StatCard label="Bitácoras" value={store.logs.length} detail="Intervenciones" icon={ClipboardList} />
+        <StatCard label="Documentos" value={store.documents.length} detail="Índice documental" icon={FolderOpen} />
+      </div>
+
+      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
+        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
+          <div>
+            <h2 className="text-xl font-black tracking-tight text-slate-950">Puesta en marcha guiada</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Secuencia recomendada para dejar la institución lista antes de operar con el equipo completo.
+            </p>
+          </div>
+          <span className="rounded-full bg-teal-50 px-3 py-2 text-xs font-black text-teal-700 ring-1 ring-teal-100">
+            {total === 0 ? "Inicio limpio" : `${total} registros`}
+          </span>
+        </div>
+        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ActionTile icon={Upload} title="Importar desde Sheets" body="Pega o sube CSV/TSV. La IA local reconoce columnas y te deja revisar el mapeo antes de guardar." cta="Abrir importador" onClick={() => onNavigate("import")} />
+          <ActionTile icon={UserRound} title="Crear base de estudiantes" body="Registra estudiantes, curso, ID, apoderado y contacto para vincular casos y bitácoras." cta="Ir a estudiantes" onClick={() => onNavigate("students")} />
+          <ActionTile icon={FileText} title="Abrir casos reales" body="Ingresa motivo, prioridad, estado y responsable sin llenar paneles con información ficticia." cta="Ir a casos" onClick={() => onNavigate("cases")} />
+          <ActionTile icon={ShieldCheck} title="Ordenar protocolos" body="Centraliza derivaciones, plazos y notas para que el seguimiento sea auditable desde el día uno." cta="Ir a protocolos" onClick={() => onNavigate("protocols")} />
+        </div>
+      </section>
+
+      {total === 0 ? (
+        <section className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+          <Database className="mx-auto h-14 w-14 text-teal-700" />
+          <h2 className="mt-4 text-2xl font-black">No hay datos inventados cargados</h2>
+          <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">
+            La plataforma está vacía a propósito. Puedes empezar con formularios o importando tu Google Sheet como CSV/TSV.
+          </p>
+          <div className="mt-6 flex flex-wrap justify-center gap-3">
+            <button onClick={() => onNavigate("students")} className="rounded-lg bg-teal-700 px-5 py-3 font-bold text-white">Crear primer estudiante</button>
+            <button onClick={() => onNavigate("import")} className="rounded-lg border border-slate-200 px-5 py-3 font-bold text-slate-700">Importar planilla</button>
+          </div>
+        </section>
+      ) : (
+        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-black">Últimos registros</h2>
+          <div className="mt-4 divide-y divide-slate-100">
+            {latest.map(({ entity, record }) => {
+              const config = entityConfigs[entity];
+              const titleField = config.fields.find((field) => field.required)?.key || config.fields[0].key;
               return (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setCurrentView(item.id);
-                    if (item.id !== 'cursos') {
-                      setSelectedCourse(null);
-                      setSelectedStudent(null);
-                    }
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
-                    isActive 
-                      ? 'bg-cyan-50 text-cyan-700' 
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <item.icon className={`w-5 h-5 ${isActive ? 'text-cyan-600' : 'text-slate-400'}`} />
-                  {item.name}
+                <button key={`${entity}-${record.id}`} onClick={() => onNavigate(entity)} className="flex w-full items-center justify-between py-3 text-left">
+                  <span>
+                    <span className="block font-bold text-slate-950">{record[titleField] || config.singular}</span>
+                    <span className="block text-xs text-slate-500">{config.label} · {new Date(record.updatedAt).toLocaleString("es-CL")}</span>
+                  </span>
+                  <ChevronDown className="-rotate-90 h-4 w-4 text-slate-400" />
                 </button>
               );
             })}
-          </nav>
-        </div>
-
-        <div className="p-4 border-t border-slate-100">
-          <div className="flex items-center gap-3 px-4 py-3 bg-slate-50 rounded-xl">
-            <div className="w-8 h-8 rounded-full bg-cyan-200 flex items-center justify-center flex-shrink-0">
-              <span className="text-cyan-800 font-bold text-xs">GC</span>
-            </div>
-            <div className="overflow-hidden">
-              <p className="text-sm font-bold text-slate-800 truncate">Gustavo Caro</p>
-              <p className="text-xs text-slate-500 truncate">Orientador</p>
-            </div>
           </div>
-        </div>
-      </aside>
+        </section>
+      )}
+    </div>
+  );
+}
 
-      {/* MAIN CONTENT */}
-      <main className="flex-1 flex flex-col min-h-screen overflow-hidden">
-        {/* HEADER */}
-        <header className="bg-white/90 backdrop-blur-md border-b border-slate-200 sticky top-0 z-20">
-          <div className="px-4 md:px-6 py-3 flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-cyan-600 flex items-center justify-center shadow-inner overflow-hidden relative shrink-0">
-                  <span className="text-white font-bold text-lg absolute z-0">SL</span>
-                  <img
-                    src="/logo-san-lucas.png"
-                    alt="Logo Colegio San Lucas de Lo Espejo"
-                    className="w-full h-full object-cover relative z-10 p-1"
-                    onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <h1 className="font-bold text-lg text-slate-800 leading-tight truncate">Colegio San Lucas de Lo Espejo</h1>
-                  <p className="text-xs font-medium text-slate-500 truncate">{navigation.find(n => n.id === currentView)?.name || currentView}</p>
-                </div>
-              </div>
-              <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors xl:hidden">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-              </button>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
-              <select
-                value={currentView}
-                onChange={(e) => {
-                  setCurrentView(e.target.value);
-                  if (e.target.value !== 'cursos') {
-                    setSelectedCourse(null);
-                    setSelectedStudent(null);
-                  }
-                }}
-                className="lg:hidden w-full px-3 py-2.5 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                {navigation.map(item => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-
-            <nav className="hidden lg:grid grid-cols-6 gap-2">
-              {navigation.map((item) => {
-                const isActive = currentView === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => {
-                      setCurrentView(item.id);
-                      if (item.id !== 'cursos') {
-                        setSelectedCourse(null);
-                        setSelectedStudent(null);
-                      }
-                    }}
-                    className={`min-w-0 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
-                      isActive
-                        ? 'bg-cyan-600 text-white shadow-sm shadow-cyan-600/20'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    <item.icon className="w-4 h-4 shrink-0" />
-                    <span className="truncate">{item.name}</span>
-                  </button>
-                );
-              })}
-            </nav>
-
-            <div className="hidden xl:flex items-center gap-3">
-              <div className="hidden 2xl:flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Software por</span>
-                <img src="/tiza-education-logo.svg" alt="Logo Tiza Education" className="h-7 w-auto" />
-              </div>
-              <button className="relative p-2.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-full transition-colors">
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
-              </button>
-              <button 
-                onClick={() => setIsModalOpen(true)}
-                className="hidden sm:flex items-center gap-2 bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2.5 rounded-xl font-semibold text-sm shadow-sm shadow-cyan-600/20 transition-all hover:shadow-md hover:shadow-cyan-600/30 active:scale-95"
-              >
-                <Plus className="w-4 h-4" />
-                Registro
-              </button>
-            </div>
-            </div>
+function SettingsView({
+  profile,
+  setProfile,
+  onClear,
+}: {
+  profile: Record<string, string>;
+  setProfile: (profile: Record<string, string>) => void;
+  onClear: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-6">
+        <h1 className="text-3xl font-black tracking-tight text-slate-950">Configuración</h1>
+        <p className="mt-2 max-w-3xl text-sm text-slate-600">Configura la institución y revisa el estado de persistencia.</p>
+      </div>
+      <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-black">Institución</h2>
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            {[
+              ["organization", "Nombre institución"],
+              ["role", "Rol activo"],
+              ["year", "Año escolar"],
+              ["professional", "Profesional"],
+            ].map(([key, label]) => (
+              <label key={key}>
+                <span className="text-sm font-bold text-slate-700">{label}</span>
+                <input
+                  value={profile[key] || ""}
+                  onChange={(event) => setProfile({ ...profile, [key]: event.target.value })}
+                  className="mt-2 w-full rounded-lg border border-slate-200 p-3 text-sm outline-none focus:border-teal-600"
+                />
+              </label>
+            ))}
           </div>
-        </header>
-
-        {/* CONTENT AREA */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-6">
-          <div className={`${currentView === 'orientacion' ? 'max-w-none' : 'max-w-5xl'} mx-auto`}>
-            {currentView === 'inicio' && ViewInicio()}
-            {currentView === 'bitacora' && ViewBitacora()}
-            {currentView === 'cursos' && ViewCursos()}
-            {currentView === 'orientacion' && ViewOrientacion()}
-            {currentView === 'reuniones' && ViewReuniones()}
-            {currentView === 'archivos' && ViewArchivos()}
+        </section>
+        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h2 className="text-lg font-black">Persistencia actual</h2>
+          <div className="mt-4 rounded-lg bg-teal-50 p-4 text-sm text-teal-900">
+            <p className="font-black"><Lock className="mr-2 inline h-4 w-4" /> Guardado local</p>
+            <p className="mt-2">Los datos quedan en este navegador. Para uso multiusuario real, el siguiente paso es conectar Supabase con RLS y autenticación.</p>
           </div>
+          <button onClick={onClear} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-red-200 px-5 py-3 font-bold text-red-600 hover:bg-red-50">
+            <Trash2 className="h-5 w-5" /> Borrar datos locales
+          </button>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function Toast({ message }: { message: string }) {
+  return (
+    <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-teal-200 bg-white px-5 py-4 font-bold text-slate-950 shadow-2xl">
+      <Check className="mr-2 inline h-5 w-5 text-teal-700" />
+      {message}
+    </div>
+  );
+}
+
+export default function TizaEducationApp() {
+  const [store, setStore] = useState<DataStore>(() => {
+    if (typeof window === "undefined") return emptyStore();
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return emptyStore();
+    try {
+      return { ...emptyStore(), ...JSON.parse(raw) };
+    } catch {
+      return emptyStore();
+    }
+  });
+  const [activeView, setActiveView] = useState<ViewId>("dashboard");
+  const [query, setQuery] = useState("");
+  const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
+  const [parsed, setParsed] = useState<ParsedSheet | null>(null);
+  const [plan, setPlan] = useState<ImportPlan | null>(null);
+  const [toast, setToast] = useState("");
+  const [profile, setProfile] = useState<Record<string, string>>(() => {
+    const defaults = {
+      organization: "Colegio San Lucas",
+      role: "Orientación / Convivencia",
+      year: "2026",
+      professional: "",
+    };
+    if (typeof window === "undefined") return defaults;
+    const savedProfile = window.localStorage.getItem(PROFILE_KEY);
+    if (!savedProfile) return defaults;
+    try {
+      return { ...defaults, ...JSON.parse(savedProfile) };
+    } catch {
+      return defaults;
+    }
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  }, [store]);
+
+  useEffect(() => {
+    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+  }, [profile]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  const activeLabel = activeView === "dashboard"
+    ? "Inicio"
+    : activeView === "import"
+      ? "Importar con IA"
+      : activeView === "settings"
+        ? "Configuración"
+        : entityConfigs[activeView].label;
+
+  const addRecord = (entity: EntityId, record: DataRecord) => {
+    setStore((current) => ({ ...current, [entity]: [record, ...current[entity]] }));
+    setDialogEntity(null);
+    setToast(`${entityConfigs[entity].singular} guardado`);
+  };
+
+  const deleteRecord = (entity: EntityId, id: string) => {
+    setStore((current) => ({ ...current, [entity]: current[entity].filter((record) => record.id !== id) }));
+    setToast("Registro eliminado");
+  };
+
+  const importText = (text: string, fileName = "tabla pegada") => {
+    const parsedCsv = parseCsv(text);
+    const sheet = { fileName, ...parsedCsv };
+    const inferred = inferImportPlan(sheet);
+    setParsed(sheet);
+    setPlan(inferred);
+    setActiveView("import");
+    setToast("Planilla interpretada");
+  };
+
+  const importFile = (file: File) => {
+    if (file.name.toLowerCase().endsWith(".xlsx")) {
+      setToast("Exporta tu Google Sheet como CSV/TSV por ahora");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => importText(String(reader.result || ""), file.name);
+    reader.readAsText(file, "utf-8");
+  };
+
+  const confirmImport = () => {
+    if (!parsed || !plan) return;
+    const config = entityConfigs[plan.entity];
+    const requiredMissing = config.fields.filter((field) => field.required && !plan.mapping[field.key]);
+    if (requiredMissing.length) {
+      setToast(`Falta mapear: ${requiredMissing.map((field) => field.label).join(", ")}`);
+      return;
+    }
+    const imported = parsed.rows
+      .map((row): DataRecord => {
+        const record = config.fields.reduce<Record<string, string>>((acc, field) => {
+          const header = plan.mapping[field.key];
+          acc[field.key] = header ? row[header] || "" : "";
+          return acc;
+        }, {});
+        return { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...record };
+      })
+      .filter((record) => config.fields.some((field) => record[field.key]?.trim()));
+
+    setStore((current) => ({ ...current, [plan.entity]: [...imported, ...current[plan.entity]] }));
+    setToast(`${imported.length} registros importados en ${config.label}`);
+    setParsed(null);
+    setPlan(null);
+    setActiveView(plan.entity);
+  };
+
+  const exportEntity = (entity: EntityId) => {
+    const config = entityConfigs[entity];
+    downloadText(`${config.id}.csv`, recordsToCsv(store[entity], config.fields), "text/csv;charset=utf-8");
+    setToast(`${config.label} exportado`);
+  };
+
+  const clearLocal = () => {
+    if (!window.confirm("¿Borrar todos los datos locales de Tiza Education en este navegador?")) return;
+    setStore(emptyStore());
+    setToast("Datos locales borrados");
+  };
+
+  const renderView = () => {
+    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
+    if (activeView === "import") {
+      return (
+        <ImportView
+          parsed={parsed}
+          plan={plan}
+          setPlan={setPlan}
+          onFile={importFile}
+          onText={(text) => importText(text)}
+          onConfirm={confirmImport}
+        />
+      );
+    }
+    if (activeView === "settings") return <SettingsView profile={profile} setProfile={setProfile} onClear={clearLocal} />;
+
+    const entity = entityConfigs[activeView];
+    return (
+      <EntityView
+        entity={entity}
+        records={store[activeView]}
+        query={query}
+        onAdd={() => setDialogEntity(activeView)}
+        onDelete={(id) => deleteRecord(activeView, id)}
+        onExport={() => exportEntity(activeView)}
+        onImport={() => setActiveView("import")}
+      />
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f3f7fb] text-slate-950">
+      <Sidebar activeView={activeView} onNavigate={setActiveView} />
+      <Topbar query={query} setQuery={setQuery} activeLabel={`${profile.organization || "Institución"} · ${activeLabel}`} />
+      <main className="lg:pl-[304px]">
+        <div className="mx-auto max-w-[1540px] px-4 py-7 sm:px-8">
+          {renderView()}
         </div>
       </main>
-
-      {/* MODAL BITÁCORA */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl relative z-10 animate-in zoom-in-95 duration-200 overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-              <h2 className="text-lg font-bold text-slate-800">Nuevo Registro de Bitácora</h2>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <form onSubmit={handleSaveBitacora} className="p-6 overflow-y-auto flex-1">
-              <div className="space-y-5">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Título / Actividad</label>
-                  <input 
-                    type="text" 
-                    value={newNoteTitle}
-                    onChange={(e) => setNewNoteTitle(e.target.value)}
-                    placeholder="Ej: Reunión con profesora jefe 1° Medio A..."
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-sm"
-                    required
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Tipo de Registro</label>
-                    <select 
-                      value={newNoteType}
-                      onChange={(e) => setNewNoteType(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-sm cursor-pointer"
-                    >
-                      <option>Registro</option>
-                      <option>Incidencia</option>
-                      <option>Acuerdo</option>
-                      <option>Seguimiento</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Etiquetas (separadas por coma)</label>
-                    <input 
-                      type="text" 
-                      value={newNoteTags}
-                      onChange={(e) => setNewNoteTags(e.target.value)}
-                      placeholder="Ej: Orientación, 1° Medio A"
-                      className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-sm"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Detalle</label>
-                  <textarea 
-                    value={newNoteContent}
-                    onChange={(e) => setNewNoteContent(e.target.value)}
-                    placeholder="Describe los detalles de la actividad, acuerdos, etc..."
-                    rows={5}
-                    className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 transition-all shadow-sm resize-none"
-                    required
-                  />
-                </div>
-              </div>
-              
-              <div className="mt-8 flex justify-end gap-3 pt-4 border-t border-slate-100">
-                <button 
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-5 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit"
-                  className="px-6 py-2.5 text-sm font-bold text-white bg-cyan-600 hover:bg-cyan-700 rounded-xl shadow-sm shadow-cyan-600/20 transition-all hover:shadow-md hover:shadow-cyan-600/30"
-                >
-                  Guardar en Bitácora
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {dialogEntity ? (
+        <RecordDialog entity={entityConfigs[dialogEntity]} onClose={() => setDialogEntity(null)} onSave={(record) => addRecord(dialogEntity, record)} />
+      ) : null}
+      {toast ? <Toast message={toast} /> : null}
     </div>
   );
 }

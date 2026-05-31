@@ -1,11 +1,34 @@
-<svg width="180" height="44" viewBox="0 0 180 44" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<svg width="236" height="72" viewBox="0 0 236 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Tiza Education</title>
-  <desc id="desc">Logo de Tiza Education</desc>
-  <rect x="1" y="1" width="42" height="42" rx="12" fill="#0891B2"/>
-  <path d="M14 29.5L22 10.5L30 29.5" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M17.2 23.3H26.8" stroke="white" stroke-width="3.2" stroke-linecap="round"/>
-  <path d="M34 12.5V31.5" stroke="#A7F3D0" stroke-width="3.2" stroke-linecap="round"/>
-  <path d="M11 33.5H34" stroke="#CFFAFE" stroke-width="2.4" stroke-linecap="round"/>
-  <text x="55" y="19" fill="#0F172A" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700">Tiza</text>
-  <text x="55" y="35" fill="#475569" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="600">Education</text>
+  <desc id="desc">Logo moderno de Tiza Education con pizarra antigua, tiza y lápiz.</desc>
+  <defs>
+    <linearGradient id="board" x1="6" y1="6" x2="62" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F766E"/>
+      <stop offset="0.55" stop-color="#075E63"/>
+      <stop offset="1" stop-color="#063B4C"/>
+    </linearGradient>
+    <linearGradient id="chalk" x1="16" y1="48" x2="58" y2="16" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#DDFCF4"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="pencil" x1="32" y1="44" x2="52" y2="17" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F59E0B"/>
+      <stop offset="1" stop-color="#FFD08A"/>
+    </linearGradient>
+    <filter id="softShadow" x="-8" y="-8" width="86" height="86" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#002B3D" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+  <g filter="url(#softShadow)">
+    <path d="M11 13.5C11 8.253 15.253 4 20.5 4H53.5C58.747 4 63 8.253 63 13.5V41.5C63 46.747 58.747 51 53.5 51H31.3L19.8 62V51H20.5C15.253 51 11 46.747 11 41.5V13.5Z" fill="url(#board)"/>
+    <path d="M20.5 8H53.5C56.538 8 59 10.462 59 13.5V41.5C59 44.538 56.538 47 53.5 47H29.7L23.8 52.7V47H20.5C17.462 47 15 44.538 15 41.5V13.5C15 10.462 17.462 8 20.5 8Z" stroke="url(#chalk)" stroke-width="3.2" stroke-linejoin="round"/>
+    <path d="M22 39.5C28.2 36.2 34.1 36.6 39.8 39.9C44.1 42.4 48 42.6 53 39.6" stroke="#BFFAF0" stroke-width="2.5" stroke-linecap="round" opacity="0.95"/>
+    <path d="M28.5 44.4H44.5" stroke="#E6FFFB" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+    <path d="M34.4 35.4L31 41.5L37.6 39.2L53.8 20.9C55.1 19.4 54.9 17.1 53.4 15.8L51.2 13.9C49.7 12.6 47.4 12.8 46.1 14.3L34.4 35.4Z" fill="url(#pencil)"/>
+    <path d="M31 41.5L34.4 35.4L37.6 39.2L31 41.5Z" fill="#F8E7C8"/>
+    <path d="M46.1 14.3L53.8 20.9" stroke="#083344" stroke-width="2.2" stroke-linecap="round"/>
+    <path d="M33.3 37.3L35.8 40.1" stroke="#8A4B12" stroke-width="1.8" stroke-linecap="round"/>
+  </g>
+  <text x="78" y="35" fill="#06142B" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="800" letter-spacing="-0.5">Tiza</text>
+  <text x="80" y="56" fill="#334155" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18" font-weight="600">Education</text>
 </svg>
