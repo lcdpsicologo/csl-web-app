@@ -398,14 +398,14 @@ function StatCard({ label, value, detail, icon: Icon, accent = "teal" }: { label
 
 function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (view: ViewId) => void }) {
   return (
-    <aside className="fixed inset-y-0 left-0 hidden w-[304px] flex-col bg-[#00364a] text-white shadow-2xl lg:flex">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(45,212,191,.36),transparent_30%),radial-gradient(circle_at_82%_22%,rgba(14,165,233,.18),transparent_25%),linear-gradient(180deg,#07384b,#002b3e_58%,#012536)]" />
+    <aside className="fixed inset-y-0 left-0 hidden w-[286px] flex-col bg-[#00364a] text-white shadow-2xl lg:flex">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(45,212,191,.28),transparent_30%),linear-gradient(180deg,#06384b,#003247_58%,#05293a)]" />
       <div className="relative flex h-full flex-col">
-        <div className="px-6 py-6">
-          <div className="rounded-2xl border border-white/15 bg-white/95 p-3 shadow-2xl shadow-cyan-950/20">
-            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={210} height={64} priority />
+        <div className="px-5 pb-4 pt-5">
+          <div className="rounded-xl border border-white/15 bg-white/95 px-3 py-2 shadow-xl shadow-cyan-950/20">
+            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={178} height={54} priority />
           </div>
-          <div className="mt-4 flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-2 text-xs font-bold text-cyan-50/90">
+          <div className="mt-3 flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-2 text-xs font-bold text-cyan-50/90">
             <Sparkles className="h-4 w-4 text-teal-200" />
             Plataforma lista para datos reales
           </div>
@@ -418,7 +418,7 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className={`flex h-12 w-full items-center gap-3 rounded-xl px-4 text-left text-sm font-black transition ${
+                className={`flex h-11 w-full items-center gap-3 rounded-xl px-4 text-left text-sm font-black transition ${
                   active ? "bg-teal-400 text-slate-950 shadow-lg shadow-teal-950/25" : "text-cyan-50/90 hover:bg-white/10 hover:text-white"
                 }`}
               >
@@ -454,7 +454,7 @@ function Topbar({
   activeLabel: string;
 }) {
   return (
-    <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl lg:pl-[304px]">
+    <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl lg:pl-[286px]">
       <div className="flex min-h-20 items-center gap-4 px-4 py-3 sm:px-8">
         <div className="flex min-w-0 items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
@@ -871,42 +871,43 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
 
   return (
     <div className="space-y-7">
-      <section className="relative overflow-hidden rounded-3xl border border-slate-200 bg-slate-950 p-6 text-white shadow-[0_28px_70px_rgba(15,23,42,0.18)] sm:p-8">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,rgba(45,212,191,.32),transparent_28%),radial-gradient(circle_at_85%_30%,rgba(59,130,246,.24),transparent_30%),linear-gradient(135deg,#062f42,#081827_68%,#020617)]" />
-        <div className="relative grid gap-8 xl:grid-cols-[1.1fr_0.9fr] xl:items-end">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.05)]">
+        <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-center">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-2 text-xs font-black text-cyan-50">
-              <CheckCircle2 className="h-4 w-4 text-teal-200" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700">
+              <CheckCircle2 className="h-4 w-4" />
               Operativo, sin datos ficticios
             </div>
-          <h1 className="mt-5 max-w-3xl text-4xl font-black tracking-tight text-white sm:text-5xl">Centro de mando para orientación y convivencia escolar</h1>
-          <p className="mt-4 max-w-3xl text-sm leading-6 text-cyan-50/80 sm:text-base">
+          <h1 className="mt-4 max-w-3xl text-3xl font-black tracking-tight text-slate-950">Inicio institucional</h1>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             Base lista para empezar a ingresar información real. Los datos se guardan localmente en este navegador hasta conectar Supabase/Auth.
           </p>
-          <div className="mt-6 flex flex-wrap gap-3">
-          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-5 py-3 font-black text-slate-950 shadow-lg shadow-teal-950/30">
+          <div className="mt-5 flex flex-wrap gap-3">
+          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-teal-800">
             <Wand2 className="h-5 w-5" /> Importar planilla
           </button>
-          <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-5 py-3 font-black text-white hover:bg-white/15">
+          <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
             <Plus className="h-5 w-5" /> Ingresar datos
           </button>
         </div>
           </div>
-          <div className="rounded-2xl border border-white/15 bg-white/10 p-5 backdrop-blur">
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-black text-cyan-50/80">Preparacion de datos</p>
-                <p className="mt-1 text-4xl font-black">{readiness}%</p>
+                <p className="text-sm font-black text-slate-600">Preparacion de datos</p>
+                <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">{readiness}%</p>
               </div>
-              <BarChart3 className="h-10 w-10 text-teal-200" />
+              <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-teal-700 ring-1 ring-slate-200">
+                <BarChart3 className="h-6 w-6" />
+              </div>
             </div>
-            <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/15">
-              <div className="h-full rounded-full bg-teal-300" style={{ width: `${readiness}%` }} />
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full bg-teal-600" style={{ width: `${readiness}%` }} />
             </div>
-            <div className="mt-5 grid gap-3 text-sm text-cyan-50/80">
-              <div className="flex justify-between gap-4"><span>Registros reales cargados</span><strong className="text-white">{total}</strong></div>
-              <div className="flex justify-between gap-4"><span>Modulos con informacion</span><strong className="text-white">{activeEntities}/{Object.keys(entityConfigs).length}</strong></div>
-              <div className="flex justify-between gap-4"><span>Privacidad actual</span><strong className="text-white">Local</strong></div>
+            <div className="mt-4 grid gap-2 text-sm text-slate-600">
+              <div className="flex justify-between gap-4"><span>Registros reales</span><strong className="text-slate-950">{total}</strong></div>
+              <div className="flex justify-between gap-4"><span>Modulos con datos</span><strong className="text-slate-950">{activeEntities}/{Object.keys(entityConfigs).length}</strong></div>
+              <div className="flex justify-between gap-4"><span>Persistencia</span><strong className="text-slate-950">Local</strong></div>
             </div>
           </div>
         </div>
@@ -1195,8 +1196,8 @@ export default function TizaEducationApp() {
     <div className="min-h-screen bg-[#f3f7fb] text-slate-950">
       <Sidebar activeView={activeView} onNavigate={setActiveView} />
       <Topbar query={query} setQuery={setQuery} activeLabel={`${profile.organization || "Institución"} · ${activeLabel}`} />
-      <main className="lg:pl-[304px]">
-        <div className="mx-auto max-w-[1540px] px-4 py-7 sm:px-8">
+      <main className="lg:pl-[286px]">
+        <div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-8">
           {renderView()}
         </div>
       </main>
