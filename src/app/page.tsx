@@ -4,7 +4,6 @@ import Image from "next/image";
 import React, { useEffect, useState } from "react";
 import {
   ArrowDownToLine,
-  ArrowUpRight,
   BarChart3,
   BookOpen,
   Building2,
@@ -25,7 +24,6 @@ import {
   Search,
   Settings,
   ShieldCheck,
-  Sparkles,
   Trash2,
   Upload,
   UserRound,
@@ -371,11 +369,11 @@ function downloadText(fileName: string, content: string, type = "text/plain;char
   URL.revokeObjectURL(url);
 }
 
-function StatCard({ label, value, detail, icon: Icon, accent = "teal" }: { label: string; value: number; detail: string; icon: LucideIcon; accent?: "teal" | "blue" | "amber" | "violet" | "rose" }) {
+function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label: string; value: number; detail: string; icon: LucideIcon; accent?: "teal" | "blue" | "amber" | "violet" | "rose" }) {
   const accents = {
-    teal: "bg-teal-50 text-teal-700 ring-teal-100",
+    teal: "bg-blue-50 text-blue-700 ring-blue-100",
     blue: "bg-blue-50 text-blue-700 ring-blue-100",
-    amber: "bg-amber-50 text-amber-700 ring-amber-100",
+    amber: "bg-orange-50 text-orange-700 ring-orange-100",
     violet: "bg-violet-50 text-violet-700 ring-violet-100",
     rose: "bg-rose-50 text-rose-700 ring-rose-100",
   };
@@ -398,16 +396,12 @@ function StatCard({ label, value, detail, icon: Icon, accent = "teal" }: { label
 
 function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (view: ViewId) => void }) {
   return (
-    <aside className="fixed inset-y-0 left-0 hidden w-[286px] flex-col bg-[#00364a] text-white shadow-2xl lg:flex">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_0%,rgba(45,212,191,.28),transparent_30%),linear-gradient(180deg,#06384b,#003247_58%,#05293a)]" />
+    <aside className="fixed inset-y-0 left-0 hidden w-[286px] flex-col bg-[#061452] text-white shadow-2xl lg:flex">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(0,107,255,.35),transparent_32%),linear-gradient(180deg,#061452,#030a2e)]" />
       <div className="relative flex h-full flex-col">
-        <div className="px-5 pb-4 pt-5">
-          <div className="rounded-xl border border-white/15 bg-white/95 px-3 py-2 shadow-xl shadow-cyan-950/20">
+        <div className="px-5 pb-5 pt-5">
+          <div className="rounded-2xl border border-white/15 bg-white px-3 py-3 shadow-xl shadow-blue-950/20">
             <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={178} height={54} priority />
-          </div>
-          <div className="mt-3 flex items-center gap-2 rounded-full border border-white/15 bg-white/8 px-3 py-2 text-xs font-bold text-cyan-50/90">
-            <Sparkles className="h-4 w-4 text-teal-200" />
-            Plataforma lista para datos reales
           </div>
         </div>
         <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
@@ -419,7 +413,7 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
                 className={`flex h-11 w-full items-center gap-3 rounded-xl px-4 text-left text-sm font-black transition ${
-                  active ? "bg-teal-400 text-slate-950 shadow-lg shadow-teal-950/25" : "text-cyan-50/90 hover:bg-white/10 hover:text-white"
+                  active ? "bg-[#006BFF] text-white shadow-lg shadow-blue-950/25" : "text-white/82 hover:bg-white/10 hover:text-white"
                 }`}
               >
                 <Icon className="h-5 w-5" />
@@ -428,7 +422,7 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
             );
           })}
         </nav>
-        <div className="m-5 rounded-2xl border border-white/15 bg-white/8 p-4 shadow-xl shadow-cyan-950/20">
+        <div className="m-5 rounded-2xl border border-white/15 bg-white/8 p-4 shadow-xl shadow-blue-950/20">
           <div className="flex items-center gap-3">
             <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/10">
               <Building2 className="h-6 w-6 text-cyan-50" />
@@ -444,51 +438,11 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
   );
 }
 
-function Topbar({
-  query,
-  setQuery,
-  activeLabel,
-}: {
-  query: string;
-  setQuery: (value: string) => void;
-  activeLabel: string;
-}) {
-  return (
-    <header className="sticky top-0 z-20 border-b border-slate-200/80 bg-white/90 backdrop-blur-xl lg:pl-[286px]">
-      <div className="flex min-h-20 items-center gap-4 px-4 py-3 sm:px-8">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
-            <Database className="h-5 w-5" />
-          </div>
-          <div>
-            <p className="text-sm font-black tracking-tight text-slate-950">{activeLabel}</p>
-            <p className="text-xs font-semibold text-slate-500">Datos reales ingresados por tu equipo</p>
-          </div>
-        </div>
-        <div className="ml-auto flex w-full max-w-xl items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
-          <Search className="h-5 w-5 text-slate-400" />
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Buscar dentro de tus datos..."
-            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
-          />
-          {query ? (
-            <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-700">
-              <X className="h-4 w-4" />
-            </button>
-          ) : null}
-        </div>
-      </div>
-    </header>
-  );
-}
-
 function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: () => void; entity: EntityConfig }) {
   const Icon = entity.icon;
   return (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
+      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">
         <Icon className="h-8 w-8" />
       </div>
       <h2 className="mt-5 text-xl font-black text-slate-950">Todavía no hay {entity.label.toLowerCase()}</h2>
@@ -496,7 +450,7 @@ function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: 
         Empieza ingresando un registro manualmente o importa una planilla CSV/TSV exportada desde Google Sheets.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white">
+        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-[#006BFF] px-5 py-3 font-bold text-white">
           <Plus className="h-5 w-5" /> Agregar {entity.singular}
         </button>
         <button onClick={onImport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-5 py-3 font-bold text-slate-700">
@@ -511,6 +465,7 @@ function EntityView({
   entity,
   records,
   query,
+  setQuery,
   onAdd,
   onDelete,
   onExport,
@@ -519,6 +474,7 @@ function EntityView({
   entity: EntityConfig;
   records: DataRecord[];
   query: string;
+  setQuery: (value: string) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
   onExport: () => void;
@@ -534,19 +490,33 @@ function EntityView({
       <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <div className="flex items-center gap-3">
-            <entity.icon className="h-7 w-7 text-teal-700" />
+            <entity.icon className="h-7 w-7 text-blue-700" />
             <h1 className="text-3xl font-black tracking-tight text-slate-950">{entity.label}</h1>
           </div>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">{entity.description}</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex min-w-[260px] flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm xl:w-80 xl:flex-none">
+            <Search className="h-5 w-5 text-slate-400" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={`Buscar en ${entity.label.toLowerCase()}...`}
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
+            />
+            {query ? (
+              <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-700">
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
           <button onClick={onImport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700">
             <Upload className="h-5 w-5" /> Importar
           </button>
           <button onClick={onExport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700">
             <ArrowDownToLine className="h-5 w-5" /> Exportar
           </button>
-          <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-4 py-3 font-bold text-white">
+          <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-[#006BFF] px-4 py-3 font-bold text-white">
             <Plus className="h-5 w-5" /> Agregar
           </button>
         </div>
@@ -572,7 +542,7 @@ function EntityView({
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filtered.map((record) => (
-                  <tr key={record.id} className="hover:bg-teal-50/40">
+                  <tr key={record.id} className="hover:bg-blue-50/40">
                     {entity.fields.slice(0, 6).map((field) => (
                       <td key={field.key} className="max-w-[260px] truncate px-5 py-4">
                         {record[field.key] || <span className="text-slate-300">Sin dato</span>}
@@ -829,37 +799,6 @@ function ImportView({
   );
 }
 
-function ActionTile({
-  icon: Icon,
-  title,
-  body,
-  cta,
-  onClick,
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-  cta: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-[0_18px_45px_rgba(15,23,42,0.05)] transition hover:-translate-y-0.5 hover:border-teal-200 hover:shadow-[0_24px_55px_rgba(15,23,42,0.08)]"
-    >
-      <div className="flex items-center justify-between">
-        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-teal-50 text-teal-700 ring-1 ring-teal-100">
-          <Icon className="h-5 w-5" />
-        </div>
-        <ArrowUpRight className="h-5 w-5 text-slate-300 transition group-hover:text-teal-700" />
-      </div>
-      <h3 className="mt-5 text-base font-black text-slate-950">{title}</h3>
-      <p className="mt-2 flex-1 text-sm leading-6 text-slate-600">{body}</p>
-      <span className="mt-5 text-sm font-black text-teal-700">{cta}</span>
-    </button>
-  );
-}
-
 function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view: ViewId) => void }) {
   const total = Object.values(store).reduce((sum, records) => sum + records.length, 0);
   const activeEntities = Object.values(store).filter((records) => records.length > 0).length;
@@ -874,7 +813,7 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.05)]">
         <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-center">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-teal-100 bg-teal-50 px-3 py-1.5 text-xs font-black text-teal-700">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
               <CheckCircle2 className="h-4 w-4" />
               Operativo, sin datos ficticios
             </div>
@@ -883,7 +822,7 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
             Base lista para empezar a ingresar información real. Los datos se guardan localmente en este navegador hasta conectar Supabase/Auth.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-teal-800">
+          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-xl bg-[#006BFF] px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700">
             <Wand2 className="h-5 w-5" /> Importar planilla
           </button>
           <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
@@ -897,12 +836,12 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
                 <p className="text-sm font-black text-slate-600">Preparacion de datos</p>
                 <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">{readiness}%</p>
               </div>
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-teal-700 ring-1 ring-slate-200">
+              <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-blue-700 ring-1 ring-slate-200">
                 <BarChart3 className="h-6 w-6" />
               </div>
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-teal-600" style={{ width: `${readiness}%` }} />
+              <div className="h-full rounded-full bg-[#006BFF]" style={{ width: `${readiness}%` }} />
             </div>
             <div className="mt-4 grid gap-2 text-sm text-slate-600">
               <div className="flex justify-between gap-4"><span>Registros reales</span><strong className="text-slate-950">{total}</strong></div>
@@ -921,35 +860,15 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
         <StatCard label="Documentos" value={store.documents.length} detail="Índice documental" icon={FolderOpen} />
       </div>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-[0_18px_45px_rgba(15,23,42,0.06)]">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-          <div>
-            <h2 className="text-xl font-black tracking-tight text-slate-950">Puesta en marcha guiada</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-              Secuencia recomendada para dejar la institución lista antes de operar con el equipo completo.
-            </p>
-          </div>
-          <span className="rounded-full bg-teal-50 px-3 py-2 text-xs font-black text-teal-700 ring-1 ring-teal-100">
-            {total === 0 ? "Inicio limpio" : `${total} registros`}
-          </span>
-        </div>
-        <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <ActionTile icon={Upload} title="Importar desde Sheets" body="Pega o sube CSV/TSV. La IA local reconoce columnas y te deja revisar el mapeo antes de guardar." cta="Abrir importador" onClick={() => onNavigate("import")} />
-          <ActionTile icon={UserRound} title="Crear base de estudiantes" body="Registra estudiantes, curso, ID, apoderado y contacto para vincular casos y bitácoras." cta="Ir a estudiantes" onClick={() => onNavigate("students")} />
-          <ActionTile icon={FileText} title="Abrir casos reales" body="Ingresa motivo, prioridad, estado y responsable sin llenar paneles con información ficticia." cta="Ir a casos" onClick={() => onNavigate("cases")} />
-          <ActionTile icon={ShieldCheck} title="Ordenar protocolos" body="Centraliza derivaciones, plazos y notas para que el seguimiento sea auditable desde el día uno." cta="Ir a protocolos" onClick={() => onNavigate("protocols")} />
-        </div>
-      </section>
-
       {total === 0 ? (
         <section className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <Database className="mx-auto h-14 w-14 text-teal-700" />
+          <Database className="mx-auto h-14 w-14 text-blue-700" />
           <h2 className="mt-4 text-2xl font-black">No hay datos inventados cargados</h2>
           <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">
             La plataforma está vacía a propósito. Puedes empezar con formularios o importando tu Google Sheet como CSV/TSV.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <button onClick={() => onNavigate("students")} className="rounded-lg bg-teal-700 px-5 py-3 font-bold text-white">Crear primer estudiante</button>
+            <button onClick={() => onNavigate("students")} className="rounded-lg bg-[#006BFF] px-5 py-3 font-bold text-white">Crear primer estudiante</button>
             <button onClick={() => onNavigate("import")} className="rounded-lg border border-slate-200 px-5 py-3 font-bold text-slate-700">Importar planilla</button>
           </div>
         </section>
@@ -1085,14 +1004,6 @@ export default function TizaEducationApp() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const activeLabel = activeView === "dashboard"
-    ? "Inicio"
-    : activeView === "import"
-      ? "Importar con IA"
-      : activeView === "settings"
-        ? "Configuración"
-        : entityConfigs[activeView].label;
-
   const addRecord = (entity: EntityId, record: DataRecord) => {
     setStore((current) => ({ ...current, [entity]: [record, ...current[entity]] }));
     setDialogEntity(null);
@@ -1184,6 +1095,7 @@ export default function TizaEducationApp() {
         entity={entity}
         records={store[activeView]}
         query={query}
+        setQuery={setQuery}
         onAdd={() => setDialogEntity(activeView)}
         onDelete={(id) => deleteRecord(activeView, id)}
         onExport={() => exportEntity(activeView)}
@@ -1195,9 +1107,8 @@ export default function TizaEducationApp() {
   return (
     <div className="min-h-screen bg-[#f3f7fb] text-slate-950">
       <Sidebar activeView={activeView} onNavigate={setActiveView} />
-      <Topbar query={query} setQuery={setQuery} activeLabel={`${profile.organization || "Institución"} · ${activeLabel}`} />
       <main className="lg:pl-[286px]">
-        <div className="mx-auto max-w-[1500px] px-4 py-7 sm:px-8">
+        <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-8">
           {renderView()}
         </div>
       </main>

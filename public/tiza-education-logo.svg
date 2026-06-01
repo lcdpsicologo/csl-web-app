@@ -1,34 +1,38 @@
 <svg width="236" height="72" viewBox="0 0 236 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Tiza Education</title>
-  <desc id="desc">Logo moderno de Tiza Education con pizarra antigua, tiza y lápiz.</desc>
+  <desc id="desc">Marca Tiza Education con isotipo T, azul principal, navy y acento naranja.</desc>
   <defs>
-    <linearGradient id="board" x1="6" y1="6" x2="62" y2="62" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#0F766E"/>
-      <stop offset="0.55" stop-color="#075E63"/>
-      <stop offset="1" stop-color="#063B4C"/>
+    <linearGradient id="markBlue" x1="6" y1="6" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#006BFF"/>
+      <stop offset="1" stop-color="#0052D9"/>
     </linearGradient>
-    <linearGradient id="chalk" x1="16" y1="48" x2="58" y2="16" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#DDFCF4"/>
-      <stop offset="1" stop-color="#FFFFFF"/>
+    <linearGradient id="markNavy" x1="11" y1="24" x2="42" y2="62" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#061452"/>
+      <stop offset="1" stop-color="#030A2E"/>
     </linearGradient>
-    <linearGradient id="pencil" x1="32" y1="44" x2="52" y2="17" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F59E0B"/>
-      <stop offset="1" stop-color="#FFD08A"/>
+    <linearGradient id="markOrange" x1="48" y1="22" x2="64" y2="61" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF8A1F"/>
+      <stop offset="1" stop-color="#FF5A1F"/>
     </linearGradient>
-    <filter id="softShadow" x="-8" y="-8" width="86" height="86" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#002B3D" flood-opacity="0.18"/>
+    <linearGradient id="chalk" x1="35" y1="26" x2="48" y2="59" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#F2F4F8"/>
+      <stop offset="1" stop-color="#D9DEE8"/>
+    </linearGradient>
+    <filter id="shadow" x="-8" y="-8" width="86" height="86" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#061452" flood-opacity="0.16"/>
     </filter>
   </defs>
-  <g filter="url(#softShadow)">
-    <path d="M11 13.5C11 8.253 15.253 4 20.5 4H53.5C58.747 4 63 8.253 63 13.5V41.5C63 46.747 58.747 51 53.5 51H31.3L19.8 62V51H20.5C15.253 51 11 46.747 11 41.5V13.5Z" fill="url(#board)"/>
-    <path d="M20.5 8H53.5C56.538 8 59 10.462 59 13.5V41.5C59 44.538 56.538 47 53.5 47H29.7L23.8 52.7V47H20.5C17.462 47 15 44.538 15 41.5V13.5C15 10.462 17.462 8 20.5 8Z" stroke="url(#chalk)" stroke-width="3.2" stroke-linejoin="round"/>
-    <path d="M22 39.5C28.2 36.2 34.1 36.6 39.8 39.9C44.1 42.4 48 42.6 53 39.6" stroke="#BFFAF0" stroke-width="2.5" stroke-linecap="round" opacity="0.95"/>
-    <path d="M28.5 44.4H44.5" stroke="#E6FFFB" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
-    <path d="M34.4 35.4L31 41.5L37.6 39.2L53.8 20.9C55.1 19.4 54.9 17.1 53.4 15.8L51.2 13.9C49.7 12.6 47.4 12.8 46.1 14.3L34.4 35.4Z" fill="url(#pencil)"/>
-    <path d="M31 41.5L34.4 35.4L37.6 39.2L31 41.5Z" fill="#F8E7C8"/>
-    <path d="M46.1 14.3L53.8 20.9" stroke="#083344" stroke-width="2.2" stroke-linecap="round"/>
-    <path d="M33.3 37.3L35.8 40.1" stroke="#8A4B12" stroke-width="1.8" stroke-linecap="round"/>
+  <g filter="url(#shadow)">
+    <rect x="8" y="8" width="56" height="56" rx="14" fill="white"/>
+    <path d="M8 22C8 14.268 14.268 8 22 8H50C57.732 8 64 14.268 64 22V26H8V22Z" fill="url(#markBlue)"/>
+    <path d="M8 26H37V64H22C14.268 64 8 57.732 8 50V26Z" fill="url(#markNavy)"/>
+    <path d="M48 26H64V50C64 57.732 57.732 64 50 64H43L48 26Z" fill="url(#markOrange)"/>
+    <path d="M18 22H55L52 31H41V61L31 58V31H18V22Z" fill="white"/>
+    <path d="M38.7 31.5C40.8 30.9 43.2 32.1 43.9 34.3L49.7 52.4C50.4 54.6 49.1 57 46.9 57.7L39.4 60.1L32.7 33.5L38.7 31.5Z" fill="url(#chalk)"/>
+    <path d="M37.8 58.9C35.2 58 32.7 56.9 30.4 55.6" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>
+    <path d="M33.5 62.2C31.5 61.5 29.5 60.7 27.6 59.7" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.6"/>
   </g>
-  <text x="78" y="35" fill="#06142B" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="800" letter-spacing="-0.5">Tiza</text>
-  <text x="80" y="56" fill="#334155" font-family="Inter, Arial, Helvetica, sans-serif" font-size="18" font-weight="600">Education</text>
+  <text x="82" y="39" fill="#061452" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="850" letter-spacing="-0.7">Tiza</text>
+  <text x="157" y="39" fill="#061452" font-family="Inter, Arial, Helvetica, sans-serif" font-size="31" font-weight="400" letter-spacing="-0.8">Education</text>
 </svg>
