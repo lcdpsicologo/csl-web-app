@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
+import { createClient, type User } from "@supabase/supabase-js";
 import {
   ArrowDownToLine,
   BarChart3,
@@ -18,6 +19,8 @@ import {
   GraduationCap,
   Home,
   Lock,
+  LogOut,
+  Mail,
   MessageSquareText,
   Plus,
   Save,
@@ -89,6 +92,12 @@ type ImportPlan = {
 
 const STORAGE_KEY = "tiza-education-store-v1";
 const PROFILE_KEY = "tiza-education-profile-v1";
+const SUPABASE_PUBLIC_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const SUPABASE_PUBLIC_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const isSupabaseAuthConfigured = Boolean(SUPABASE_PUBLIC_URL && SUPABASE_PUBLIC_ANON_KEY);
+const supabaseAuth = isSupabaseAuthConfigured
+  ? createClient(SUPABASE_PUBLIC_URL, SUPABASE_PUBLIC_ANON_KEY)
+  : null;
 
 const nowIso = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -955,7 +964,110 @@ function Toast({ message }: { message: string }) {
   );
 }
 
+function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string) => Promise<void> }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      await onSignIn(email, password);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo iniciar sesion.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <main className="grid min-h-screen bg-slate-50 px-4 py-8 text-slate-950">
+      <section className="m-auto grid w-full max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white md:grid-cols-[1fr_420px]">
+        <div className="flex min-h-[560px] flex-col justify-between border-b border-slate-200 p-8 md:border-b-0 md:border-r">
+          <div>
+            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={190} height={58} priority />
+            <div className="mt-16 max-w-xl">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Plataforma institucional</p>
+              <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">Gestion escolar con acceso seguro.</h1>
+              <p className="mt-4 text-sm leading-6 text-slate-600">
+                Ingresa para administrar estudiantes, casos, bitacoras, orientacion y documentos desde un entorno privado.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">Datos reales</div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">Acceso controlado</div>
+            <div className="rounded-md border border-slate-200 bg-slate-50 p-3">Supabase Auth</div>
+          </div>
+        </div>
+
+        <div className="p-8">
+          <div className="mb-8">
+            <div className="grid h-11 w-11 place-items-center rounded-md bg-slate-900 text-white">
+              <Lock className="h-5 w-5" />
+            </div>
+            <h2 className="mt-5 text-2xl font-semibold tracking-tight">Iniciar sesion</h2>
+            <p className="mt-2 text-sm text-slate-600">Usa las credenciales autorizadas por la institucion.</p>
+          </div>
+
+          {!isSupabaseAuthConfigured ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              Para activar el login, configura `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY` en `.env.local` y en Vercel.
+            </div>
+          ) : (
+            <form onSubmit={submit} className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Correo</span>
+                <div className="mt-2 flex items-center gap-3 rounded-md border border-slate-300 px-3 py-2.5 focus-within:border-slate-900">
+                  <Mail className="h-4 w-4 text-slate-400" />
+                  <input
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    type="email"
+                    autoComplete="email"
+                    required
+                    className="w-full bg-transparent text-sm outline-none"
+                    placeholder="usuario@institucion.cl"
+                  />
+                </div>
+              </label>
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Contrasena</span>
+                <div className="mt-2 flex items-center gap-3 rounded-md border border-slate-300 px-3 py-2.5 focus-within:border-slate-900">
+                  <Lock className="h-4 w-4 text-slate-400" />
+                  <input
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    type="password"
+                    autoComplete="current-password"
+                    required
+                    className="w-full bg-transparent text-sm outline-none"
+                    placeholder="Tu contrasena"
+                  />
+                </div>
+              </label>
+              {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+              <button
+                type="submit"
+                disabled={submitting}
+                className="w-full rounded-md bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+              >
+                {submitting ? "Verificando..." : "Entrar"}
+              </button>
+            </form>
+          )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default function TizaEducationApp() {
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(isSupabaseAuthConfigured);
   const [store, setStore] = useState<DataStore>(() => {
     if (typeof window === "undefined") return emptyStore();
     const raw = window.localStorage.getItem(STORAGE_KEY);
@@ -990,6 +1102,29 @@ export default function TizaEducationApp() {
   });
 
   useEffect(() => {
+    if (!supabaseAuth) {
+      return;
+    }
+
+    let mounted = true;
+    supabaseAuth.auth.getSession().then(({ data }) => {
+      if (!mounted) return;
+      setAuthUser(data.session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
+      setAuthUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   }, [store]);
 
@@ -1007,6 +1142,18 @@ export default function TizaEducationApp() {
     setStore((current) => ({ ...current, [entity]: [record, ...current[entity]] }));
     setDialogEntity(null);
     setToast(`${entityConfigs[entity].singular} guardado`);
+  };
+
+  const signIn = async (email: string, password: string) => {
+    if (!supabaseAuth) throw new Error("Supabase Auth no esta configurado.");
+    const { error } = await supabaseAuth.auth.signInWithPassword({ email, password });
+    if (error) throw new Error(error.message);
+  };
+
+  const signOut = async () => {
+    if (!supabaseAuth) return;
+    await supabaseAuth.auth.signOut();
+    setToast("Sesion cerrada");
   };
 
   const deleteRecord = (entity: EntityId, id: string) => {
@@ -1103,11 +1250,37 @@ export default function TizaEducationApp() {
     );
   };
 
+  if (authLoading) {
+    return (
+      <main className="grid min-h-screen place-items-center bg-slate-50 text-slate-700">
+        <div className="rounded-lg border border-slate-200 bg-white px-6 py-5 text-sm font-semibold shadow-sm">
+          Verificando sesion...
+        </div>
+      </main>
+    );
+  }
+
+  if (!authUser) {
+    return <LoginScreen onSignIn={signIn} />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
       <Sidebar activeView={activeView} onNavigate={setActiveView} />
       <main className="lg:pl-[272px]">
         <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8">
+          <div className="mb-5 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
+            <div>
+              <p className="font-semibold text-slate-900">Sesion activa</p>
+              <p className="text-slate-500">{authUser.email}</p>
+            </div>
+            <button
+              onClick={signOut}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              <LogOut className="h-4 w-4" /> Salir
+            </button>
+          </div>
           {renderView()}
         </div>
       </main>
