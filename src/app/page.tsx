@@ -965,6 +965,7 @@ function Toast({ message }: { message: string }) {
 }
 
 function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string) => Promise<void> }) {
+  const [school, setSchool] = useState("Colegio San Lucas de Lo Espejo");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -1019,6 +1020,16 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
             </div>
           ) : (
             <form onSubmit={submit} className="space-y-4">
+              <label className="block">
+                <span className="text-sm font-semibold text-slate-700">Colegio</span>
+                <select
+                  value={school}
+                  onChange={(event) => setSchool(event.target.value)}
+                  className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-slate-900"
+                >
+                  <option value="Colegio San Lucas de Lo Espejo">Colegio San Lucas de Lo Espejo</option>
+                </select>
+              </label>
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">Correo</span>
                 <div className="mt-2 flex items-center gap-3 rounded-md border border-slate-300 px-3 py-2.5 focus-within:border-slate-900">

@@ -1,38 +1,10 @@
-<svg width="236" height="72" viewBox="0 0 236 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+<svg width="260" height="72" viewBox="0 0 260 72" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">Tiza Education</title>
-  <desc id="desc">Marca Tiza Education con isotipo T, azul principal, navy y acento naranja.</desc>
-  <defs>
-    <linearGradient id="markBlue" x1="6" y1="6" x2="56" y2="56" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#006BFF"/>
-      <stop offset="1" stop-color="#0052D9"/>
-    </linearGradient>
-    <linearGradient id="markNavy" x1="11" y1="24" x2="42" y2="62" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#061452"/>
-      <stop offset="1" stop-color="#030A2E"/>
-    </linearGradient>
-    <linearGradient id="markOrange" x1="48" y1="22" x2="64" y2="61" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FF8A1F"/>
-      <stop offset="1" stop-color="#FF5A1F"/>
-    </linearGradient>
-    <linearGradient id="chalk" x1="35" y1="26" x2="48" y2="59" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#FFFFFF"/>
-      <stop offset="0.55" stop-color="#F2F4F8"/>
-      <stop offset="1" stop-color="#D9DEE8"/>
-    </linearGradient>
-    <filter id="shadow" x="-8" y="-8" width="86" height="86" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#061452" flood-opacity="0.16"/>
-    </filter>
-  </defs>
-  <g filter="url(#shadow)">
-    <rect x="8" y="8" width="56" height="56" rx="14" fill="white"/>
-    <path d="M8 22C8 14.268 14.268 8 22 8H50C57.732 8 64 14.268 64 22V26H8V22Z" fill="url(#markBlue)"/>
-    <path d="M8 26H37V64H22C14.268 64 8 57.732 8 50V26Z" fill="url(#markNavy)"/>
-    <path d="M48 26H64V50C64 57.732 57.732 64 50 64H43L48 26Z" fill="url(#markOrange)"/>
-    <path d="M18 22H55L52 31H41V61L31 58V31H18V22Z" fill="white"/>
-    <path d="M38.7 31.5C40.8 30.9 43.2 32.1 43.9 34.3L49.7 52.4C50.4 54.6 49.1 57 46.9 57.7L39.4 60.1L32.7 33.5L38.7 31.5Z" fill="url(#chalk)"/>
-    <path d="M37.8 58.9C35.2 58 32.7 56.9 30.4 55.6" stroke="white" stroke-width="1.6" stroke-linecap="round" opacity="0.85"/>
-    <path d="M33.5 62.2C31.5 61.5 29.5 60.7 27.6 59.7" stroke="white" stroke-width="1.4" stroke-linecap="round" opacity="0.6"/>
-  </g>
-  <text x="82" y="39" fill="#061452" font-family="Inter, Arial, Helvetica, sans-serif" font-size="34" font-weight="850" letter-spacing="-0.7">Tiza</text>
-  <text x="157" y="39" fill="#061452" font-family="Inter, Arial, Helvetica, sans-serif" font-size="31" font-weight="400" letter-spacing="-0.8">Education</text>
+  <desc id="desc">Marca Tiza Education minimalista en color calipso.</desc>
+  <rect x="8" y="8" width="56" height="56" rx="14" fill="#0E7490"/>
+  <path d="M20 22H52V31H41V56H31V31H20V22Z" fill="white"/>
+  <path d="M44 34.5C47.2 35.7 49.5 38.8 49.5 42.4C49.5 47.1 45.7 50.9 41 50.9H37V43.5H41C42.9 43.5 44.5 41.9 44.5 40C44.5 38.6 43.7 37.4 42.5 36.8L44 34.5Z" fill="#A7F3D0"/>
+  <path d="M20 22H52" stroke="#CFFAFE" stroke-width="2" stroke-linecap="round"/>
+  <text x="82" y="42" fill="#0F172A" font-family="Inter, Arial, Helvetica, sans-serif" font-size="32" font-weight="700" letter-spacing="-0.8">Tiza</text>
+  <text x="148" y="42" fill="#0E7490" font-family="Inter, Arial, Helvetica, sans-serif" font-size="32" font-weight="500" letter-spacing="-0.9">education</text>
 </svg>
