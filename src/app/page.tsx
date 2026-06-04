@@ -409,7 +409,7 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
       <div className="flex h-full flex-col">
         <div className="border-b border-slate-200 px-6 py-5">
           <div className="flex h-12 items-center">
-            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={178} height={54} priority />
+            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={214} height={52} priority />
           </div>
         </div>
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
@@ -989,7 +989,7 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
       <section className="m-auto grid w-full max-w-5xl overflow-hidden rounded-lg border border-slate-200 bg-white md:grid-cols-[1fr_420px]">
         <div className="flex min-h-[560px] flex-col justify-between border-b border-slate-200 p-8 md:border-b-0 md:border-r">
           <div>
-            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={190} height={58} priority />
+            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={240} height={58} priority />
             <div className="mt-16 max-w-xl">
               <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">Plataforma institucional</p>
               <h1 className="mt-4 text-4xl font-semibold tracking-tight text-slate-950">Gestion escolar con acceso seguro.</h1>
