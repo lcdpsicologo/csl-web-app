@@ -371,23 +371,23 @@ function downloadText(fileName: string, content: string, type = "text/plain;char
 
 function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label: string; value: number; detail: string; icon: LucideIcon; accent?: "teal" | "blue" | "amber" | "violet" | "rose" }) {
   const accents = {
-    teal: "bg-blue-50 text-blue-700 ring-blue-100",
-    blue: "bg-blue-50 text-blue-700 ring-blue-100",
-    amber: "bg-orange-50 text-orange-700 ring-orange-100",
-    violet: "bg-violet-50 text-violet-700 ring-violet-100",
-    rose: "bg-rose-50 text-rose-700 ring-rose-100",
+    teal: "bg-slate-50 text-slate-600 ring-slate-200",
+    blue: "bg-slate-50 text-slate-600 ring-slate-200",
+    amber: "bg-slate-50 text-slate-600 ring-slate-200",
+    violet: "bg-slate-50 text-slate-600 ring-slate-200",
+    rose: "bg-slate-50 text-slate-600 ring-slate-200",
   };
 
   return (
-    <section className="group rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_18px_45px_rgba(15,23,42,0.06)] transition hover:-translate-y-0.5 hover:shadow-[0_24px_55px_rgba(15,23,42,0.09)]">
+    <section className="rounded-lg border border-slate-200 bg-white p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-sm font-black text-slate-600">{label}</p>
-          <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{value}</p>
-          <p className="mt-1 text-xs font-semibold text-slate-500">{detail}</p>
+          <p className="text-sm font-semibold text-slate-600">{label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+          <p className="mt-1 text-xs text-slate-500">{detail}</p>
         </div>
-        <div className={`grid h-12 w-12 place-items-center rounded-2xl ring-1 ${accents[accent]}`}>
-          <Icon className="h-6 w-6" />
+        <div className={`grid h-10 w-10 place-items-center rounded-md ring-1 ${accents[accent]}`}>
+          <Icon className="h-5 w-5" />
         </div>
       </div>
     </section>
@@ -396,15 +396,14 @@ function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label
 
 function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (view: ViewId) => void }) {
   return (
-    <aside className="fixed inset-y-0 left-0 hidden w-[286px] flex-col bg-[#061452] text-white shadow-2xl lg:flex">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,rgba(0,107,255,.35),transparent_32%),linear-gradient(180deg,#061452,#030a2e)]" />
-      <div className="relative flex h-full flex-col">
-        <div className="px-5 pb-5 pt-5">
-          <div className="rounded-2xl border border-white/15 bg-white px-3 py-3 shadow-xl shadow-blue-950/20">
+    <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-slate-200 bg-white text-slate-700 lg:flex">
+      <div className="flex h-full flex-col">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <div className="flex h-12 items-center">
             <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={178} height={54} priority />
           </div>
         </div>
-        <nav className="flex-1 space-y-1.5 overflow-y-auto px-4 pb-4">
+        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {viewNav.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;
@@ -412,24 +411,24 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className={`flex h-11 w-full items-center gap-3 rounded-xl px-4 text-left text-sm font-black transition ${
-                  active ? "bg-[#006BFF] text-white shadow-lg shadow-blue-950/25" : "text-white/82 hover:bg-white/10 hover:text-white"
+                className={`flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-medium transition ${
+                  active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-4 w-4" />
                 {item.label}
               </button>
             );
           })}
         </nav>
-        <div className="m-5 rounded-2xl border border-white/15 bg-white/8 p-4 shadow-xl shadow-blue-950/20">
+        <div className="m-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/10">
-              <Building2 className="h-6 w-6 text-cyan-50" />
+            <div className="grid h-9 w-9 place-items-center rounded-md bg-white ring-1 ring-slate-200">
+              <Building2 className="h-5 w-5 text-slate-600" />
             </div>
             <div>
-              <p className="text-sm font-black">Institución activa</p>
-              <p className="text-xs text-cyan-50/70">Configurable en ajustes</p>
+              <p className="text-sm font-semibold text-slate-800">Institución activa</p>
+              <p className="text-xs text-slate-500">Configurable en ajustes</p>
             </div>
           </div>
         </div>
@@ -441,20 +440,20 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
 function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: () => void; entity: EntityConfig }) {
   const Icon = entity.icon;
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-[0_18px_45px_rgba(15,23,42,0.05)]">
-      <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-blue-50 text-blue-700 ring-1 ring-blue-100">
-        <Icon className="h-8 w-8" />
+    <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+      <div className="mx-auto grid h-12 w-12 place-items-center rounded-md bg-slate-50 text-slate-500 ring-1 ring-slate-200">
+        <Icon className="h-6 w-6" />
       </div>
-      <h2 className="mt-5 text-xl font-black text-slate-950">Todavía no hay {entity.label.toLowerCase()}</h2>
+      <h2 className="mt-5 text-lg font-semibold text-slate-950">Todavía no hay {entity.label.toLowerCase()}</h2>
       <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
         Empieza ingresando un registro manualmente o importa una planilla CSV/TSV exportada desde Google Sheets.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-[#006BFF] px-5 py-3 font-bold text-white">
-          <Plus className="h-5 w-5" /> Agregar {entity.singular}
+        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+          <Plus className="h-4 w-4" /> Agregar {entity.singular}
         </button>
-        <button onClick={onImport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-5 py-3 font-bold text-slate-700">
-          <Upload className="h-5 w-5" /> Importar planilla
+        <button onClick={onImport} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          <Upload className="h-4 w-4" /> Importar planilla
         </button>
       </div>
     </div>
@@ -490,13 +489,13 @@ function EntityView({
       <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <div className="flex items-center gap-3">
-            <entity.icon className="h-7 w-7 text-blue-700" />
-            <h1 className="text-3xl font-black tracking-tight text-slate-950">{entity.label}</h1>
+            <entity.icon className="h-6 w-6 text-slate-600" />
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{entity.label}</h1>
           </div>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">{entity.description}</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex min-w-[260px] flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm xl:w-80 xl:flex-none">
+          <div className="flex min-w-[260px] flex-1 items-center gap-3 rounded-md border border-slate-300 bg-white px-4 py-2.5 xl:w-80 xl:flex-none">
             <Search className="h-5 w-5 text-slate-400" />
             <input
               value={query}
@@ -516,8 +515,8 @@ function EntityView({
           <button onClick={onExport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700">
             <ArrowDownToLine className="h-5 w-5" /> Exportar
           </button>
-          <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-lg bg-[#006BFF] px-4 py-3 font-bold text-white">
-            <Plus className="h-5 w-5" /> Agregar
+          <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+            <Plus className="h-4 w-4" /> Agregar
           </button>
         </div>
       </div>
@@ -525,7 +524,7 @@ function EntityView({
       {records.length === 0 ? (
         <EmptyState entity={entity} onAdd={onAdd} onImport={onImport} />
       ) : (
-        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
           <div className="border-b border-slate-100 px-5 py-4 text-sm font-semibold text-slate-600">
             Mostrando {filtered.length} de {records.length} registros
           </div>
@@ -534,9 +533,9 @@ function EntityView({
               <thead className="bg-slate-50 text-xs uppercase text-slate-500">
                 <tr>
                   {entity.fields.slice(0, 6).map((field) => (
-                    <th key={field.key} className="px-5 py-4 font-black">{field.label}</th>
+                    <th key={field.key} className="px-5 py-4 font-semibold">{field.label}</th>
                   ))}
-                  <th className="px-5 py-4 font-black">Actualizado</th>
+                  <th className="px-5 py-4 font-semibold">Actualizado</th>
                   <th className="px-5 py-4" />
                 </tr>
               </thead>
@@ -585,10 +584,10 @@ function RecordDialog({
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/30 p-4 backdrop-blur-sm">
-      <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl">
+      <section className="max-h-[92vh] w-full max-w-3xl overflow-y-auto rounded-lg bg-white shadow-xl">
         <div className="flex items-start justify-between border-b border-slate-100 p-6">
           <div>
-            <h2 className="text-2xl font-black">Agregar {entity.singular}</h2>
+            <h2 className="text-2xl font-semibold">Agregar {entity.singular}</h2>
             <p className="mt-1 text-sm text-slate-600">Este registro se guardará en el almacenamiento local del navegador.</p>
           </div>
           <button onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full text-slate-500 hover:bg-slate-100">
@@ -632,7 +631,7 @@ function RecordDialog({
           <button
             disabled={!canSave}
             onClick={() => onSave({ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...form })}
-            className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
             <Save className="h-5 w-5" /> Guardar
           </button>
@@ -664,8 +663,8 @@ function ImportView({
     <div>
       <div className="mb-6">
         <div className="flex items-center gap-3">
-          <Wand2 className="h-8 w-8 text-teal-700" />
-          <h1 className="text-3xl font-black tracking-tight text-slate-950">Importar con IA local</h1>
+          <Wand2 className="h-7 w-7 text-slate-600" />
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Importar con IA local</h1>
         </div>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">
           Sube un CSV/TSV exportado desde Google Sheets o pega una tabla. El asistente interpreta encabezados,
@@ -674,11 +673,11 @@ function ImportView({
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">1. Cargar archivo o pegar datos</h2>
-          <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-teal-300 bg-teal-50/50 p-8 text-center">
-            <FileSpreadsheet className="h-12 w-12 text-teal-700" />
-            <span className="mt-3 font-black text-slate-950">Subir CSV / TSV</span>
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="text-lg font-semibold">1. Cargar archivo o pegar datos</h2>
+          <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center hover:bg-slate-100">
+            <FileSpreadsheet className="h-10 w-10 text-slate-500" />
+            <span className="mt-3 font-semibold text-slate-950">Subir CSV / TSV</span>
             <span className="mt-1 text-sm text-slate-600">Google Sheets: Archivo → Descargar → CSV o TSV</span>
             <input
               type="file"
@@ -701,19 +700,19 @@ function ImportView({
             <button
               onClick={() => onText(paste)}
               disabled={!paste.trim()}
-              className="mt-3 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white disabled:bg-slate-300"
+              className="mt-3 rounded-md bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
             >
               Interpretar tabla pegada
             </button>
           </div>
           <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <p className="font-black">Sobre archivos .xlsx</p>
+            <p className="font-semibold">Sobre archivos .xlsx</p>
             <p className="mt-1">Por ahora esta versión interpreta CSV/TSV en el navegador. Para Google Sheets, descarga como CSV/TSV. Si me envías tus archivos, puedo ajustar el importador a tus columnas reales.</p>
           </div>
         </section>
 
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">2. Revisión antes de importar</h2>
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="text-lg font-semibold">2. Revisión antes de importar</h2>
           {!parsed || !plan || !entity ? (
             <div className="mt-6 rounded-xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-500">
               Carga o pega una planilla para ver la interpretación.
@@ -723,15 +722,15 @@ function ImportView({
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="rounded-lg bg-slate-50 p-4">
                   <p className="text-xs font-bold text-slate-500">Archivo</p>
-                  <p className="mt-1 truncate font-black">{parsed.fileName}</p>
+                  <p className="mt-1 truncate font-semibold">{parsed.fileName}</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-4">
                   <p className="text-xs font-bold text-slate-500">Filas detectadas</p>
-                  <p className="mt-1 text-2xl font-black">{parsed.rows.length}</p>
+                  <p className="mt-1 text-2xl font-semibold">{parsed.rows.length}</p>
                 </div>
                 <div className="rounded-lg bg-slate-50 p-4">
                   <p className="text-xs font-bold text-slate-500">Confianza</p>
-                  <p className="mt-1 text-2xl font-black">{plan.confidence}%</p>
+                  <p className="mt-1 text-2xl font-semibold">{plan.confidence}%</p>
                 </div>
               </div>
 
@@ -750,7 +749,7 @@ function ImportView({
               </label>
 
               <div>
-                <h3 className="mb-3 font-black">Mapeo de columnas</h3>
+                <h3 className="mb-3 font-semibold">Mapeo de columnas</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   {entity.fields.map((field) => (
                     <label key={field.key} className="block rounded-lg border border-slate-100 p-3">
@@ -771,7 +770,7 @@ function ImportView({
               </div>
 
               <div>
-                <h3 className="mb-3 font-black">Vista previa</h3>
+                <h3 className="mb-3 font-semibold">Vista previa</h3>
                 <div className="max-h-60 overflow-auto rounded-lg border border-slate-200">
                   <table className="w-full min-w-[640px] text-left text-xs">
                     <thead className="bg-slate-50">
@@ -788,7 +787,7 @@ function ImportView({
                 </div>
               </div>
 
-              <button onClick={onConfirm} className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-5 py-3 font-bold text-white">
+              <button onClick={onConfirm} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800">
                 <Check className="h-5 w-5" /> Confirmar importación
               </button>
             </div>
@@ -809,39 +808,39 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
     .slice(0, 6);
 
   return (
-    <div className="space-y-7">
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-[0_14px_35px_rgba(15,23,42,0.05)]">
-        <div className="grid gap-5 xl:grid-cols-[1fr_360px] xl:items-center">
+    <div className="space-y-6">
+      <section className="rounded-lg border border-slate-200 bg-white p-6">
+        <div className="grid gap-6 xl:grid-cols-[1fr_340px] xl:items-start">
           <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-black text-blue-700">
-              <CheckCircle2 className="h-4 w-4" />
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+              <CheckCircle2 className="h-3.5 w-3.5" />
               Operativo, sin datos ficticios
             </div>
-          <h1 className="mt-4 max-w-3xl text-3xl font-black tracking-tight text-slate-950">Inicio institucional</h1>
+          <h1 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight text-slate-950">Inicio institucional</h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
             Base lista para empezar a ingresar información real. Los datos se guardan localmente en este navegador hasta conectar Supabase/Auth.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-xl bg-[#006BFF] px-4 py-3 text-sm font-black text-white shadow-sm hover:bg-blue-700">
-            <Wand2 className="h-5 w-5" /> Importar planilla
+          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+            <Wand2 className="h-4 w-4" /> Importar planilla
           </button>
-          <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50">
-            <Plus className="h-5 w-5" /> Ingresar datos
+          <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <Plus className="h-4 w-4" /> Ingresar datos
           </button>
         </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-black text-slate-600">Preparacion de datos</p>
-                <p className="mt-1 text-3xl font-black tracking-tight text-slate-950">{readiness}%</p>
+                <p className="text-sm font-semibold text-slate-600">Preparacion de datos</p>
+                <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{readiness}%</p>
               </div>
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-blue-700 ring-1 ring-slate-200">
-                <BarChart3 className="h-6 w-6" />
+              <div className="grid h-10 w-10 place-items-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200">
+                <BarChart3 className="h-5 w-5" />
               </div>
             </div>
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-[#006BFF]" style={{ width: `${readiness}%` }} />
+              <div className="h-full rounded-full bg-slate-900" style={{ width: `${readiness}%` }} />
             </div>
             <div className="mt-4 grid gap-2 text-sm text-slate-600">
               <div className="flex justify-between gap-4"><span>Registros reales</span><strong className="text-slate-950">{total}</strong></div>
@@ -861,20 +860,20 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
       </div>
 
       {total === 0 ? (
-        <section className="mt-6 rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
-          <Database className="mx-auto h-14 w-14 text-blue-700" />
-          <h2 className="mt-4 text-2xl font-black">No hay datos inventados cargados</h2>
+        <section className="mt-6 rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+          <Database className="mx-auto h-10 w-10 text-slate-500" />
+          <h2 className="mt-4 text-xl font-semibold text-slate-950">Sistema listo para datos reales</h2>
           <p className="mx-auto mt-2 max-w-2xl text-sm text-slate-600">
             La plataforma está vacía a propósito. Puedes empezar con formularios o importando tu Google Sheet como CSV/TSV.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <button onClick={() => onNavigate("students")} className="rounded-lg bg-[#006BFF] px-5 py-3 font-bold text-white">Crear primer estudiante</button>
-            <button onClick={() => onNavigate("import")} className="rounded-lg border border-slate-200 px-5 py-3 font-bold text-slate-700">Importar planilla</button>
+            <button onClick={() => onNavigate("students")} className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Crear primer estudiante</button>
+            <button onClick={() => onNavigate("import")} className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Importar planilla</button>
           </div>
         </section>
       ) : (
-        <section className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">Últimos registros</h2>
+        <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="text-lg font-semibold">Últimos registros</h2>
           <div className="mt-4 divide-y divide-slate-100">
             {latest.map(({ entity, record }) => {
               const config = entityConfigs[entity];
@@ -908,12 +907,12 @@ function SettingsView({
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-3xl font-black tracking-tight text-slate-950">Configuración</h1>
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Configuración</h1>
         <p className="mt-2 max-w-3xl text-sm text-slate-600">Configura la institución y revisa el estado de persistencia.</p>
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">Institución</h2>
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="text-lg font-semibold">Institución</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
             {[
               ["organization", "Nombre institución"],
@@ -932,10 +931,10 @@ function SettingsView({
             ))}
           </div>
         </section>
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-black">Persistencia actual</h2>
-          <div className="mt-4 rounded-lg bg-teal-50 p-4 text-sm text-teal-900">
-            <p className="font-black"><Lock className="mr-2 inline h-4 w-4" /> Guardado local</p>
+        <section className="rounded-lg border border-slate-200 bg-white p-6">
+          <h2 className="text-lg font-semibold">Persistencia actual</h2>
+          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+            <p className="font-semibold text-slate-900"><Lock className="mr-2 inline h-4 w-4" /> Guardado local</p>
             <p className="mt-2">Los datos quedan en este navegador. Para uso multiusuario real, el siguiente paso es conectar Supabase con RLS y autenticación.</p>
           </div>
           <button onClick={onClear} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-red-200 px-5 py-3 font-bold text-red-600 hover:bg-red-50">
@@ -949,8 +948,8 @@ function SettingsView({
 
 function Toast({ message }: { message: string }) {
   return (
-    <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-xl border border-teal-200 bg-white px-5 py-4 font-bold text-slate-950 shadow-2xl">
-      <Check className="mr-2 inline h-5 w-5 text-teal-700" />
+    <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-5 py-4 font-semibold text-slate-950 shadow-xl">
+      <Check className="mr-2 inline h-5 w-5 text-slate-700" />
       {message}
     </div>
   );
@@ -1105,10 +1104,10 @@ export default function TizaEducationApp() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f3f7fb] text-slate-950">
+    <div className="min-h-screen bg-slate-50 text-slate-950">
       <Sidebar activeView={activeView} onNavigate={setActiveView} />
-      <main className="lg:pl-[286px]">
-        <div className="mx-auto max-w-[1500px] px-4 py-8 sm:px-8">
+      <main className="lg:pl-[272px]">
+        <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8">
           {renderView()}
         </div>
       </main>
