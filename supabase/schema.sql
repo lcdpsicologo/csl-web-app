@@ -69,6 +69,21 @@ create table if not exists public.orientation_records (
   updated_at timestamptz default now()
 );
 
+alter table public.orientation_records
+  add column if not exists institution_id uuid references public.institutions(id) on delete cascade,
+  add column if not exists date date,
+  add column if not exists cycle text default '',
+  add column if not exists course text default '',
+  add column if not exists action text default '',
+  add column if not exists status text default 'Pendiente',
+  add column if not exists sem text default '',
+  add column if not exists topic text default '',
+  add column if not exists observations text default '',
+  add column if not exists evidence_link text default '',
+  add column if not exists planning_link text default '',
+  add column if not exists created_at timestamptz default now(),
+  add column if not exists updated_at timestamptz default now();
+
 create or replace function public.set_updated_at()
 returns trigger as $$
 begin
