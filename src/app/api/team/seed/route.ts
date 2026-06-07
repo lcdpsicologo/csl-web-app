@@ -30,6 +30,19 @@ const getAdminClient = () => {
   });
 };
 
+const getAuthClient = () => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !key) return null;
+
+  return createClient(url, key, {
+    auth: {
+      persistSession: false,
+    },
+  });
+};
+
 const getToken = (request: Request) => {
   const header = request.headers.get("authorization") || "";
   const [scheme, token] = header.split(" ");
@@ -59,7 +72,8 @@ const getInstitutionId = async (supabase: SupabaseClient) => {
 
 export async function POST(request: Request) {
   const supabase = getAdminClient();
-  if (!supabase) {
+  const authClient = getAuthClient();
+  if (!supabase || !authClient) {
     return NextResponse.json({ error: "Supabase service credentials are not configured" }, { status: 503 });
   }
 
@@ -68,7 +82,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing bearer token" }, { status: 401 });
   }
 
-  const { data: authData, error: authError } = await supabase.auth.getUser(token);
+  const { data: authData, error: authError } = await authClient.auth.getUser(token);
   const requesterEmail = authData.user?.email?.toLowerCase() || "";
   if (authError || !authData.user || !AUTHORIZED_SEED_EMAILS.has(requesterEmail)) {
     return NextResponse.json({ error: "No autorizado para crear equipo institucional" }, { status: 403 });

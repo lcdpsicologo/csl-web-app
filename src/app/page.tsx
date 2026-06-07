@@ -1259,7 +1259,10 @@ export default function TizaEducationApp() {
             authorization: `Bearer ${accessToken}`,
           },
         });
-        if (!response.ok) throw new Error("No se pudieron cargar los datos remotos.");
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "No se pudieron cargar los datos remotos.");
+        }
         const payload = await response.json();
         if (cancelled) return;
         setStore({ ...emptyStore(), ...(payload.store || {}) });
@@ -1294,7 +1297,10 @@ export default function TizaEducationApp() {
             authorization: `Bearer ${accessToken}`,
           },
         });
-        if (!response.ok) throw new Error("No se pudo cargar el equipo.");
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "No se pudo cargar el equipo.");
+        }
         const payload = await response.json();
         if (!cancelled) setTeam(payload.team || []);
       } catch (error) {
@@ -1327,7 +1333,10 @@ export default function TizaEducationApp() {
           },
           body: JSON.stringify({ store }),
         });
-        if (!response.ok) throw new Error("No se pudieron guardar los datos remotos.");
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
+        }
         setRemoteStatus("synced");
       } catch (error) {
         console.error(error);
