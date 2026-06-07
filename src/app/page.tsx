@@ -65,6 +65,14 @@ type TeamMember = {
   email: string;
 };
 
+type CourseDef = {
+  name: string;
+  cycle: "I Ciclo" | "II Ciclo" | "III Ciclo";
+  orientationOwner: string;
+  orientationEmail: string;
+  capacity: number;
+};
+
 type FieldDef = {
   key: string;
   label: string;
@@ -117,6 +125,84 @@ const normalize = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+const makeCourseRecord = (course: CourseDef): DataRecord => ({
+  id: `course-${normalize(course.name).replace(/\s+/g, "-")}`,
+  createdAt: nowIso(),
+  updatedAt: nowIso(),
+  name: course.name,
+  cycle: course.cycle,
+  orientationOwner: course.orientationOwner,
+  orientationEmail: course.orientationEmail,
+  capacity: String(course.capacity),
+  headTeacher: "",
+  notes: "",
+});
+
+const basicLevels = ["1° Básico", "2° Básico", "3° Básico", "4° Básico", "5° Básico", "6° Básico", "7° Básico", "8° Básico"];
+const highSchoolLevels = ["I° Medio", "II° Medio", "III° Medio", "IV° Medio"];
+
+const officialCourses: CourseDef[] = [
+  ...["A", "B", "C"].map((section) => ({
+    name: `Prekínder ${section}`,
+    cycle: "I Ciclo" as const,
+    orientationOwner: "Gustavo Caro",
+    orientationEmail: "g.caro.m@colegiosanlucas.com",
+    capacity: 32,
+  })),
+  ...["A", "B", "C"].map((section) => ({
+    name: `Kínder ${section}`,
+    cycle: "I Ciclo" as const,
+    orientationOwner: "Gustavo Caro",
+    orientationEmail: "g.caro.m@colegiosanlucas.com",
+    capacity: 32,
+  })),
+  ...basicLevels.flatMap((level, index) =>
+    ["A", "B"].map((section) => ({
+      name: `${level} ${section}`,
+      cycle: index < 4 ? "I Ciclo" as const : "II Ciclo" as const,
+      orientationOwner: index < 4 ? "Gustavo Caro" : "Cindy Pulido",
+      orientationEmail: index < 4 ? "g.caro.m@colegiosanlucas.com" : "c.pulido@colegiosanlucas.com",
+      capacity: 36,
+    }))
+  ),
+  ...highSchoolLevels.flatMap((level) =>
+    ["A", "B"].map((section) => ({
+      name: `${level} ${section}`,
+      cycle: "III Ciclo" as const,
+      orientationOwner: "Marcela Toro",
+      orientationEmail: "m.toro@colegiosanlucas.com",
+      capacity: 36,
+    }))
+  ),
+];
+
+const orientationOwners = [
+  {
+    name: "Gustavo Caro",
+    role: "Orientador I Ciclo",
+    email: "g.caro.m@colegiosanlucas.com",
+    cycle: "I Ciclo",
+    courses: officialCourses.filter((course) => course.orientationOwner === "Gustavo Caro").map((course) => course.name),
+  },
+  {
+    name: "Cindy Pulido",
+    role: "Orientadora de IIº Ciclo",
+    email: "c.pulido@colegiosanlucas.com",
+    cycle: "II Ciclo",
+    courses: officialCourses.filter((course) => course.orientationOwner === "Cindy Pulido").map((course) => course.name),
+  },
+  {
+    name: "Marcela Toro",
+    role: "Orientadora de III° Ciclo",
+    email: "m.toro@colegiosanlucas.com",
+    cycle: "III Ciclo",
+    courses: officialCourses.filter((course) => course.orientationOwner === "Marcela Toro").map((course) => course.name),
+  },
+];
+
+const courseMatches = (record: DataRecord, courseName: string) =>
+  Object.values(record).some((value) => normalize(String(value)) === normalize(courseName) || normalize(String(value)).includes(normalize(courseName)));
+
 const entityConfigs: Record<EntityId, EntityConfig> = {
   students: {
     id: "students",
@@ -142,8 +228,11 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
     description: "Cursos o grupos de la institución. Útiles para reportes y planificación grupal.",
     fields: [
       { key: "name", label: "Curso", required: true, aliases: ["curso", "nombre curso", "grado", "nivel"] },
-      { key: "headTeacher", label: "Profesor/a jefe", aliases: ["profesor jefe", "profesora jefe", "docente", "tutor"] },
       { key: "cycle", label: "Ciclo", aliases: ["ciclo", "nivel", "etapa"] },
+      { key: "orientationOwner", label: "Orientador/a", aliases: ["orientador", "orientadora", "responsable orientacion"] },
+      { key: "orientationEmail", label: "Correo orientacion", aliases: ["correo orientacion", "email orientador"] },
+      { key: "headTeacher", label: "Profesor/a jefe", aliases: ["profesor jefe", "profesora jefe", "docente", "tutor"] },
+      { key: "capacity", label: "Capacidad sala", aliases: ["capacidad", "puestos", "cupos"] },
       { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "comentarios"] },
     ],
   },
@@ -155,6 +244,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
     description: "Casos individuales o grupales con prioridad, estado y trazabilidad.",
     fields: [
       { key: "student", label: "Estudiante / grupo", required: true, aliases: ["estudiante", "alumno", "nombre", "grupo", "curso"] },
+      { key: "course", label: "Curso", aliases: ["curso", "grado", "nivel"] },
       { key: "title", label: "Motivo / título", required: true, aliases: ["motivo", "caso", "titulo", "situacion", "problema"] },
       { key: "category", label: "Categoría", type: "select", options: ["Convivencia", "Socioemocional", "Académico", "Asistencia", "Familiar", "PIE/NEE", "Otro"], aliases: ["categoria", "tipo", "area"] },
       { key: "priority", label: "Prioridad", type: "select", options: ["Baja", "Media", "Alta", "Crítica"], aliases: ["prioridad", "urgencia", "riesgo"] },
@@ -217,6 +307,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
     fields: [
       { key: "date", label: "Fecha", type: "date", aliases: ["fecha", "date"] },
       { key: "course", label: "Curso", required: true, aliases: ["curso", "nivel", "grado"] },
+      { key: "orientationOwner", label: "Orientador/a", aliases: ["orientador", "orientadora", "responsable"] },
       { key: "topic", label: "Tema / clase", required: true, aliases: ["tema", "clase", "sesion", "actividad"] },
       { key: "axis", label: "Eje", aliases: ["eje", "unidad", "area"] },
       { key: "status", label: "Estado", type: "select", options: ["Planificada", "Realizada", "Pendiente", "Reprogramada"], aliases: ["estado", "status"] },
@@ -577,6 +668,201 @@ function EntityView({
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+function CourseWorkspaceView({
+  store,
+  onSeedCourses,
+  onNavigate,
+}: {
+  store: DataStore;
+  onSeedCourses: () => void;
+  onNavigate: (view: ViewId) => void;
+}) {
+  const savedByName = new Map(store.courses.map((course) => [normalize(course.name || ""), course]));
+  const courses = officialCourses.map((course) => ({ ...course, record: savedByName.get(normalize(course.name)) || makeCourseRecord(course) }));
+  const [selectedCourse, setSelectedCourse] = useState(courses[0]?.name || "");
+  const current = courses.find((course) => course.name === selectedCourse) || courses[0];
+  const courseName = current?.name || "";
+  const students = store.students.filter((record) => normalize(record.course || "") === normalize(courseName));
+  const cases = store.cases.filter((record) => courseMatches(record, courseName));
+  const convivencia = cases.filter((record) => normalize(`${record.category || ""} ${record.title || ""}`).includes("convivencia"));
+  const logs = store.logs.filter((record) => courseMatches(record, courseName));
+  const orientation = store.orientation.filter((record) => courseMatches(record, courseName));
+  const documents = store.documents.filter((record) => courseMatches(record, courseName));
+  const capacity = Math.max(24, Number(current?.record.capacity || current?.capacity || 32));
+  const seats = Array.from({ length: capacity }, (_, index) => students[index]);
+  const missingOfficialCourses = officialCourses.filter((course) => !savedByName.has(normalize(course.name))).length;
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Cursos</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Cada curso tiene su propio tablero: estudiantes, casos de convivencia, bitácoras, clases de orientación, documentos y distribución de sala.
+          </p>
+        </div>
+        <button
+          onClick={onSeedCourses}
+          disabled={missingOfficialCourses === 0}
+          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+        >
+          <Save className="h-4 w-4" />
+          {missingOfficialCourses === 0 ? "Cursos oficiales guardados" : `Guardar ${missingOfficialCourses} cursos oficiales`}
+        </button>
+      </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white">
+        <div className="overflow-x-auto border-b border-slate-100 px-4 py-3">
+          <div className="flex min-w-max gap-2">
+            {courses.map((course) => (
+              <button
+                key={course.name}
+                onClick={() => setSelectedCourse(course.name)}
+                className={`rounded-md px-3 py-2 text-sm font-semibold ${
+                  selectedCourse === course.name ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                }`}
+              >
+                {course.name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {current ? (
+          <div className="space-y-6 p-6">
+            <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+              <div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <h2 className="text-2xl font-semibold text-slate-950">{current.name}</h2>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{current.cycle}</span>
+                </div>
+                <p className="mt-2 text-sm text-slate-600">
+                  Orientación: <strong className="text-slate-950">{current.orientationOwner}</strong> · {current.orientationEmail}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{students.length}</strong> estudiantes</div>
+                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{convivencia.length}</strong> convivencia</div>
+                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{orientation.length}</strong> orientación</div>
+                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{logs.length}</strong> bitácoras</div>
+              </div>
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+              <section className="rounded-lg border border-slate-200 p-5">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-950">Simulación de sala</h3>
+                  <span className="text-xs font-semibold text-slate-500">{capacity} puestos</span>
+                </div>
+                <div className="grid grid-cols-4 gap-3 sm:grid-cols-6">
+                  {seats.map((student, index) => (
+                    <div key={index} className="min-h-16 rounded-md border border-slate-200 bg-slate-50 p-2 text-xs">
+                      <span className="block font-semibold text-slate-500">Puesto {index + 1}</span>
+                      <span className="mt-1 block font-semibold text-slate-950">{student?.fullName || "Sin asignar"}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+
+              <section className="rounded-lg border border-slate-200 p-5">
+                <h3 className="font-semibold text-slate-950">Casos de convivencia</h3>
+                <div className="mt-4 space-y-3">
+                  {convivencia.length === 0 ? (
+                    <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">No hay casos de convivencia ingresados para este curso.</p>
+                  ) : convivencia.map((record) => (
+                    <article key={record.id} className="rounded-md border border-slate-200 p-3 text-sm">
+                      <strong className="block text-slate-950">{record.title || record.student}</strong>
+                      <span className="text-slate-600">{record.status || "Sin estado"} · {record.priority || "Sin prioridad"}</span>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </div>
+
+            <div className="grid gap-5 lg:grid-cols-3">
+              {([
+                ["Estudiantes", students.length, "students" as ViewId],
+                ["Clases de orientación", orientation.length, "orientation" as ViewId],
+                ["Documentos vinculados", documents.length, "documents" as ViewId],
+              ] as Array<[string, number, ViewId]>).map(([label, count, view]) => (
+                <button key={label} onClick={() => onNavigate(view)} className="rounded-lg border border-slate-200 p-5 text-left hover:bg-slate-50">
+                  <span className="block text-sm font-semibold text-slate-600">{label}</span>
+                  <strong className="mt-2 block text-2xl text-slate-950">{count}</strong>
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
+function OrientationCycleView({
+  store,
+  onAddClass,
+}: {
+  store: DataStore;
+  onAddClass: () => void;
+}) {
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Orientación por ciclo</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Clases y seguimiento por orientador responsable, usando la distribución real de cursos del colegio.
+          </p>
+        </div>
+        <button onClick={onAddClass} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+          <Plus className="h-4 w-4" /> Agregar clase
+        </button>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-3">
+        {orientationOwners.map((owner) => {
+          const classes = store.orientation.filter((record) =>
+            normalize(record.orientationOwner || "") === normalize(owner.name) || owner.courses.some((course) => normalize(record.course || "") === normalize(course))
+          );
+          return (
+            <section key={owner.email} className="rounded-lg border border-slate-200 bg-white p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-950">{owner.name}</h2>
+                  <p className="mt-1 text-sm text-slate-600">{owner.role}</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{owner.cycle}</span>
+              </div>
+              <div className="mt-5">
+                <p className="text-xs font-semibold uppercase text-slate-500">Cursos a cargo</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {owner.courses.map((course) => <span key={course} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{course}</span>)}
+                </div>
+              </div>
+              <div className="mt-5 border-t border-slate-100 pt-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="font-semibold text-slate-950">Clases registradas</h3>
+                  <span className="text-sm font-semibold text-slate-600">{classes.length}</span>
+                </div>
+                <div className="space-y-3">
+                  {classes.length === 0 ? (
+                    <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">Aún no hay clases ingresadas para este ciclo.</p>
+                  ) : classes.slice(0, 6).map((record) => (
+                    <article key={record.id} className="rounded-md border border-slate-200 p-3 text-sm">
+                      <strong className="block text-slate-950">{record.topic || "Clase sin tema"}</strong>
+                      <span className="text-slate-600">{record.course} · {record.status || "Sin estado"}</span>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1418,6 +1704,19 @@ export default function TizaEducationApp() {
     setToast("Registro eliminado");
   };
 
+  const seedOfficialCourses = () => {
+    setStore((current) => {
+      const existing = new Set(current.courses.map((course) => normalize(course.name || "")));
+      const missing = officialCourses
+        .filter((course) => !existing.has(normalize(course.name)))
+        .map(makeCourseRecord);
+
+      if (missing.length === 0) return current;
+      return { ...current, courses: [...current.courses, ...missing] };
+    });
+    setToast("Cursos oficiales preparados");
+  };
+
   const importText = (text: string, fileName = "tabla pegada") => {
     const parsedCsv = parseCsv(text);
     const sheet = { fileName, ...parsedCsv };
@@ -1478,6 +1777,12 @@ export default function TizaEducationApp() {
 
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
+    if (activeView === "courses") {
+      return <CourseWorkspaceView store={store} onSeedCourses={seedOfficialCourses} onNavigate={setActiveView} />;
+    }
+    if (activeView === "orientation") {
+      return <OrientationCycleView store={store} onAddClass={() => setDialogEntity("orientation")} />;
+    }
     if (activeView === "import") {
       return (
         <ImportView
