@@ -47,7 +47,7 @@ type EntityId =
   | "workshops"
   | "documents";
 
-type ViewId = "dashboard" | "import" | "settings" | EntityId;
+type ViewId = "dashboard" | "import" | "team" | "settings" | EntityId;
 
 type DataRecord = {
   id: string;
@@ -57,6 +57,13 @@ type DataRecord = {
 };
 
 type DataStore = Record<EntityId, DataRecord[]>;
+
+type TeamMember = {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+};
 
 type FieldDef = {
   key: string;
@@ -261,6 +268,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "orientation", label: "Orientación", icon: UsersRound },
   { id: "workshops", label: "Talleres", icon: GraduationCap },
   { id: "documents", label: "Documentos", icon: FolderOpen },
+  { id: "team", label: "Equipo", icon: UsersRound },
   { id: "settings", label: "Configuración", icon: Settings },
 ];
 
@@ -904,6 +912,99 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
   );
 }
 
+function TeamView({
+  team,
+  canSeed,
+  seeding,
+  seedNotice,
+  onSeed,
+}: {
+  team: TeamMember[];
+  canSeed: boolean;
+  seeding: boolean;
+  seedNotice: string;
+  onSeed: () => void;
+}) {
+  const leadership = team.filter((member) => normalize(member.role).includes("directora"));
+  const coordination = team.filter((member) => normalize(member.role).includes("coordinador") || normalize(member.role).includes("coordinadora"));
+  const professionals = team.filter((member) => !leadership.some((leader) => leader.id === member.id) && !coordination.some((coordinator) => coordinator.id === member.id));
+  const groups = [
+    { label: "Dirección", members: leadership },
+    { label: "Coordinaciones", members: coordination },
+    { label: "Equipo profesional", members: professionals },
+  ].filter((group) => group.members.length > 0);
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Equipo de Formación y Convivencia</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Perfiles institucionales activos para asignación de casos, bitácoras, orientación y seguimiento.
+          </p>
+          {seedNotice ? <p className="mt-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-800">{seedNotice}</p> : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          {canSeed ? (
+            <button
+              onClick={onSeed}
+              disabled={seeding}
+              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+            >
+              <UsersRound className="h-4 w-4" />
+              {seeding ? "Actualizando..." : "Crear/actualizar equipo"}
+            </button>
+          ) : null}
+          <div className="rounded-md border border-slate-200 bg-white px-4 py-3 text-sm">
+            <span className="font-semibold text-slate-950">{team.length}</span>
+            <span className="ml-1 text-slate-600">integrantes</span>
+          </div>
+        </div>
+      </div>
+
+      {team.length === 0 ? (
+        <section className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+          <UsersRound className="mx-auto h-10 w-10 text-slate-500" />
+          <h2 className="mt-4 text-xl font-semibold text-slate-950">Aún no hay equipo cargado</h2>
+          <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+            Cuando se creen los usuarios en Supabase, aparecerán aquí automáticamente.
+          </p>
+        </section>
+      ) : (
+        <div className="space-y-6">
+          {groups.map((group) => (
+            <section key={group.label} className="rounded-lg border border-slate-200 bg-white p-6">
+              <div className="mb-5 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-slate-950">{group.label}</h2>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{group.members.length}</span>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {group.members.map((member) => (
+                  <article key={member.id} className="rounded-lg border border-slate-200 p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-md bg-slate-900 text-sm font-semibold text-white">
+                        {member.name.split(" ").slice(0, 2).map((part) => part[0]).join("")}
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="font-semibold text-slate-950">{member.name}</h3>
+                        <p className="mt-1 text-sm text-slate-600">{member.role}</p>
+                        <a href={`mailto:${member.email}`} className="mt-3 inline-flex max-w-full items-center gap-2 text-sm font-semibold text-slate-700 hover:text-slate-950">
+                          <Mail className="h-4 w-4 shrink-0" />
+                          <span className="truncate">{member.email}</span>
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsView({
   profile,
   setProfile,
@@ -1097,6 +1198,9 @@ export default function TizaEducationApp() {
   const [toast, setToast] = useState("");
   const [remoteLoaded, setRemoteLoaded] = useState(!isSupabaseAuthConfigured);
   const [remoteStatus, setRemoteStatus] = useState<"local" | "loading" | "synced" | "saving" | "error">("local");
+  const [team, setTeam] = useState<TeamMember[]>([]);
+  const [teamSeeding, setTeamSeeding] = useState(false);
+  const [teamSeedNotice, setTeamSeedNotice] = useState("");
   const [profile, setProfile] = useState<Record<string, string>>(() => {
     const defaults = {
       organization: "Colegio San Lucas",
@@ -1183,6 +1287,38 @@ export default function TizaEducationApp() {
   }, [authUser]);
 
   useEffect(() => {
+    if (!authUser || !supabaseAuth) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadTeam = async () => {
+      const { data } = await supabaseAuth.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) return;
+
+      try {
+        const response = await fetch("/api/team", {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) throw new Error("No se pudo cargar el equipo.");
+        const payload = await response.json();
+        if (!cancelled) setTeam(payload.team || []);
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) setToast("No se pudo cargar el equipo institucional.");
+      }
+    };
+
+    loadTeam();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   }, [store]);
 
@@ -1245,7 +1381,46 @@ export default function TizaEducationApp() {
     await supabaseAuth.auth.signOut();
     setRemoteStatus("local");
     setRemoteLoaded(false);
+    setTeam([]);
     setToast("Sesion cerrada");
+  };
+
+  const seedTeam = async () => {
+    if (!supabaseAuth) return;
+    setTeamSeeding(true);
+    setTeamSeedNotice("");
+    try {
+      const { data } = await supabaseAuth.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) throw new Error("No hay sesión activa.");
+
+      const response = await fetch("/api/team/seed", {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "No se pudo crear el equipo.");
+
+      const teamResponse = await fetch("/api/team", {
+        headers: {
+          authorization: `Bearer ${token}`,
+        },
+      });
+      const teamPayload = await teamResponse.json();
+      if (teamResponse.ok) setTeam(teamPayload.team || []);
+
+      const created = (payload.results || []).filter((item: { action: string }) => item.action === "created").length;
+      const updated = (payload.results || []).filter((item: { action: string }) => item.action === "updated").length;
+      setTeamSeedNotice(`${created} usuarios creados y ${updated} perfiles actualizados. Contraseña temporal para usuarios nuevos: ${payload.temporaryPassword}`);
+      setToast("Equipo institucional actualizado");
+    } catch (error) {
+      console.error(error);
+      setToast(error instanceof Error ? error.message : "No se pudo crear el equipo.");
+    } finally {
+      setTeamSeeding(false);
+    }
   };
 
   const deleteRecord = (entity: EntityId, id: string) => {
@@ -1326,6 +1501,17 @@ export default function TizaEducationApp() {
       );
     }
     if (activeView === "settings") return <SettingsView profile={profile} setProfile={setProfile} onClear={clearLocal} />;
+    if (activeView === "team") {
+      return (
+        <TeamView
+          team={team}
+          canSeed={authUser?.email?.toLowerCase() === "g.caro.m@colegiosanlucas.com"}
+          seeding={teamSeeding}
+          seedNotice={teamSeedNotice}
+          onSeed={seedTeam}
+        />
+      );
+    }
 
     const entity = entityConfigs[activeView];
     return (
