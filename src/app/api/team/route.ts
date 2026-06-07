@@ -8,13 +8,15 @@ type ProfileRow = {
   role: string | null;
 };
 
+const normalizeSupabaseUrl = (url: string) => url.replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/$/, "");
+
 const getAdminClient = () => {
-  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  if (!url || !key) return null;
+  if (!rawUrl || !key) return null;
 
-  return createClient(url, key, {
+  return createClient(normalizeSupabaseUrl(rawUrl), key, {
     auth: {
       persistSession: false,
     },
@@ -22,12 +24,12 @@ const getAdminClient = () => {
 };
 
 const getAuthClient = () => {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || !key) return null;
+  if (!rawUrl || !key) return null;
 
-  return createClient(url, key, {
+  return createClient(normalizeSupabaseUrl(rawUrl), key, {
     auth: {
       persistSession: false,
     },
