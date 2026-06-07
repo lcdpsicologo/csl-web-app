@@ -70,6 +70,8 @@ type CourseDef = {
   cycle: "I Ciclo" | "II Ciclo" | "III Ciclo";
   orientationOwner: string;
   orientationEmail: string;
+  convivenciaCoordinator: string;
+  convivenciaEmail: string;
   capacity: number;
 };
 
@@ -133,6 +135,8 @@ const makeCourseRecord = (course: CourseDef): DataRecord => ({
   cycle: course.cycle,
   orientationOwner: course.orientationOwner,
   orientationEmail: course.orientationEmail,
+  convivenciaCoordinator: course.convivenciaCoordinator,
+  convivenciaEmail: course.convivenciaEmail,
   capacity: String(course.capacity),
   headTeacher: "",
   notes: "",
@@ -141,12 +145,20 @@ const makeCourseRecord = (course: CourseDef): DataRecord => ({
 const basicLevels = ["1° Básico", "2° Básico", "3° Básico", "4° Básico", "5° Básico", "6° Básico", "7° Básico", "8° Básico"];
 const highSchoolLevels = ["I° Medio", "II° Medio", "III° Medio", "IV° Medio"];
 
+const convivenciaByCycle = {
+  "I Ciclo": { name: "Karen Riquelme", email: "k.riquelme@colegiosanlucas.com" },
+  "II Ciclo": { name: "Andrea Acuña", email: "a.acuna@colegiosanlucas.com" },
+  "III Ciclo": { name: "Rita Concha", email: "r.concha@colegiosanlucas.com" },
+} satisfies Record<CourseDef["cycle"], { name: string; email: string }>;
+
 const officialCourses: CourseDef[] = [
   ...["A", "B", "C"].map((section) => ({
     name: `Prekínder ${section}`,
     cycle: "I Ciclo" as const,
     orientationOwner: "Gustavo Caro",
     orientationEmail: "g.caro.m@colegiosanlucas.com",
+    convivenciaCoordinator: convivenciaByCycle["I Ciclo"].name,
+    convivenciaEmail: convivenciaByCycle["I Ciclo"].email,
     capacity: 32,
   })),
   ...["A", "B", "C"].map((section) => ({
@@ -154,6 +166,8 @@ const officialCourses: CourseDef[] = [
     cycle: "I Ciclo" as const,
     orientationOwner: "Gustavo Caro",
     orientationEmail: "g.caro.m@colegiosanlucas.com",
+    convivenciaCoordinator: convivenciaByCycle["I Ciclo"].name,
+    convivenciaEmail: convivenciaByCycle["I Ciclo"].email,
     capacity: 32,
   })),
   ...basicLevels.flatMap((level, index) =>
@@ -162,6 +176,8 @@ const officialCourses: CourseDef[] = [
       cycle: index < 4 ? "I Ciclo" as const : "II Ciclo" as const,
       orientationOwner: index < 4 ? "Gustavo Caro" : "Cindy Pulido",
       orientationEmail: index < 4 ? "g.caro.m@colegiosanlucas.com" : "c.pulido@colegiosanlucas.com",
+      convivenciaCoordinator: index < 4 ? convivenciaByCycle["I Ciclo"].name : convivenciaByCycle["II Ciclo"].name,
+      convivenciaEmail: index < 4 ? convivenciaByCycle["I Ciclo"].email : convivenciaByCycle["II Ciclo"].email,
       capacity: 36,
     }))
   ),
@@ -171,6 +187,8 @@ const officialCourses: CourseDef[] = [
       cycle: "III Ciclo" as const,
       orientationOwner: "Marcela Toro",
       orientationEmail: "m.toro@colegiosanlucas.com",
+      convivenciaCoordinator: convivenciaByCycle["III Ciclo"].name,
+      convivenciaEmail: convivenciaByCycle["III Ciclo"].email,
       capacity: 36,
     }))
   ),
@@ -182,6 +200,8 @@ const orientationOwners = [
     role: "Orientador I Ciclo",
     email: "g.caro.m@colegiosanlucas.com",
     cycle: "I Ciclo",
+    convivenciaCoordinator: convivenciaByCycle["I Ciclo"].name,
+    convivenciaEmail: convivenciaByCycle["I Ciclo"].email,
     courses: officialCourses.filter((course) => course.orientationOwner === "Gustavo Caro").map((course) => course.name),
   },
   {
@@ -189,6 +209,8 @@ const orientationOwners = [
     role: "Orientadora de IIº Ciclo",
     email: "c.pulido@colegiosanlucas.com",
     cycle: "II Ciclo",
+    convivenciaCoordinator: convivenciaByCycle["II Ciclo"].name,
+    convivenciaEmail: convivenciaByCycle["II Ciclo"].email,
     courses: officialCourses.filter((course) => course.orientationOwner === "Cindy Pulido").map((course) => course.name),
   },
   {
@@ -196,6 +218,8 @@ const orientationOwners = [
     role: "Orientadora de III° Ciclo",
     email: "m.toro@colegiosanlucas.com",
     cycle: "III Ciclo",
+    convivenciaCoordinator: convivenciaByCycle["III Ciclo"].name,
+    convivenciaEmail: convivenciaByCycle["III Ciclo"].email,
     courses: officialCourses.filter((course) => course.orientationOwner === "Marcela Toro").map((course) => course.name),
   },
 ];
@@ -231,6 +255,8 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "cycle", label: "Ciclo", aliases: ["ciclo", "nivel", "etapa"] },
       { key: "orientationOwner", label: "Orientador/a", aliases: ["orientador", "orientadora", "responsable orientacion"] },
       { key: "orientationEmail", label: "Correo orientacion", aliases: ["correo orientacion", "email orientador"] },
+      { key: "convivenciaCoordinator", label: "Coord. convivencia", aliases: ["coordinadora convivencia", "coordinador convivencia", "convivencia"] },
+      { key: "convivenciaEmail", label: "Correo convivencia", aliases: ["correo convivencia", "email convivencia"] },
       { key: "headTeacher", label: "Profesor/a jefe", aliases: ["profesor jefe", "profesora jefe", "docente", "tutor"] },
       { key: "capacity", label: "Capacidad sala", aliases: ["capacidad", "puestos", "cupos"] },
       { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "comentarios"] },
@@ -743,6 +769,9 @@ function CourseWorkspaceView({
                 <p className="mt-2 text-sm text-slate-600">
                   Orientación: <strong className="text-slate-950">{current.orientationOwner}</strong> · {current.orientationEmail}
                 </p>
+                <p className="mt-1 text-sm text-slate-600">
+                  Convivencia: <strong className="text-slate-950">{current.convivenciaCoordinator}</strong> · {current.convivenciaEmail}
+                </p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{students.length}</strong> estudiantes</div>
@@ -834,6 +863,9 @@ function OrientationCycleView({
                 <div>
                   <h2 className="text-lg font-semibold text-slate-950">{owner.name}</h2>
                   <p className="mt-1 text-sm text-slate-600">{owner.role}</p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    Coord. convivencia: <strong className="text-slate-950">{owner.convivenciaCoordinator}</strong>
+                  </p>
                 </div>
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{owner.cycle}</span>
               </div>
@@ -1706,15 +1738,29 @@ export default function TizaEducationApp() {
 
   const seedOfficialCourses = () => {
     setStore((current) => {
+      const officialByName = new Map(officialCourses.map((course) => [normalize(course.name), course]));
       const existing = new Set(current.courses.map((course) => normalize(course.name || "")));
+      const updatedCourses = current.courses.map((record) => {
+        const official = officialByName.get(normalize(record.name || ""));
+        if (!official) return record;
+        return {
+          ...record,
+          cycle: official.cycle,
+          orientationOwner: official.orientationOwner,
+          orientationEmail: official.orientationEmail,
+          convivenciaCoordinator: official.convivenciaCoordinator,
+          convivenciaEmail: official.convivenciaEmail,
+          capacity: record.capacity || String(official.capacity),
+          updatedAt: nowIso(),
+        };
+      });
       const missing = officialCourses
         .filter((course) => !existing.has(normalize(course.name)))
         .map(makeCourseRecord);
 
-      if (missing.length === 0) return current;
-      return { ...current, courses: [...current.courses, ...missing] };
+      return { ...current, courses: [...updatedCourses, ...missing] };
     });
-    setToast("Cursos oficiales preparados");
+    setToast("Cursos oficiales y duplas por ciclo actualizadas");
   };
 
   const importText = (text: string, fileName = "tabla pegada") => {
