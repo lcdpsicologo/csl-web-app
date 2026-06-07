@@ -1,5 +1,60 @@
+create extension if not exists "pgcrypto";
+
+create table if not exists public.institutions (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  slug text not null unique,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  institution_id uuid references public.institutions(id) on delete set null,
+  full_name text default '',
+  role text not null default 'orientacion',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.app_records (
+  id uuid primary key default gen_random_uuid(),
+  institution_id uuid not null references public.institutions(id) on delete cascade,
+  entity text not null check (
+    entity in (
+      'students',
+      'courses',
+      'cases',
+      'logs',
+      'interviews',
+      'protocols',
+      'orientation',
+      'workshops',
+      'documents'
+    )
+  ),
+  record_id text not null,
+  data jsonb not null default '{}'::jsonb,
+  created_by uuid references auth.users(id) on delete set null,
+  updated_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (institution_id, entity, record_id)
+);
+
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  institution_id uuid references public.institutions(id) on delete cascade,
+  actor_id uuid references auth.users(id) on delete set null,
+  action text not null,
+  entity text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
 create table if not exists public.orientation_records (
   id bigint primary key,
+  institution_id uuid references public.institutions(id) on delete cascade,
   sem text default '',
   date date not null,
   cycle text not null,
@@ -22,41 +77,81 @@ begin
 end;
 $$ language plpgsql;
 
-drop trigger if exists set_orientation_records_updated_at on public.orientation_records;
+drop trigger if exists set_institutions_updated_at on public.institutions;
+create trigger set_institutions_updated_at
+before update on public.institutions
+for each row execute function public.set_updated_at();
 
+drop trigger if exists set_profiles_updated_at on public.profiles;
+create trigger set_profiles_updated_at
+before update on public.profiles
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_app_records_updated_at on public.app_records;
+create trigger set_app_records_updated_at
+before update on public.app_records
+for each row execute function public.set_updated_at();
+
+drop trigger if exists set_orientation_records_updated_at on public.orientation_records;
 create trigger set_orientation_records_updated_at
 before update on public.orientation_records
-for each row
-execute function public.set_updated_at();
+for each row execute function public.set_updated_at();
 
+alter table public.institutions enable row level security;
+alter table public.profiles enable row level security;
+alter table public.app_records enable row level security;
+alter table public.audit_logs enable row level security;
 alter table public.orientation_records enable row level security;
 
-drop policy if exists "orientation_records_server_only" on public.orientation_records;
+drop policy if exists "profiles_read_own" on public.profiles;
+create policy "profiles_read_own"
+on public.profiles for select
+using (auth.uid() = id);
 
-create policy "orientation_records_server_only"
-on public.orientation_records
-for all
-using (false)
-with check (false);
+drop policy if exists "institutions_read_own" on public.institutions;
+create policy "institutions_read_own"
+on public.institutions for select
+using (
+  id in (
+    select institution_id
+    from public.profiles
+    where profiles.id = auth.uid()
+  )
+);
 
-insert into public.orientation_records (
-  id,
-  sem,
-  date,
-  cycle,
-  course,
-  action,
-  topic,
-  status,
-  observations,
-  evidence_link,
-  planning_link
-) values
-  (1, '18/05 al 22/05 (Semana 12)', '2026-05-19', '1° Ciclo', 'Pre Kinder B', 'Hago las cosas bien', 'Sesión 4', 'Realizado', 'La araña hacendosa', 'https://canva.link/x83vxwd4h45p6gb', 'https://drive.google.com/'),
-  (2, '18/05 al 22/05 (Semana 12)', '2026-05-20', '1° Ciclo', 'Pre Kinder C', 'Hago las cosas bien', 'Sesión 4', 'Realizado', 'La araña hacendosa', 'https://canva.link/x83vxwd4h45p6gb', 'https://drive.google.com/'),
-  (3, '18/05 al 22/05 (Semana 12)', '2026-05-21', '1° Ciclo', 'Kinder A', 'Hago las cosas bien', 'Sesión 3', 'Pendiente', 'El desorden de Franklin', 'https://canva.link/i4asqi5qao0qr9t', ''),
-  (4, '18/05 al 22/05 (Semana 12)', '2026-05-22', '1° Ciclo', 'Kinder C', 'Intervención Formativa', 'Sesión 1', 'Realizado', 'Kinder C juega con cuidado y buen trato', 'https://canva.link/la4qtzcfajo6rcc', 'https://drive.google.com/'),
-  (5, '18/05 al 22/05 (Semana 12)', '2026-05-18', '1° Ciclo', '1° Básico A', 'Intervención Formativa', 'Sesión 1', 'Realizado', 'Devolución de prueba DIA socioemocional', 'https://canva.link/y860v75hqwkhdd4p', 'https://drive.google.com/'),
-  (6, '18/05 al 22/05 (Semana 12)', '2026-05-22', '1° Ciclo', '2° Básico A', 'Intervención Formativa', 'Sesión 1', 'Pendiente', 'Devolución de prueba DIA socioemocional', 'https://canva.link/e75srmdmto1vsms', ''),
-  (7, '18/05 al 22/05 (Semana 12)', '2026-05-18', '1° Ciclo', '4° Básico A', 'Intervención Formativa', 'Sesión 1', 'Realizado', 'Devolución de prueba DIA socioemocional. Durante la clase acompaña Subdirectora Valeska, Profesora Catalina y Orientador.', 'https://canva.link/irg9u9ntpra8vyp', 'https://drive.google.com/')
-on conflict (id) do nothing;
+drop policy if exists "app_records_read_own_institution" on public.app_records;
+create policy "app_records_read_own_institution"
+on public.app_records for select
+using (
+  institution_id in (
+    select institution_id
+    from public.profiles
+    where profiles.id = auth.uid()
+  )
+);
+
+drop policy if exists "audit_logs_read_own_institution" on public.audit_logs;
+create policy "audit_logs_read_own_institution"
+on public.audit_logs for select
+using (
+  institution_id in (
+    select institution_id
+    from public.profiles
+    where profiles.id = auth.uid()
+  )
+);
+
+drop policy if exists "orientation_records_read_own_institution" on public.orientation_records;
+create policy "orientation_records_read_own_institution"
+on public.orientation_records for select
+using (
+  institution_id in (
+    select institution_id
+    from public.profiles
+    where profiles.id = auth.uid()
+  )
+);
+
+insert into public.institutions (name, slug)
+values ('Colegio San Lucas', 'colegio-san-lucas')
+on conflict (slug) do nothing;

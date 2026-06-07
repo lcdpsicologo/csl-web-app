@@ -1095,6 +1095,8 @@ export default function TizaEducationApp() {
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [toast, setToast] = useState("");
+  const [remoteLoaded, setRemoteLoaded] = useState(!isSupabaseAuthConfigured);
+  const [remoteStatus, setRemoteStatus] = useState<"local" | "loading" | "synced" | "saving" | "error">("local");
   const [profile, setProfile] = useState<Record<string, string>>(() => {
     const defaults = {
       organization: "Colegio San Lucas",
@@ -1127,6 +1129,7 @@ export default function TizaEducationApp() {
     const { data: listener } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
       setAuthUser(session?.user ?? null);
       setAuthLoading(false);
+      setRemoteLoaded(false);
     });
 
     return () => {
@@ -1136,8 +1139,84 @@ export default function TizaEducationApp() {
   }, []);
 
   useEffect(() => {
+    if (!authUser || !supabaseAuth) {
+      return;
+    }
+
+    let cancelled = false;
+    const loadRemoteStore = async () => {
+      setRemoteStatus("loading");
+      const { data } = await supabaseAuth.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        setRemoteStatus("error");
+        setRemoteLoaded(true);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/records", {
+          headers: {
+            authorization: `Bearer ${token}`,
+          },
+        });
+        if (!response.ok) throw new Error("No se pudieron cargar los datos remotos.");
+        const payload = await response.json();
+        if (cancelled) return;
+        setStore({ ...emptyStore(), ...(payload.store || {}) });
+        setRemoteLoaded(true);
+        setRemoteStatus("synced");
+      } catch (error) {
+        console.error(error);
+        if (!cancelled) {
+          setRemoteLoaded(true);
+          setRemoteStatus("error");
+          setToast("No se pudo sincronizar Supabase. Usando respaldo local.");
+        }
+      }
+    };
+
+    loadRemoteStore();
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser]);
+
+  useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   }, [store]);
+
+  useEffect(() => {
+    if (!authUser || !supabaseAuth || !remoteLoaded) return;
+
+    const timer = window.setTimeout(async () => {
+      setRemoteStatus("saving");
+      const { data } = await supabaseAuth.auth.getSession();
+      const token = data.session?.access_token;
+      if (!token) {
+        setRemoteStatus("error");
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/records", {
+          method: "PUT",
+          headers: {
+            authorization: `Bearer ${token}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ store }),
+        });
+        if (!response.ok) throw new Error("No se pudieron guardar los datos remotos.");
+        setRemoteStatus("synced");
+      } catch (error) {
+        console.error(error);
+        setRemoteStatus("error");
+      }
+    }, 700);
+
+    return () => window.clearTimeout(timer);
+  }, [store, authUser, remoteLoaded]);
 
   useEffect(() => {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
@@ -1164,6 +1243,8 @@ export default function TizaEducationApp() {
   const signOut = async () => {
     if (!supabaseAuth) return;
     await supabaseAuth.auth.signOut();
+    setRemoteStatus("local");
+    setRemoteLoaded(false);
     setToast("Sesion cerrada");
   };
 
@@ -1261,6 +1342,14 @@ export default function TizaEducationApp() {
     );
   };
 
+  const syncLabel = {
+    local: "Guardado local",
+    loading: "Cargando Supabase",
+    synced: "Sincronizado",
+    saving: "Guardando",
+    error: "Sincronizacion pendiente",
+  }[remoteStatus];
+
   if (authLoading) {
     return (
       <main className="grid min-h-screen place-items-center bg-slate-50 text-slate-700">
@@ -1285,12 +1374,23 @@ export default function TizaEducationApp() {
               <p className="font-semibold text-slate-900">Sesion activa</p>
               <p className="text-slate-500">{authUser.email}</p>
             </div>
-            <button
-              onClick={signOut}
-              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              <LogOut className="h-4 w-4" /> Salir
-            </button>
+            <div className="flex items-center gap-3">
+              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                remoteStatus === "synced"
+                  ? "bg-green-50 text-green-700"
+                  : remoteStatus === "error"
+                    ? "bg-orange-50 text-orange-700"
+                    : "bg-slate-100 text-slate-600"
+              }`}>
+                {syncLabel}
+              </span>
+              <button
+                onClick={signOut}
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                <LogOut className="h-4 w-4" /> Salir
+              </button>
+            </div>
           </div>
           {renderView()}
         </div>
