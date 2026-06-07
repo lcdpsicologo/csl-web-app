@@ -1179,6 +1179,7 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
 
 export default function TizaEducationApp() {
   const [authUser, setAuthUser] = useState<User | null>(null);
+  const [accessToken, setAccessToken] = useState("");
   const [authLoading, setAuthLoading] = useState(isSupabaseAuthConfigured);
   const [store, setStore] = useState<DataStore>(() => {
     if (typeof window === "undefined") return emptyStore();
@@ -1227,11 +1228,13 @@ export default function TizaEducationApp() {
     supabaseAuth.auth.getSession().then(({ data }) => {
       if (!mounted) return;
       setAuthUser(data.session?.user ?? null);
+      setAccessToken(data.session?.access_token ?? "");
       setAuthLoading(false);
     });
 
     const { data: listener } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
       setAuthUser(session?.user ?? null);
+      setAccessToken(session?.access_token ?? "");
       setAuthLoading(false);
       setRemoteLoaded(false);
     });
@@ -1243,25 +1246,17 @@ export default function TizaEducationApp() {
   }, []);
 
   useEffect(() => {
-    if (!authUser || !supabaseAuth) {
+    if (!authUser || !accessToken) {
       return;
     }
 
     let cancelled = false;
     const loadRemoteStore = async () => {
       setRemoteStatus("loading");
-      const { data } = await supabaseAuth.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) {
-        setRemoteStatus("error");
-        setRemoteLoaded(true);
-        return;
-      }
-
       try {
         const response = await fetch("/api/records", {
           headers: {
-            authorization: `Bearer ${token}`,
+            authorization: `Bearer ${accessToken}`,
           },
         });
         if (!response.ok) throw new Error("No se pudieron cargar los datos remotos.");
@@ -1284,23 +1279,19 @@ export default function TizaEducationApp() {
     return () => {
       cancelled = true;
     };
-  }, [authUser]);
+  }, [authUser, accessToken]);
 
   useEffect(() => {
-    if (!authUser || !supabaseAuth) {
+    if (!authUser || !accessToken) {
       return;
     }
 
     let cancelled = false;
     const loadTeam = async () => {
-      const { data } = await supabaseAuth.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) return;
-
       try {
         const response = await fetch("/api/team", {
           headers: {
-            authorization: `Bearer ${token}`,
+            authorization: `Bearer ${accessToken}`,
           },
         });
         if (!response.ok) throw new Error("No se pudo cargar el equipo.");
@@ -1316,29 +1307,22 @@ export default function TizaEducationApp() {
     return () => {
       cancelled = true;
     };
-  }, [authUser]);
+  }, [authUser, accessToken]);
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
   }, [store]);
 
   useEffect(() => {
-    if (!authUser || !supabaseAuth || !remoteLoaded) return;
+    if (!authUser || !accessToken || !remoteLoaded) return;
 
     const timer = window.setTimeout(async () => {
       setRemoteStatus("saving");
-      const { data } = await supabaseAuth.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) {
-        setRemoteStatus("error");
-        return;
-      }
-
       try {
         const response = await fetch("/api/records", {
           method: "PUT",
           headers: {
-            authorization: `Bearer ${token}`,
+            authorization: `Bearer ${accessToken}`,
             "content-type": "application/json",
           },
           body: JSON.stringify({ store }),
@@ -1352,7 +1336,7 @@ export default function TizaEducationApp() {
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [store, authUser, remoteLoaded]);
+  }, [store, authUser, accessToken, remoteLoaded]);
 
   useEffect(() => {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
@@ -1379,6 +1363,7 @@ export default function TizaEducationApp() {
   const signOut = async () => {
     if (!supabaseAuth) return;
     await supabaseAuth.auth.signOut();
+    setAccessToken("");
     setRemoteStatus("local");
     setRemoteLoaded(false);
     setTeam([]);
@@ -1386,18 +1371,14 @@ export default function TizaEducationApp() {
   };
 
   const seedTeam = async () => {
-    if (!supabaseAuth) return;
+    if (!accessToken) return;
     setTeamSeeding(true);
     setTeamSeedNotice("");
     try {
-      const { data } = await supabaseAuth.auth.getSession();
-      const token = data.session?.access_token;
-      if (!token) throw new Error("No hay sesión activa.");
-
       const response = await fetch("/api/team/seed", {
         method: "POST",
         headers: {
-          authorization: `Bearer ${token}`,
+          authorization: `Bearer ${accessToken}`,
         },
       });
       const payload = await response.json();
@@ -1405,7 +1386,7 @@ export default function TizaEducationApp() {
 
       const teamResponse = await fetch("/api/team", {
         headers: {
-          authorization: `Bearer ${token}`,
+          authorization: `Bearer ${accessToken}`,
         },
       });
       const teamPayload = await teamResponse.json();
