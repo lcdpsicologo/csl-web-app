@@ -75,6 +75,14 @@ type CourseDef = {
   capacity: number;
 };
 
+type ClassroomTeamMember = {
+  id: string;
+  name: string;
+  role: string;
+  email: string;
+  notes: string;
+};
+
 type FieldDef = {
   key: string;
   label: string;
@@ -139,6 +147,7 @@ const makeCourseRecord = (course: CourseDef): DataRecord => ({
   convivenciaEmail: course.convivenciaEmail,
   capacity: String(course.capacity),
   headTeacher: "",
+  classroomTeam: "[]",
   notes: "",
 });
 
@@ -226,6 +235,32 @@ const orientationOwners = [
 
 const courseMatches = (record: DataRecord, courseName: string) =>
   Object.values(record).some((value) => normalize(String(value)) === normalize(courseName) || normalize(String(value)).includes(normalize(courseName)));
+
+const classroomRoles = [
+  "Profesor/a jefe",
+  "Profesor/a de asignatura",
+  "Asistente de aula",
+  "Educadora diferencial",
+  "Educadora de párvulos",
+  "Técnico en párvulos",
+  "Inspector/a",
+  "Psicóloga",
+  "Trabajadora social",
+  "Coordinadora de convivencia",
+  "Orientador/a",
+  "Otro apoyo",
+];
+
+const parseClassroomTeam = (value: string | undefined): ClassroomTeamMember[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((member) => member && typeof member.name === "string" && typeof member.role === "string");
+  } catch {
+    return [];
+  }
+};
 
 const entityConfigs: Record<EntityId, EntityConfig> = {
   students: {
@@ -701,10 +736,12 @@ function EntityView({
 function CourseWorkspaceView({
   store,
   onSeedCourses,
+  onUpdateCourse,
   onNavigate,
 }: {
   store: DataStore;
   onSeedCourses: () => void;
+  onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
   onNavigate: (view: ViewId) => void;
 }) {
   const savedByName = new Map(store.courses.map((course) => [normalize(course.name || ""), course]));
@@ -721,6 +758,31 @@ function CourseWorkspaceView({
   const capacity = Math.max(24, Number(current?.record.capacity || current?.capacity || 32));
   const seats = Array.from({ length: capacity }, (_, index) => students[index]);
   const missingOfficialCourses = officialCourses.filter((course) => !savedByName.has(normalize(course.name))).length;
+  const classroomTeam = parseClassroomTeam(current?.record.classroomTeam);
+  const [teamForm, setTeamForm] = useState({ name: "", role: "Profesor/a jefe", email: "", notes: "" });
+  const addClassroomTeamMember = () => {
+    if (!current || !teamForm.name.trim()) return;
+    const member: ClassroomTeamMember = {
+      id: uid(),
+      name: teamForm.name.trim(),
+      role: teamForm.role,
+      email: teamForm.email.trim(),
+      notes: teamForm.notes.trim(),
+    };
+    onUpdateCourse(current.name, {
+      classroomTeam: JSON.stringify([...classroomTeam, member]),
+      headTeacher: member.role === "Profesor/a jefe" ? member.name : current.record.headTeacher || "",
+    });
+    setTeamForm({ name: "", role: "Profesor/a jefe", email: "", notes: "" });
+  };
+  const removeClassroomTeamMember = (memberId: string) => {
+    if (!current) return;
+    const nextTeam = classroomTeam.filter((member) => member.id !== memberId);
+    onUpdateCourse(current.name, {
+      classroomTeam: JSON.stringify(nextTeam),
+      headTeacher: current.record.headTeacher === classroomTeam.find((member) => member.id === memberId)?.name ? "" : current.record.headTeacher || "",
+    });
+  };
 
   return (
     <div>
@@ -811,6 +873,71 @@ function CourseWorkspaceView({
                 </div>
               </section>
             </div>
+
+            <section className="rounded-lg border border-slate-200 p-5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold text-slate-950">Equipo de aula</h3>
+                  <p className="mt-1 text-sm text-slate-600">Personas que trabajan directamente con este curso.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{classroomTeam.length} integrantes</span>
+              </div>
+
+              <div className="grid gap-3 rounded-lg bg-slate-50 p-4 lg:grid-cols-[1fr_220px_1fr_1fr_auto]">
+                <input
+                  value={teamForm.name}
+                  onChange={(event) => setTeamForm((currentForm) => ({ ...currentForm, name: event.target.value }))}
+                  placeholder="Nombre completo"
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
+                />
+                <select
+                  value={teamForm.role}
+                  onChange={(event) => setTeamForm((currentForm) => ({ ...currentForm, role: event.target.value }))}
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
+                >
+                  {classroomRoles.map((role) => <option key={role}>{role}</option>)}
+                </select>
+                <input
+                  value={teamForm.email}
+                  onChange={(event) => setTeamForm((currentForm) => ({ ...currentForm, email: event.target.value }))}
+                  placeholder="Correo"
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
+                />
+                <input
+                  value={teamForm.notes}
+                  onChange={(event) => setTeamForm((currentForm) => ({ ...currentForm, notes: event.target.value }))}
+                  placeholder="Notas o horario"
+                  className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
+                />
+                <button
+                  onClick={addClassroomTeamMember}
+                  disabled={!teamForm.name.trim()}
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+                >
+                  <Plus className="h-4 w-4" /> Añadir
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {classroomTeam.length === 0 ? (
+                  <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600 md:col-span-2 xl:col-span-3">Aún no hay equipo de aula ingresado para este curso.</p>
+                ) : classroomTeam.map((member) => (
+                  <article key={member.id} className="rounded-md border border-slate-200 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-slate-950">{member.name}</h4>
+                        <p className="mt-1 text-sm text-slate-600">{member.role}</p>
+                        {member.email ? <p className="mt-2 truncate text-sm text-slate-500">{member.email}</p> : null}
+                        {member.notes ? <p className="mt-2 text-sm text-slate-500">{member.notes}</p> : null}
+                      </div>
+                      <button onClick={() => removeClassroomTeamMember(member.id)} className="rounded-md p-2 text-red-500 hover:bg-red-50">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
 
             <div className="grid gap-5 lg:grid-cols-3">
               {([
@@ -1763,6 +1890,28 @@ export default function TizaEducationApp() {
     setToast("Cursos oficiales y duplas por ciclo actualizadas");
   };
 
+  const updateCourseRecord = (courseName: string, updates: Record<string, string>) => {
+    setStore((current) => {
+      const official = officialCourses.find((course) => normalize(course.name) === normalize(courseName));
+      const baseRecord = official ? makeCourseRecord(official) : {
+        id: `course-${normalize(courseName).replace(/\s+/g, "-")}`,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        name: courseName,
+      };
+      const exists = current.courses.some((course) => normalize(course.name || "") === normalize(courseName));
+      const nextRecord = (record: DataRecord) => ({ ...record, ...updates, updatedAt: nowIso() });
+
+      return {
+        ...current,
+        courses: exists
+          ? current.courses.map((course) => normalize(course.name || "") === normalize(courseName) ? nextRecord(course) : course)
+          : [nextRecord(baseRecord), ...current.courses],
+      };
+    });
+    setToast("Equipo de aula actualizado");
+  };
+
   const importText = (text: string, fileName = "tabla pegada") => {
     const parsedCsv = parseCsv(text);
     const sheet = { fileName, ...parsedCsv };
@@ -1824,7 +1973,7 @@ export default function TizaEducationApp() {
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
     if (activeView === "courses") {
-      return <CourseWorkspaceView store={store} onSeedCourses={seedOfficialCourses} onNavigate={setActiveView} />;
+      return <CourseWorkspaceView store={store} onSeedCourses={seedOfficialCourses} onUpdateCourse={updateCourseRecord} onNavigate={setActiveView} />;
     }
     if (activeView === "orientation") {
       return <OrientationCycleView store={store} onAddClass={() => setDialogEntity("orientation")} />;
