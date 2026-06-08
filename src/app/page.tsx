@@ -83,6 +83,15 @@ type ClassroomTeamMember = {
   notes: string;
 };
 
+type GenogramMember = {
+  id: string;
+  name: string;
+  relation: string;
+  role: string;
+  age: string;
+  notes: string;
+};
+
 type FieldDef = {
   key: string;
   label: string;
@@ -262,6 +271,40 @@ const parseClassroomTeam = (value: string | undefined): ClassroomTeamMember[] =>
   }
 };
 
+const parseGenogram = (value: string | undefined): GenogramMember[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((member) => member && typeof member.name === "string" && typeof member.relation === "string");
+  } catch {
+    return [];
+  }
+};
+
+const genogramRelations = [
+  "Madre",
+  "Padre",
+  "Cuidador/a principal",
+  "Apoderado/a",
+  "Hermano/a",
+  "Abuelo/a",
+  "Tío/a",
+  "Tutor/a legal",
+  "Otro familiar",
+  "Red de apoyo",
+];
+
+const genogramRoles = [
+  "Vive con el estudiante",
+  "No vive con el estudiante",
+  "Contacto principal",
+  "Contacto secundario",
+  "Restricción de contacto",
+  "Fallecido/a",
+  "Red significativa",
+];
+
 const entityConfigs: Record<EntityId, EntityConfig> = {
   students: {
     id: "students",
@@ -276,7 +319,12 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "guardian", label: "Apoderado/a", aliases: ["apoderado", "apoderada", "tutor", "guardian", "madre", "padre"] },
       { key: "phone", label: "Teléfono", aliases: ["telefono", "celular", "fono", "phone"] },
       { key: "email", label: "Correo", aliases: ["correo", "email", "mail"] },
+      { key: "relevantInfo", label: "Informacion relevante", type: "textarea", aliases: ["informacion relevante", "antecedentes relevantes", "contexto"] },
+      { key: "strengths", label: "Fortalezas", type: "textarea", aliases: ["fortalezas", "recursos", "habilidades"] },
+      { key: "supportNeeds", label: "Necesidades de apoyo", type: "textarea", aliases: ["necesidades", "apoyos", "dificultades"] },
+      { key: "healthAlerts", label: "Alertas de salud/cuidados", type: "textarea", aliases: ["salud", "alertas", "cuidados"] },
       { key: "notes", label: "Notas", type: "textarea", aliases: ["notas", "observaciones", "comentarios", "antecedentes"] },
+      { key: "genogram", label: "Genograma", type: "textarea", aliases: ["genograma", "familia", "grupo familiar"] },
     ],
   },
   courses: {
@@ -1022,6 +1070,211 @@ function OrientationCycleView({
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function GenogramChart({ student, members }: { student: DataRecord; members: GenogramMember[] }) {
+  const primary = members.filter((member) => ["Madre", "Padre", "Cuidador/a principal", "Apoderado/a", "Tutor/a legal"].includes(member.relation));
+  const siblings = members.filter((member) => member.relation === "Hermano/a");
+  const support = members.filter((member) => !primary.includes(member) && !siblings.includes(member));
+
+  return (
+    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <svg viewBox="0 0 900 520" className="min-h-[420px] w-full min-w-[760px]" role="img" aria-label={`Genograma de ${student.fullName || "estudiante"}`}>
+        <defs>
+          <filter id="genogramShadow" x="-10%" y="-10%" width="120%" height="130%">
+            <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.10" />
+          </filter>
+        </defs>
+        <line x1="450" y1="250" x2="450" y2="310" className="stroke-slate-300" strokeWidth="2" />
+        <rect x="345" y="300" width="210" height="82" rx="12" className="fill-slate-900" filter="url(#genogramShadow)" />
+        <text x="450" y="333" textAnchor="middle" className="fill-white text-[15px] font-bold">{student.fullName || "Estudiante"}</text>
+        <text x="450" y="356" textAnchor="middle" className="fill-slate-300 text-[12px]">{student.course || "Sin curso"}</text>
+
+        {primary.slice(0, 4).map((member, index) => {
+          const x = 105 + index * 225;
+          return (
+            <g key={member.id}>
+              <line x1={x + 80} y1="165" x2="450" y2="250" className="stroke-slate-300" strokeWidth="2" />
+              <rect x={x} y="95" width="160" height="88" rx="12" className="fill-white stroke-slate-300" filter="url(#genogramShadow)" />
+              <text x={x + 80} y="126" textAnchor="middle" className="fill-slate-950 text-[12px] font-semibold">{member.name}</text>
+              <text x={x + 80} y="148" textAnchor="middle" className="fill-slate-500 text-[10px]">{member.relation}</text>
+              <text x={x + 80} y="166" textAnchor="middle" className="fill-slate-500 text-[10px]">{member.role}</text>
+            </g>
+          );
+        })}
+
+        {siblings.slice(0, 4).map((member, index) => {
+          const x = 120 + index * 170;
+          return (
+            <g key={member.id}>
+              <line x1="450" y1="360" x2={x + 65} y2="430" className="stroke-slate-300" strokeWidth="2" />
+              <rect x={x} y="405" width="130" height="70" rx="10" className="fill-white stroke-slate-300" />
+              <text x={x + 65} y="434" textAnchor="middle" className="fill-slate-950 text-[12px] font-semibold">{member.name}</text>
+              <text x={x + 65} y="454" textAnchor="middle" className="fill-slate-500 text-[10px]">{member.relation}</text>
+            </g>
+          );
+        })}
+
+        {support.slice(0, 3).map((member, index) => {
+          const y = 210 + index * 78;
+          return (
+            <g key={member.id}>
+              <line x1="555" y1="340" x2="735" y2={y + 32} className="stroke-blue-300" strokeDasharray="6 6" strokeWidth="2" />
+              <rect x="715" y={y} width="150" height="64" rx="10" className="fill-blue-50 stroke-blue-200" />
+              <text x="790" y={y + 27} textAnchor="middle" className="fill-blue-950 text-[12px] font-semibold">{member.name}</text>
+              <text x="790" y={y + 46} textAnchor="middle" className="fill-blue-700 text-[10px]">{member.relation}</text>
+            </g>
+          );
+        })}
+
+        {members.length === 0 ? (
+          <text x="450" y="110" textAnchor="middle" className="fill-slate-500 text-[14px]">Agrega familiares o redes para construir el genograma.</text>
+        ) : null}
+      </svg>
+    </div>
+  );
+}
+
+function StudentsWorkspaceView({
+  store,
+  onAdd,
+  onUpdateStudent,
+}: {
+  store: DataStore;
+  onAdd: () => void;
+  onUpdateStudent: (studentId: string, updates: Record<string, string>) => void;
+}) {
+  const [selectedId, setSelectedId] = useState(store.students[0]?.id || "");
+  const selected = store.students.find((student) => student.id === selectedId) || store.students[0];
+  const [genogramForm, setGenogramForm] = useState({ name: "", relation: "Madre", role: "Vive con el estudiante", age: "", notes: "" });
+  const genogram = parseGenogram(selected?.genogram);
+  const cases = selected ? store.cases.filter((record) => record.student === selected.fullName || record.course === selected.course) : [];
+  const logs = selected ? store.logs.filter((record) => record.student === selected.fullName || record.student === selected.course) : [];
+
+  const updateInfo = (key: string, value: string) => {
+    if (!selected) return;
+    onUpdateStudent(selected.id, { [key]: value });
+  };
+
+  const addGenogramMember = () => {
+    if (!selected || !genogramForm.name.trim()) return;
+    const member: GenogramMember = {
+      id: uid(),
+      name: genogramForm.name.trim(),
+      relation: genogramForm.relation,
+      role: genogramForm.role,
+      age: genogramForm.age.trim(),
+      notes: genogramForm.notes.trim(),
+    };
+    onUpdateStudent(selected.id, { genogram: JSON.stringify([...genogram, member]) });
+    setGenogramForm({ name: "", relation: "Madre", role: "Vive con el estudiante", age: "", notes: "" });
+  };
+
+  const removeGenogramMember = (memberId: string) => {
+    if (!selected) return;
+    onUpdateStudent(selected.id, { genogram: JSON.stringify(genogram.filter((member) => member.id !== memberId)) });
+  };
+
+  return (
+    <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Estudiantes</h1>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">Ficha individual con información relevante, historial vinculado y genograma familiar/profesional.</p>
+        </div>
+        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+          <Plus className="h-4 w-4" /> Agregar estudiante
+        </button>
+      </div>
+
+      {store.students.length === 0 ? (
+        <EmptyState entity={entityConfigs.students} onAdd={onAdd} onImport={() => undefined} />
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
+          <aside className="rounded-lg border border-slate-200 bg-white p-3">
+            <div className="mb-3 px-2 text-xs font-semibold uppercase text-slate-500">Estudiantes</div>
+            <div className="space-y-1">
+              {store.students.map((student) => (
+                <button key={student.id} onClick={() => setSelectedId(student.id)} className={`w-full rounded-md px-3 py-2 text-left text-sm ${selected?.id === student.id ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`}>
+                  <span className="block font-semibold">{student.fullName || "Sin nombre"}</span>
+                  <span className={`block text-xs ${selected?.id === student.id ? "text-slate-300" : "text-slate-500"}`}>{student.course || "Sin curso"}</span>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          {selected ? (
+            <section className="space-y-6">
+              <div className="rounded-lg border border-slate-200 bg-white p-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-2xl font-semibold text-slate-950">{selected.fullName}</h2>
+                    <p className="mt-1 text-sm text-slate-600">{selected.course} · {selected.rut || "Sin RUT/ID"}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl">{cases.length}</strong> casos</div>
+                    <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl">{logs.length}</strong> bitácoras</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+                <section className="rounded-lg border border-slate-200 bg-white p-6">
+                  <h3 className="font-semibold text-slate-950">Información relevante</h3>
+                  <div className="mt-4 space-y-4">
+                    {[
+                      ["relevantInfo", "Antecedentes relevantes"],
+                      ["strengths", "Fortalezas y recursos"],
+                      ["supportNeeds", "Necesidades de apoyo"],
+                      ["healthAlerts", "Alertas de salud/cuidados"],
+                      ["notes", "Observaciones generales"],
+                    ].map(([key, label]) => (
+                      <label key={key} className="block">
+                        <span className="text-sm font-semibold text-slate-700">{label}</span>
+                        <textarea value={selected[key] || ""} onChange={(event) => updateInfo(key, event.target.value)} className="mt-2 h-24 w-full resize-none rounded-md border border-slate-200 p-3 text-sm outline-none focus:border-slate-900" />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-lg border border-slate-200 bg-white p-6">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="font-semibold text-slate-950">Genograma</h3>
+                    <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{genogram.length} vínculos</span>
+                  </div>
+                  <GenogramChart student={selected} members={genogram} />
+
+                  <div className="mt-5 grid gap-3 rounded-lg bg-slate-50 p-4 lg:grid-cols-2">
+                    <input value={genogramForm.name} onChange={(event) => setGenogramForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre familiar/red" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
+                    <select value={genogramForm.relation} onChange={(event) => setGenogramForm((form) => ({ ...form, relation: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900">
+                      {genogramRelations.map((relation) => <option key={relation}>{relation}</option>)}
+                    </select>
+                    <select value={genogramForm.role} onChange={(event) => setGenogramForm((form) => ({ ...form, role: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900">
+                      {genogramRoles.map((role) => <option key={role}>{role}</option>)}
+                    </select>
+                    <input value={genogramForm.age} onChange={(event) => setGenogramForm((form) => ({ ...form, age: event.target.value }))} placeholder="Edad opcional" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
+                    <input value={genogramForm.notes} onChange={(event) => setGenogramForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notas breves" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900 lg:col-span-2" />
+                    <button onClick={addGenogramMember} disabled={!genogramForm.name.trim()} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300 lg:col-span-2">
+                      <Plus className="h-4 w-4" /> Añadir al genograma
+                    </button>
+                  </div>
+
+                  <div className="mt-4 space-y-2">
+                    {genogram.map((member) => (
+                      <div key={member.id} className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm">
+                        <span><strong>{member.name}</strong> · {member.relation} · {member.role}</span>
+                        <button onClick={() => removeGenogramMember(member.id)} className="rounded-md p-2 text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </div>
+            </section>
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }
@@ -1912,6 +2165,16 @@ export default function TizaEducationApp() {
     setToast("Equipo de aula actualizado");
   };
 
+  const updateStudentRecord = (studentId: string, updates: Record<string, string>) => {
+    setStore((current) => ({
+      ...current,
+      students: current.students.map((student) =>
+        student.id === studentId ? { ...student, ...updates, updatedAt: nowIso() } : student
+      ),
+    }));
+    setToast("Ficha del estudiante actualizada");
+  };
+
   const importText = (text: string, fileName = "tabla pegada") => {
     const parsedCsv = parseCsv(text);
     const sheet = { fileName, ...parsedCsv };
@@ -1972,6 +2235,9 @@ export default function TizaEducationApp() {
 
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
+    if (activeView === "students") {
+      return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onUpdateStudent={updateStudentRecord} />;
+    }
     if (activeView === "courses") {
       return <CourseWorkspaceView store={store} onSeedCourses={seedOfficialCourses} onUpdateCourse={updateCourseRecord} onNavigate={setActiveView} />;
     }
