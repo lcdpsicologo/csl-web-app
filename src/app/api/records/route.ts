@@ -157,24 +157,31 @@ export async function GET(request: Request) {
 
   try {
     const institutionId = await ensureInstitution(supabase, auth.user);
-    const { data, error } = await supabase
-      .from("app_records")
-      .select("entity, record_id, data, created_at, updated_at")
-      .eq("institution_id", institutionId)
-      .order("updated_at", { ascending: false });
-
-    if (error) throw error;
-
     const store = emptyStore();
-    (data as AppRecordRow[] | null)?.forEach((row) => {
-      if (!ENTITY_IDS.includes(row.entity)) return;
-      store[row.entity].push({
-        id: row.record_id,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        ...row.data,
+    const pageSize = 1000;
+    let from = 0;
+    while (true) {
+      const { data, error } = await supabase
+        .from("app_records")
+        .select("entity, record_id, data, created_at, updated_at")
+        .eq("institution_id", institutionId)
+        .order("updated_at", { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) throw error;
+      const batch = (data as AppRecordRow[] | null) || [];
+      batch.forEach((row) => {
+        if (!ENTITY_IDS.includes(row.entity)) return;
+        store[row.entity].push({
+          id: row.record_id,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          ...row.data,
+        });
       });
-    });
+      if (batch.length < pageSize) break;
+      from += pageSize;
+    }
 
     return NextResponse.json({ store, persistent: true });
   } catch (error) {
@@ -215,10 +222,12 @@ export async function PUT(request: Request) {
       })
     );
 
-    if (rows.length > 0) {
+    const chunkSize = 500;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
       const { error: upsertError } = await supabase
         .from("app_records")
-        .upsert(rows, { onConflict: "institution_id,entity,record_id" });
+        .upsert(chunk, { onConflict: "institution_id,entity,record_id" });
 
       if (upsertError) throw upsertError;
     }
