@@ -18,6 +18,10 @@ body {
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
+* {
+  overflow-wrap: anywhere;
+}
+
 button {
   cursor: pointer;
 }
