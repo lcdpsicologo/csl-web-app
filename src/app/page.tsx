@@ -859,7 +859,7 @@ function CourseWorkspaceView({
   onSeedCourses: () => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
   onNavigate: (view: ViewId) => void;
-  onOpenStudent: (studentId: string) => void;
+  onOpenStudent: (studentId: string, focusField?: string) => void;
 }) {
   const savedByName = new Map(store.courses.map((course) => [normalize(course.name || ""), course]));
   const courses = officialCourses.map((course) => ({ ...course, record: savedByName.get(normalize(course.name)) || makeCourseRecord(course) }));
@@ -1163,7 +1163,18 @@ function CourseWorkspaceView({
                             {student.rut ? <span className="mt-0.5 block text-[10px] text-slate-500">{student.rut}</span> : null}
                             <div className="mt-1.5 flex flex-wrap gap-1">
                               {caseCount ? <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">{caseCount} caso{caseCount === 1 ? "" : "s"}</span> : null}
-                              {student.healthAlerts ? <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700">Salud</span> : null}
+                              {student.healthAlerts ? (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(event) => { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); }}
+                                  onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); } }}
+                                  title="Ver / editar alerta de salud"
+                                  className="cursor-pointer rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-200"
+                                >
+                                  ⚠ Salud
+                                </span>
+                              ) : null}
                             </div>
                           </>
                         ) : (
@@ -1406,6 +1417,7 @@ function StudentDetailDialog({
   onUpdateStudent,
   onAddRecord,
   onNavigate,
+  focusField,
 }: {
   student: DataRecord;
   store: DataStore;
@@ -1413,8 +1425,29 @@ function StudentDetailDialog({
   onUpdateStudent: (studentId: string, updates: Record<string, string>) => void;
   onAddRecord: (entity: EntityId, record: DataRecord) => void;
   onNavigate?: (view: ViewId) => void;
+  focusField?: string;
 }) {
   const [activeTab, setActiveTab] = useState<"resumen" | "familia" | "casos" | "entrevistas" | "bitacoras" | "documentos">("resumen");
+  const [highlightField, setHighlightField] = useState<string>("");
+  const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | null>>({});
+
+  useEffect(() => {
+    if (!focusField) return;
+    setActiveTab("resumen");
+    setHighlightField(focusField);
+    const timer = window.setTimeout(() => {
+      const el = fieldRefs.current[focusField];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.focus({ preventScroll: true });
+      }
+    }, 240);
+    const stopHighlight = window.setTimeout(() => setHighlightField(""), 2400);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(stopHighlight);
+    };
+  }, [focusField]);
   const [editingMemberId, setEditingMemberId] = useState("");
   const emptyGenogramForm = { name: "", relation: "Madre", role: "Vive con el estudiante", age: "", phone: "", email: "", address: "", notes: "" };
   const [genogramForm, setGenogramForm] = useState(emptyGenogramForm);
@@ -1653,7 +1686,23 @@ function StudentDetailDialog({
                 <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
                   {student.phone ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.phone}</span> : null}
                   {student.email ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.email}</span> : null}
-                  {student.healthAlerts ? <span className="rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-700">Alerta de salud</span> : null}
+                  {student.healthAlerts ? (
+                    <button
+                      onClick={() => {
+                        setActiveTab("resumen");
+                        setHighlightField("healthAlerts");
+                        window.setTimeout(() => {
+                          const el = fieldRefs.current.healthAlerts;
+                          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                          el?.focus({ preventScroll: true });
+                        }, 60);
+                        window.setTimeout(() => setHighlightField(""), 2400);
+                      }}
+                      className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100"
+                    >
+                      <ShieldCheck className="h-3 w-3" /> Alerta de salud
+                    </button>
+                  ) : null}
                   {cases.length ? <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">{cases.length} caso{cases.length === 1 ? "" : "s"}</span> : null}
                 </div>
               </div>
@@ -1711,22 +1760,42 @@ function StudentDetailDialog({
                 <section className="rounded-xl border border-slate-200 bg-white p-5">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Información clínica y pedagógica</h3>
                   <div className="mt-4 grid gap-4">
-                    {[
+                    {([
                       ["relevantInfo", "Antecedentes relevantes"],
                       ["strengths", "Fortalezas y recursos"],
                       ["supportNeeds", "Necesidades de apoyo"],
                       ["healthAlerts", "Alertas de salud / cuidados"],
                       ["notes", "Observaciones generales"],
-                    ].map(([key, label]) => (
-                      <label key={key} className="block">
-                        <span className="text-xs font-semibold text-slate-700">{label}</span>
-                        <textarea
-                          value={student[key] || ""}
-                          onChange={(event) => updateInfo(key, event.target.value)}
-                          className="mt-1.5 min-h-20 w-full resize-y rounded-md border border-slate-200 bg-white p-2.5 text-sm leading-6 outline-none focus:border-blue-500"
-                        />
-                      </label>
-                    ))}
+                    ] as const).map(([key, label]) => {
+                      const highlighted = highlightField === key;
+                      const isHealth = key === "healthAlerts";
+                      return (
+                        <label key={key} className="block">
+                          <span className={`flex items-center gap-2 text-xs font-semibold ${isHealth ? "text-rose-700" : "text-slate-700"}`}>
+                            {isHealth ? <ShieldCheck className="h-3.5 w-3.5" /> : null}
+                            {label}
+                            {isHealth && student[key] ? (
+                              <button
+                                type="button"
+                                onClick={() => updateInfo(key, "")}
+                                className="ml-auto text-[10px] font-semibold text-rose-500 hover:text-rose-700"
+                              >
+                                Limpiar
+                              </button>
+                            ) : null}
+                          </span>
+                          <textarea
+                            ref={(el) => { fieldRefs.current[key] = el; }}
+                            value={student[key] || ""}
+                            onChange={(event) => updateInfo(key, event.target.value)}
+                            placeholder={isHealth ? "Ej.: Alergias, medicamentos, condiciones crónicas, restricciones de actividad…" : undefined}
+                            className={`mt-1.5 min-h-20 w-full resize-y rounded-md border bg-white p-2.5 text-sm leading-6 outline-none transition focus:border-blue-500 ${
+                              isHealth ? "border-rose-200 bg-rose-50/40" : "border-slate-200"
+                            } ${highlighted ? "ring-4 ring-blue-300/60 border-blue-500" : ""}`}
+                          />
+                        </label>
+                      );
+                    })}
                   </div>
                 </section>
               </div>
@@ -1892,7 +1961,7 @@ function StudentsWorkspaceView({
 }: {
   store: DataStore;
   onAdd: () => void;
-  onOpenStudent: (studentId: string) => void;
+  onOpenStudent: (studentId: string, focusField?: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [cycleFilter, setCycleFilter] = useState<"all" | CourseDef["cycle"]>("all");
@@ -2026,7 +2095,18 @@ function StudentsWorkspaceView({
                             <span className="block truncate text-xs text-slate-500">{student.rut || "Sin RUT"}{student.guardian ? ` · ${student.guardian}` : ""}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            {student.healthAlerts ? <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">Salud</span> : null}
+                            {student.healthAlerts ? (
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(event) => { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); }}
+                                onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); } }}
+                                title={student.healthAlerts}
+                                className="cursor-pointer rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100"
+                              >
+                                ⚠ Salud
+                              </span>
+                            ) : null}
                             {caseCount ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{caseCount} caso{caseCount === 1 ? "" : "s"}</span> : null}
                             <ChevronDown className="-rotate-90 h-4 w-4 text-slate-300 group-hover:text-blue-500" />
                           </div>
@@ -2060,7 +2140,7 @@ function CommandPalette({
 }: {
   store: DataStore;
   onClose: () => void;
-  onOpenStudent: (studentId: string) => void;
+  onOpenStudent: (studentId: string, focusField?: string) => void;
   onNavigate: (view: ViewId) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -2878,7 +2958,18 @@ export default function TizaEducationApp() {
   });
   const [activeView, setActiveView] = useState<ViewId>("dashboard");
   const [detailStudentId, setDetailStudentId] = useState("");
+  const [detailFocusField, setDetailFocusField] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
+
+  const openStudent = (studentId: string, focusField?: string) => {
+    setDetailStudentId(studentId);
+    setDetailFocusField(focusField || "");
+  };
+
+  const closeStudent = () => {
+    setDetailStudentId("");
+    setDetailFocusField("");
+  };
   const [query, setQuery] = useState("");
   const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
@@ -3241,7 +3332,7 @@ export default function TizaEducationApp() {
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
     if (activeView === "students") {
-      return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={(studentId) => setDetailStudentId(studentId)} />;
+      return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
     }
     if (activeView === "courses") {
       return (
@@ -3250,7 +3341,7 @@ export default function TizaEducationApp() {
           onSeedCourses={seedOfficialCourses}
           onUpdateCourse={updateCourseRecord}
           onNavigate={setActiveView}
-          onOpenStudent={(studentId) => setDetailStudentId(studentId)}
+          onOpenStudent={openStudent}
         />
       );
     }
@@ -3371,10 +3462,11 @@ export default function TizaEducationApp() {
           <StudentDetailDialog
             student={detailStudent}
             store={store}
-            onClose={() => setDetailStudentId("")}
+            onClose={closeStudent}
             onUpdateStudent={updateStudentRecord}
             onAddRecord={(entity, record) => addRecord(entity, record)}
             onNavigate={setActiveView}
+            focusField={detailFocusField}
           />
         );
       })() : null}
@@ -3382,7 +3474,7 @@ export default function TizaEducationApp() {
         <CommandPalette
           store={store}
           onClose={() => setCommandOpen(false)}
-          onOpenStudent={(studentId) => setDetailStudentId(studentId)}
+          onOpenStudent={openStudent}
           onNavigate={setActiveView}
         />
       ) : null}
