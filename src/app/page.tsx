@@ -668,16 +668,25 @@ function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label
   );
 }
 
-function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (view: ViewId) => void }) {
+function Sidebar({ activeView, onNavigate, schoolName }: { activeView: ViewId; onNavigate: (view: ViewId) => void; schoolName: string }) {
   return (
-    <aside className="fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-slate-200 bg-white text-slate-700 lg:flex">
+    <aside className="tz-glass fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-slate-200/80 text-slate-700 lg:flex">
       <div className="flex h-full flex-col">
-        <div className="border-b border-slate-200 px-6 py-5">
+        <div className="border-b border-slate-200/80 px-6 pb-4 pt-5">
           <div className="flex h-12 items-center">
-            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={214} height={52} priority />
+            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={200} height={48} priority />
+          </div>
+          <div className="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white/80 p-2.5">
+            <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
+              <Image src="/logo-san-lucas.png" alt={schoolName} width={36} height={36} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Trabajando en</p>
+              <p className="truncate text-sm font-semibold text-slate-900">{schoolName}</p>
+            </div>
           </div>
         </div>
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
           {viewNav.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;
@@ -685,24 +694,25 @@ function Sidebar({ activeView, onNavigate }: { activeView: ViewId; onNavigate: (
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id)}
-                className={`flex h-10 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-medium transition ${
-                  active ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+                className={`tz-nav-item relative flex h-10 w-full items-center gap-3 overflow-hidden rounded-lg px-3 text-left text-sm font-medium ${
+                  active ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
-                <Icon className="h-4 w-4" />
+                {active ? <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-blue-500" /> : null}
+                <Icon className={`h-4 w-4 ${active ? "text-white" : "text-slate-500"}`} />
                 {item.label}
               </button>
             );
           })}
         </nav>
-        <div className="m-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+        <div className="m-3 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3">
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-md bg-white ring-1 ring-slate-200">
-              <Building2 className="h-5 w-5 text-slate-600" />
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-white ring-1 ring-slate-200">
+              <Building2 className="h-4 w-4 text-slate-600" />
             </div>
-            <div>
-              <p className="text-sm font-semibold text-slate-800">Institución activa</p>
-              <p className="text-xs text-slate-500">Configurable en ajustes</p>
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-slate-800">Institución activa</p>
+              <p className="truncate text-[11px] text-slate-500">Configurable en ajustes</p>
             </div>
           </div>
         </div>
@@ -2034,6 +2044,211 @@ function StudentsWorkspaceView({
   );
 }
 
+type CommandResult = {
+  entity: EntityId;
+  record: DataRecord;
+  title: string;
+  subtitle: string;
+  score: number;
+};
+
+function CommandPalette({
+  store,
+  onClose,
+  onOpenStudent,
+  onNavigate,
+}: {
+  store: DataStore;
+  onClose: () => void;
+  onOpenStudent: (studentId: string) => void;
+  onNavigate: (view: ViewId) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const listRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => inputRef.current?.focus(), 30);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const normalized = normalize(query);
+  const results: CommandResult[] = [];
+  if (normalized) {
+    (Object.keys(entityConfigs) as EntityId[]).forEach((entityId) => {
+      const config = entityConfigs[entityId];
+      const titleField = config.fields.find((field) => field.required)?.key || config.fields[0].key;
+      const sample = store[entityId];
+      sample.forEach((record) => {
+        const haystack = Object.values(record).map((value) => normalize(String(value))).join(" ");
+        const idx = haystack.indexOf(normalized);
+        if (idx < 0) return;
+        const titleRaw = String(record[titleField] || record[config.fields[0].key] || config.singular);
+        const subtitleParts: string[] = [];
+        config.fields.slice(0, 4).forEach((field) => {
+          if (field.key === titleField) return;
+          const val = String(record[field.key] || "").trim();
+          if (val) subtitleParts.push(val);
+        });
+        results.push({
+          entity: entityId,
+          record,
+          title: titleRaw,
+          subtitle: `${config.label} · ${subtitleParts.slice(0, 3).join(" · ") || "Registro"}`,
+          score: -idx,
+        });
+      });
+    });
+    results.sort((a, b) => b.score - a.score);
+  }
+  const limited = results.slice(0, 40);
+  const grouped = new Map<EntityId, CommandResult[]>();
+  limited.forEach((result) => {
+    if (!grouped.has(result.entity)) grouped.set(result.entity, []);
+    grouped.get(result.entity)!.push(result);
+  });
+
+  const flat = Array.from(grouped.entries()).flatMap(([, items]) => items);
+  const activeResult = flat[selectedIndex];
+
+  const choose = (result: CommandResult | undefined) => {
+    if (!result) return;
+    if (result.entity === "students") {
+      onOpenStudent(result.record.id);
+    } else {
+      onNavigate(result.entity);
+    }
+    onClose();
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSelectedIndex((index) => Math.min(flat.length - 1, index + 1));
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSelectedIndex((index) => Math.max(0, index - 1));
+      } else if (event.key === "Enter") {
+        event.preventDefault();
+        choose(activeResult);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  useEffect(() => {
+    setSelectedIndex(0);
+    listRef.current?.scrollTo({ top: 0 });
+  }, [query]);
+
+  const quickShortcuts: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
+    { id: "students", label: "Ir a Estudiantes", icon: UserRound },
+    { id: "courses", label: "Ir a Cursos", icon: BookOpen },
+    { id: "cases", label: "Ir a Casos", icon: FileText },
+    { id: "interviews", label: "Ir a Entrevistas", icon: MessageSquareText },
+  ];
+
+  return (
+    <div className="tz-backdrop fixed inset-0 z-[70] grid items-start justify-center bg-slate-950/40 px-4 pt-24" onClick={onClose}>
+      <div
+        className="tz-pop-fast w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white tz-ring"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 border-b border-slate-100 px-4 py-3">
+          <Search className="h-5 w-5 text-slate-400" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Buscar estudiantes, casos, entrevistas, documentos…"
+            className="w-full bg-transparent text-base outline-none placeholder:text-slate-400"
+          />
+          <span className="hidden sm:inline tz-kbd">ESC</span>
+        </div>
+
+        <div ref={listRef} className="max-h-[60vh] overflow-y-auto">
+          {!normalized ? (
+            <div className="p-4">
+              <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Accesos rápidos</p>
+              <div className="grid gap-1">
+                {quickShortcuts.map((item) => {
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => { onNavigate(item.id); onClose(); }}
+                      className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium text-slate-700 hover:bg-slate-100"
+                    >
+                      <div className="grid h-8 w-8 place-items-center rounded-md bg-slate-100 text-slate-600">
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-4 px-2 text-xs text-slate-500">
+                Empieza a escribir para buscar en todos los registros (nombres, cursos, RUT, motivos, etiquetas...).
+              </p>
+            </div>
+          ) : flat.length === 0 ? (
+            <div className="p-10 text-center text-sm text-slate-500">
+              <Search className="mx-auto mb-3 h-6 w-6 text-slate-300" />
+              No encontramos resultados para “{query}”.
+            </div>
+          ) : (
+            <div className="py-2">
+              {Array.from(grouped.entries()).map(([entityId, items]) => {
+                const config = entityConfigs[entityId];
+                const Icon = config.icon;
+                return (
+                  <div key={entityId} className="px-2 pb-2">
+                    <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{config.label}</p>
+                    {items.map((result) => {
+                      const flatIndex = flat.indexOf(result);
+                      const active = flatIndex === selectedIndex;
+                      return (
+                        <button
+                          key={`${result.entity}-${result.record.id}`}
+                          onMouseEnter={() => setSelectedIndex(flatIndex)}
+                          onClick={() => choose(result)}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition ${active ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                        >
+                          <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md text-sm font-bold text-white shadow-sm bg-gradient-to-br ${avatarTone(result.record.id)}`}>
+                            {result.entity === "students" ? initialsOf(result.title) : <Icon className="h-4 w-4" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-950">{result.title}</p>
+                            <p className="truncate text-xs text-slate-500">{result.subtitle}</p>
+                          </div>
+                          {active ? <span className="tz-kbd">↵</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <footer className="flex items-center justify-between gap-3 border-t border-slate-100 bg-slate-50/60 px-4 py-2 text-[11px] text-slate-500">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center gap-1"><span className="tz-kbd">↑</span><span className="tz-kbd">↓</span> navegar</span>
+            <span className="flex items-center gap-1"><span className="tz-kbd">↵</span> abrir</span>
+          </div>
+          <span className="flex items-center gap-1">{normalized ? `${flat.length} resultados` : <><span className="tz-kbd">⌘</span><span className="tz-kbd">K</span></>}</span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function RecordDialog({
   entity,
   onClose,
@@ -2057,9 +2272,21 @@ function RecordDialog({
     onSave({ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...form });
   };
 
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
   return (
-    <div className="fixed inset-0 z-50 grid bg-slate-950/40 p-4 backdrop-blur-sm">
-      <form onSubmit={save} className="m-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-2xl">
+    <div className="tz-backdrop fixed inset-0 z-50 grid bg-slate-950/45 p-4" onClick={onClose}>
+      <form
+        onSubmit={save}
+        onClick={(event) => event.stopPropagation()}
+        className="tz-pop-fast m-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white tz-ring"
+      >
         <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6">
           <div>
             <h2 className="text-xl font-semibold text-slate-950">Agregar {entity.singular}</h2>
@@ -2651,6 +2878,7 @@ export default function TizaEducationApp() {
   });
   const [activeView, setActiveView] = useState<ViewId>("dashboard");
   const [detailStudentId, setDetailStudentId] = useState("");
+  const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
@@ -2815,6 +3043,22 @@ export default function TizaEducationApp() {
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((value) => !value);
+      } else if (event.key === "/" && !commandOpen) {
+        const target = event.target as HTMLElement | null;
+        if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
+        event.preventDefault();
+        setCommandOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [commandOpen]);
 
   const addRecord = (entity: EntityId, record: DataRecord) => {
     setStore((current) => ({ ...current, [entity]: [record, ...current[entity]] }));
@@ -3077,16 +3321,23 @@ export default function TizaEducationApp() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-950">
-      <Sidebar activeView={activeView} onNavigate={setActiveView} />
+      <Sidebar activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} />
       <main className="lg:pl-[272px]">
-        <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8">
-          <div className="mb-5 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm">
-            <div>
-              <p className="font-semibold text-slate-900">Sesion activa</p>
-              <p className="text-slate-500">{authUser.email}</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className={`rounded-full px-3 py-1 text-xs font-semibold ${
+        <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
+          <div className="mx-auto flex max-w-[1440px] items-center gap-3">
+            <button
+              onClick={() => setCommandOpen(true)}
+              className="tz-press group flex flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-left text-sm text-slate-500 shadow-sm hover:border-slate-300 hover:bg-white"
+            >
+              <Search className="h-4 w-4 text-slate-400 transition group-hover:text-slate-600" />
+              <span className="flex-1 truncate">Buscar estudiantes, casos, entrevistas, documentos…</span>
+              <span className="hidden items-center gap-1 sm:flex">
+                <span className="tz-kbd">⌘</span><span className="tz-kbd">K</span>
+              </span>
+            </button>
+            <div className="hidden flex-col items-end text-right md:flex">
+              <p className="text-xs font-semibold text-slate-900">{authUser.email}</p>
+              <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                 remoteStatus === "synced"
                   ? "bg-green-50 text-green-700"
                   : remoteStatus === "error"
@@ -3095,14 +3346,18 @@ export default function TizaEducationApp() {
               }`}>
                 {syncLabel}
               </span>
-              <button
-                onClick={signOut}
-                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                <LogOut className="h-4 w-4" /> Salir
-              </button>
             </div>
+            <button
+              onClick={signOut}
+              className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-white"
+              title="Cerrar sesión"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Salir</span>
+            </button>
           </div>
+        </div>
+        <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8">
           {renderView()}
         </div>
       </main>
@@ -3123,6 +3378,14 @@ export default function TizaEducationApp() {
           />
         );
       })() : null}
+      {commandOpen ? (
+        <CommandPalette
+          store={store}
+          onClose={() => setCommandOpen(false)}
+          onOpenStudent={(studentId) => setDetailStudentId(studentId)}
+          onNavigate={setActiveView}
+        />
+      ) : null}
       {toast ? <Toast message={toast} /> : null}
     </div>
   );
