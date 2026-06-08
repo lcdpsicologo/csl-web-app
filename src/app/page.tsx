@@ -8,6 +8,7 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  Camera,
   MapPin,
   Check,
   CheckCircle2,
@@ -147,7 +148,7 @@ const initialsOf = (name: string) =>
     .slice(0, 2)
     .map((part) => part[0] || "")
     .join("")
-    .toUpperCase() || "··";
+    .toUpperCase();
 
 const avatarTone = (seed: string) => {
   const palette = [
@@ -647,25 +648,26 @@ function downloadText(fileName: string, content: string, type = "text/plain;char
 
 function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label: string; value: number; detail: string; icon: LucideIcon; accent?: "teal" | "blue" | "amber" | "violet" | "rose" }) {
   const accents = {
-    teal: "bg-slate-50 text-slate-600 ring-slate-200",
-    blue: "bg-slate-50 text-slate-600 ring-slate-200",
-    amber: "bg-slate-50 text-slate-600 ring-slate-200",
-    violet: "bg-slate-50 text-slate-600 ring-slate-200",
-    rose: "bg-slate-50 text-slate-600 ring-slate-200",
+    teal: "from-teal-500 to-emerald-500 text-white",
+    blue: "from-sky-500 to-blue-600 text-white",
+    amber: "from-amber-500 to-orange-500 text-white",
+    violet: "from-violet-500 to-purple-600 text-white",
+    rose: "from-rose-500 to-pink-600 text-white",
   };
 
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5">
+    <section className="tz-card relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold text-slate-600">{label}</p>
-          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{value}</p>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">{value.toLocaleString("es-CL")}</p>
           <p className="mt-1 text-xs text-slate-500">{detail}</p>
         </div>
-        <div className={`grid h-10 w-10 place-items-center rounded-md ring-1 ${accents[accent]}`}>
+        <div className={`grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br ${accents[accent]} shadow-sm`}>
           <Icon className="h-5 w-5" />
         </div>
       </div>
+      <span className="pointer-events-none absolute -bottom-12 -right-12 h-32 w-32 rounded-full bg-slate-50" />
     </section>
   );
 }
@@ -772,17 +774,19 @@ function EntityView({
 
   return (
     <div>
-      <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+      <div className="tz-fade mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <div className="flex items-center gap-3">
-            <entity.icon className="h-6 w-6 text-slate-600" />
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white shadow-sm">
+              <entity.icon className="h-5 w-5" />
+            </div>
             <h1 className="text-3xl font-semibold tracking-tight text-slate-950">{entity.label}</h1>
           </div>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">{entity.description}</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex min-w-[260px] flex-1 items-center gap-3 rounded-md border border-slate-300 bg-white px-4 py-2.5 xl:w-80 xl:flex-none">
-            <Search className="h-5 w-5 text-slate-400" />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm xl:w-80 xl:flex-none">
+            <Search className="h-4 w-4 text-slate-400" />
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -790,18 +794,18 @@ function EntityView({
               className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
             />
             {query ? (
-              <button onClick={() => setQuery("")} className="text-slate-400 hover:text-slate-700">
+              <button onClick={() => setQuery("")} className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
                 <X className="h-4 w-4" />
               </button>
             ) : null}
           </div>
-          <button onClick={onImport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700">
-            <Upload className="h-5 w-5" /> Importar
+          <button onClick={onImport} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <Upload className="h-4 w-4" /> Importar
           </button>
-          <button onClick={onExport} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-3 font-bold text-slate-700">
-            <ArrowDownToLine className="h-5 w-5" /> Exportar
+          <button onClick={onExport} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowDownToLine className="h-4 w-4" /> Exportar
           </button>
-          <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800">
             <Plus className="h-4 w-4" /> Agregar
           </button>
         </div>
@@ -810,32 +814,35 @@ function EntityView({
       {records.length === 0 ? (
         <EmptyState entity={entity} onAdd={onAdd} onImport={onImport} />
       ) : (
-        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 px-5 py-4 text-sm font-semibold text-slate-600">
-            Mostrando {filtered.length} de {records.length} registros
+        <section className="tz-fade overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 text-sm">
+            <span className="font-semibold text-slate-700">
+              Mostrando <span className="tabular-nums">{filtered.length}</span> de <span className="tabular-nums">{records.length}</span> registros
+            </span>
+            {query ? <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">filtro: “{query}”</span> : null}
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase text-slate-500">
+              <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
                 <tr>
                   {entity.fields.slice(0, 6).map((field) => (
-                    <th key={field.key} className="px-5 py-4 font-semibold">{field.label}</th>
+                    <th key={field.key} className="px-5 py-3 font-semibold">{field.label}</th>
                   ))}
-                  <th className="px-5 py-4 font-semibold">Actualizado</th>
-                  <th className="px-5 py-4" />
+                  <th className="px-5 py-3 font-semibold">Actualizado</th>
+                  <th className="px-5 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filtered.map((record) => (
-                  <tr key={record.id} className="hover:bg-blue-50/40">
-                    {entity.fields.slice(0, 6).map((field) => (
-                      <td key={field.key} className="max-w-[260px] truncate px-5 py-4">
-                        {record[field.key] || <span className="text-slate-300">Sin dato</span>}
+                {filtered.map((record, index) => (
+                  <tr key={record.id} className={`group transition hover:bg-blue-50/50 ${index % 2 === 1 ? "bg-slate-50/30" : ""}`}>
+                    {entity.fields.slice(0, 6).map((field, fieldIndex) => (
+                      <td key={field.key} className={`max-w-[260px] truncate px-5 py-3 ${fieldIndex === 0 ? "font-semibold text-slate-950" : "text-slate-700"}`}>
+                        {record[field.key] || <span className="text-slate-300">—</span>}
                       </td>
                     ))}
-                    <td className="px-5 py-4 text-xs text-slate-500">{new Date(record.updatedAt).toLocaleString("es-CL")}</td>
-                    <td className="px-5 py-4">
-                      <button onClick={() => onDelete(record.id)} className="rounded-lg p-2 text-red-500 hover:bg-red-50">
+                    <td className="px-5 py-3 text-xs text-slate-500">{new Date(record.updatedAt).toLocaleString("es-CL")}</td>
+                    <td className="px-5 py-3 text-right">
+                      <button onClick={() => onDelete(record.id)} title="Eliminar" className="rounded-lg p-2 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-600">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </td>
@@ -1388,22 +1395,37 @@ function GenogramChart({
 
 function LinkedRecordList({ title, records, emptyText }: { title: string; records: DataRecord[]; emptyText: string }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5">
+    <section className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
-        <h3 className="font-semibold text-slate-950">{title}</h3>
-        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{records.length}</span>
+        <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
+        <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-semibold text-white tabular-nums">{records.length}</span>
       </div>
       {records.length === 0 ? (
-        <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">{emptyText}</p>
+        <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">{emptyText}</p>
       ) : (
-        <div className="space-y-3">
-          {records.map((record) => (
-            <article key={record.id} className="rounded-md border border-slate-200 p-3 text-sm">
-              <strong className="block text-slate-950">{record.title || record.reason || record.topic || record.type || record.student || record.relatedTo || "Registro"}</strong>
-              <p className="mt-1 text-slate-600">{record.description || record.agreements || record.notes || record.status || "Sin detalle adicional."}</p>
-              <p className="mt-2 text-xs text-slate-500">{record.date || record.dueDate || new Date(record.updatedAt).toLocaleDateString("es-CL")}</p>
-            </article>
-          ))}
+        <div className="space-y-2">
+          {records.map((record) => {
+            const status = record.status || record.priority || "";
+            const statusTone = /critic|alta|abierto|activ/i.test(status)
+              ? "bg-amber-50 text-amber-700 ring-amber-200"
+              : /cerrad|realizad|complet/i.test(status)
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                : "bg-slate-100 text-slate-600 ring-slate-200";
+            return (
+              <article key={record.id} className="tz-card group rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <strong className="block flex-1 text-slate-950">{record.title || record.reason || record.topic || record.type || record.student || record.relatedTo || "Registro"}</strong>
+                  {status ? <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${statusTone}`}>{status}</span> : null}
+                </div>
+                {(record.description || record.agreements || record.observations || record.notes) ? (
+                  <p className="mt-1.5 line-clamp-2 text-slate-600">{record.description || record.agreements || record.observations || record.notes}</p>
+                ) : null}
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {record.date || record.dueDate || new Date(record.updatedAt).toLocaleDateString("es-CL")}
+                </p>
+              </article>
+            );
+          })}
         </div>
       )}
     </section>
@@ -1671,14 +1693,21 @@ function StudentDetailDialog({
           </div>
           <div className="border-b border-slate-200 bg-white px-6 pt-5 pb-5 sm:px-8">
             <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-              <label className="group relative -mt-16 inline-grid h-24 w-24 shrink-0 cursor-pointer place-items-center overflow-hidden rounded-2xl bg-white text-2xl font-bold text-slate-900 ring-4 ring-white shadow-lg sm:-mt-20">
-                {student.profilePhoto ? (
-                  <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
-                ) : (
-                  <span className={`grid h-full w-full place-items-center bg-gradient-to-br ${avatarTone(student.id)} text-white`}>{initialsOf(student.fullName)}</span>
-                )}
-                <span className="absolute inset-x-0 bottom-0 bg-slate-950/70 py-1 text-center text-[10px] font-semibold uppercase tracking-wider text-white opacity-0 transition group-hover:opacity-100">
-                  <Upload className="mr-1 inline h-3 w-3" /> Foto
+              <label className="group relative -mt-16 inline-block h-24 w-24 shrink-0 cursor-pointer sm:-mt-20">
+                <span className="block h-full w-full overflow-hidden rounded-2xl bg-white ring-4 ring-white shadow-lg">
+                  {student.profilePhoto ? (
+                    <span className="block h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
+                  ) : (
+                    <span className={`grid h-full w-full place-items-center bg-gradient-to-br ${avatarTone(student.id)} text-2xl font-bold text-white`}>
+                      {initialsOf(student.fullName) || <UserRound className="h-10 w-10 opacity-80" />}
+                    </span>
+                  )}
+                </span>
+                <span className="absolute -bottom-1 -right-1 grid h-8 w-8 place-items-center rounded-full bg-slate-900 text-white ring-2 ring-white shadow-md transition group-hover:scale-110">
+                  <Camera className="h-4 w-4" />
+                </span>
+                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-slate-950/50 text-[11px] font-semibold uppercase tracking-wider text-white opacity-0 transition group-hover:opacity-100">
+                  Cambiar foto
                 </span>
                 <input type="file" accept="image/*" className="hidden" onChange={(event) => handlePhoto(event.target.files?.[0])} />
               </label>
@@ -2079,7 +2108,7 @@ function StudentsWorkspaceView({
                 <button onClick={() => toggleCourse(group.name)} className="flex w-full items-center justify-between gap-3 bg-gradient-to-br from-slate-50 to-white px-5 py-4 text-left">
                   <div className="flex items-center gap-3">
                     <div className={`grid h-10 w-10 place-items-center rounded-md bg-gradient-to-br ${avatarTone(group.name)} text-sm font-bold text-white shadow-sm`}>
-                      {group.name.split(" ").slice(0, 2).map((part) => part[0] || "").join("").toUpperCase().slice(0, 2) || "··"}
+                      {group.name.split(" ").slice(0, 2).map((part) => part[0] || "").join("").toUpperCase().slice(0, 2)}
                     </div>
                     <div>
                       <h2 className="text-base font-semibold text-slate-950">{group.name}</h2>
@@ -2649,11 +2678,11 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
       </section>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Estudiantes" value={store.students.length} detail="Registros reales" icon={UserRound} />
-        <StatCard label="Cursos" value={store.courses.length} detail="Cursos creados" icon={BookOpen} />
-        <StatCard label="Casos" value={store.cases.length} detail="Casos ingresados" icon={FileText} />
-        <StatCard label="Bitácoras" value={store.logs.length} detail="Intervenciones" icon={ClipboardList} />
-        <StatCard label="Documentos" value={store.documents.length} detail="Índice documental" icon={FolderOpen} />
+        <StatCard label="Estudiantes" value={store.students.length} detail="Registros reales" icon={UserRound} accent="blue" />
+        <StatCard label="Cursos" value={store.courses.length} detail="Cursos creados" icon={BookOpen} accent="teal" />
+        <StatCard label="Casos" value={store.cases.length} detail="Casos ingresados" icon={FileText} accent="amber" />
+        <StatCard label="Bitácoras" value={store.logs.length} detail="Intervenciones" icon={ClipboardList} accent="violet" />
+        <StatCard label="Documentos" value={store.documents.length} detail="Índice documental" icon={FolderOpen} accent="rose" />
       </div>
 
       {total === 0 ? (
@@ -2838,9 +2867,13 @@ function SettingsView({
 
 function Toast({ message }: { message: string }) {
   return (
-    <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 rounded-lg border border-slate-200 bg-white px-5 py-4 font-semibold text-slate-950 shadow-xl">
-      <Check className="mr-2 inline h-5 w-5 text-slate-700" />
-      {message}
+    <div className="tz-slide-up fixed bottom-6 left-1/2 z-[60] -translate-x-1/2">
+      <div className="flex items-center gap-3 rounded-full border border-slate-200 bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-900 shadow-xl tz-ring backdrop-blur">
+        <span className="grid h-6 w-6 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+          <Check className="h-4 w-4" />
+        </span>
+        {message}
+      </div>
     </div>
   );
 }
