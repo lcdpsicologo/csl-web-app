@@ -139,6 +139,31 @@ const supabaseAuth = isSupabaseAuthConfigured
 const nowIso = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
+const initialsOf = (name: string) =>
+  (name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0] || "")
+    .join("")
+    .toUpperCase() || "··";
+
+const avatarTone = (seed: string) => {
+  const palette = [
+    "from-sky-500 to-blue-600",
+    "from-emerald-500 to-teal-600",
+    "from-amber-500 to-orange-600",
+    "from-violet-500 to-purple-600",
+    "from-rose-500 to-pink-600",
+    "from-cyan-500 to-blue-500",
+    "from-lime-500 to-emerald-600",
+    "from-fuchsia-500 to-purple-600",
+  ];
+  let hash = 0;
+  for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+  return palette[hash % palette.length];
+};
+
 const normalize = (value: string) =>
   value
     .toLowerCase()
@@ -829,7 +854,13 @@ function CourseWorkspaceView({
   const savedByName = new Map(store.courses.map((course) => [normalize(course.name || ""), course]));
   const courses = officialCourses.map((course) => ({ ...course, record: savedByName.get(normalize(course.name)) || makeCourseRecord(course) }));
   const [selectedCourse, setSelectedCourse] = useState(courses[0]?.name || "");
+  const [cycleTab, setCycleTab] = useState<"all" | CourseDef["cycle"]>("all");
   const [draggedStudentId, setDraggedStudentId] = useState("");
+  const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
+  const [teamForm, setTeamForm] = useState({ name: "", role: "Profesor/a jefe", email: "", notes: "" });
+  const [showTeamForm, setShowTeamForm] = useState(false);
+
+  const visibleCourses = cycleTab === "all" ? courses : courses.filter((course) => course.cycle === cycleTab);
   const current = courses.find((course) => course.name === selectedCourse) || courses[0];
   const courseName = current?.name || "";
   const students = store.students.filter((record) => normalize(record.course || "") === normalize(courseName));
@@ -846,7 +877,12 @@ function CourseWorkspaceView({
   const seats = Array.from({ length: capacity }, (_, index) => studentsById.get(seatStudentIds[index] || ""));
   const missingOfficialCourses = officialCourses.filter((course) => !savedByName.has(normalize(course.name))).length;
   const classroomTeam = parseClassroomTeam(current?.record.classroomTeam);
-  const [teamForm, setTeamForm] = useState({ name: "", role: "Profesor/a jefe", email: "", notes: "" });
+  const caseCountByStudent = new Map<string, number>();
+  store.cases.forEach((record) => {
+    students.forEach((student) => {
+      if (studentMatches(record, student)) caseCountByStudent.set(student.id, (caseCountByStudent.get(student.id) || 0) + 1);
+    });
+  });
 
   const updateSeatAssignments = (nextSeats: Array<DataRecord | undefined>) => {
     if (!current) return;
@@ -863,6 +899,7 @@ function CourseWorkspaceView({
     nextSeats[targetIndex] = dragged;
     updateSeatAssignments(nextSeats);
     setDraggedStudentId("");
+    setDropTargetIndex(null);
   };
 
   const addClassroomTeamMember = () => {
@@ -879,24 +916,32 @@ function CourseWorkspaceView({
       headTeacher: member.role === "Profesor/a jefe" ? member.name : current.record.headTeacher || "",
     });
     setTeamForm({ name: "", role: "Profesor/a jefe", email: "", notes: "" });
+    setShowTeamForm(false);
   };
 
   const removeClassroomTeamMember = (memberId: string) => {
     if (!current) return;
     const nextTeam = classroomTeam.filter((member) => member.id !== memberId);
+    const removed = classroomTeam.find((member) => member.id === memberId);
     onUpdateCourse(current.name, {
       classroomTeam: JSON.stringify(nextTeam),
-      headTeacher: current.record.headTeacher === classroomTeam.find((member) => member.id === memberId)?.name ? "" : current.record.headTeacher || "",
+      headTeacher: current.record.headTeacher === removed?.name ? "" : current.record.headTeacher || "",
     });
   };
 
+  const updateClassroomTeamMember = (memberId: string, patch: Partial<ClassroomTeamMember>) => {
+    if (!current) return;
+    const nextTeam = classroomTeam.map((member) => (member.id === memberId ? { ...member, ...patch } : member));
+    onUpdateCourse(current.name, { classroomTeam: JSON.stringify(nextTeam) });
+  };
+
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="tz-fade">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Cursos</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Cada curso tiene su propio tablero: equipo de aula, estudiantes, casos, orientacion, documentos y distribucion de sala.
+            Cada curso tiene su propio tablero: equipo de aula, simulación de sala, casos, orientación y documentos.
           </p>
         </div>
         <button
@@ -909,163 +954,259 @@ function CourseWorkspaceView({
         </button>
       </div>
 
-      <section className="rounded-lg border border-slate-200 bg-white">
-        <div className="overflow-x-auto border-b border-slate-100 px-4 py-3">
-          <div className="flex min-w-max gap-2">
-            {courses.map((course) => (
-              <button
-                key={course.name}
-                onClick={() => setSelectedCourse(course.name)}
-                className={`rounded-md px-3 py-2 text-sm font-semibold ${selectedCourse === course.name ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-              >
-                {course.name}
-              </button>
-            ))}
-          </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {([
+          ["all", "Todos"],
+          ["I Ciclo", "I Ciclo"],
+          ["II Ciclo", "II Ciclo"],
+          ["III Ciclo", "III Ciclo"],
+        ] as Array<["all" | CourseDef["cycle"], string]>).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setCycleTab(key)}
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${cycleTab === key ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-5 overflow-x-auto rounded-xl border border-slate-200 bg-white px-3 py-3">
+        <div className="flex min-w-max gap-1.5">
+          {visibleCourses.map((course) => (
+            <button
+              key={course.name}
+              onClick={() => setSelectedCourse(course.name)}
+              className={`rounded-md px-3 py-2 text-sm font-semibold transition ${selectedCourse === course.name ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+            >
+              {course.name}
+            </button>
+          ))}
         </div>
+      </div>
 
-        {current ? (
-          <div className="space-y-6 p-6">
-            <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
-              <div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <h2 className="text-2xl font-semibold text-slate-950">{current.name}</h2>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{current.cycle}</span>
-                </div>
-                <p className="mt-2 text-sm text-slate-600">Orientacion: <strong className="text-slate-950">{current.orientationOwner}</strong> - {current.orientationEmail}</p>
-                <p className="mt-1 text-sm text-slate-600">Convivencia: <strong className="text-slate-950">{current.convivenciaCoordinator}</strong> - {current.convivenciaEmail}</p>
-              </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{students.length}</strong> estudiantes</div>
-                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{convivencia.length}</strong> convivencia</div>
-                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{orientation.length}</strong> orientacion</div>
-                <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl text-slate-950">{logs.length}</strong> bitacoras</div>
-              </div>
-            </div>
-
-            <section className="rounded-lg border border-blue-100 bg-blue-50/40 p-5">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+      {current ? (
+        <div className="space-y-6">
+          <section className="tz-slide-up overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className={`bg-gradient-to-br ${avatarTone(current.name)} px-6 py-5 text-white`}>
+              <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                  <h3 className="font-semibold text-slate-950">Equipo de aula</h3>
-                  <p className="mt-1 text-sm text-slate-600">Visible al comienzo del curso para entender quien acompana al grupo.</p>
-                </div>
-                <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-600">{classroomTeam.length} integrantes</span>
-              </div>
-              {classroomTeam.length === 0 ? (
-                <p className="rounded-md border border-dashed border-blue-200 bg-white p-3 text-sm text-slate-600">Aun no hay equipo de aula ingresado para este curso.</p>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-                  {classroomTeam.map((member) => (
-                    <article key={member.id} className="rounded-md border border-blue-100 bg-white p-3 text-sm">
-                      <strong className="block text-slate-950">{member.name}</strong>
-                      <span className="mt-1 block text-slate-600">{member.role}</span>
-                      {member.email ? <span className="mt-1 block text-xs text-slate-500">{member.email}</span> : null}
-                    </article>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-              <section className="rounded-lg border border-slate-200 p-5">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-slate-950">Simulacion de sala</h3>
-                    <p className="mt-1 text-sm text-slate-600">Arrastra estudiantes entre puestos. Haz clic en un estudiante para abrir su ficha.</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/80">
+                    <span className="rounded-full bg-white/20 px-2.5 py-0.5">{current.cycle}</span>
+                    <span>·</span>
+                    <span>{current.orientationOwner}</span>
                   </div>
-                  <span className="text-xs font-semibold text-slate-500">{capacity} puestos</span>
+                  <h2 className="mt-2 text-3xl font-semibold tracking-tight">{current.name}</h2>
+                  <p className="mt-1 text-sm text-white/90">Convivencia: <strong>{current.convivenciaCoordinator}</strong> · {current.convivenciaEmail}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
-                  {seats.map((student, index) => (
-                    <button
-                      key={`${index}-${student?.id || "empty"}`}
-                      type="button"
-                      draggable={Boolean(student)}
-                      onDragStart={() => student && setDraggedStudentId(student.id)}
-                      onDragOver={(event) => event.preventDefault()}
-                      onDrop={() => moveStudentToSeat(index)}
-                      onClick={() => student && onOpenStudent(student.id)}
-                      className={`min-h-24 rounded-lg border p-3 text-left text-xs transition ${student ? "border-slate-300 bg-white shadow-sm hover:border-blue-400 hover:bg-blue-50" : "border-dashed border-slate-300 bg-slate-50 text-slate-400"}`}
-                    >
-                      <span className="block font-semibold text-slate-500">Puesto {index + 1}</span>
-                      <span className="mt-2 block text-sm font-bold leading-snug text-slate-950">{student?.fullName || "Sin asignar"}</span>
-                      {student?.rut ? <span className="mt-1 block text-[11px] text-slate-500">{student.rut}</span> : null}
-                    </button>
+                <div className="grid grid-cols-4 gap-2 text-center text-xs font-semibold">
+                  {[
+                    ["Estudiantes", students.length],
+                    ["Casos", cases.length],
+                    ["Orientación", orientation.length],
+                    ["Bitácoras", logs.length],
+                  ].map(([label, count]) => (
+                    <div key={String(label)} className="rounded-lg bg-white/15 px-3 py-2 backdrop-blur">
+                      <div className="text-xl font-bold">{count}</div>
+                      <div className="opacity-80">{label}</div>
+                    </div>
                   ))}
-                </div>
-              </section>
-
-              <section className="rounded-lg border border-slate-200 p-5">
-                <h3 className="font-semibold text-slate-950">Casos de convivencia</h3>
-                <div className="mt-4 space-y-3">
-                  {convivencia.length === 0 ? (
-                    <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">No hay casos de convivencia ingresados para este curso.</p>
-                  ) : convivencia.map((record) => (
-                    <article key={record.id} className="rounded-md border border-slate-200 p-3 text-sm">
-                      <strong className="block text-slate-950">{record.title || record.student}</strong>
-                      <span className="text-slate-600">{record.status || "Sin estado"} - {record.priority || "Sin prioridad"}</span>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </div>
-
-            <section className="rounded-lg border border-slate-200 p-5">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h3 className="font-semibold text-slate-950">Editar equipo de aula</h3>
-                  <p className="mt-1 text-sm text-slate-600">Agrega profesora jefe, asistentes, educadora diferencial u otros apoyos.</p>
                 </div>
               </div>
+            </div>
+          </section>
 
-              <div className="grid gap-3 rounded-lg bg-slate-50 p-4 lg:grid-cols-[1fr_220px_1fr_1fr_auto]">
-                <input value={teamForm.name} onChange={(event) => setTeamForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                <select value={teamForm.role} onChange={(event) => setTeamForm((form) => ({ ...form, role: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900">
-                  {classroomRoles.map((role) => <option key={role}>{role}</option>)}
-                </select>
-                <input value={teamForm.email} onChange={(event) => setTeamForm((form) => ({ ...form, email: event.target.value }))} placeholder="Correo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                <input value={teamForm.notes} onChange={(event) => setTeamForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notas o horario" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                <button onClick={addClassroomTeamMember} disabled={!teamForm.name.trim()} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
-                  <Plus className="h-4 w-4" /> Anadir
+          <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+                  <UsersRound className="h-5 w-5 text-blue-600" />
+                  Equipo de aula
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">Profesor/a jefe, asistentes y apoyos del curso. Edita o agrega miembros directamente desde aquí.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{classroomTeam.length} integrante{classroomTeam.length === 1 ? "" : "s"}</span>
+                <button
+                  onClick={() => setShowTeamForm((value) => !value)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                >
+                  <Plus className="h-4 w-4" /> Añadir miembro
                 </button>
               </div>
+            </div>
 
-              <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {classroomTeam.length === 0 ? (
-                  <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600 md:col-span-2 xl:col-span-3">Aun no hay equipo de aula ingresado para este curso.</p>
-                ) : classroomTeam.map((member) => (
-                  <article key={member.id} className="rounded-md border border-slate-200 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h4 className="font-semibold text-slate-950">{member.name}</h4>
-                        <p className="mt-1 text-sm text-slate-600">{member.role}</p>
-                        {member.email ? <p className="mt-2 text-sm text-slate-500">{member.email}</p> : null}
-                        {member.notes ? <p className="mt-2 text-sm text-slate-500">{member.notes}</p> : null}
+            {showTeamForm ? (
+              <div className="tz-slide-up mb-4 grid gap-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4 lg:grid-cols-[1fr_220px_1fr_1fr_auto]">
+                <input value={teamForm.name} onChange={(event) => setTeamForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <select value={teamForm.role} onChange={(event) => setTeamForm((form) => ({ ...form, role: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
+                  {classroomRoles.map((role) => <option key={role}>{role}</option>)}
+                </select>
+                <input value={teamForm.email} onChange={(event) => setTeamForm((form) => ({ ...form, email: event.target.value }))} placeholder="Correo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <input value={teamForm.notes} onChange={(event) => setTeamForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notas u horario" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <button onClick={addClassroomTeamMember} disabled={!teamForm.name.trim()} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
+                  <Save className="h-4 w-4" /> Guardar
+                </button>
+              </div>
+            ) : null}
+
+            {classroomTeam.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                Todavía no hay equipo de aula. Pulsa <strong>Añadir miembro</strong> para empezar.
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {classroomTeam.map((member) => (
+                  <article key={member.id} className="tz-card group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br ${avatarTone(member.id)} text-sm font-bold text-white shadow-sm`}>
+                        {initialsOf(member.name)}
                       </div>
-                      <button onClick={() => removeClassroomTeamMember(member.id)} className="rounded-md p-2 text-red-500 hover:bg-red-50">
+                      <div className="min-w-0 flex-1">
+                        <input
+                          value={member.name}
+                          onChange={(event) => updateClassroomTeamMember(member.id, { name: event.target.value })}
+                          className="w-full border-b border-transparent bg-transparent text-sm font-semibold text-slate-950 outline-none transition hover:border-slate-200 focus:border-blue-500"
+                        />
+                        <select
+                          value={member.role}
+                          onChange={(event) => updateClassroomTeamMember(member.id, { role: event.target.value })}
+                          className="mt-1 w-full rounded border border-transparent bg-transparent text-xs text-slate-600 outline-none transition hover:border-slate-200 focus:border-blue-500"
+                        >
+                          {classroomRoles.map((role) => <option key={role}>{role}</option>)}
+                        </select>
+                        <input
+                          value={member.email}
+                          onChange={(event) => updateClassroomTeamMember(member.id, { email: event.target.value })}
+                          placeholder="Correo"
+                          className="mt-1 w-full border-b border-transparent bg-transparent text-xs text-slate-500 outline-none transition hover:border-slate-200 focus:border-blue-500"
+                        />
+                        {member.notes !== undefined ? (
+                          <input
+                            value={member.notes || ""}
+                            onChange={(event) => updateClassroomTeamMember(member.id, { notes: event.target.value })}
+                            placeholder="Notas"
+                            className="mt-1 w-full border-b border-transparent bg-transparent text-xs text-slate-500 outline-none transition hover:border-slate-200 focus:border-blue-500"
+                          />
+                        ) : null}
+                      </div>
+                      <button onClick={() => removeClassroomTeamMember(member.id)} className="rounded-md p-1.5 text-red-500 opacity-0 transition group-hover:opacity-100 hover:bg-red-50">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </article>
                 ))}
               </div>
+            )}
+          </section>
+
+          <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
+            <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+                    <Building2 className="h-5 w-5 text-blue-600" />
+                    Simulación de sala
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">Arrastra para reorganizar puestos. Haz clic en un estudiante para abrir su ficha.</p>
+                </div>
+                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{capacity} puestos · {students.length} ocupados</span>
+              </div>
+
+              <div className="rounded-xl border border-slate-200 bg-gradient-to-b from-slate-50 to-white p-4">
+                <div className="mx-auto mb-4 max-w-md rounded-md bg-gradient-to-r from-slate-800 via-slate-900 to-slate-800 px-4 py-2 text-center text-xs font-semibold uppercase tracking-[0.3em] text-white shadow-inner">
+                  Pizarra
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+                  {seats.map((student, index) => {
+                    const occupied = Boolean(student);
+                    const caseCount = student ? (caseCountByStudent.get(student.id) || 0) : 0;
+                    const isTarget = dropTargetIndex === index;
+                    return (
+                      <button
+                        key={`${index}-${student?.id || "empty"}`}
+                        type="button"
+                        draggable={occupied}
+                        onDragStart={() => student && setDraggedStudentId(student.id)}
+                        onDragEnd={() => { setDraggedStudentId(""); setDropTargetIndex(null); }}
+                        onDragOver={(event) => { event.preventDefault(); setDropTargetIndex(index); }}
+                        onDragLeave={() => setDropTargetIndex((current) => (current === index ? null : current))}
+                        onDrop={() => moveStudentToSeat(index)}
+                        onClick={() => student && onOpenStudent(student.id)}
+                        className={`tz-seat group relative min-h-28 rounded-xl border-2 p-3 text-left text-xs ${
+                          occupied
+                            ? "border-slate-200 bg-white shadow-sm hover:border-blue-400"
+                            : "border-dashed border-slate-300 bg-slate-50/60 text-slate-400"
+                        } ${draggedStudentId && student?.id === draggedStudentId ? "dragging" : ""} ${isTarget ? "drop-target" : ""}`}
+                      >
+                        <span className="absolute right-2 top-2 text-[10px] font-semibold text-slate-400">#{index + 1}</span>
+                        {occupied && student ? (
+                          <>
+                            <div className={`mb-2 grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[11px] font-bold text-white shadow-sm`}>
+                              {student.profilePhoto ? (
+                                <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
+                              ) : (
+                                initialsOf(student.fullName)
+                              )}
+                            </div>
+                            <span className="block text-[13px] font-bold leading-tight text-slate-950">{student.fullName}</span>
+                            {student.rut ? <span className="mt-0.5 block text-[10px] text-slate-500">{student.rut}</span> : null}
+                            <div className="mt-1.5 flex flex-wrap gap-1">
+                              {caseCount ? <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">{caseCount} caso{caseCount === 1 ? "" : "s"}</span> : null}
+                              {student.healthAlerts ? <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700">Salud</span> : null}
+                            </div>
+                          </>
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center text-[11px] font-semibold uppercase tracking-wider text-slate-400">Libre</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-3 text-center text-[11px] text-slate-500">Frente del aula ↑ · Fondo del aula ↓</p>
+              </div>
             </section>
 
-            <div className="grid gap-5 lg:grid-cols-3">
-              {([
-                ["Estudiantes", students.length, "students" as ViewId],
-                ["Clases de orientacion", orientation.length, "orientation" as ViewId],
-                ["Documentos vinculados", documents.length, "documents" as ViewId],
-              ] as Array<[string, number, ViewId]>).map(([label, count, view]) => (
-                <button key={label} onClick={() => onNavigate(view)} className="rounded-lg border border-slate-200 p-5 text-left hover:bg-slate-50">
-                  <span className="block text-sm font-semibold text-slate-600">{label}</span>
-                  <strong className="mt-2 block text-2xl text-slate-950">{count}</strong>
-                </button>
-              ))}
-            </div>
+            <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+              <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+                <ShieldCheck className="h-5 w-5 text-rose-600" />
+                Convivencia
+              </h3>
+              <div className="mt-4 space-y-3">
+                {convivencia.length === 0 ? (
+                  <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">No hay casos de convivencia para este curso.</p>
+                ) : convivencia.map((record) => (
+                  <article key={record.id} className="tz-card rounded-lg border border-slate-200 p-3 text-sm">
+                    <strong className="block text-slate-950">{record.title || record.student}</strong>
+                    <div className="mt-1 flex flex-wrap gap-1.5">
+                      {record.status ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{record.status}</span> : null}
+                      {record.priority ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{record.priority}</span> : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
-        ) : null}
-      </section>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            {([
+              ["Estudiantes", students.length, "students" as ViewId, UserRound],
+              ["Clases de orientación", orientation.length, "orientation" as ViewId, UsersRound],
+              ["Documentos vinculados", documents.length, "documents" as ViewId, FolderOpen],
+            ] as Array<[string, number, ViewId, LucideIcon]>).map(([label, count, view, Icon]) => (
+              <button key={label} onClick={() => onNavigate(view)} className="tz-card flex items-center justify-between rounded-xl border border-slate-200 bg-white p-5 text-left">
+                <div>
+                  <span className="block text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</span>
+                  <strong className="mt-2 block text-3xl font-bold text-slate-950">{count}</strong>
+                </div>
+                <div className="grid h-11 w-11 place-items-center rounded-lg bg-slate-100 text-slate-600">
+                  <Icon className="h-5 w-5" />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1246,38 +1387,49 @@ function LinkedRecordList({ title, records, emptyText }: { title: string; record
   );
 }
 
-function StudentsWorkspaceView({
+type QuickAddKind = "cases" | "interviews" | "logs" | "documents" | "protocols";
+
+function StudentDetailDialog({
+  student,
   store,
-  onAdd,
+  onClose,
   onUpdateStudent,
-  initialSelectedId,
+  onAddRecord,
+  onNavigate,
 }: {
+  student: DataRecord;
   store: DataStore;
-  onAdd: () => void;
+  onClose: () => void;
   onUpdateStudent: (studentId: string, updates: Record<string, string>) => void;
-  initialSelectedId?: string;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onNavigate?: (view: ViewId) => void;
 }) {
-  const [selectedId, setSelectedId] = useState(initialSelectedId || store.students[0]?.id || "");
-  const [activeTab, setActiveTab] = useState("resumen");
+  const [activeTab, setActiveTab] = useState<"resumen" | "familia" | "casos" | "entrevistas" | "bitacoras" | "documentos">("resumen");
   const [editingMemberId, setEditingMemberId] = useState("");
   const emptyGenogramForm = { name: "", relation: "Madre", role: "Vive con el estudiante", age: "", phone: "", email: "", address: "", notes: "" };
   const [genogramForm, setGenogramForm] = useState(emptyGenogramForm);
+  const [quickAddOpen, setQuickAddOpen] = useState<QuickAddKind | "">("");
+  const [quickAddForm, setQuickAddForm] = useState<Record<string, string>>({});
 
-  const selected = store.students.find((student) => student.id === selectedId) || store.students[0];
-  const genogram = parseGenogram(selected?.genogram);
-  const cases = selected ? store.cases.filter((record) => studentMatches(record, selected)) : [];
-  const courseCases = selected ? store.cases.filter((record) => !studentMatches(record, selected) && courseMatches(record, selected.course || "")) : [];
-  const logs = selected ? store.logs.filter((record) => studentMatches(record, selected)) : [];
-  const interviews = selected ? store.interviews.filter((record) => studentMatches(record, selected)) : [];
-  const protocols = selected ? store.protocols.filter((record) => studentMatches(record, selected)) : [];
-  const documents = selected ? store.documents.filter((record) => studentMatches(record, selected) || normalize(record.relatedTo || "").includes(normalize(selected.fullName || ""))) : [];
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const genogram = parseGenogram(student.genogram);
+  const cases = store.cases.filter((record) => studentMatches(record, student));
+  const courseCases = store.cases.filter((record) => !studentMatches(record, student) && courseMatches(record, student.course || ""));
+  const logs = store.logs.filter((record) => studentMatches(record, student));
+  const interviews = store.interviews.filter((record) => studentMatches(record, student));
+  const protocols = store.protocols.filter((record) => studentMatches(record, student));
+  const documents = store.documents.filter((record) => studentMatches(record, student) || normalize(record.relatedTo || "").includes(normalize(student.fullName || "")));
   const timeline = [...cases, ...logs, ...interviews, ...protocols, ...documents].sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
   const editingMember = genogram.find((member) => member.id === editingMemberId);
 
-  const updateInfo = (key: string, value: string) => {
-    if (!selected) return;
-    onUpdateStudent(selected.id, { [key]: value });
-  };
+  const updateInfo = (key: string, value: string) => onUpdateStudent(student.id, { [key]: value });
 
   const editGenogramMember = (memberId: string) => {
     const member = genogram.find((item) => item.id === memberId);
@@ -1296,7 +1448,7 @@ function StudentsWorkspaceView({
   };
 
   const saveGenogramMember = () => {
-    if (!selected || !genogramForm.name.trim()) return;
+    if (!genogramForm.name.trim()) return;
     const member: GenogramMember = {
       id: editingMemberId || uid(),
       name: genogramForm.name.trim(),
@@ -1308,15 +1460,14 @@ function StudentsWorkspaceView({
       address: genogramForm.address.trim(),
       notes: genogramForm.notes.trim(),
     };
-    const nextGenogram = editingMemberId ? genogram.map((item) => item.id === editingMemberId ? member : item) : [...genogram, member];
-    onUpdateStudent(selected.id, { genogram: JSON.stringify(nextGenogram) });
+    const nextGenogram = editingMemberId ? genogram.map((item) => (item.id === editingMemberId ? member : item)) : [...genogram, member];
+    onUpdateStudent(student.id, { genogram: JSON.stringify(nextGenogram) });
     setEditingMemberId("");
     setGenogramForm(emptyGenogramForm);
   };
 
   const removeGenogramMember = (memberId: string) => {
-    if (!selected) return;
-    onUpdateStudent(selected.id, { genogram: JSON.stringify(genogram.filter((member) => member.id !== memberId)) });
+    onUpdateStudent(student.id, { genogram: JSON.stringify(genogram.filter((member) => member.id !== memberId)) });
     if (editingMemberId === memberId) {
       setEditingMemberId("");
       setGenogramForm(emptyGenogramForm);
@@ -1324,178 +1475,534 @@ function StudentsWorkspaceView({
   };
 
   const handlePhoto = (file: File | undefined) => {
-    if (!selected || !file) return;
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => onUpdateStudent(selected.id, { profilePhoto: String(reader.result || "") });
+    reader.onload = () => onUpdateStudent(student.id, { profilePhoto: String(reader.result || "") });
     reader.readAsDataURL(file);
   };
 
-  const tabs = [
-    ["resumen", "Resumen"],
-    ["familia", "Familia"],
-    ["historial", "Historial"],
-    ["casos", "Casos"],
-    ["entrevistas", "Entrevistas"],
-    ["documentos", "Documentos"],
+  const openQuickAdd = (kind: QuickAddKind) => {
+    setQuickAddOpen(kind);
+    const today = new Date().toISOString().slice(0, 10);
+    const baseLink = { student: student.fullName || "", course: student.course || "" };
+    if (kind === "cases") setQuickAddForm({ ...baseLink, title: "", category: "Socioemocional", priority: "Media", status: "Abierto", description: "" });
+    if (kind === "interviews") setQuickAddForm({ date: today, participant: "", student: baseLink.student, reason: "", status: "Agendada", agreements: "" });
+    if (kind === "logs") setQuickAddForm({ date: today, ...baseLink, type: "Seguimiento", description: "", agreements: "" });
+    if (kind === "documents") setQuickAddForm({ title: "", folder: "", confidentiality: "Interno", relatedTo: baseLink.student, url: "", notes: "" });
+    if (kind === "protocols") setQuickAddForm({ title: "", student: baseLink.student, status: "Activado", dueDate: today, responsible: "", notes: "" });
+  };
+
+  const submitQuickAdd = () => {
+    if (!quickAddOpen) return;
+    const entity = entityConfigs[quickAddOpen];
+    const missing = entity.fields.filter((field) => field.required && !quickAddForm[field.key]?.trim());
+    if (missing.length) return;
+    const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...quickAddForm };
+    onAddRecord(quickAddOpen, record);
+    setQuickAddOpen("");
+    setQuickAddForm({});
+  };
+
+  const tabs: Array<{ id: typeof activeTab; label: string; badge?: number; icon: LucideIcon }> = [
+    { id: "resumen", label: "Resumen", icon: UserRound },
+    { id: "familia", label: "Familia", icon: UsersRound, badge: genogram.length || undefined },
+    { id: "casos", label: "Casos", icon: FileText, badge: cases.length || undefined },
+    { id: "entrevistas", label: "Entrevistas", icon: MessageSquareText, badge: interviews.length || undefined },
+    { id: "bitacoras", label: "Bitácoras", icon: ClipboardList, badge: logs.length || undefined },
+    { id: "documentos", label: "Documentos", icon: FolderOpen, badge: (documents.length || 0) + (protocols.length || 0) || undefined },
   ];
 
+  const renderQuickAddForm = () => {
+    if (!quickAddOpen) return null;
+    const fields: Array<{ key: string; label: string; type?: "textarea" | "date" | "select"; options?: string[]; full?: boolean; required?: boolean }> = (() => {
+      if (quickAddOpen === "cases") return [
+        { key: "title", label: "Motivo / título", required: true },
+        { key: "category", label: "Categoría", type: "select", options: ["Convivencia", "Socioemocional", "Académico", "Asistencia", "Familiar", "PIE/NEE", "Otro"] },
+        { key: "priority", label: "Prioridad", type: "select", options: ["Baja", "Media", "Alta", "Crítica"] },
+        { key: "status", label: "Estado", type: "select", options: ["Abierto", "En seguimiento", "Derivado", "Cerrado"] },
+        { key: "description", label: "Descripción", type: "textarea", full: true },
+      ];
+      if (quickAddOpen === "interviews") return [
+        { key: "date", label: "Fecha", type: "date", required: true },
+        { key: "participant", label: "Participante", required: true },
+        { key: "reason", label: "Motivo", required: true, full: true },
+        { key: "status", label: "Estado", type: "select", options: ["Agendada", "Realizada", "Reprogramada", "Cerrada"] },
+        { key: "agreements", label: "Acuerdos", type: "textarea", full: true },
+      ];
+      if (quickAddOpen === "logs") return [
+        { key: "date", label: "Fecha", type: "date", required: true },
+        { key: "type", label: "Tipo", type: "select", options: ["Seguimiento", "Entrevista", "Observación", "Crisis", "Coordinación", "Otro"] },
+        { key: "description", label: "Descripción", type: "textarea", required: true, full: true },
+        { key: "agreements", label: "Acuerdos", type: "textarea", full: true },
+      ];
+      if (quickAddOpen === "documents") return [
+        { key: "title", label: "Nombre del documento", required: true },
+        { key: "folder", label: "Carpeta" },
+        { key: "confidentiality", label: "Confidencialidad", type: "select", options: ["Interno", "Reservado", "Confidencial", "Altamente sensible"] },
+        { key: "url", label: "Enlace", full: true },
+        { key: "notes", label: "Notas", type: "textarea", full: true },
+      ];
+      if (quickAddOpen === "protocols") return [
+        { key: "title", label: "Protocolo / derivación", required: true },
+        { key: "status", label: "Estado", type: "select", options: ["Activado", "En análisis", "En seguimiento", "Cerrado"] },
+        { key: "dueDate", label: "Plazo", type: "date" },
+        { key: "responsible", label: "Responsable" },
+        { key: "notes", label: "Notas", type: "textarea", full: true },
+      ];
+      return [];
+    })();
+    const titles: Record<QuickAddKind, string> = {
+      cases: "Nuevo caso",
+      interviews: "Nueva entrevista",
+      logs: "Nueva bitácora",
+      documents: "Nuevo documento",
+      protocols: "Nuevo protocolo",
+    };
+    return (
+      <div className="tz-slide-up rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <h4 className="font-semibold text-slate-950">{titles[quickAddOpen]} — {student.fullName}</h4>
+          <button onClick={() => { setQuickAddOpen(""); setQuickAddForm({}); }} className="rounded-md p-1.5 text-slate-500 hover:bg-white">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {fields.map((field) => (
+            <label key={field.key} className={field.full ? "block sm:col-span-2" : "block"}>
+              <span className="text-xs font-semibold text-slate-700">{field.label}{field.required ? " *" : ""}</span>
+              {field.type === "textarea" ? (
+                <textarea
+                  value={quickAddForm[field.key] || ""}
+                  onChange={(event) => setQuickAddForm((form) => ({ ...form, [field.key]: event.target.value }))}
+                  className="mt-1.5 min-h-24 w-full resize-y rounded-md border border-slate-200 bg-white p-2.5 text-sm outline-none focus:border-blue-500"
+                />
+              ) : field.type === "select" ? (
+                <select
+                  value={quickAddForm[field.key] || ""}
+                  onChange={(event) => setQuickAddForm((form) => ({ ...form, [field.key]: event.target.value }))}
+                  className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500"
+                >
+                  <option value="">Seleccionar</option>
+                  {field.options?.map((option) => <option key={option}>{option}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={field.type === "date" ? "date" : "text"}
+                  value={quickAddForm[field.key] || ""}
+                  onChange={(event) => setQuickAddForm((form) => ({ ...form, [field.key]: event.target.value }))}
+                  className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500"
+                />
+              )}
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 flex justify-end gap-2">
+          <button onClick={() => { setQuickAddOpen(""); setQuickAddForm({}); }} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+          <button onClick={submitQuickAdd} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-800">
+            <Save className="h-4 w-4" /> Guardar
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div>
+    <div className="tz-backdrop fixed inset-0 z-50 grid bg-slate-950/45 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="tz-pop m-auto flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="relative overflow-hidden">
+          <div className={`bg-gradient-to-br ${avatarTone(student.id)} px-6 pt-6 pb-20 text-white`}>
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/80">
+                <BookOpen className="h-3.5 w-3.5" />
+                {student.course || "Sin curso"}
+              </div>
+              <button onClick={onClose} className="rounded-md p-1.5 text-white/90 hover:bg-white/15">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+          <div className="-mt-14 px-6">
+            <div className="flex flex-wrap items-end gap-5">
+              <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl bg-white text-2xl font-bold text-slate-900 ring-4 ring-white shadow-lg">
+                {student.profilePhoto ? (
+                  <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
+                ) : (
+                  <span className={`grid h-full w-full place-items-center bg-gradient-to-br ${avatarTone(student.id)} text-white`}>{initialsOf(student.fullName)}</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1 pb-2">
+                <h2 className="text-2xl font-semibold tracking-tight text-slate-950">{student.fullName || "Estudiante"}</h2>
+                <p className="mt-1 text-sm text-slate-600">{student.rut || "Sin RUT/ID"}{student.guardian ? ` · Apoderado/a: ${student.guardian}` : ""}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+                  {student.phone ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">📞 {student.phone}</span> : null}
+                  {student.email ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.email}</span> : null}
+                  {student.healthAlerts ? <span className="rounded-full bg-rose-50 px-2.5 py-1 font-semibold text-rose-700">Alerta de salud</span> : null}
+                </div>
+              </div>
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                <Upload className="h-4 w-4" /> Foto
+                <input type="file" accept="image/*" className="hidden" onChange={(event) => handlePhoto(event.target.files?.[0])} />
+              </label>
+            </div>
+          </div>
+        </header>
+
+        <nav className="border-b border-slate-200 px-4 pt-3">
+          <div className="flex flex-wrap gap-1">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`relative inline-flex items-center gap-2 rounded-t-md px-3 py-2 text-sm font-semibold transition ${active ? "bg-white text-slate-950" : "text-slate-500 hover:text-slate-900"}`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {tab.label}
+                  {tab.badge ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${active ? "bg-blue-100 text-blue-700" : "bg-slate-100 text-slate-600"}`}>{tab.badge}</span> : null}
+                  {active ? <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-blue-600" /> : null}
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+
+        <div className="tz-fade flex-1 overflow-y-auto bg-slate-50 px-6 py-5">
+          {activeTab === "resumen" ? (
+            <div className="grid gap-5 xl:grid-cols-2">
+              <section className="rounded-xl border border-slate-200 bg-white p-5">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Información clínica y pedagógica</h3>
+                <div className="mt-4 grid gap-4">
+                  {[
+                    ["relevantInfo", "Antecedentes relevantes"],
+                    ["strengths", "Fortalezas y recursos"],
+                    ["supportNeeds", "Necesidades de apoyo"],
+                    ["healthAlerts", "Alertas de salud / cuidados"],
+                    ["notes", "Observaciones generales"],
+                  ].map(([key, label]) => (
+                    <label key={key} className="block">
+                      <span className="text-xs font-semibold text-slate-700">{label}</span>
+                      <textarea
+                        value={student[key] || ""}
+                        onChange={(event) => updateInfo(key, event.target.value)}
+                        className="mt-1.5 min-h-20 w-full resize-y rounded-md border border-slate-200 bg-white p-2.5 text-sm leading-6 outline-none focus:border-blue-500"
+                      />
+                    </label>
+                  ))}
+                </div>
+              </section>
+              <div className="space-y-5">
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Acciones rápidas</h3>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {([
+                      ["cases", "Caso", FileText],
+                      ["interviews", "Entrevista", MessageSquareText],
+                      ["logs", "Bitácora", ClipboardList],
+                      ["documents", "Documento", FolderOpen],
+                      ["protocols", "Protocolo", ShieldCheck],
+                    ] as Array<[QuickAddKind, string, LucideIcon]>).map(([kind, label, Icon]) => (
+                      <button
+                        key={kind}
+                        onClick={() => openQuickAdd(kind)}
+                        className="group flex flex-col items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-left hover:border-blue-400 hover:bg-blue-50"
+                      >
+                        <Icon className="h-4 w-4 text-slate-500 group-hover:text-blue-600" />
+                        <span className="text-sm font-semibold text-slate-800 group-hover:text-blue-700">+ {label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {quickAddOpen ? <div className="mt-4">{renderQuickAddForm()}</div> : null}
+                </section>
+                <LinkedRecordList title="Últimos registros vinculados" records={timeline.slice(0, 6)} emptyText="Todavía no hay registros vinculados a este estudiante." />
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === "familia" ? (
+            <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
+              <section className="rounded-xl border border-slate-200 bg-white p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Genograma</h3>
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{genogram.length} vínculos</span>
+                </div>
+                <GenogramChart student={student} members={genogram} selectedMemberId={editingMemberId} onSelectMember={editGenogramMember} />
+              </section>
+              <section className="rounded-xl border border-slate-200 bg-white p-5">
+                <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">{editingMember ? "Editar vínculo" : "Agregar vínculo"}</h3>
+                <div className="mt-3 grid gap-2">
+                  <input value={genogramForm.name} onChange={(event) => setGenogramForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre familiar/red" className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <select value={genogramForm.relation} onChange={(event) => setGenogramForm((form) => ({ ...form, relation: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                      {genogramRelations.map((relation) => <option key={relation}>{relation}</option>)}
+                    </select>
+                    <select value={genogramForm.role} onChange={(event) => setGenogramForm((form) => ({ ...form, role: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                      {genogramRoles.map((role) => <option key={role}>{role}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    <input value={genogramForm.age} onChange={(event) => setGenogramForm((form) => ({ ...form, age: event.target.value }))} placeholder="Edad" className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    <input value={genogramForm.phone} onChange={(event) => setGenogramForm((form) => ({ ...form, phone: event.target.value }))} placeholder="Teléfono" className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                  </div>
+                  <input value={genogramForm.email} onChange={(event) => setGenogramForm((form) => ({ ...form, email: event.target.value }))} placeholder="Correo" className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                  <input value={genogramForm.address} onChange={(event) => setGenogramForm((form) => ({ ...form, address: event.target.value }))} placeholder="Dirección" className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                  <textarea value={genogramForm.notes} onChange={(event) => setGenogramForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notas breves" className="min-h-20 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={saveGenogramMember} disabled={!genogramForm.name.trim()} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
+                      <Save className="h-4 w-4" /> {editingMember ? "Guardar" : "Añadir"}
+                    </button>
+                    {editingMember ? (
+                      <button onClick={() => { setEditingMemberId(""); setGenogramForm(emptyGenogramForm); }} className="rounded-md border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  {genogram.map((member) => (
+                    <div key={member.id} className="flex items-start justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-blue-300 hover:bg-blue-50/50">
+                      <button onClick={() => editGenogramMember(member.id)} className="min-w-0 text-left">
+                        <strong className="block text-slate-950">{member.name}</strong>
+                        <span className="text-slate-600">{member.relation} · {member.role}</span>
+                        {member.phone || member.email ? <span className="mt-0.5 block text-xs text-slate-500">{[member.phone, member.email].filter(Boolean).join(" · ")}</span> : null}
+                      </button>
+                      <button onClick={() => removeGenogramMember(member.id)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          ) : null}
+
+          {activeTab === "casos" ? (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button onClick={() => openQuickAdd("cases")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                  <Plus className="h-4 w-4" /> Nuevo caso
+                </button>
+              </div>
+              {quickAddOpen === "cases" ? renderQuickAddForm() : null}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <LinkedRecordList title={`Casos individuales (${cases.length})`} records={cases} emptyText="No hay casos individuales vinculados." />
+                <LinkedRecordList title={`Situaciones del curso (${courseCases.length})`} records={courseCases} emptyText="No hay situaciones del curso." />
+              </div>
+            </div>
+          ) : null}
+
+          {activeTab === "entrevistas" ? (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button onClick={() => openQuickAdd("interviews")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                  <Plus className="h-4 w-4" /> Nueva entrevista
+                </button>
+              </div>
+              {quickAddOpen === "interviews" ? renderQuickAddForm() : null}
+              <LinkedRecordList title={`Entrevistas y reuniones (${interviews.length})`} records={interviews} emptyText="No hay entrevistas vinculadas." />
+            </div>
+          ) : null}
+
+          {activeTab === "bitacoras" ? (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button onClick={() => openQuickAdd("logs")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                  <Plus className="h-4 w-4" /> Nueva bitácora
+                </button>
+              </div>
+              {quickAddOpen === "logs" ? renderQuickAddForm() : null}
+              <LinkedRecordList title={`Bitácoras (${logs.length})`} records={logs} emptyText="No hay bitácoras vinculadas." />
+            </div>
+          ) : null}
+
+          {activeTab === "documentos" ? (
+            <div className="space-y-4">
+              <div className="flex justify-end gap-2">
+                <button onClick={() => openQuickAdd("protocols")} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                  <Plus className="h-4 w-4" /> Protocolo
+                </button>
+                <button onClick={() => openQuickAdd("documents")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                  <Plus className="h-4 w-4" /> Documento
+                </button>
+              </div>
+              {quickAddOpen === "documents" || quickAddOpen === "protocols" ? renderQuickAddForm() : null}
+              <div className="grid gap-4 xl:grid-cols-2">
+                <LinkedRecordList title={`Documentos (${documents.length})`} records={documents} emptyText="No hay documentos vinculados." />
+                <LinkedRecordList title={`Protocolos (${protocols.length})`} records={protocols} emptyText="No hay protocolos vinculados." />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-3 text-xs text-slate-500">
+          <span>Actualizado {new Date(student.updatedAt).toLocaleString("es-CL")}</span>
+          <div className="flex gap-2">
+            {onNavigate ? (
+              <button onClick={() => { onNavigate("students"); onClose(); }} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
+                Ver en sección Estudiantes
+              </button>
+            ) : null}
+            <button onClick={onClose} className="rounded-md bg-slate-900 px-3 py-1.5 font-semibold text-white hover:bg-slate-800">Cerrar</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+function StudentsWorkspaceView({
+  store,
+  onAdd,
+  onOpenStudent,
+}: {
+  store: DataStore;
+  onAdd: () => void;
+  onOpenStudent: (studentId: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [cycleFilter, setCycleFilter] = useState<"all" | CourseDef["cycle"]>("all");
+  const [openCourses, setOpenCourses] = useState<Record<string, boolean>>({});
+
+  const searchable = normalize(search);
+  const cycleByCourse = new Map(officialCourses.map((course) => [normalize(course.name), course.cycle]));
+
+  const filteredStudents = store.students.filter((student) => {
+    if (!searchable) return true;
+    return [student.fullName, student.rut, student.guardian, student.email, student.phone]
+      .map((value) => normalize(String(value || "")))
+      .some((value) => value.includes(searchable));
+  });
+
+  const grouped = new Map<string, DataRecord[]>();
+  filteredStudents.forEach((student) => {
+    const courseKey = (student.course || "Sin curso").trim() || "Sin curso";
+    if (!grouped.has(courseKey)) grouped.set(courseKey, []);
+    grouped.get(courseKey)!.push(student);
+  });
+
+  const officialOrder = [...officialCourses.map((course) => course.name), "Sin curso"];
+  const courseList = officialOrder
+    .filter((name) => grouped.has(name))
+    .concat(Array.from(grouped.keys()).filter((name) => !officialOrder.includes(name)))
+    .map((name) => {
+      const cycle = cycleByCourse.get(normalize(name)) || (name === "Sin curso" ? undefined : "III Ciclo");
+      return { name, students: grouped.get(name) || [], cycle };
+    })
+    .filter((group) => cycleFilter === "all" || group.cycle === cycleFilter);
+
+  const totalShown = courseList.reduce((sum, group) => sum + group.students.length, 0);
+  const toggleCourse = (name: string) => setOpenCourses((current) => ({ ...current, [name]: !(current[name] ?? true) }));
+
+  return (
+    <div className="tz-fade">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Estudiantes</h1>
-          <p className="mt-2 max-w-3xl text-sm text-slate-600">Ficha individual integrada con familia, casos, bitacoras, entrevistas, protocolos y documentos.</p>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Listado ordenado por curso. Haz clic en cualquier estudiante para abrir su ficha con casos, entrevistas y documentos.
+          </p>
         </div>
         <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
           <Plus className="h-4 w-4" /> Agregar estudiante
         </button>
       </div>
 
+      <div className="mb-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:flex-row lg:items-center">
+        <div className="flex flex-1 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <Search className="h-4 w-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por nombre, RUT, apoderado, correo..."
+            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
+          />
+          {search ? (
+            <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-700">
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {([
+            ["all", "Todos"],
+            ["I Ciclo", "I Ciclo"],
+            ["II Ciclo", "II Ciclo"],
+            ["III Ciclo", "III Ciclo"],
+          ] as Array<["all" | CourseDef["cycle"], string]>).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setCycleFilter(key)}
+              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${cycleFilter === key ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="rounded-md bg-slate-50 px-3 py-1.5 text-sm">
+          <span className="font-semibold text-slate-950">{totalShown}</span>
+          <span className="ml-1 text-slate-500">de {store.students.length} estudiantes</span>
+        </div>
+      </div>
+
       {store.students.length === 0 ? (
         <EmptyState entity={entityConfigs.students} onAdd={onAdd} onImport={() => undefined} />
+      ) : courseList.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
+          <Search className="mx-auto h-8 w-8 text-slate-400" />
+          <p className="mt-3 text-sm text-slate-600">No hay estudiantes que coincidan con tu búsqueda.</p>
+        </div>
       ) : (
-        <div className="grid gap-6 2xl:grid-cols-[320px_1fr]">
-          <aside className="max-h-[calc(100vh-180px)] overflow-y-auto rounded-lg border border-slate-200 bg-white p-3">
-            <div className="mb-3 px-2 text-xs font-semibold uppercase text-slate-500">Estudiantes</div>
-            <div className="space-y-1">
-              {store.students.map((student) => (
-                <button key={student.id} onClick={() => setSelectedId(student.id)} className={`w-full rounded-md px-3 py-2 text-left text-sm ${selected?.id === student.id ? "bg-slate-900 text-white" : "hover:bg-slate-100"}`}>
-                  <span className="block font-semibold leading-snug">{student.fullName || "Sin nombre"}</span>
-                  <span className={`block text-xs ${selected?.id === student.id ? "text-slate-300" : "text-slate-500"}`}>{student.course || "Sin curso"}</span>
+        <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+          {courseList.map((group) => {
+            const isOpen = openCourses[group.name] ?? true;
+            return (
+              <section key={group.name} className="tz-card overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <button onClick={() => toggleCourse(group.name)} className="flex w-full items-center justify-between gap-3 bg-gradient-to-br from-slate-50 to-white px-5 py-4 text-left">
+                  <div className="flex items-center gap-3">
+                    <div className={`grid h-10 w-10 place-items-center rounded-md bg-gradient-to-br ${avatarTone(group.name)} text-sm font-bold text-white shadow-sm`}>
+                      {group.name.split(" ").slice(0, 2).map((part) => part[0] || "").join("").toUpperCase().slice(0, 2) || "··"}
+                    </div>
+                    <div>
+                      <h2 className="text-base font-semibold text-slate-950">{group.name}</h2>
+                      <p className="text-xs text-slate-500">{group.cycle || "Sin ciclo"} · {group.students.length} estudiante{group.students.length === 1 ? "" : "s"}</p>
+                    </div>
+                  </div>
+                  <ChevronDown className={`h-5 w-5 text-slate-400 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
                 </button>
-              ))}
-            </div>
-          </aside>
-
-          {selected ? (
-            <section className="space-y-6 min-w-0">
-              <div className="rounded-lg border border-slate-200 bg-white p-6">
-                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-center">
-                    <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200">
-                      {selected.profilePhoto ? (
-                        <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${selected.profilePhoto})` }} />
-                      ) : (
-                        <UserRound className="h-10 w-10 text-slate-400" />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="text-2xl font-semibold leading-tight text-slate-950">{selected.fullName}</h2>
-                      <p className="mt-1 text-sm text-slate-600">{selected.course} - {selected.rut || "Sin RUT/ID"}</p>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-600">
-                        {selected.guardian ? <span className="rounded-full bg-slate-100 px-3 py-1">Apoderado/a: {selected.guardian}</span> : null}
-                        {selected.phone ? <span className="rounded-full bg-slate-100 px-3 py-1">Tel: {selected.phone}</span> : null}
-                        {selected.email ? <span className="rounded-full bg-slate-100 px-3 py-1">{selected.email}</span> : null}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                      <Upload className="h-4 w-4" /> Foto
-                      <input type="file" accept="image/*" className="hidden" onChange={(event) => handlePhoto(event.target.files?.[0])} />
-                    </label>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl">{cases.length}</strong> casos</div>
-                      <div className="rounded-md border border-slate-200 p-3"><strong className="block text-xl">{timeline.length}</strong> registros</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white px-3 py-2">
-                <div className="flex min-w-max gap-2">
-                  {tabs.map(([id, label]) => (
-                    <button key={id} onClick={() => setActiveTab(id)} className={`rounded-md px-3 py-2 text-sm font-semibold ${activeTab === id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {activeTab === "resumen" ? (
-                <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-                  <section className="rounded-lg border border-slate-200 bg-white p-6">
-                    <h3 className="font-semibold text-slate-950">Informacion relevante</h3>
-                    <div className="mt-4 grid gap-4 md:grid-cols-2">
-                      {[
-                        ["relevantInfo", "Antecedentes relevantes"],
-                        ["strengths", "Fortalezas y recursos"],
-                        ["supportNeeds", "Necesidades de apoyo"],
-                        ["healthAlerts", "Alertas de salud/cuidados"],
-                        ["notes", "Observaciones generales"],
-                      ].map(([key, label]) => (
-                        <label key={key} className={key === "notes" ? "block md:col-span-2" : "block"}>
-                          <span className="text-sm font-semibold text-slate-700">{label}</span>
-                          <textarea value={selected[key] || ""} onChange={(event) => updateInfo(key, event.target.value)} className="mt-2 min-h-32 w-full resize-y rounded-md border border-slate-200 p-3 text-sm leading-6 outline-none focus:border-slate-900" />
-                        </label>
-                      ))}
-                    </div>
-                  </section>
-                  <LinkedRecordList title="Ultimos registros vinculados" records={timeline.slice(0, 6)} emptyText="Todavia no hay registros vinculados a este estudiante." />
-                </div>
-              ) : null}
-
-              {activeTab === "familia" ? (
-                <div className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-                  <section className="rounded-lg border border-slate-200 bg-white p-6">
-                    <div className="mb-4 flex items-center justify-between">
-                      <h3 className="font-semibold text-slate-950">Genograma</h3>
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{genogram.length} vinculos</span>
-                    </div>
-                    <GenogramChart student={selected} members={genogram} selectedMemberId={editingMemberId} onSelectMember={editGenogramMember} />
-                  </section>
-
-                  <section className="rounded-lg border border-slate-200 bg-white p-6">
-                    <h3 className="font-semibold text-slate-950">{editingMember ? "Editar vinculo" : "Agregar vinculo"}</h3>
-                    <div className="mt-4 grid gap-3">
-                      <input value={genogramForm.name} onChange={(event) => setGenogramForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre familiar/red" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <select value={genogramForm.relation} onChange={(event) => setGenogramForm((form) => ({ ...form, relation: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900">
-                          {genogramRelations.map((relation) => <option key={relation}>{relation}</option>)}
-                        </select>
-                        <select value={genogramForm.role} onChange={(event) => setGenogramForm((form) => ({ ...form, role: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900">
-                          {genogramRoles.map((role) => <option key={role}>{role}</option>)}
-                        </select>
-                      </div>
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <input value={genogramForm.age} onChange={(event) => setGenogramForm((form) => ({ ...form, age: event.target.value }))} placeholder="Edad opcional" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                        <input value={genogramForm.phone} onChange={(event) => setGenogramForm((form) => ({ ...form, phone: event.target.value }))} placeholder="Telefono" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                      </div>
-                      <input value={genogramForm.email} onChange={(event) => setGenogramForm((form) => ({ ...form, email: event.target.value }))} placeholder="Correo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                      <input value={genogramForm.address} onChange={(event) => setGenogramForm((form) => ({ ...form, address: event.target.value }))} placeholder="Direccion" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                      <textarea value={genogramForm.notes} onChange={(event) => setGenogramForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notas breves" className="min-h-24 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900" />
-                      <div className="flex flex-wrap gap-2">
-                        <button onClick={saveGenogramMember} disabled={!genogramForm.name.trim()} className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
-                          <Save className="h-4 w-4" /> {editingMember ? "Guardar cambios" : "Anadir"}
+                {isOpen ? (
+                  <div className="tz-fade divide-y divide-slate-100">
+                    {group.students.map((student) => {
+                      const caseCount = store.cases.filter((record) => studentMatches(record, student)).length;
+                      return (
+                        <button
+                          key={student.id}
+                          onClick={() => onOpenStudent(student.id)}
+                          className="group flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-blue-50/60"
+                        >
+                          <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-xs font-bold text-white`}>
+                            {student.profilePhoto ? (
+                              <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
+                            ) : (
+                              initialsOf(student.fullName)
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-slate-950 group-hover:text-blue-700">{student.fullName || "Sin nombre"}</span>
+                            <span className="block truncate text-xs text-slate-500">{student.rut || "Sin RUT"}{student.guardian ? ` · ${student.guardian}` : ""}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {student.healthAlerts ? <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">Salud</span> : null}
+                            {caseCount ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{caseCount} caso{caseCount === 1 ? "" : "s"}</span> : null}
+                            <ChevronDown className="-rotate-90 h-4 w-4 text-slate-300 group-hover:text-blue-500" />
+                          </div>
                         </button>
-                        {editingMember ? (
-                          <button onClick={() => { setEditingMemberId(""); setGenogramForm(emptyGenogramForm); }} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="mt-5 space-y-2">
-                      {genogram.map((member) => (
-                        <div key={member.id} className="flex items-start justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm">
-                          <button onClick={() => editGenogramMember(member.id)} className="min-w-0 text-left">
-                            <strong className="block text-slate-950">{member.name}</strong>
-                            <span className="text-slate-600">{member.relation} - {member.role}</span>
-                            {member.phone || member.email ? <span className="mt-1 block text-xs text-slate-500">{[member.phone, member.email].filter(Boolean).join(" - ")}</span> : null}
-                          </button>
-                          <button onClick={() => removeGenogramMember(member.id)} className="rounded-md p-2 text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              ) : null}
-
-              {activeTab === "historial" ? <LinkedRecordList title="Historial completo" records={timeline} emptyText="No hay historial registrado para este estudiante." /> : null}
-              {activeTab === "casos" ? <div className="grid gap-6 xl:grid-cols-2"><LinkedRecordList title="Casos individuales" records={cases} emptyText="No hay casos individuales vinculados." /><LinkedRecordList title="Situaciones del curso" records={courseCases} emptyText="No hay situaciones de curso vinculadas." /></div> : null}
-              {activeTab === "entrevistas" ? <LinkedRecordList title="Entrevistas y reuniones" records={interviews} emptyText="No hay entrevistas vinculadas." /> : null}
-              {activeTab === "documentos" ? <div className="grid gap-6 xl:grid-cols-2"><LinkedRecordList title="Documentos" records={documents} emptyText="No hay documentos vinculados." /><LinkedRecordList title="Protocolos" records={protocols} emptyText="No hay protocolos vinculados." /></div> : null}
-            </section>
-          ) : null}
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
         </div>
       )}
     </div>
@@ -2118,7 +2625,7 @@ export default function TizaEducationApp() {
     }
   });
   const [activeView, setActiveView] = useState<ViewId>("dashboard");
-  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [detailStudentId, setDetailStudentId] = useState("");
   const [query, setQuery] = useState("");
   const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
@@ -2465,7 +2972,7 @@ export default function TizaEducationApp() {
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
     if (activeView === "students") {
-      return <StudentsWorkspaceView key={selectedStudentId || "students"} store={store} onAdd={() => setDialogEntity("students")} onUpdateStudent={updateStudentRecord} initialSelectedId={selectedStudentId} />;
+      return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={(studentId) => setDetailStudentId(studentId)} />;
     }
     if (activeView === "courses") {
       return (
@@ -2474,10 +2981,7 @@ export default function TizaEducationApp() {
           onSeedCourses={seedOfficialCourses}
           onUpdateCourse={updateCourseRecord}
           onNavigate={setActiveView}
-          onOpenStudent={(studentId) => {
-            setSelectedStudentId(studentId);
-            setActiveView("students");
-          }}
+          onOpenStudent={(studentId) => setDetailStudentId(studentId)}
         />
       );
     }
@@ -2580,6 +3084,20 @@ export default function TizaEducationApp() {
       {dialogEntity ? (
         <RecordDialog entity={entityConfigs[dialogEntity]} onClose={() => setDialogEntity(null)} onSave={(record) => addRecord(dialogEntity, record)} />
       ) : null}
+      {detailStudentId ? (() => {
+        const detailStudent = store.students.find((s) => s.id === detailStudentId);
+        if (!detailStudent) return null;
+        return (
+          <StudentDetailDialog
+            student={detailStudent}
+            store={store}
+            onClose={() => setDetailStudentId("")}
+            onUpdateStudent={updateStudentRecord}
+            onAddRecord={(entity, record) => addRecord(entity, record)}
+            onNavigate={setActiveView}
+          />
+        );
+      })() : null}
       {toast ? <Toast message={toast} /> : null}
     </div>
   );
