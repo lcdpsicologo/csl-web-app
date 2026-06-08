@@ -232,20 +232,40 @@ export async function PUT(request: Request) {
       if (upsertError) throw upsertError;
     }
 
+    // Compute IDs to delete by reading existing IDs and diffing against incoming.
+    // This avoids huge NOT IN(...) URLs that PostgREST rejects.
     for (const entity of ENTITY_IDS) {
-      const ids = (incomingStore[entity] || []).map((record) => record.id);
-      let deleteQuery = supabase
-        .from("app_records")
-        .delete()
-        .eq("institution_id", institutionId)
-        .eq("entity", entity);
+      const keepIds = new Set((incomingStore[entity] || []).map((record) => record.id));
 
-      if (ids.length > 0) {
-        deleteQuery = deleteQuery.not("record_id", "in", `(${ids.map((id) => `"${id}"`).join(",")})`);
+      const existingIds: string[] = [];
+      const pageSize = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("app_records")
+          .select("record_id")
+          .eq("institution_id", institutionId)
+          .eq("entity", entity)
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const batch = (data as Array<{ record_id: string }> | null) || [];
+        batch.forEach((row) => existingIds.push(row.record_id));
+        if (batch.length < pageSize) break;
+        from += pageSize;
       }
 
-      const { error: deleteError } = await deleteQuery;
-      if (deleteError) throw deleteError;
+      const toDelete = existingIds.filter((id) => !keepIds.has(id));
+      const deleteChunk = 200;
+      for (let i = 0; i < toDelete.length; i += deleteChunk) {
+        const slice = toDelete.slice(i, i + deleteChunk);
+        const { error: deleteError } = await supabase
+          .from("app_records")
+          .delete()
+          .eq("institution_id", institutionId)
+          .eq("entity", entity)
+          .in("record_id", slice);
+        if (deleteError) throw deleteError;
+      }
     }
 
     await supabase.from("audit_logs").insert({
