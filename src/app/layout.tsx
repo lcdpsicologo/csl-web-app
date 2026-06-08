@@ -14,7 +14,15 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Tiza Education",
-  description: "Plataforma SaaS multi-institución para orientación, convivencia, formación y gestión documental escolar.",
+  description: "Plataforma SaaS multi-institucion para orientacion, convivencia, formacion y gestion documental escolar.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

@@ -1,0 +1,17 @@
+<svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#061452"/>
+  <path d="M4 18C4 10.268 10.268 4 18 4H50C55.523 4 60 8.477 60 14V23H4V18Z" fill="#006BFF"/>
+  <path d="M41 23H60V46C60 53.732 53.732 60 46 60H41V23Z" fill="#FF681F"/>
+  <path d="M15 17H49C50.657 17 52 18.343 52 20V25C52 26.657 50.657 28 49 28H38V49C38 50.657 36.657 52 35 52H29C27.343 52 26 50.657 26 49V28H15C13.343 28 12 26.657 12 25V20C12 18.343 13.343 17 15 17Z" fill="white"/>
+  <g filter="url(#shadow)">
+    <path d="M32.8 31.2C35.46 30.16 38.52 31.47 39.58 34.12L41.8 39.68C42.86 42.33 41.55 45.34 38.88 46.39L35.72 47.64L29.64 32.45L32.8 31.2Z" fill="#F8FAFC"/>
+    <path d="M29.64 32.45L35.72 47.64" stroke="#CBD5E1" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M35.72 47.64L31.82 49.12L30.64 46.13" stroke="#E2E8F0" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <path d="M28.5 52.5C30.4 53.25 32.72 53.16 34.7 52.35" stroke="white" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="1 2"/>
+  <defs>
+    <filter id="shadow" x="25" y="27" width="22" height="27" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#020617" flood-opacity="0.22"/>
+    </filter>
+  </defs>
+</svg>
