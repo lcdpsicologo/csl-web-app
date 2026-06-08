@@ -8,6 +8,7 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  MapPin,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -380,7 +381,8 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "strengths", label: "Fortalezas", type: "textarea", aliases: ["fortalezas", "recursos", "habilidades"] },
       { key: "supportNeeds", label: "Necesidades de apoyo", type: "textarea", aliases: ["necesidades", "apoyos", "dificultades"] },
       { key: "healthAlerts", label: "Alertas de salud/cuidados", type: "textarea", aliases: ["salud", "alertas", "cuidados"] },
-      { key: "notes", label: "Notas", type: "textarea", aliases: ["notas", "observaciones", "comentarios", "antecedentes"] },
+      { key: "notes", label: "Dirección / Domicilio", type: "textarea", aliases: ["direccion", "domicilio", "dirección", "address", "vive", "vivienda"] },
+      { key: "observations", label: "Observaciones generales", type: "textarea", aliases: ["observaciones", "notas", "comentarios", "antecedentes", "obs"] },
       { key: "genogram", label: "Genograma", type: "textarea", aliases: ["genograma", "familia", "grupo familiar"] },
     ],
   },
@@ -1761,18 +1763,21 @@ function StudentDetailDialog({
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Información clínica y pedagógica</h3>
                   <div className="mt-4 grid gap-4">
                     {([
-                      ["relevantInfo", "Antecedentes relevantes"],
-                      ["strengths", "Fortalezas y recursos"],
-                      ["supportNeeds", "Necesidades de apoyo"],
-                      ["healthAlerts", "Alertas de salud / cuidados"],
-                      ["notes", "Observaciones generales"],
-                    ] as const).map(([key, label]) => {
+                      ["relevantInfo", "Antecedentes relevantes", null],
+                      ["strengths", "Fortalezas y recursos", null],
+                      ["supportNeeds", "Necesidades de apoyo", null],
+                      ["healthAlerts", "Alertas de salud / cuidados", "health"],
+                      ["notes", "Dirección / Domicilio", "address"],
+                      ["observations", "Observaciones generales", null],
+                    ] as const).map(([key, label, kind]) => {
                       const highlighted = highlightField === key;
-                      const isHealth = key === "healthAlerts";
+                      const isHealth = kind === "health";
+                      const isAddress = kind === "address";
                       return (
                         <label key={key} className="block">
-                          <span className={`flex items-center gap-2 text-xs font-semibold ${isHealth ? "text-rose-700" : "text-slate-700"}`}>
+                          <span className={`flex items-center gap-2 text-xs font-semibold ${isHealth ? "text-rose-700" : isAddress ? "text-emerald-700" : "text-slate-700"}`}>
                             {isHealth ? <ShieldCheck className="h-3.5 w-3.5" /> : null}
+                            {isAddress ? <MapPin className="h-3.5 w-3.5" /> : null}
                             {label}
                             {isHealth && student[key] ? (
                               <button
@@ -1788,9 +1793,19 @@ function StudentDetailDialog({
                             ref={(el) => { fieldRefs.current[key] = el; }}
                             value={student[key] || ""}
                             onChange={(event) => updateInfo(key, event.target.value)}
-                            placeholder={isHealth ? "Ej.: Alergias, medicamentos, condiciones crónicas, restricciones de actividad…" : undefined}
+                            placeholder={
+                              isHealth
+                                ? "Ej.: Alergias, medicamentos, condiciones crónicas, restricciones de actividad…"
+                                : isAddress
+                                  ? "Ej.: Av. Ejemplo 1234, depto 5B, Comuna…"
+                                  : undefined
+                            }
                             className={`mt-1.5 min-h-20 w-full resize-y rounded-md border bg-white p-2.5 text-sm leading-6 outline-none transition focus:border-blue-500 ${
-                              isHealth ? "border-rose-200 bg-rose-50/40" : "border-slate-200"
+                              isHealth
+                                ? "border-rose-200 bg-rose-50/40"
+                                : isAddress
+                                  ? "border-emerald-200 bg-emerald-50/40"
+                                  : "border-slate-200"
                             } ${highlighted ? "ring-4 ring-blue-300/60 border-blue-500" : ""}`}
                           />
                         </label>
