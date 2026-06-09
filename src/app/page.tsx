@@ -2688,25 +2688,32 @@ function CommandPalette({
     onClose();
   };
 
+  const handleKey = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+    } else if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setSelectedIndex((index) => (flat.length === 0 ? 0 : Math.min(flat.length - 1, index + 1)));
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setSelectedIndex((index) => Math.max(0, index - 1));
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      setSelectedIndex(0);
+    } else if (event.key === "End") {
+      event.preventDefault();
+      setSelectedIndex(Math.max(0, flat.length - 1));
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      choose(activeResult);
+    }
+  };
+
   useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onClose();
-      } else if (event.key === "ArrowDown") {
-        event.preventDefault();
-        setSelectedIndex((index) => Math.min(flat.length - 1, index + 1));
-      } else if (event.key === "ArrowUp") {
-        event.preventDefault();
-        setSelectedIndex((index) => Math.max(0, index - 1));
-      } else if (event.key === "Enter") {
-        event.preventDefault();
-        choose(activeResult);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+    const el = listRef.current?.querySelector<HTMLElement>(`[data-cmd-idx="${selectedIndex}"]`);
+    el?.scrollIntoView({ block: "nearest" });
+  }, [selectedIndex]);
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -2732,6 +2739,7 @@ function CommandPalette({
             ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleKey}
             placeholder="Buscar estudiantes, casos, entrevistas, documentos…"
             className="w-full bg-transparent text-base outline-none placeholder:text-slate-400"
           />
@@ -2782,9 +2790,10 @@ function CommandPalette({
                       return (
                         <button
                           key={`${result.entity}-${result.record.id}`}
+                          data-cmd-idx={flatIndex}
                           onMouseEnter={() => setSelectedIndex(flatIndex)}
                           onClick={() => choose(result)}
-                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition ${active ? "bg-blue-50" : "hover:bg-slate-50"}`}
+                          className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition ${active ? "bg-blue-50 ring-1 ring-blue-200" : "hover:bg-slate-50"}`}
                         >
                           <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md text-sm font-bold text-white shadow-sm bg-gradient-to-br ${avatarTone(result.record.id)}`}>
                             {result.entity === "students" ? initialsOf(result.title) : <Icon className="h-4 w-4" />}
