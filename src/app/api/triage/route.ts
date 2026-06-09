@@ -188,71 +188,101 @@ ${emailText}
 
 Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la nómina por nombre o RUT), proponé registros estructurados (cases/interviews/logs/protocols) y devolvé el JSON solicitado.`;
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_KEY}`;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 50_000);
-    let res: Response;
-    try {
-      res = await fetch(url, {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
-          maxOutputTokens: 2048,
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-        safetySettings: [
-          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
-          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
-        ],
-      }),
-    });
-    } catch (err) {
-      clearTimeout(timer);
-      if (err instanceof Error && err.name === "AbortError") {
-        return NextResponse.json(
-          {
-            error: `La IA tardó más de 50s en responder. Prueba con un correo más corto, o reintenta en unos segundos. Estudiantes evaluados en este request: ${students.length} (de ${fullStudents.length} totales).`,
-          },
-          { status: 504 },
-        );
-      }
-      throw err;
-    }
-    clearTimeout(timer);
+  // Try the configured model, then fall back to other free models if Google is overloaded.
+  const fallbackModels = [MODEL, "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-2.0-flash-lite"].filter(
+    (m, idx, arr) => arr.indexOf(m) === idx,
+  );
 
-    if (!res.ok) {
-      const errText = await res.text();
-      let errMsg = errText;
+  const geminiBody = {
+    systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      maxOutputTokens: 2048,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+    safetySettings: [
+      { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+      { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+    ],
+  };
+
+  let lastStatus = 0;
+  let lastMsg = "";
+  let usedModel = MODEL;
+  let data: { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>; usageMetadata?: unknown } | null = null;
+
+  outer: for (const candidate of fallbackModels) {
+    // Up to 3 attempts per model with exponential backoff on 503/429.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 800 * 2 ** (attempt - 1)));
+      }
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent?key=${GEMINI_KEY}`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 25_000);
+      let res: Response;
       try {
-        const parsed = JSON.parse(errText);
-        errMsg = parsed?.error?.message || errText;
-      } catch {
-        // keep raw
+        res = await fetch(url, {
+          method: "POST",
+          signal: controller.signal,
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(geminiBody),
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        if (err instanceof Error && err.name === "AbortError") {
+          lastStatus = 504;
+          lastMsg = `Timeout en ${candidate}`;
+          continue; // retry this model or fall back
+        }
+        lastStatus = 500;
+        lastMsg = err instanceof Error ? err.message : String(err);
+        continue;
       }
-      if (res.status === 429) {
+      clearTimeout(timer);
+
+      if (res.status === 503 || res.status === 429 || res.status === 500) {
+        const errText = await res.text().catch(() => "");
+        lastStatus = res.status;
+        lastMsg = errText.slice(0, 240);
+        continue; // retry or fall back
+      }
+
+      if (!res.ok) {
+        const errText = await res.text();
+        let errMsg = errText;
+        try {
+          const parsedErr = JSON.parse(errText);
+          errMsg = parsedErr?.error?.message || errText;
+        } catch {
+          // keep raw
+        }
         return NextResponse.json(
-          {
-            error: `Cuota de Gemini excedida en el modelo "${MODEL}". Prueba: (1) esperar unos minutos, (2) cambiar el modelo a uno con free tier más amplio agregando GEMINI_MODEL=gemini-2.5-flash-lite en Vercel, o (3) verificar que la "Generative Language API" esté habilitada en https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com para el proyecto de tu API key. Detalle: ${errMsg}`,
-          },
-          { status: 429 },
+          { error: `Gemini devolvió ${res.status} en modelo ${candidate}: ${errMsg}` },
+          { status: 502 },
         );
       }
-      return NextResponse.json(
-        { error: `Gemini devolvió ${res.status}: ${errMsg}` },
-        { status: 502 },
-      );
-    }
 
-    const data = await res.json();
+      data = await res.json();
+      usedModel = candidate;
+      break outer;
+    }
+  }
+
+  if (!data) {
+    return NextResponse.json(
+      {
+        error: `Todos los modelos de Gemini gratis están saturados o sin cuota en este momento (último: ${lastStatus} ${lastMsg}). Espera 1-2 minutos y vuelve a intentar.`,
+      },
+      { status: 503 },
+    );
+  }
+
+  try {
     const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
     if (!text) {
       return NextResponse.json(
@@ -283,7 +313,7 @@ Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la 
       ok: true,
       result: parsed,
       usage: data?.usageMetadata || null,
-      model: MODEL,
+      model: usedModel,
       provider: "google-gemini",
     });
   } catch (error) {
