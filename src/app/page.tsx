@@ -2685,8 +2685,66 @@ function CommandPalette({
   const flat = Array.from(grouped.entries()).flatMap(([, items]) => items);
   const activeResult = flat[selectedIndex];
 
+  const RECENTS_KEY = "tiza-search-recent-v1";
+  type RecentEntry = { entity: EntityId; id: string; title: string; subtitle: string; ts: number };
+  const [recents, setRecents] = useState<RecentEntry[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(RECENTS_KEY);
+      return raw ? (JSON.parse(raw) as RecentEntry[]) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Reconcile recents against the live store so renamed / deleted records don't appear.
+  const liveRecents = recents
+    .map((r) => {
+      const list = store[r.entity];
+      const found = list?.find((rec) => rec.id === r.id);
+      if (!found) return null;
+      const config = entityConfigs[r.entity];
+      const titleField = config.fields.find((f) => f.required)?.key || config.fields[0].key;
+      return { ...r, title: String(found[titleField] || r.title) };
+    })
+    .filter((r): r is RecentEntry => r !== null)
+    .slice(0, 8);
+
+  const pushRecent = (result: CommandResult) => {
+    const entry: RecentEntry = {
+      entity: result.entity,
+      id: result.record.id,
+      title: result.title,
+      subtitle: result.subtitle,
+      ts: Date.now(),
+    };
+    const next = [entry, ...recents.filter((r) => !(r.entity === entry.entity && r.id === entry.id))].slice(0, 10);
+    setRecents(next);
+    try {
+      window.localStorage.setItem(RECENTS_KEY, JSON.stringify(next));
+    } catch {
+      // ignore quota errors
+    }
+  };
+
+  const clearRecents = () => {
+    setRecents([]);
+    try {
+      window.localStorage.removeItem(RECENTS_KEY);
+    } catch {
+      // ignore
+    }
+  };
+
+  const openRecent = (entry: RecentEntry) => {
+    if (entry.entity === "students") onOpenStudent(entry.id);
+    else onNavigate(entry.entity);
+    onClose();
+  };
+
   const choose = (result: CommandResult | undefined) => {
     if (!result) return;
+    pushRecent(result);
     if (result.entity === "students") {
       onOpenStudent(result.record.id);
     } else {
@@ -2756,6 +2814,37 @@ function CommandPalette({
         <div ref={listRef} className="max-h-[60vh] overflow-y-auto">
           {!normalized ? (
             <div className="p-4">
+              {liveRecents.length > 0 ? (
+                <>
+                  <div className="flex items-center justify-between px-2 pb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Búsquedas recientes</p>
+                    <button onClick={clearRecents} className="text-[11px] font-semibold text-slate-400 hover:text-slate-700">Limpiar</button>
+                  </div>
+                  <div className="grid gap-1">
+                    {liveRecents.map((entry) => {
+                      const config = entityConfigs[entry.entity];
+                      const Icon = config.icon;
+                      return (
+                        <button
+                          key={`${entry.entity}-${entry.id}`}
+                          onClick={() => openRecent(entry)}
+                          className="group flex items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-slate-50"
+                        >
+                          <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md text-sm font-bold text-white shadow-sm bg-gradient-to-br ${avatarTone(entry.id)}`}>
+                            {entry.entity === "students" ? initialsOf(entry.title) : <Icon className="h-4 w-4" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-950">{entry.title}</p>
+                            <p className="truncate text-xs text-slate-500">{entry.subtitle}</p>
+                          </div>
+                          <span className="text-[10px] text-slate-400">{config.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="my-3 h-px bg-slate-100" />
+                </>
+              ) : null}
               <p className="px-2 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-400">Accesos rápidos</p>
               <div className="grid gap-1">
                 {quickShortcuts.map((item) => {
