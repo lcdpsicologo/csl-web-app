@@ -3094,17 +3094,24 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team }: { store: 
   const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
   const emailLower = (userEmail || "").toLowerCase().trim();
   const teamMatch = team.find((m) => (m.email || "").toLowerCase().trim() === emailLower);
-  let displayName = "";
-  if (teamMatch?.name) {
-    // Use just the first name for a personal feel.
-    displayName = teamMatch.name.split(/\s+/)[0] || teamMatch.name;
-  } else if (emailLower) {
-    const local = emailLower.split("@")[0] || "";
-    // Heuristic: if email looks like "g.caro.m" prefer the second segment ("caro"); otherwise the first.
-    const parts = local.split(".").filter(Boolean);
-    const best = parts.find((p) => p.length >= 3) || parts[0] || local;
-    displayName = best.charAt(0).toUpperCase() + best.slice(1);
-  }
+  // Persist the matched name so subsequent loads show it instantly without the team having to come back.
+  const cacheKey = emailLower ? `tiza-display-name:${emailLower}` : "";
+  const [cachedName, setCachedName] = useState<string>(() => {
+    if (typeof window === "undefined" || !cacheKey) return "";
+    return window.localStorage.getItem(cacheKey) || "";
+  });
+  useEffect(() => {
+    if (!cacheKey || !teamMatch?.name) return;
+    const first = teamMatch.name.split(/\s+/)[0] || teamMatch.name;
+    if (first && first !== cachedName) {
+      window.localStorage.setItem(cacheKey, first);
+      setCachedName(first);
+    }
+  }, [teamMatch, cacheKey, cachedName]);
+
+  const displayName = teamMatch?.name
+    ? (teamMatch.name.split(/\s+/)[0] || teamMatch.name)
+    : cachedName;
   const dateLabel = now.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
 
   return (
