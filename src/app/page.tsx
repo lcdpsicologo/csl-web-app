@@ -2679,7 +2679,13 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Estudiantes" value={store.students.length} detail="Registros reales" icon={UserRound} accent="blue" />
-        <StatCard label="Cursos" value={store.courses.length} detail="Cursos creados" icon={BookOpen} accent="teal" />
+        <StatCard
+          label="Cursos"
+          value={Math.max(officialCourses.length, store.courses.length)}
+          detail={`${store.courses.length} guardados · ${officialCourses.length} oficiales`}
+          icon={BookOpen}
+          accent="teal"
+        />
         <StatCard label="Casos" value={store.cases.length} detail="Casos ingresados" icon={FileText} accent="amber" />
         <StatCard label="Bitácoras" value={store.logs.length} detail="Intervenciones" icon={ClipboardList} accent="violet" />
         <StatCard label="Documentos" value={store.documents.length} detail="Índice documental" icon={FolderOpen} accent="rose" />
@@ -3260,7 +3266,7 @@ export default function TizaEducationApp() {
     setToast("Registro eliminado");
   };
 
-  const seedOfficialCourses = () => {
+  const seedOfficialCourses = (silent = false) => {
     setStore((current) => {
       const officialByName = new Map(officialCourses.map((course) => [normalize(course.name), course]));
       const existing = new Set(current.courses.map((course) => normalize(course.name || "")));
@@ -3284,8 +3290,22 @@ export default function TizaEducationApp() {
 
       return { ...current, courses: [...updatedCourses, ...missing] };
     });
-    setToast("Cursos oficiales y duplas por ciclo actualizadas");
+    if (!silent) setToast("Cursos oficiales y duplas por ciclo actualizadas");
   };
+
+  const autoSeededRef = React.useRef(false);
+  useEffect(() => {
+    if (!remoteLoaded || autoSeededRef.current) return;
+    const existing = new Set(store.courses.map((course) => normalize(course.name || "")));
+    const missing = officialCourses.some((course) => !existing.has(normalize(course.name)));
+    if (missing) {
+      autoSeededRef.current = true;
+      seedOfficialCourses(true);
+    } else {
+      autoSeededRef.current = true;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteLoaded]);
 
   const updateCourseRecord = (courseName: string, updates: Record<string, string>) => {
     setStore((current) => {
