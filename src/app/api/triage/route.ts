@@ -1,6 +1,45 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+// Vercel: allow up to 60s for the Gemini call (default is 10s on Hobby).
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
+const normalize = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const tokensOf = (value: string) =>
+  normalize(value)
+    .split(/\s+/)
+    .filter((token) => token.length >= 3);
+
+const prefilterRoster = (students: RosterStudent[], emailText: string, limit = 250): RosterStudent[] => {
+  if (students.length <= limit) return students;
+  const emailTokens = new Set(tokensOf(emailText));
+  if (emailTokens.size === 0) return students.slice(0, limit);
+  const scored = students.map((student) => {
+    const haystack = tokensOf(`${student.name} ${student.rut || ""} ${student.guardian || ""} ${student.course || ""}`);
+    let score = 0;
+    for (const token of haystack) {
+      if (emailTokens.has(token)) score += 1;
+    }
+    return { student, score };
+  });
+  const matched = scored.filter((entry) => entry.score > 0).sort((a, b) => b.score - a.score).map((entry) => entry.student);
+  if (matched.length >= 12) return matched.slice(0, limit);
+  // Fallback: include matched + some neighbors from same courses, up to limit
+  const matchedCourses = new Set(matched.map((s) => normalize(s.course || "")));
+  const neighbors = students.filter(
+    (s) => !matched.includes(s) && matchedCourses.has(normalize(s.course || "")),
+  );
+  return [...matched, ...neighbors].slice(0, limit);
+};
+
 const normalizeSupabaseUrl = (url: string) =>
   url.replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/$/, "");
 
@@ -124,11 +163,14 @@ export async function POST(request: Request) {
   }
 
   const emailText = (body.emailText || "").trim();
-  const students = Array.isArray(body.students) ? body.students.slice(0, 1800) : [];
+  const fullStudents = Array.isArray(body.students) ? body.students : [];
   const today = body.today || new Date().toISOString().slice(0, 10);
 
   if (!emailText) return NextResponse.json({ error: "Falta el texto del correo" }, { status: 400 });
-  if (students.length === 0) return NextResponse.json({ error: "Falta la nómina de estudiantes" }, { status: 400 });
+  if (fullStudents.length === 0) return NextResponse.json({ error: "Falta la nómina de estudiantes" }, { status: 400 });
+
+  // Pre-filter: keep prompt small by sending only students likely mentioned in the email.
+  const students = prefilterRoster(fullStudents, emailText, 250);
 
   const rosterTable = students
     .map((s) => `${s.id}|${(s.name || "").replace(/\|/g, "/")}|${s.course || ""}|${s.rut || ""}|${s.guardian || ""}`)
@@ -148,8 +190,13 @@ Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la 
 
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_KEY}`;
-    const res = await fetch(url, {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 50_000);
+    let res: Response;
+    try {
+      res = await fetch(url, {
       method: "POST",
+      signal: controller.signal,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
@@ -167,6 +214,19 @@ Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la 
         ],
       }),
     });
+    } catch (err) {
+      clearTimeout(timer);
+      if (err instanceof Error && err.name === "AbortError") {
+        return NextResponse.json(
+          {
+            error: `La IA tardó más de 50s en responder. Probá con un correo más corto, o reintentá en unos segundos. Estudiantes evaluados en este request: ${students.length} (de ${fullStudents.length} totales).`,
+          },
+          { status: 504 },
+        );
+      }
+      throw err;
+    }
+    clearTimeout(timer);
 
     if (!res.ok) {
       const errText = await res.text();
