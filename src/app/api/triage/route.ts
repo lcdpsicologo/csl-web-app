@@ -69,12 +69,12 @@ const authenticate = async (request: Request, supabase: SupabaseClient) => {
 
 type RosterStudent = { id: string; name: string; course?: string; rut?: string; guardian?: string };
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
 const SYSTEM_PROMPT = `Eres un asistente experto en orientación escolar y convivencia, integrado en la plataforma Tiza Education del Colegio San Lucas de Lo Espejo.
 
-Recibís correos, mensajes o relatos sobre estudiantes y los transformás en registros estructurados que se cargarán al sistema. Sos preciso, prudente y conservador: si no estás seguro, dejá el campo vacío o marcá baja confianza. Nunca inventes nombres ni hechos.
+Recibís correos, mensajes o relatos sobre estudiantes y los transformás en registros estructurados que se cargarán al sistema. Sos preciso, prudente y conservador: si no estás seguro, deja el campo vacío o marcá baja confianza. Nunca inventes nombres ni hechos.
 
 Categorías válidas para "cases": Convivencia, Socioemocional, Académico, Asistencia, Familiar, PIE/NEE, Otro.
 Prioridades válidas: Baja, Media, Alta, Crítica.
@@ -143,7 +143,7 @@ const RESPONSE_SCHEMA = {
 export async function POST(request: Request) {
   if (!GEMINI_KEY) {
     return NextResponse.json(
-      { error: "GEMINI_API_KEY no está configurada. Agregá la variable en Vercel (Settings → Environment Variables). Obtené una key gratis en https://aistudio.google.com/app/apikey" },
+      { error: "GEMINI_API_KEY no está configurada. Agrega la variable en Vercel (Settings → Environment Variables). Obtené una key gratis en https://aistudio.google.com/app/apikey" },
       { status: 503 },
     );
   }
@@ -204,7 +204,8 @@ Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la 
         generationConfig: {
           temperature: 0.2,
           responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
+          maxOutputTokens: 2048,
+          thinkingConfig: { thinkingBudget: 0 },
         },
         safetySettings: [
           { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
@@ -219,7 +220,7 @@ Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la 
       if (err instanceof Error && err.name === "AbortError") {
         return NextResponse.json(
           {
-            error: `La IA tardó más de 50s en responder. Probá con un correo más corto, o reintentá en unos segundos. Estudiantes evaluados en este request: ${students.length} (de ${fullStudents.length} totales).`,
+            error: `La IA tardó más de 50s en responder. Prueba con un correo más corto, o reintenta en unos segundos. Estudiantes evaluados en este request: ${students.length} (de ${fullStudents.length} totales).`,
           },
           { status: 504 },
         );
@@ -240,7 +241,7 @@ Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la 
       if (res.status === 429) {
         return NextResponse.json(
           {
-            error: `Cuota de Gemini excedida en el modelo "${MODEL}". Probá: (1) esperar unos minutos, (2) cambiar el modelo a uno con free tier más amplio agregando GEMINI_MODEL=gemini-2.5-flash-lite en Vercel, o (3) verificar que la "Generative Language API" esté habilitada en https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com para el proyecto de tu API key. Detalle: ${errMsg}`,
+            error: `Cuota de Gemini excedida en el modelo "${MODEL}". Prueba: (1) esperar unos minutos, (2) cambiar el modelo a uno con free tier más amplio agregando GEMINI_MODEL=gemini-2.5-flash-lite en Vercel, o (3) verificar que la "Generative Language API" esté habilitada en https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com para el proyecto de tu API key. Detalle: ${errMsg}`,
           },
           { status: 429 },
         );

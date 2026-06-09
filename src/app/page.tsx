@@ -3717,7 +3717,7 @@ function TriageView({
             Triaje IA
           </h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Pegá un correo, mensaje o relato sobre uno o varios estudiantes. La IA detecta a quién(es) involucra, lo resume y propone casos, entrevistas, bitácoras o protocolos pre-asociados.
+            Pega un correo, mensaje o relato sobre uno o varios estudiantes. La IA detecta a quién(es) involucra, lo resume y propone casos, entrevistas, bitácoras o protocolos pre-asociados.
           </p>
         </div>
       </div>
@@ -3728,7 +3728,7 @@ function TriageView({
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="Pegá aquí el correo o relato completo. Ej.: 'Hola Gustavo, te escribo porque María Pérez de 4°A presentó una crisis de ansiedad en la clase de matemáticas...'"
+            placeholder="Pega aquí el correo o relato completo. Ej.: 'Hola Gustavo, te escribo porque María Pérez de 4°A presentó una crisis de ansiedad en la clase de matemáticas...'"
             className="mt-2 min-h-44 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/30 p-3 text-sm leading-6 outline-none focus:border-violet-500 focus:bg-white"
           />
         </label>
