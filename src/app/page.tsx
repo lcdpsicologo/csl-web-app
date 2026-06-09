@@ -3075,55 +3075,84 @@ function ImportView({
   );
 }
 
-function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view: ViewId) => void }) {
+function Dashboard({ store, onNavigate, schoolName, userEmail }: { store: DataStore; onNavigate: (view: ViewId) => void; schoolName: string; userEmail: string }) {
   const total = Object.values(store).reduce((sum, records) => sum + records.length, 0);
-  const activeEntities = Object.values(store).filter((records) => records.length > 0).length;
-  const readiness = Math.round((activeEntities / Object.keys(entityConfigs).length) * 100);
   const latest = Object.entries(store)
     .flatMap(([entity, records]) => records.map((record) => ({ entity: entity as EntityId, record })))
     .sort((a, b) => b.record.updatedAt.localeCompare(a.record.updatedAt))
     .slice(0, 6);
 
+  const now = new Date();
+  const hour = now.getHours();
+  const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
+  const namePart = (userEmail || "").split("@")[0].split(".")[0];
+  const displayName = namePart ? namePart.charAt(0).toUpperCase() + namePart.slice(1) : "";
+  const dateLabel = now.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
+
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-slate-200 bg-white p-6">
-        <div className="grid gap-6 xl:grid-cols-[1fr_340px] xl:items-start">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              Operativo, sin datos ficticios
+      <section className="tz-slide-up relative overflow-hidden rounded-3xl border border-slate-200 bg-white">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-gradient-to-br from-violet-200/40 via-blue-200/30 to-transparent blur-2xl" />
+        <div className="pointer-events-none absolute -left-32 -bottom-32 h-72 w-72 rounded-full bg-gradient-to-tr from-emerald-100/40 via-cyan-100/40 to-transparent blur-3xl" />
+
+        <div className="relative grid gap-8 p-6 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-center">
+          <div className="min-w-0">
+            <div className="mb-5 flex items-center gap-4 sm:gap-5">
+              <div className="flex h-14 items-center">
+                <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={170} height={42} priority />
+              </div>
+              <span className="text-2xl font-light text-slate-300">×</span>
+              <div className="flex items-center gap-3">
+                <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-white ring-1 ring-slate-200 shadow-sm">
+                  <Image src="/logo-san-lucas.png" alt={schoolName} width={40} height={40} />
+                </div>
+                <p className="hidden text-sm font-semibold text-slate-800 sm:block">{schoolName}</p>
+              </div>
             </div>
-          <h1 className="mt-5 max-w-3xl text-3xl font-semibold tracking-tight text-slate-950">Inicio institucional</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            Base lista para empezar a ingresar información real. Los datos se guardan localmente en este navegador hasta conectar Supabase/Auth.
-          </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-          <button onClick={() => onNavigate("triage")} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
-            <Sparkles className="h-4 w-4" /> Abrir Asistente IA
-          </button>
-          <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <Plus className="h-4 w-4" /> Ingresar datos
-          </button>
-        </div>
+
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{dateLabel}</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
+              {greeting}{displayName ? `, ${displayName}` : ""}.
+            </h1>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+              Tu espacio de trabajo en orientación y convivencia. Hoy hay <strong className="text-slate-900">{store.students.length.toLocaleString("es-CL")}</strong> estudiantes activos en <strong className="text-slate-900">{Math.max(officialCourses.length, store.courses.length)}</strong> cursos.
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              <button onClick={() => onNavigate("today")} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
+                <CalendarDays className="h-4 w-4" /> Ver mi día
+              </button>
+              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50">
+                <Sparkles className="h-4 w-4" /> Asistente IA
+              </button>
+              <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                <UserRound className="h-4 w-4" /> Estudiantes
+              </button>
+            </div>
           </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-600">Preparacion de datos</p>
-                <p className="mt-1 text-3xl font-semibold tracking-tight text-slate-950">{readiness}%</p>
-              </div>
-              <div className="grid h-10 w-10 place-items-center rounded-md bg-white text-slate-600 ring-1 ring-slate-200">
-                <BarChart3 className="h-5 w-5" />
-              </div>
-            </div>
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-slate-900" style={{ width: `${readiness}%` }} />
-            </div>
-            <div className="mt-4 grid gap-2 text-sm text-slate-600">
-              <div className="flex justify-between gap-4"><span>Registros reales</span><strong className="text-slate-950">{total}</strong></div>
-              <div className="flex justify-between gap-4"><span>Modulos con datos</span><strong className="text-slate-950">{activeEntities}/{Object.keys(entityConfigs).length}</strong></div>
-              <div className="flex justify-between gap-4"><span>Persistencia</span><strong className="text-slate-950">Local</strong></div>
-            </div>
+
+          <div className="grid w-full grid-cols-2 gap-3 sm:max-w-md lg:w-auto lg:grid-cols-1 lg:gap-2">
+            {([
+              ["Casos abiertos", store.cases.filter((c) => !/cerrad/i.test(c.status || "")).length, "from-amber-500 to-orange-500", "cases" as ViewId, FileText],
+              ["Entrevistas próximas", store.interviews.filter((r) => r.date && r.date >= now.toISOString().slice(0, 10)).length, "from-sky-500 to-blue-600", "interviews" as ViewId, MessageSquareText],
+              ["Protocolos activos", store.protocols.filter((r) => !/cerrad/i.test(r.status || "")).length, "from-rose-500 to-pink-600", "protocols" as ViewId, ShieldCheck],
+              ["Bitácoras totales", store.logs.length, "from-violet-500 to-purple-600", "logs" as ViewId, ClipboardList],
+            ] as Array<[string, number, string, ViewId, LucideIcon]>).map(([label, value, tone, view, Icon]) => (
+              <button
+                key={label}
+                onClick={() => onNavigate(view)}
+                className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-left shadow-sm backdrop-blur transition hover:border-slate-300 hover:shadow-md lg:w-56"
+              >
+                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${tone} text-white shadow-sm`}>
+                  <Icon className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+                  <p className="text-xl font-semibold tabular-nums text-slate-950">{value.toLocaleString("es-CL")}</p>
+                </div>
+                <ChevronDown className="-rotate-90 h-4 w-4 text-slate-300 transition group-hover:text-slate-500" />
+              </button>
+            ))}
           </div>
         </div>
       </section>
@@ -4757,7 +4786,7 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
-    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
+    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} />;
     if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
