@@ -480,7 +480,9 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "topic", label: "Tema / clase", required: true, aliases: ["tema", "clase", "sesion", "actividad"] },
       { key: "axis", label: "Eje", aliases: ["eje", "unidad", "area"] },
       { key: "status", label: "Estado", type: "select", options: ["Planificada", "Realizada", "Pendiente", "Reprogramada"], aliases: ["estado", "status"] },
+      { key: "canvaLink", label: "Enlace Canva", aliases: ["canva", "link canva", "presentacion", "diapositivas"] },
       { key: "evidence", label: "Evidencia / enlace", aliases: ["evidencia", "link", "enlace", "url"] },
+      { key: "planificacion", label: "Planificación", type: "textarea", aliases: ["planificacion", "plan", "objetivos", "actividades"] },
       { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "descripcion"] },
     ],
   },
@@ -1254,68 +1256,446 @@ function CourseWorkspaceView({
 
 function OrientationCycleView({
   store,
-  onAddClass,
+  onAddOrientationRecord,
+  onUpdateOrientationRecord,
+  onDeleteOrientationRecord,
+  onOpenStudent,
 }: {
   store: DataStore;
-  onAddClass: () => void;
+  onAddOrientationRecord: (record: DataRecord) => void;
+  onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
+  onDeleteOrientationRecord: (recordId: string) => void;
+  onOpenStudent: (studentId: string) => void;
 }) {
+  const [selectedOwner, setSelectedOwner] = useState(orientationOwners[0].name);
+  const [innerTab, setInnerTab] = useState<"clases" | "nomina" | "cursos">("clases");
+  const [filterCourse, setFilterCourse] = useState<string>("all");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [expandedClassId, setExpandedClassId] = useState<string>("");
+  const [newClassOpen, setNewClassOpen] = useState(false);
+  const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
+
+  const owner = orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0];
+  const today = new Date().toISOString().slice(0, 10);
+
+  const ownerClasses = store.orientation.filter((record) =>
+    normalize(record.orientationOwner || "") === normalize(owner.name) ||
+    owner.courses.some((course) => normalize(record.course || "") === normalize(course))
+  );
+
+  const filteredClasses = ownerClasses.filter((record) => {
+    if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
+    if (filterStatus !== "all" && (record.status || "") !== filterStatus) return false;
+    return true;
+  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+
+  const ownerStudents = store.students.filter((student) => owner.courses.includes(student.course || ""));
+  const studentsByCourse = owner.courses.map((course) => ({
+    course,
+    students: ownerStudents
+      .filter((student) => student.course === course)
+      .sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "es")),
+  }));
+
+  const classCounts = {
+    realizadas: ownerClasses.filter((r) => r.status === "Realizada").length,
+    planificadas: ownerClasses.filter((r) => r.status === "Planificada").length,
+    pendientes: ownerClasses.filter((r) => r.status === "Pendiente" || !r.status).length,
+  };
+
+  const openNewClass = () => {
+    setNewClassOpen(true);
+    setNewClassForm({
+      date: today,
+      course: owner.courses[0] || "",
+      orientationOwner: owner.name,
+      topic: "",
+      axis: "",
+      status: "Planificada",
+      canvaLink: "",
+      planificacion: "",
+      notes: "",
+    });
+  };
+
+  const saveNewClass = () => {
+    if (!newClassForm.topic?.trim() || !newClassForm.course?.trim()) return;
+    onAddOrientationRecord({
+      id: uid(),
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      ...newClassForm,
+    });
+    setNewClassOpen(false);
+    setNewClassForm({});
+  };
+
+  const exportOwnerClasses = () => {
+    const headers = ["Fecha", "Curso", "Tema", "Eje", "Estado", "Enlace Canva", "Planificación", "Observaciones"];
+    const rows = filteredClasses.map((record) => [
+      record.date || "",
+      record.course || "",
+      record.topic || "",
+      record.axis || "",
+      record.status || "",
+      record.canvaLink || record.evidence || "",
+      (record.planificacion || "").replace(/\n/g, " "),
+      (record.notes || "").replace(/\n/g, " "),
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => (/[",;\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(","))
+      .join("\n");
+    downloadText(`orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.csv`, csv, "text/csv;charset=utf-8");
+  };
+
+  const statusTone = (status: string) =>
+    status === "Realizada" ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+      : status === "Planificada" ? "bg-blue-100 text-blue-700 ring-blue-200"
+      : status === "Reprogramada" ? "bg-amber-100 text-amber-700 ring-amber-200"
+      : "bg-slate-100 text-slate-600 ring-slate-200";
+
   return (
-    <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className="tz-fade">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Orientación por ciclo</h1>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Orientación</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Clases y seguimiento por orientador responsable, usando la distribución real de cursos del colegio.
+            Workspace por orientador/a: clases con link Canva y planificación, nómina de estudiantes y cursos a cargo.
           </p>
         </div>
-        <button onClick={onAddClass} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
-          <Plus className="h-4 w-4" /> Agregar clase
-        </button>
+        <div className="flex gap-2">
+          <button onClick={exportOwnerClasses} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowDownToLine className="h-4 w-4" /> Exportar CSV
+          </button>
+          <button onClick={openNewClass} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800">
+            <Plus className="h-4 w-4" /> Nueva clase
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        {orientationOwners.map((owner) => {
-          const classes = store.orientation.filter((record) =>
-            normalize(record.orientationOwner || "") === normalize(owner.name) || owner.courses.some((course) => normalize(record.course || "") === normalize(course))
+      <div className="mb-5 grid gap-3 md:grid-cols-3">
+        {orientationOwners.map((item) => {
+          const active = item.name === selectedOwner;
+          const itemClasses = store.orientation.filter((record) =>
+            normalize(record.orientationOwner || "") === normalize(item.name) ||
+            item.courses.some((course) => normalize(record.course || "") === normalize(course))
           );
           return (
-            <section key={owner.email} className="rounded-lg border border-slate-200 bg-white p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-950">{owner.name}</h2>
-                  <p className="mt-1 text-sm text-slate-600">{owner.role}</p>
-                  <p className="mt-2 text-sm text-slate-600">
-                    Coord. convivencia: <strong className="text-slate-950">{owner.convivenciaCoordinator}</strong>
-                  </p>
+            <button
+              key={item.email}
+              onClick={() => { setSelectedOwner(item.name); setFilterCourse("all"); setExpandedClassId(""); }}
+              className={`tz-card relative overflow-hidden rounded-2xl border p-4 text-left ${
+                active ? "border-slate-900 bg-slate-900 text-white shadow-lg" : "border-slate-200 bg-white"
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-base font-bold shadow-sm ${
+                  active ? "bg-white/15 text-white" : `bg-gradient-to-br ${avatarTone(item.name)} text-white`
+                }`}>
+                  {initialsOf(item.name)}
                 </div>
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{owner.cycle}</span>
-              </div>
-              <div className="mt-5">
-                <p className="text-xs font-semibold uppercase text-slate-500">Cursos a cargo</p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {owner.courses.map((course) => <span key={course} className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{course}</span>)}
-                </div>
-              </div>
-              <div className="mt-5 border-t border-slate-100 pt-5">
-                <div className="mb-3 flex items-center justify-between">
-                  <h3 className="font-semibold text-slate-950">Clases registradas</h3>
-                  <span className="text-sm font-semibold text-slate-600">{classes.length}</span>
-                </div>
-                <div className="space-y-3">
-                  {classes.length === 0 ? (
-                    <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-600">Aún no hay clases ingresadas para este ciclo.</p>
-                  ) : classes.slice(0, 6).map((record) => (
-                    <article key={record.id} className="rounded-md border border-slate-200 p-3 text-sm">
-                      <strong className="block text-slate-950">{record.topic || "Clase sin tema"}</strong>
-                      <span className="text-slate-600">{record.course} · {record.status || "Sin estado"}</span>
-                    </article>
-                  ))}
+                <div className="min-w-0 flex-1">
+                  <p className={`text-[10px] font-semibold uppercase tracking-wider ${active ? "text-white/70" : "text-slate-500"}`}>{item.cycle}</p>
+                  <h3 className={`truncate text-sm font-semibold ${active ? "text-white" : "text-slate-950"}`}>{item.name}</h3>
+                  <p className={`mt-0.5 truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{item.role}</p>
                 </div>
               </div>
-            </section>
+              <div className={`mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold ${active ? "text-white/90" : "text-slate-700"}`}>
+                <div className={`rounded-lg px-2 py-1 ${active ? "bg-white/15" : "bg-slate-50"}`}>
+                  <strong className="block text-base">{item.courses.length}</strong>
+                  <span className={active ? "opacity-80" : "text-slate-500"}>cursos</span>
+                </div>
+                <div className={`rounded-lg px-2 py-1 ${active ? "bg-white/15" : "bg-slate-50"}`}>
+                  <strong className="block text-base">{itemClasses.length}</strong>
+                  <span className={active ? "opacity-80" : "text-slate-500"}>clases</span>
+                </div>
+                <div className={`rounded-lg px-2 py-1 ${active ? "bg-white/15" : "bg-slate-50"}`}>
+                  <strong className="block text-base">{store.students.filter((s) => item.courses.includes(s.course || "")).length}</strong>
+                  <span className={active ? "opacity-80" : "text-slate-500"}>estudiantes</span>
+                </div>
+              </div>
+            </button>
           );
         })}
       </div>
+
+      <section className="tz-slide-up overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className={`bg-gradient-to-br ${avatarTone(owner.name)} px-6 py-5 text-white sm:px-8`}>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-wider text-white/85">{owner.role}</p>
+              <h2 className="mt-1 text-2xl font-semibold sm:text-3xl">{owner.name}</h2>
+              <p className="mt-1 text-sm text-white/90">{owner.email} · Coord. convivencia: <strong>{owner.convivenciaCoordinator}</strong></p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+              {[
+                ["Realizadas", classCounts.realizadas],
+                ["Planificadas", classCounts.planificadas],
+                ["Pendientes", classCounts.pendientes],
+              ].map(([label, count]) => (
+                <div key={String(label)} className="rounded-lg bg-white/15 px-3 py-2 backdrop-blur">
+                  <div className="text-xl font-bold leading-none">{count}</div>
+                  <div className="mt-1 opacity-85">{label}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <nav className="flex gap-1 border-b border-slate-200 bg-white px-2 sm:px-6">
+          {([
+            ["clases", "Clases", ClipboardList],
+            ["nomina", "Nómina", UsersRound],
+            ["cursos", "Cursos a cargo", BookOpen],
+          ] as Array<[typeof innerTab, string, LucideIcon]>).map(([id, label, Icon]) => (
+            <button
+              key={id}
+              onClick={() => setInnerTab(id)}
+              className={`relative inline-flex items-center gap-2 px-3 py-3 text-sm font-semibold transition ${innerTab === id ? "text-blue-700" : "text-slate-500 hover:text-slate-900"}`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+              <span className={`absolute inset-x-3 bottom-0 h-0.5 rounded-full transition-all ${innerTab === id ? "bg-blue-600" : "bg-transparent"}`} />
+            </button>
+          ))}
+        </nav>
+
+        <div className="p-5 sm:p-6">
+          {innerTab === "clases" ? (
+            <>
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <select value={filterCourse} onChange={(event) => setFilterCourse(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
+                  <option value="all">Todos los cursos</option>
+                  {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
+                </select>
+                <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
+                  <option value="all">Todos los estados</option>
+                  {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+                <span className="ml-auto text-xs font-semibold text-slate-500">{filteredClasses.length} clase{filteredClasses.length === 1 ? "" : "s"}</span>
+              </div>
+
+              {newClassOpen ? (
+                <div className="tz-slide-up mb-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="font-semibold text-slate-950">Nueva clase de orientación</h4>
+                    <button onClick={() => { setNewClassOpen(false); setNewClassForm({}); }} className="rounded-md p-1.5 text-slate-500 hover:bg-white">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Fecha</span>
+                      <input type="date" value={newClassForm.date || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, date: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Curso *</span>
+                      <select value={newClassForm.course || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, course: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                        <option value="">Seleccionar</option>
+                        {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Estado</span>
+                      <select value={newClassForm.status || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, status: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                        {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs font-semibold text-slate-700">Tema / nombre de la clase *</span>
+                      <input value={newClassForm.topic || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, topic: event.target.value }))} placeholder="Ej.: Autoconcepto y autoestima" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Eje</span>
+                      <input value={newClassForm.axis || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, axis: event.target.value }))} placeholder="Ej.: Crecimiento personal" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block sm:col-span-2 lg:col-span-3">
+                      <span className="text-xs font-semibold text-slate-700">Enlace Canva</span>
+                      <input value={newClassForm.canvaLink || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, canvaLink: event.target.value }))} placeholder="https://www.canva.com/design/..." className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block sm:col-span-2 lg:col-span-3">
+                      <span className="text-xs font-semibold text-slate-700">Planificación</span>
+                      <textarea value={newClassForm.planificacion || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, planificacion: event.target.value }))} placeholder="Objetivos, actividades, recursos, evaluación..." className="mt-1 min-h-24 w-full resize-y rounded-md border border-slate-200 bg-white p-2.5 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                  </div>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <button onClick={() => { setNewClassOpen(false); setNewClassForm({}); }} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                    <button onClick={saveNewClass} disabled={!newClassForm.topic?.trim() || !newClassForm.course?.trim()} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
+                      <Save className="h-4 w-4" /> Guardar clase
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              {filteredClasses.length === 0 ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center">
+                  <ClipboardList className="mx-auto h-8 w-8 text-slate-400" />
+                  <p className="mt-3 text-sm text-slate-600">No hay clases registradas con esos filtros.</p>
+                  <button onClick={openNewClass} className="mt-4 inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                    <Plus className="h-4 w-4" /> Crear la primera clase
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {filteredClasses.map((record) => {
+                    const expanded = expandedClassId === record.id;
+                    const canvaUrl = record.canvaLink || record.evidence || "";
+                    return (
+                      <article key={record.id} className={`tz-card rounded-xl border bg-white transition ${expanded ? "border-blue-300 shadow-md" : "border-slate-200"}`}>
+                        <button
+                          onClick={() => setExpandedClassId(expanded ? "" : record.id)}
+                          className="flex w-full items-center gap-3 px-4 py-3 text-left"
+                        >
+                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-bold text-slate-700">
+                            {record.date ? new Date(record.date).getDate() : "—"}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-slate-950">{record.topic || "Clase sin tema"}</p>
+                            <p className="truncate text-xs text-slate-500">{record.course || "Sin curso"} · {record.axis || "Sin eje"}</p>
+                          </div>
+                          <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ring-1 ${statusTone(record.status || "")}`}>
+                            {record.status || "Pendiente"}
+                          </span>
+                          {canvaUrl ? (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(event) => { event.stopPropagation(); window.open(canvaUrl, "_blank", "noopener,noreferrer"); }}
+                              className="hidden cursor-pointer items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100 sm:inline-flex"
+                            >
+                              Canva ↗
+                            </span>
+                          ) : null}
+                          <ChevronDown className={`h-4 w-4 text-slate-400 transition ${expanded ? "rotate-180" : ""}`} />
+                        </button>
+
+                        {expanded ? (
+                          <div className="tz-fade border-t border-slate-100 p-4">
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Fecha</span>
+                                <input type="date" value={record.date || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Curso</span>
+                                <select value={record.course || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { course: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                                  {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
+                                </select>
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Estado</span>
+                                <select value={record.status || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { status: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                                  {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
+                                </select>
+                              </label>
+                              <label className="block sm:col-span-2">
+                                <span className="text-xs font-semibold text-slate-700">Tema / nombre de la clase</span>
+                                <input value={record.topic || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Eje</span>
+                                <input value={record.axis || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                              </label>
+                              <label className="block sm:col-span-2 lg:col-span-3">
+                                <span className="flex items-center gap-2 text-xs font-semibold text-violet-700">
+                                  Enlace Canva
+                                  {canvaUrl ? (
+                                    <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="ml-auto text-[10px] font-semibold text-violet-600 hover:underline">Abrir ↗</a>
+                                  ) : null}
+                                </span>
+                                <input value={record.canvaLink || record.evidence || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { canvaLink: event.target.value })} placeholder="https://www.canva.com/design/..." className="mt-1 w-full rounded-md border border-violet-200 bg-violet-50/40 px-2.5 py-2 text-sm outline-none focus:border-violet-500" />
+                              </label>
+                              <label className="block sm:col-span-2 lg:col-span-3">
+                                <span className="text-xs font-semibold text-slate-700">Planificación</span>
+                                <textarea value={record.planificacion || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { planificacion: event.target.value })} placeholder="Objetivos de aprendizaje, actividades, recursos, evaluación..." className="mt-1 min-h-28 w-full resize-y rounded-md border border-slate-200 bg-white p-2.5 text-sm leading-6 outline-none focus:border-blue-500" />
+                              </label>
+                              <label className="block sm:col-span-2 lg:col-span-3">
+                                <span className="text-xs font-semibold text-slate-700">Observaciones</span>
+                                <textarea value={record.notes || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { notes: event.target.value })} className="mt-1 min-h-20 w-full resize-y rounded-md border border-slate-200 bg-white p-2.5 text-sm outline-none focus:border-blue-500" />
+                              </label>
+                            </div>
+                            <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                              <p className="text-[11px] text-slate-400">Actualizado {new Date(record.updatedAt).toLocaleString("es-CL")}</p>
+                              <div className="flex gap-2">
+                                {canvaUrl ? (
+                                  <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100">
+                                    Abrir en Canva ↗
+                                  </a>
+                                ) : null}
+                                <button onClick={() => { if (window.confirm("¿Eliminar esta clase?")) onDeleteOrientationRecord(record.id); }} className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">
+                                  <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          ) : null}
+
+          {innerTab === "nomina" ? (
+            <div className="space-y-5">
+              {studentsByCourse.every((group) => group.students.length === 0) ? (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-10 text-center text-sm text-slate-500">
+                  No hay estudiantes en los cursos de {owner.name.split(" ")[0]} todavía.
+                </div>
+              ) : studentsByCourse.map((group) => group.students.length === 0 ? null : (
+                <section key={group.course} className="overflow-hidden rounded-xl border border-slate-200">
+                  <header className="flex items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-br from-slate-50 to-white px-4 py-3">
+                    <h3 className="text-sm font-semibold text-slate-950">{group.course}</h3>
+                    <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-semibold text-white tabular-nums">{group.students.length}</span>
+                  </header>
+                  <ol className="divide-y divide-slate-100">
+                    {group.students.map((student, index) => (
+                      <li key={student.id}>
+                        <button
+                          onClick={() => onOpenStudent(student.id)}
+                          className="group flex w-full items-center gap-3 px-4 py-2.5 text-left hover:bg-blue-50/50"
+                        >
+                          <span className="w-6 shrink-0 text-right text-[11px] font-semibold text-slate-400 tabular-nums">{index + 1}</span>
+                          <div className={`grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[10px] font-bold text-white`}>
+                            {student.profilePhoto ? (
+                              <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
+                            ) : (
+                              initialsOf(student.fullName)
+                            )}
+                          </div>
+                          <span className="flex-1 truncate text-sm font-semibold text-slate-900 group-hover:text-blue-700">{student.fullName || "Sin nombre"}</span>
+                          <span className="hidden text-[11px] text-slate-500 sm:inline">{student.rut || ""}</span>
+                          {student.healthAlerts ? <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700" title={student.healthAlerts}>⚠</span> : null}
+                          <ChevronDown className="-rotate-90 h-3.5 w-3.5 text-slate-300 group-hover:text-blue-500" />
+                        </button>
+                      </li>
+                    ))}
+                  </ol>
+                </section>
+              ))}
+            </div>
+          ) : null}
+
+          {innerTab === "cursos" ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {owner.courses.map((course) => {
+                const count = store.students.filter((s) => s.course === course).length;
+                const classes = ownerClasses.filter((rec) => rec.course === course).length;
+                return (
+                  <article key={course} className="tz-card rounded-xl border border-slate-200 bg-white p-4">
+                    <div className={`mb-3 grid h-10 w-10 place-items-center rounded-lg bg-gradient-to-br ${avatarTone(course)} text-xs font-bold text-white shadow-sm`}>
+                      {course.split(" ").slice(0, 2).map((part) => part[0] || "").join("").toUpperCase()}
+                    </div>
+                    <h4 className="text-sm font-semibold text-slate-950">{course}</h4>
+                    <p className="mt-1 text-xs text-slate-500">{count} estudiantes · {classes} clases</p>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+        </div>
+      </section>
     </div>
   );
 }
@@ -3350,6 +3730,28 @@ export default function TizaEducationApp() {
     setToast("Ficha del estudiante actualizada");
   };
 
+  const updateOrientationRecord = (recordId: string, updates: Record<string, string>) => {
+    setStore((current) => ({
+      ...current,
+      orientation: current.orientation.map((record) =>
+        record.id === recordId ? { ...record, ...updates, updatedAt: nowIso() } : record
+      ),
+    }));
+  };
+
+  const addOrientationRecord = (record: DataRecord) => {
+    setStore((current) => ({ ...current, orientation: [record, ...current.orientation] }));
+    setToast("Clase de orientación guardada");
+  };
+
+  const deleteOrientationRecord = (recordId: string) => {
+    setStore((current) => ({
+      ...current,
+      orientation: current.orientation.filter((record) => record.id !== recordId),
+    }));
+    setToast("Clase eliminada");
+  };
+
   const importText = (text: string, fileName = "tabla pegada") => {
     const parsedCsv = parseCsv(text);
     const sheet = { fileName, ...parsedCsv };
@@ -3425,7 +3827,15 @@ export default function TizaEducationApp() {
       );
     }
     if (activeView === "orientation") {
-      return <OrientationCycleView store={store} onAddClass={() => setDialogEntity("orientation")} />;
+      return (
+        <OrientationCycleView
+          store={store}
+          onAddOrientationRecord={addOrientationRecord}
+          onUpdateOrientationRecord={updateOrientationRecord}
+          onDeleteOrientationRecord={deleteOrientationRecord}
+          onOpenStudent={openStudent}
+        />
+      );
     }
     if (activeView === "import") {
       return (
