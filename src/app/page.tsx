@@ -529,7 +529,6 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "workshops", label: "Talleres", icon: GraduationCap },
   { id: "documents", label: "Documentos", icon: FolderOpen },
   { id: "team", label: "Equipo", icon: UsersRound },
-  { id: "settings", label: "Configuración", icon: Settings },
 ];
 
 const emptyStore = (): DataStore => ({
@@ -709,17 +708,29 @@ function Sidebar({ activeView, onNavigate, schoolName }: { activeView: ViewId; o
             );
           })}
         </nav>
-        <div className="m-3 rounded-xl border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-3">
+        <button
+          onClick={() => onNavigate("settings")}
+          className={`tz-press group relative m-3 overflow-hidden rounded-2xl border p-3 text-left transition ${
+            activeView === "settings"
+              ? "border-slate-900 bg-slate-900 text-white shadow-lg"
+              : "border-slate-200 bg-gradient-to-br from-white to-slate-50 hover:border-slate-300 hover:shadow-md"
+          }`}
+        >
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-lg bg-white ring-1 ring-slate-200">
-              <Building2 className="h-4 w-4 text-slate-600" />
+            <div className={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl shadow-sm ${
+              activeView === "settings" ? "bg-white/15 ring-1 ring-white/30" : "bg-gradient-to-br from-slate-800 to-slate-600 ring-1 ring-slate-900/10"
+            }`}>
+              <Settings className={`h-5 w-5 ${activeView === "settings" ? "text-white" : "text-white"} transition group-hover:rotate-90`} />
+              <span className="absolute -right-2 -top-2 h-3 w-3 rounded-full bg-emerald-400 opacity-80 ring-2 ring-white" />
             </div>
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-slate-800">Institución activa</p>
-              <p className="truncate text-[11px] text-slate-500">Configurable en ajustes</p>
+            <div className="min-w-0 flex-1">
+              <p className={`text-[10px] font-semibold uppercase tracking-wider ${activeView === "settings" ? "text-white/70" : "text-slate-500"}`}>Ajustes</p>
+              <p className={`truncate text-sm font-semibold ${activeView === "settings" ? "text-white" : "text-slate-900"}`}>{schoolName}</p>
             </div>
+            <ChevronDown className={`h-4 w-4 -rotate-90 transition group-hover:translate-x-0.5 ${activeView === "settings" ? "text-white/70" : "text-slate-400"}`} />
           </div>
-        </div>
+          <span className="pointer-events-none absolute -bottom-8 -right-8 h-20 w-20 rounded-full bg-slate-100/0 group-hover:bg-slate-100/40 transition" />
+        </button>
       </div>
     </aside>
   );
