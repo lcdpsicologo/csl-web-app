@@ -141,6 +141,19 @@ const RESPONSE_SCHEMA = {
 };
 
 export async function POST(request: Request) {
+  try {
+    return await handle(request);
+  } catch (error) {
+    console.error("Triage route crashed", error);
+    const message = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(
+      { error: `Error interno: ${message}` },
+      { status: 500 },
+    );
+  }
+}
+
+async function handle(request: Request) {
   if (!GEMINI_KEY) {
     return NextResponse.json(
       { error: "GEMINI_API_KEY no está configurada. Agrega la variable en Vercel (Settings → Environment Variables). Obtené una key gratis en https://aistudio.google.com/app/apikey" },

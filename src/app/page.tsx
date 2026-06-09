@@ -3662,14 +3662,30 @@ function TriageView({
         },
         body: JSON.stringify({ emailText: text, students, today: new Date().toISOString().slice(0, 10) }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Error de IA");
-      setResult(data.result);
+      let data: { ok?: boolean; error?: unknown; result?: TriageResponse } = {};
+      try {
+        data = await res.json();
+      } catch {
+        const fallbackText = await res.text().catch(() => "");
+        throw new Error(`Respuesta no válida del servidor (${res.status}). ${fallbackText.slice(0, 200)}`);
+      }
+      if (!res.ok || !data.ok) {
+        const errField = data.error;
+        let msg: string;
+        if (typeof errField === "string") msg = errField;
+        else if (errField && typeof errField === "object") {
+          const obj = errField as { message?: string; code?: string };
+          msg = obj.message || obj.code || JSON.stringify(errField);
+        } else msg = `Error ${res.status}`;
+        throw new Error(msg);
+      }
+      setResult(data.result || null);
       const initial: Record<number, boolean> = {};
       (data.result?.records || []).forEach((_: TriageRecord, idx: number) => { initial[idx] = true; });
       setAccepted(initial);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error inesperado");
+      const msg = err instanceof Error ? err.message : String(err);
+      setError(msg || "Error inesperado");
     } finally {
       setLoading(false);
     }
