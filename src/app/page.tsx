@@ -326,6 +326,33 @@ const parseClassroomTeam = (value: string | undefined): ClassroomTeamMember[] =>
   }
 };
 
+type CaseIntervention = {
+  id: string;
+  date: string;
+  action: string;
+  by: string;
+  outcome: string;
+};
+
+const parseInterventions = (value: string | undefined): CaseIntervention[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((i) => i && typeof i.action === "string")
+      .map((i) => ({
+        id: i.id || uid(),
+        date: i.date || "",
+        action: i.action || "",
+        by: i.by || "",
+        outcome: i.outcome || "",
+      }));
+  } catch {
+    return [];
+  }
+};
+
 const parseGenogram = (value: string | undefined): GenogramMember[] => {
   if (!value) return [];
   try {
@@ -1011,6 +1038,26 @@ function CourseWorkspaceView({
     onUpdateCourse(current.name, { classroomTeam: JSON.stringify(nextTeam) });
   };
 
+  const [showPjPanel, setShowPjPanel] = useState(false);
+  const pjList = courses
+    .map((c) => {
+      const team = parseClassroomTeam(c.record.classroomTeam);
+      const pj = team.find((m) => normalize(m.role || "").includes("profesor a jefe") || normalize(m.role || "") === "profesor jefe");
+      return pj ? { courseName: c.name, cycle: c.cycle, name: pj.name, email: pj.email || "", role: pj.role } : null;
+    })
+    .filter((x): x is { courseName: string; cycle: CourseDef["cycle"]; name: string; email: string; role: string } => x !== null);
+  const pjWithEmail = pjList.filter((p) => p.email && p.email.includes("@"));
+  const [copyState, setCopyState] = useState<"" | "all" | string>("");
+  const copyToClipboard = async (text: string, key: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyState(key);
+      window.setTimeout(() => setCopyState(""), 1500);
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="tz-fade">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
@@ -1020,15 +1067,90 @@ function CourseWorkspaceView({
             Cada curso tiene su propio tablero: equipo de aula, simulación de sala, casos, orientación y documentos.
           </p>
         </div>
-        <button
-          onClick={onSeedCourses}
-          disabled={missingOfficialCourses === 0}
-          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
-        >
-          <Save className="h-4 w-4" />
-          {missingOfficialCourses === 0 ? "Cursos oficiales guardados" : `Guardar ${missingOfficialCourses} cursos oficiales`}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setShowPjPanel((value) => !value)}
+            className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <UsersRound className="h-4 w-4" /> {showPjPanel ? "Ocultar PJ" : `Ver Profesores Jefe (${pjList.length})`}
+          </button>
+          <button
+            onClick={onSeedCourses}
+            disabled={missingOfficialCourses === 0}
+            className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+          >
+            <Save className="h-4 w-4" />
+            {missingOfficialCourses === 0 ? "Cursos oficiales guardados" : `Guardar ${missingOfficialCourses} cursos oficiales`}
+          </button>
+        </div>
       </div>
+
+      {showPjPanel ? (
+        <section className="tz-slide-up mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-5 py-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">Profesores Jefe</h2>
+              <p className="text-xs text-slate-500">{pjList.length} cursos con PJ asignado · {pjWithEmail.length} con correo</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => copyToClipboard(pjWithEmail.map((p) => p.email).join(", "), "all")}
+                disabled={pjWithEmail.length === 0}
+                className="tz-press inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-blue-600 to-sky-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50"
+              >
+                <Mail className="h-4 w-4" /> {copyState === "all" ? "✓ Copiados" : `Copiar ${pjWithEmail.length} correos`}
+              </button>
+              <button
+                onClick={() => copyToClipboard(pjWithEmail.map((p) => p.email).join(";"), "all-semi")}
+                disabled={pjWithEmail.length === 0}
+                title="Separados por ; (para Outlook/Gmail clásico)"
+                className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {copyState === "all-semi" ? "✓ Copiados" : "Copiar con ;"}
+              </button>
+            </div>
+          </div>
+          {pjList.length === 0 ? (
+            <p className="p-6 text-center text-sm text-slate-500">Aún no hay profesores jefe registrados en ningún curso. Agrégalos desde el equipo de aula de cada curso.</p>
+          ) : (
+            <div className="max-h-[60vh] overflow-y-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
+                  <tr>
+                    <th className="px-5 py-2 font-semibold">Curso</th>
+                    <th className="px-5 py-2 font-semibold">Profesor/a Jefe</th>
+                    <th className="px-5 py-2 font-semibold">Correo</th>
+                    <th className="px-5 py-2" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {pjList.map((p) => (
+                    <tr key={p.courseName} className="hover:bg-blue-50/40">
+                      <td className="px-5 py-2">
+                        <button onClick={() => { setSelectedCourse(p.courseName); setShowPjPanel(false); }} className="text-left font-semibold text-slate-900 hover:text-blue-700">
+                          {p.courseName}
+                        </button>
+                        <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{p.cycle}</span>
+                      </td>
+                      <td className="px-5 py-2 text-slate-800">{p.name}</td>
+                      <td className="px-5 py-2">
+                        {p.email ? <a href={`mailto:${p.email}`} className="text-blue-700 hover:underline">{p.email}</a> : <span className="text-slate-400">—</span>}
+                      </td>
+                      <td className="px-5 py-2 text-right">
+                        {p.email ? (
+                          <button onClick={() => copyToClipboard(p.email, p.courseName)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">
+                            {copyState === p.courseName ? "✓" : "Copiar"}
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {([
@@ -1919,22 +2041,180 @@ function LinkedRecordList({ title, records, emptyText }: { title: string; record
 
 type QuickAddKind = "cases" | "interviews" | "logs" | "documents" | "protocols";
 
+function CaseWithInterventions({
+  caseRecord,
+  onUpdateCase,
+  currentUserName,
+}: {
+  caseRecord: DataRecord;
+  onUpdateCase: (caseId: string, updates: Record<string, string>) => void;
+  currentUserName: string;
+}) {
+  const interventions = parseInterventions(caseRecord.interventions);
+  const [expanded, setExpanded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({ date: today, action: "", by: currentUserName, outcome: "" });
+
+  const latest = interventions.length > 0 ? interventions[interventions.length - 1] : null;
+  const status = caseRecord.status || "";
+  const priority = caseRecord.priority || "";
+
+  const statusTone = /cerrad/i.test(status)
+    ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+    : /seguimiento/i.test(status)
+      ? "bg-blue-100 text-blue-700 ring-blue-200"
+      : /derivad/i.test(status)
+        ? "bg-violet-100 text-violet-700 ring-violet-200"
+        : /abierto|activ/i.test(status)
+          ? "bg-amber-100 text-amber-700 ring-amber-200"
+          : "bg-slate-100 text-slate-600 ring-slate-200";
+
+  const priorityTone = /critic/i.test(priority)
+    ? "bg-rose-100 text-rose-700 ring-rose-200"
+    : /alta/i.test(priority)
+      ? "bg-amber-100 text-amber-700 ring-amber-200"
+      : /media/i.test(priority)
+        ? "bg-blue-100 text-blue-700 ring-blue-200"
+        : /baja/i.test(priority)
+          ? "bg-slate-100 text-slate-600 ring-slate-200"
+          : "";
+
+  const saveIntervention = () => {
+    if (!form.action.trim()) return;
+    const next: CaseIntervention[] = [
+      ...interventions,
+      { id: uid(), date: form.date || today, action: form.action.trim(), by: form.by.trim(), outcome: form.outcome.trim() },
+    ];
+    onUpdateCase(caseRecord.id, { interventions: JSON.stringify(next) });
+    setForm({ date: today, action: "", by: currentUserName, outcome: "" });
+    setAdding(false);
+    setExpanded(true);
+  };
+
+  const removeIntervention = (id: string) => {
+    const next = interventions.filter((i) => i.id !== id);
+    onUpdateCase(caseRecord.id, { interventions: JSON.stringify(next) });
+  };
+
+  return (
+    <article className="tz-card rounded-xl border border-slate-200 bg-white p-4">
+      <header className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {status ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${statusTone}`}>{status}</span> : null}
+            {priority ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${priorityTone}`}>{priority}</span> : null}
+            {caseRecord.category ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{caseRecord.category}</span> : null}
+          </div>
+          <h4 className="mt-1 text-sm font-semibold text-slate-950">{caseRecord.title || "Caso"}</h4>
+          {caseRecord.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{caseRecord.description}</p> : null}
+        </div>
+        <select
+          value={status}
+          onChange={(event) => onUpdateCase(caseRecord.id, { status: event.target.value })}
+          className="shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs outline-none focus:border-blue-500"
+        >
+          <option value="">Sin estado</option>
+          <option>Abierto</option>
+          <option>En seguimiento</option>
+          <option>Derivado</option>
+          <option>Cerrado</option>
+        </select>
+      </header>
+
+      <div className="mt-3 rounded-lg bg-slate-50 p-2.5 text-xs">
+        {latest ? (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Última intervención · {latest.date}{latest.by ? ` · ${latest.by}` : ""}</p>
+            <p className="mt-0.5 text-slate-800">{latest.action}</p>
+            {latest.outcome ? <p className="mt-0.5 italic text-slate-600">→ {latest.outcome}</p> : null}
+          </div>
+        ) : (
+          <p className="text-center text-slate-500">Sin intervenciones registradas aún.</p>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          disabled={interventions.length === 0}
+          className="text-[11px] font-semibold text-blue-600 hover:underline disabled:cursor-default disabled:text-slate-400 disabled:no-underline"
+        >
+          {interventions.length === 0
+            ? "Sin historial"
+            : expanded
+              ? "Ocultar historial"
+              : `Ver ${interventions.length} intervención${interventions.length === 1 ? "" : "es"}`}
+        </button>
+        <button
+          onClick={() => { setAdding(true); setExpanded(true); }}
+          className="tz-press inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800"
+        >
+          <Plus className="h-3 w-3" /> Agregar intervención
+        </button>
+      </div>
+
+      {expanded ? (
+        <div className="tz-slide-up mt-3 space-y-2 border-t border-slate-100 pt-3">
+          {adding ? (
+            <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
+              <div className="grid gap-2 sm:grid-cols-[120px_1fr_140px]">
+                <input type="date" value={form.date} onChange={(event) => setForm((f) => ({ ...f, date: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
+                <input value={form.action} onChange={(event) => setForm((f) => ({ ...f, action: event.target.value }))} placeholder="Acción / intervención (ej.: Entrevista con apoderada, derivación a psicología…)" className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
+                <input value={form.by} onChange={(event) => setForm((f) => ({ ...f, by: event.target.value }))} placeholder="Responsable" className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
+              </div>
+              <input value={form.outcome} onChange={(event) => setForm((f) => ({ ...f, outcome: event.target.value }))} placeholder="Resultado o acuerdos (opcional)" className="mt-2 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
+              <div className="mt-2 flex justify-end gap-2">
+                <button onClick={() => { setAdding(false); setForm({ date: today, action: "", by: currentUserName, outcome: "" }); }} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                <button onClick={saveIntervention} disabled={!form.action.trim()} className="rounded-md bg-blue-600 px-2 py-1 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50">Guardar</button>
+              </div>
+            </div>
+          ) : null}
+          {interventions.length > 0 ? (
+            <ol className="space-y-1.5">
+              {[...interventions].reverse().map((iv) => (
+                <li key={iv.id} className="group flex gap-3 rounded-lg border border-slate-200 px-3 py-2 text-xs">
+                  <div className="grid h-10 w-12 shrink-0 place-items-center rounded-md bg-slate-100 text-center text-[10px] font-bold text-slate-700">
+                    {iv.date ? new Date(iv.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short" }) : "—"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-slate-900">{iv.action}</p>
+                    {iv.outcome ? <p className="text-slate-600">→ {iv.outcome}</p> : null}
+                    {iv.by ? <p className="mt-0.5 text-[10px] uppercase tracking-wider text-slate-400">por {iv.by}</p> : null}
+                  </div>
+                  <button onClick={() => removeIntervention(iv.id)} className="rounded p-1 text-slate-300 opacity-0 transition group-hover:opacity-100 hover:bg-rose-50 hover:text-rose-600">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : null}
+        </div>
+      ) : null}
+    </article>
+  );
+}
+
 function StudentDetailDialog({
   student,
   store,
   onClose,
   onUpdateStudent,
+  onUpdateCase,
   onAddRecord,
   onNavigate,
   focusField,
+  currentUserName,
 }: {
   student: DataRecord;
   store: DataStore;
   onClose: () => void;
   onUpdateStudent: (studentId: string, updates: Record<string, string>) => void;
+  onUpdateCase: (caseId: string, updates: Record<string, string>) => void;
   onAddRecord: (entity: EntityId, record: DataRecord) => void;
   onNavigate?: (view: ViewId) => void;
   focusField?: string;
+  currentUserName?: string;
 }) {
   const [activeTab, setActiveTab] = useState<"resumen" | "familia" | "casos" | "entrevistas" | "bitacoras" | "documentos">("resumen");
   const [highlightField, setHighlightField] = useState<string>("");
@@ -2423,10 +2703,29 @@ function StudentDetailDialog({
                 </button>
               </div>
               {quickAddOpen === "cases" ? renderQuickAddForm() : null}
-              <div className="grid gap-4 xl:grid-cols-2">
-                <LinkedRecordList title={`Casos individuales (${cases.length})`} records={cases} emptyText="No hay casos individuales vinculados." />
+              <section className="rounded-xl border border-slate-200 bg-white p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Casos individuales</h3>
+                  <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-semibold text-white tabular-nums">{cases.length}</span>
+                </div>
+                {cases.length === 0 ? (
+                  <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">No hay casos individuales vinculados.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {cases.map((caseRecord) => (
+                      <CaseWithInterventions
+                        key={caseRecord.id}
+                        caseRecord={caseRecord}
+                        onUpdateCase={onUpdateCase}
+                        currentUserName={currentUserName || ""}
+                      />
+                    ))}
+                  </div>
+                )}
+              </section>
+              {courseCases.length > 0 ? (
                 <LinkedRecordList title={`Situaciones del curso (${courseCases.length})`} records={courseCases} emptyText="No hay situaciones del curso." />
-              </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -5860,6 +6159,15 @@ export default function TizaEducationApp() {
     setToast("Ficha del estudiante actualizada");
   };
 
+  const updateCaseRecord = (recordId: string, updates: Record<string, string>) => {
+    setStore((current) => ({
+      ...current,
+      cases: current.cases.map((record) =>
+        record.id === recordId ? { ...record, ...updates, updatedAt: nowIso() } : record,
+      ),
+    }));
+  };
+
   const updateOrientationRecord = (recordId: string, updates: Record<string, string>) => {
     setStore((current) => ({
       ...current,
@@ -6106,9 +6414,11 @@ export default function TizaEducationApp() {
             store={store}
             onClose={closeStudent}
             onUpdateStudent={updateStudentRecord}
+            onUpdateCase={updateCaseRecord}
             onAddRecord={(entity, record) => addRecord(entity, record)}
             onNavigate={setActiveView}
             focusField={detailFocusField}
+            currentUserName={(team.find((m) => (m.email || "").toLowerCase() === (authUser?.email || "").toLowerCase())?.name) || ""}
           />
         );
       })() : null}
