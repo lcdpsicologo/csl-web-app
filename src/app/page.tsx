@@ -3706,7 +3706,7 @@ type BulkAiResponse = {
   warnings?: string;
 };
 
-type AiMode = "student" | "course" | "bulk";
+type AiMode = "student" | "course" | "bulk" | "files";
 
 const callAiEndpoint = async (
   url: string,
@@ -3775,7 +3775,8 @@ function AIAssistantView({
         {([
           ["student", "Sobre un estudiante", UserRound],
           ["course", "Sobre un curso", BookOpen],
-          ["bulk", "Importar planilla", FileSpreadsheet],
+          ["bulk", "Pegar planilla", FileSpreadsheet],
+          ["files", "Archivos", FolderOpen],
         ] as Array<[AiMode, string, LucideIcon]>).map(([key, label, Icon]) => (
           <button
             key={key}
@@ -3797,6 +3798,9 @@ function AIAssistantView({
       ) : null}
       {mode === "bulk" ? (
         <AIBulkImport store={store} accessToken={accessToken} onAddRecord={onAddRecord} />
+      ) : null}
+      {mode === "files" ? (
+        <AIFilesImport store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} />
       ) : null}
     </div>
   );
@@ -4307,6 +4311,283 @@ function AIBulkImport({
                 <strong>Filas omitidas ({(result.skipped || []).length})</strong>
                 <ul className="mt-1 list-disc pl-4">
                   {(result.skipped || []).map((s, i) => <li key={i}>Fila {s.sourceRow}: {s.reason}</li>)}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+type FilesAiResult = {
+  summary?: string;
+  entity?: string;
+  records?: Array<{
+    fields?: Record<string, string>;
+    studentId?: string;
+    studentName?: string;
+    sourceFile?: string;
+    sourceRow?: number | string;
+    confidence?: number;
+    notes?: string;
+  }>;
+  skipped?: Array<{ sourceFile?: string; sourceRow?: number | string; reason?: string }>;
+  warnings?: string;
+};
+
+function AIFilesImport({
+  store,
+  accessToken,
+  onAddRecord,
+  onOpenStudent,
+}: {
+  store: DataStore;
+  accessToken: string;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onOpenStudent: (studentId: string) => void;
+}) {
+  const [entity, setEntity] = useState<EntityId>("documents");
+  const [files, setFiles] = useState<File[]>([]);
+  const [targetStudentId, setTargetStudentId] = useState<string>("");
+  const [instruction, setInstruction] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<FilesAiResult | null>(null);
+  const [accepted, setAccepted] = useState<Record<number, boolean>>({});
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  const entityOptions: Array<[EntityId, string]> = [
+    ["documents", "Documentos"],
+    ["workshops", "Talleres"],
+    ["orientation", "Clases de orientación"],
+    ["logs", "Bitácoras"],
+    ["interviews", "Entrevistas"],
+    ["cases", "Casos"],
+    ["protocols", "Protocolos"],
+    ["students", "Estudiantes"],
+    ["courses", "Cursos"],
+  ];
+
+  const addFiles = (incoming: FileList | File[]) => {
+    const arr = Array.from(incoming);
+    setFiles((current) => [...current, ...arr].slice(0, 8));
+  };
+
+  const removeFile = (index: number) => {
+    setFiles((current) => current.filter((_, i) => i !== index));
+  };
+
+  const onDrop = (event: React.DragEvent) => {
+    event.preventDefault();
+    setDragOver(false);
+    if (event.dataTransfer.files?.length) addFiles(event.dataTransfer.files);
+  };
+
+  const totalMB = files.reduce((s, f) => s + f.size, 0) / 1024 / 1024;
+
+  const analyze = async () => {
+    if (files.length === 0) return;
+    setError("");
+    setResult(null);
+    setAccepted({});
+    setLoading(true);
+    try {
+      const fd = new FormData();
+      files.forEach((f) => fd.append("files", f, f.name));
+      fd.append("entity", entity);
+      if (instruction.trim()) fd.append("instruction", instruction.trim());
+      if (targetStudentId) fd.append("targetStudentId", targetStudentId);
+      fd.append("today", new Date().toISOString().slice(0, 10));
+      const roster = store.students.slice(0, 500).map((s) => ({ id: s.id, name: s.fullName || "", course: s.course || "", rut: s.rut || "" }));
+      fd.append("roster", JSON.stringify(roster));
+      const res = await fetch("/api/ai/files", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: fd,
+      });
+      let data: { ok?: boolean; error?: unknown; result?: FilesAiResult } = {};
+      try {
+        data = await res.json();
+      } catch {
+        const txt = await res.text().catch(() => "");
+        throw new Error(`Respuesta no válida (${res.status}). ${txt.slice(0, 200)}`);
+      }
+      if (!res.ok || !data.ok) {
+        const errField = data.error;
+        let msg: string;
+        if (typeof errField === "string") msg = errField;
+        else if (errField && typeof errField === "object") {
+          const obj = errField as { message?: string; code?: string };
+          msg = obj.message || obj.code || JSON.stringify(errField);
+        } else msg = `Error ${res.status}`;
+        throw new Error(msg);
+      }
+      setResult(data.result || null);
+      const initial: Record<number, boolean> = {};
+      (data.result?.records || []).forEach((_, i) => { initial[i] = true; });
+      setAccepted(initial);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createSelected = () => {
+    if (!result?.records) return;
+    let count = 0;
+    result.records.forEach((rec, i) => {
+      if (!accepted[i]) return;
+      const fields = rec.fields || {};
+      const student = rec.studentId ? store.students.find((s) => s.id === rec.studentId) : null;
+      const record: DataRecord = {
+        id: uid(),
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        ...fields,
+      };
+      // Auto-link student name/course if available.
+      if (student && !record.student) record.student = student.fullName || "";
+      if (student && !record.course) record.course = student.course || "";
+      onAddRecord(entity, record);
+      count += 1;
+    });
+    if (count > 0) {
+      setResult(null);
+      setFiles([]);
+      setInstruction("");
+      setAccepted({});
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Importar como</span>
+            <select value={entity} onChange={(e) => setEntity(e.target.value as EntityId)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500">
+              {entityOptions.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Estudiante objetivo (opcional)</span>
+            <select value={targetStudentId} onChange={(e) => setTargetStudentId(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500">
+              <option value="">— Ninguno (la IA detecta —</option>
+              {store.students.slice(0, 500).map((s) => <option key={s.id} value={s.id}>{s.fullName} · {s.course}</option>)}
+            </select>
+            <p className="mt-1 text-[11px] text-slate-500">Si todos los archivos refieren al mismo estudiante, selecciónalo acá.</p>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Instrucción opcional</span>
+            <input value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Ej.: 'Este PDF es el informe psicopedagógico de María, súbelo como documento de la ficha de María Pérez'" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500" />
+          </label>
+        </div>
+
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={onDrop}
+          className={`mt-4 rounded-2xl border-2 border-dashed p-6 text-center transition ${dragOver ? "border-violet-500 bg-violet-50" : "border-slate-300 bg-slate-50/40"}`}
+        >
+          <div className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow-md">
+            <Upload className="h-5 w-5" />
+          </div>
+          <p className="mt-3 text-sm font-semibold text-slate-900">Arrastra archivos aquí o haz click para seleccionar</p>
+          <p className="mt-1 text-xs text-slate-500">PDF · Word (.docx) · Excel (.xlsx) · CSV · TSV · TXT · Imágenes — máx. 12 MB total</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,image/*"
+            className="hidden"
+            onChange={(e) => e.target.files && addFiles(e.target.files)}
+          />
+          <button onClick={() => fileInputRef.current?.click()} className="tz-press mt-3 inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <Plus className="h-4 w-4" /> Seleccionar archivos
+          </button>
+        </div>
+
+        {files.length > 0 ? (
+          <div className="mt-4 space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{files.length} archivo{files.length === 1 ? "" : "s"} · {totalMB.toFixed(1)} MB total</p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {files.map((f, i) => (
+                <div key={`${f.name}-${i}`} className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-900">{f.name}</p>
+                    <p className="text-[11px] text-slate-500">{(f.size / 1024).toFixed(0)} KB · {f.type || "tipo desconocido"}</p>
+                  </div>
+                  <button onClick={() => removeFile(i)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600">
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">La IA extrae texto/tablas, parsea PDFs e imágenes nativamente, y propone qué crear.</p>
+          <button onClick={analyze} disabled={loading || files.length === 0} className="tz-press inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:opacity-95 disabled:opacity-50">
+            {loading ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Analizando…</>) : (<><Sparkles className="h-4 w-4" /> Analizar archivos</>)}
+          </button>
+        </div>
+        {error ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><strong>Error:</strong> {error}</div> : null}
+      </section>
+
+      {result ? (
+        <section className="tz-slide-up overflow-hidden rounded-2xl border border-violet-200 bg-white">
+          <div className="bg-gradient-to-r from-violet-50 via-blue-50 to-white px-5 py-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
+            {result.warnings ? <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>⚠</strong> {result.warnings}</p> : null}
+          </div>
+          <div className="border-t border-slate-100 px-5 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Registros listos para crear ({(result.records || []).length})</h3>
+              <button onClick={createSelected} disabled={!Object.values(accepted).some(Boolean)} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+                <Check className="h-4 w-4" /> Crear seleccionados
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(result.records || []).map((rec, i) => {
+                const conf = Math.round((rec.confidence ?? 0.8) * 100);
+                const student = rec.studentId ? store.students.find((s) => s.id === rec.studentId) : null;
+                return (
+                  <label key={i} className="flex gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50">
+                    <input type="checkbox" checked={accepted[i] || false} onChange={(e) => setAccepted((c) => ({ ...c, [i]: e.target.checked }))} className="mt-1 h-4 w-4" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {rec.sourceFile ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{rec.sourceFile}{rec.sourceRow !== undefined ? ` · fila ${rec.sourceRow}` : ""}</span> : null}
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${conf >= 80 ? "bg-emerald-100 text-emerald-700" : conf >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{conf}%</span>
+                        {student ? (
+                          <button type="button" onClick={(e) => { e.preventDefault(); onOpenStudent(student.id); }} className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 hover:bg-blue-100">→ {student.fullName}</button>
+                        ) : rec.studentName ? <span className="rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">sin match: {rec.studentName}</span> : null}
+                        {rec.notes ? <span className="text-[10px] text-slate-500">— {rec.notes}</span> : null}
+                      </div>
+                      <div className="mt-1 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-2">
+                        {Object.entries(rec.fields || {}).map(([k, v]) => (
+                          <div key={k}><strong className="text-slate-700">{k}:</strong> <span className="text-slate-600">{String(v).slice(0, 80)}</span></div>
+                        ))}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+              {(result.records || []).length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">La IA no extrajo registros.</p> : null}
+            </div>
+            {(result.skipped || []).length > 0 ? (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                <strong>Omitidos ({(result.skipped || []).length})</strong>
+                <ul className="mt-1 list-disc pl-4">
+                  {(result.skipped || []).map((s, i) => <li key={i}>{s.sourceFile}{s.sourceRow !== undefined ? ` fila ${s.sourceRow}` : ""}: {s.reason}</li>)}
                 </ul>
               </div>
             ) : null}
