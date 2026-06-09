@@ -532,7 +532,6 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "today", label: "Hoy", icon: CalendarDays },
   { id: "triage", label: "Asistente IA", icon: Sparkles },
   { id: "reports", label: "Reportes", icon: PieChart },
-  { id: "import", label: "Importar con IA", icon: Wand2 },
   { id: "students", label: "Estudiantes", icon: UserRound },
   { id: "courses", label: "Cursos", icon: BookOpen },
   { id: "cases", label: "Casos", icon: FileText },
@@ -3090,8 +3089,8 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
             Base lista para empezar a ingresar información real. Los datos se guardan localmente en este navegador hasta conectar Supabase/Auth.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
-          <button onClick={() => onNavigate("import")} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
-            <Wand2 className="h-4 w-4" /> Importar planilla
+          <button onClick={() => onNavigate("triage")} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+            <Sparkles className="h-4 w-4" /> Abrir Asistente IA
           </button>
           <button onClick={() => onNavigate("students")} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <Plus className="h-4 w-4" /> Ingresar datos
@@ -3143,7 +3142,7 @@ function Dashboard({ store, onNavigate }: { store: DataStore; onNavigate: (view:
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button onClick={() => onNavigate("students")} className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Crear primer estudiante</button>
-            <button onClick={() => onNavigate("import")} className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Importar planilla</button>
+            <button onClick={() => onNavigate("triage")} className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Asistente IA</button>
           </div>
         </section>
       ) : (
@@ -4813,7 +4812,7 @@ export default function TizaEducationApp() {
         onAdd={() => setDialogEntity(activeView)}
         onDelete={(id) => deleteRecord(activeView, id)}
         onExport={() => exportEntity(activeView)}
-        onImport={() => setActiveView("import")}
+        onImport={() => setActiveView("triage")}
       />
     );
   };
