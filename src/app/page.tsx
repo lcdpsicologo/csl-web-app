@@ -3733,7 +3733,7 @@ function TriageView({
           />
         </label>
         <div className="mt-3 flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">{store.students.length} estudiantes disponibles en la nómina · Modelo Google Gemini 2.0 Flash (gratis)</p>
+          <p className="text-xs text-slate-500">{store.students.length} estudiantes disponibles en la nómina · Modelo Google Gemini 2.5 Flash Lite (gratis)</p>
           <button
             onClick={analyze}
             disabled={loading || !text.trim() || store.students.length === 0}

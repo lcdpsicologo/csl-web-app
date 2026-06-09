@@ -30,7 +30,7 @@ const authenticate = async (request: Request, supabase: SupabaseClient) => {
 
 type RosterStudent = { id: string; name: string; course?: string; rut?: string; guardian?: string };
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
 const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
 const SYSTEM_PROMPT = `Eres un asistente experto en orientación escolar y convivencia, integrado en la plataforma Tiza Education del Colegio San Lucas de Lo Espejo.
@@ -176,6 +176,14 @@ Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la 
         errMsg = parsed?.error?.message || errText;
       } catch {
         // keep raw
+      }
+      if (res.status === 429) {
+        return NextResponse.json(
+          {
+            error: `Cuota de Gemini excedida en el modelo "${MODEL}". Probá: (1) esperar unos minutos, (2) cambiar el modelo a uno con free tier más amplio agregando GEMINI_MODEL=gemini-2.5-flash-lite en Vercel, o (3) verificar que la "Generative Language API" esté habilitada en https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com para el proyecto de tu API key. Detalle: ${errMsg}`,
+          },
+          { status: 429 },
+        );
       }
       return NextResponse.json(
         { error: `Gemini devolvió ${res.status}: ${errMsg}` },
