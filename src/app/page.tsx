@@ -409,6 +409,36 @@ type CaseIntervention = {
   outcome: string;
 };
 
+// Detects whether a calendar event title corresponds to an orientation class
+// ("Acompañamiento orientación", "Clase de orientación", or any "orientación"
+// mention paired with a course identifier), and returns a normalized display
+// title plus the matched course.
+const matchOrientationEvent = (summary: string): { isOrientation: boolean; course: string; displayTitle: string } => {
+  const text = summary || "";
+  const normalized = normalize(text);
+  const isOrientation = /orientacion/.test(normalized);
+  if (!isOrientation) return { isOrientation: false, course: "", displayTitle: text };
+  // Try to match a known official course by name (longest first to win specificity).
+  const officialByLength = [...officialCourses].sort((a, b) => b.name.length - a.name.length);
+  let course = "";
+  for (const c of officialByLength) {
+    const normCourse = normalize(c.name);
+    if (normCourse && normalized.includes(normCourse)) {
+      course = c.name;
+      break;
+    }
+  }
+  // Fallback: a token after a +, -, or : that looks like a grade ("4°A", "II° Medio B").
+  if (!course) {
+    const m = text.match(/[+\-:|]\s*([A-Za-zÁÉÍÓÚáéíóúÑñ0-9°º\s]{1,30})$/);
+    if (m) course = m[1].trim();
+  }
+  const displayTitle = course
+    ? `Clase de orientación · ${course}`
+    : text.replace(/acompañamiento\s+orientación/i, "Clase de orientación").trim();
+  return { isOrientation: true, course, displayTitle };
+};
+
 const parseInterventions = (value: string | undefined): CaseIntervention[] => {
   if (!value) return [];
   try {
@@ -1538,12 +1568,14 @@ function OrientationCycleView({
   onUpdateOrientationRecord,
   onDeleteOrientationRecord,
   onOpenStudent,
+  calendarEvents,
 }: {
   store: DataStore;
   onAddOrientationRecord: (record: DataRecord) => void;
   onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
   onDeleteOrientationRecord: (recordId: string) => void;
   onOpenStudent: (studentId: string) => void;
+  calendarEvents: CalendarEvent[];
 }) {
   const [selectedOwner, setSelectedOwner] = useState(orientationOwners[0].name);
   const [innerTab, setInnerTab] = useState<"clases" | "nomina" | "cursos">("clases");
@@ -1556,10 +1588,43 @@ function OrientationCycleView({
   const owner = orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0];
   const today = new Date().toISOString().slice(0, 10);
 
-  const ownerClasses = store.orientation.filter((record) =>
+  const ownerStoredClasses = store.orientation.filter((record) =>
     normalize(record.orientationOwner || "") === normalize(owner.name) ||
     owner.courses.some((course) => normalize(record.course || "") === normalize(course))
   );
+
+  // Calendar events that look like orientation classes for one of this owner's
+  // courses. We treat them as virtual class records (Planificada by default) so
+  // they get counted and shown alongside the explicitly created ones.
+  const calendarClasses: DataRecord[] = calendarEvents
+    .map((ev) => {
+      const match = matchOrientationEvent(ev.summary);
+      if (!match.isOrientation) return null;
+      const course = owner.courses.find((c) => normalize(c) === normalize(match.course)) || match.course;
+      if (!course || !owner.courses.includes(course)) return null;
+      const date = ev.start.slice(0, 10);
+      return {
+        id: `cal-${ev.start}-${normalize(ev.summary).slice(0, 30)}`,
+        createdAt: ev.start,
+        updatedAt: ev.start,
+        date,
+        course,
+        orientationOwner: owner.name,
+        topic: match.displayTitle,
+        status: date < today ? "Realizada" : "Planificada",
+        source: "calendar",
+        canvaLink: ev.url || "",
+        notes: ev.location || "",
+      } as DataRecord;
+    })
+    .filter((r): r is DataRecord => r !== null);
+
+  // Avoid double-counting if the orientador already has a stored class for the
+  // same date+course (stored class wins).
+  const calendarClassesFiltered = calendarClasses.filter(
+    (cal) => !ownerStoredClasses.some((s) => (s.date || "") === cal.date && normalize(s.course || "") === normalize(cal.course)),
+  );
+  const ownerClasses: DataRecord[] = [...ownerStoredClasses, ...calendarClassesFiltered];
 
   const filteredClasses = ownerClasses.filter((record) => {
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
@@ -3648,7 +3713,171 @@ function ImportView({
   );
 }
 
-function Dashboard({ store, onNavigate, schoolName, userEmail, team }: { store: DataStore; onNavigate: (view: ViewId) => void; schoolName: string; userEmail: string; team: TeamMember[] }) {
+function DashboardAgenda({
+  store,
+  calendarEvents,
+  calendarLoading,
+  calendarIcalUrl,
+  onReloadCalendar,
+  onNavigate,
+}: {
+  store: DataStore;
+  calendarEvents: CalendarEvent[];
+  calendarLoading: boolean;
+  calendarIcalUrl?: string;
+  onReloadCalendar: () => void;
+  onNavigate: (view: ViewId) => void;
+}) {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+
+  // Combine calendar events + app entries (interviews, classes) into a unified timeline.
+  type AgendaItem = {
+    key: string;
+    start: Date;
+    end?: Date;
+    title: string;
+    location: string;
+    description: string;
+    type: "calendar" | "orientation_class" | "interview" | "app_orientation";
+    color: string;
+    icon: LucideIcon;
+    href?: ViewId;
+    courseHint?: string;
+  };
+
+  const items: AgendaItem[] = [];
+
+  calendarEvents.forEach((ev, i) => {
+    const start = new Date(ev.start);
+    const match = matchOrientationEvent(ev.summary);
+    const isOrientation = match.isOrientation;
+    items.push({
+      key: `cal-${i}-${ev.start}`,
+      start,
+      end: new Date(ev.end),
+      title: isOrientation ? match.displayTitle : (ev.summary || "(sin título)"),
+      location: ev.location || "",
+      description: ev.description || "",
+      type: isOrientation ? "orientation_class" : "calendar",
+      color: isOrientation ? "from-violet-500 to-purple-600" : "from-blue-500 to-sky-600",
+      icon: isOrientation ? ClipboardList : CalendarDays,
+      href: isOrientation ? "orientation" : undefined,
+      courseHint: match.course,
+    });
+  });
+
+  store.interviews
+    .filter((r) => (r.date || "").slice(0, 10) === todayStr)
+    .forEach((r) => {
+      const t = new Date();
+      items.push({
+        key: `interview-${r.id}`,
+        start: t,
+        title: `Entrevista · ${r.participant || r.student || "?"}`,
+        location: "",
+        description: r.reason || "",
+        type: "interview",
+        color: "from-emerald-500 to-teal-600",
+        icon: MessageSquareText,
+        href: "interviews",
+      });
+    });
+
+  store.orientation
+    .filter((r) => (r.date || "").slice(0, 10) === todayStr)
+    .forEach((r) => {
+      // Skip if a matching calendar event already covers it (same course).
+      const dup = calendarEvents.some((ev) => {
+        const match = matchOrientationEvent(ev.summary);
+        return match.isOrientation && normalize(match.course) === normalize(r.course || "");
+      });
+      if (dup) return;
+      items.push({
+        key: `app-orient-${r.id}`,
+        start: new Date(),
+        title: `${r.topic || "Clase de orientación"} · ${r.course || ""}`,
+        location: "",
+        description: r.planificacion || r.notes || "",
+        type: "app_orientation",
+        color: "from-violet-500 to-purple-600",
+        icon: ClipboardList,
+        href: "orientation",
+        courseHint: r.course,
+      });
+    });
+
+  items.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+  const dateLong = today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-5 py-3">
+        <div className="flex items-center gap-3">
+          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
+            <CalendarDays className="h-4 w-4" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-slate-950">Mi día</h2>
+            <p className="text-[11px] text-slate-500 capitalize">{dateLong}</p>
+          </div>
+          {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{items.length} {items.length === 1 ? "actividad" : "actividades"}</span>
+          {calendarIcalUrl ? (
+            <button onClick={onReloadCalendar} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Recargar</button>
+          ) : null}
+        </div>
+      </header>
+
+      <div className="p-4">
+        {!calendarIcalUrl && items.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-5 text-center">
+            <CalendarDays className="mx-auto h-7 w-7 text-blue-600" />
+            <p className="mt-2 text-sm font-semibold text-slate-900">Conecta tu Google Calendar</p>
+            <p className="mt-1 text-xs text-slate-600">Verás tus clases, reuniones, entrevistas y compromisos del día integrados aquí.</p>
+            <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
+              Conectar ahora
+            </button>
+          </div>
+        ) : items.length === 0 ? (
+          <p className="rounded-lg bg-slate-50 p-4 text-center text-sm text-slate-500">No hay actividades para hoy.</p>
+        ) : (
+          <ol className="relative space-y-2 border-l-2 border-dashed border-slate-200 pl-5">
+            {items.map((item) => {
+              const Icon = item.icon;
+              const timeLabel = item.start.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+              const endLabel = item.end ? item.end.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
+              return (
+                <li
+                  key={item.key}
+                  className={`group relative rounded-xl border border-slate-200 bg-white p-3 ${item.href ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/30" : ""}`}
+                  onClick={() => item.href && onNavigate(item.href)}
+                >
+                  <span className={`absolute -left-[1.65rem] top-3 grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white shadow ring-4 ring-white`}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
+                    <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
+                      {item.type === "interview" || item.type === "app_orientation" ? "Hoy" : (endLabel ? `${timeLabel} – ${endLabel}` : timeLabel)}
+                    </span>
+                  </div>
+                  {item.location ? <p className="mt-0.5 text-xs text-slate-600">📍 {item.location}</p> : null}
+                  {item.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{item.description}</p> : null}
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEvents, calendarLoading, calendarIcalUrl, onReloadCalendar }: { store: DataStore; onNavigate: (view: ViewId) => void; schoolName: string; userEmail: string; team: TeamMember[]; calendarEvents: CalendarEvent[]; calendarLoading: boolean; calendarIcalUrl?: string; onReloadCalendar: () => void }) {
   const total = Object.values(store).reduce((sum, records) => sum + records.length, 0);
   const latest = Object.entries(store)
     .flatMap(([entity, records]) => records.map((record) => ({ entity: entity as EntityId, record })))
@@ -3751,6 +3980,15 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team }: { store: 
           </div>
         </div>
       </section>
+
+      <DashboardAgenda
+        store={store}
+        calendarEvents={calendarEvents}
+        calendarLoading={calendarLoading}
+        calendarIcalUrl={calendarIcalUrl}
+        onReloadCalendar={onReloadCalendar}
+        onNavigate={onNavigate}
+      />
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Estudiantes" value={store.students.length} detail="Registros reales" icon={UserRound} accent="blue" />
@@ -5904,6 +6142,9 @@ export default function TizaEducationApp() {
   const [detailStudentId, setDetailStudentId] = useState("");
   const [detailFocusField, setDetailFocusField] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarFetchedAt, setCalendarFetchedAt] = useState<string>("");
 
   const openStudent = (studentId: string, focusField?: string) => {
     setDetailStudentId(studentId);
@@ -6078,6 +6319,34 @@ export default function TizaEducationApp() {
     const timer = window.setTimeout(() => setToast(""), 2600);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  const reloadCalendar = React.useCallback(async () => {
+    const url = profile.calendarIcalUrl;
+    if (!url) { setCalendarEvents([]); return; }
+    setCalendarLoading(true);
+    try {
+      const res = await fetch("/api/calendar/today", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url, date: new Date().toISOString() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) {
+        setCalendarEvents(data.events || []);
+        setCalendarFetchedAt(data.fetchedAt || new Date().toISOString());
+      } else {
+        setCalendarEvents([]);
+      }
+    } catch {
+      setCalendarEvents([]);
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [profile.calendarIcalUrl]);
+
+  useEffect(() => {
+    reloadCalendar();
+  }, [reloadCalendar]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -6325,7 +6594,7 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
-    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} />;
+    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} />;
     if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
@@ -6351,6 +6620,7 @@ export default function TizaEducationApp() {
           onUpdateOrientationRecord={updateOrientationRecord}
           onDeleteOrientationRecord={deleteOrientationRecord}
           onOpenStudent={openStudent}
+          calendarEvents={calendarEvents}
         />
       );
     }
