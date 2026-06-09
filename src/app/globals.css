@@ -220,6 +220,33 @@ a {
   to { transform: translateX(100%); }
 }
 
+@keyframes tzNameIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-8px) scale(0.96);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(2px) scale(1.01);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+.tz-name-in {
+  display: inline-block;
+  animation: tzNameIn 520ms var(--spring) both;
+  background: linear-gradient(120deg, #0f172a 0%, #2563eb 50%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 @keyframes tzPulseSoft {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.55; }

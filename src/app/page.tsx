@@ -3137,7 +3137,11 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team }: { store: 
 
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{dateLabel}</p>
             <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">
-              {greeting}{displayName ? `, ${displayName}` : ""}.
+              {greeting}{displayName ? (
+                <>
+                  , <span key={displayName} className="tz-name-in">{displayName}</span>
+                </>
+              ) : null}.
             </h1>
             <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
               Tu espacio de trabajo en orientación y convivencia. Hoy hay <strong className="text-slate-900">{store.students.length.toLocaleString("es-CL")}</strong> estudiantes activos en <strong className="text-slate-900">{Math.max(officialCourses.length, store.courses.length)}</strong> cursos.
