@@ -280,6 +280,81 @@ const orientationOwners = [
   },
 ];
 
+const buildDataContext = (store: DataStore): string => {
+  const lines: string[] = [];
+  lines.push(`Total estudiantes: ${store.students.length}`);
+  lines.push(`Cursos guardados: ${store.courses.length}`);
+
+  // Casos
+  const casesTotal = store.cases.length;
+  const open = store.cases.filter((c) => /abierto|seguimiento|activ/i.test(c.status || "")).length;
+  const closed = store.cases.filter((c) => /cerrad/i.test(c.status || "")).length;
+  const critical = store.cases.filter((c) => /critic|alta/i.test(c.priority || "")).length;
+  lines.push(`Casos: ${casesTotal} (abiertos/seguimiento: ${open}, cerrados: ${closed}, alta/crítica: ${critical})`);
+
+  const byCategory = new Map<string, number>();
+  store.cases.forEach((c) => {
+    const k = c.category || "Sin categoría";
+    byCategory.set(k, (byCategory.get(k) || 0) + 1);
+  });
+  const catLine = Array.from(byCategory.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([k, v]) => `${k}: ${v}`).join(", ");
+  if (catLine) lines.push(`  Por categoría: ${catLine}`);
+
+  const recentCases = [...store.cases].sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || "")).slice(0, 20);
+  if (recentCases.length > 0) {
+    lines.push(`\nÚLTIMOS ${recentCases.length} CASOS (más recientes primero):`);
+    recentCases.forEach((c) => {
+      const intCount = (() => { try { return Array.isArray(JSON.parse(c.interventions || "[]")) ? JSON.parse(c.interventions || "[]").length : 0; } catch { return 0; } })();
+      lines.push(`- [${c.status || "?"}] ${c.title || "Sin título"} · ${c.student || ""} (${c.course || "?"}) · prioridad ${c.priority || "?"} · ${intCount} intervenciones`);
+    });
+  }
+
+  // Entrevistas
+  const today = new Date().toISOString().slice(0, 10);
+  const upcoming = store.interviews.filter((r) => (r.date || "") >= today);
+  lines.push(`\nEntrevistas totales: ${store.interviews.length} (próximas/hoy: ${upcoming.length})`);
+  upcoming.slice(0, 10).forEach((r) => {
+    lines.push(`- ${r.date} · ${r.participant || "?"} con ${r.student || "?"} · ${r.reason || ""}`);
+  });
+
+  // Bitácoras
+  lines.push(`\nBitácoras totales: ${store.logs.length}`);
+  const recentLogs = [...store.logs].sort((a, b) => (b.date || "").localeCompare(a.date || "")).slice(0, 10);
+  recentLogs.forEach((l) => {
+    lines.push(`- ${l.date || "?"} · ${l.type || "?"} · ${l.student || "?"} · ${(l.description || "").slice(0, 100)}`);
+  });
+
+  // Protocolos
+  const dueSoon = store.protocols.filter((p) => p.dueDate && p.dueDate >= today && p.dueDate <= new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10) && !/cerrad/i.test(p.status || ""));
+  lines.push(`\nProtocolos: ${store.protocols.length} (a vencer en 14 días: ${dueSoon.length})`);
+  dueSoon.slice(0, 10).forEach((p) => {
+    lines.push(`- ${p.dueDate} · ${p.title} · ${p.student || ""} · ${p.status || ""}`);
+  });
+
+  // Orientación
+  lines.push(`\nClases de orientación: ${store.orientation.length}`);
+  const ownerCounts = new Map<string, number>();
+  store.orientation.forEach((o) => {
+    const k = o.orientationOwner || "Sin orientador";
+    ownerCounts.set(k, (ownerCounts.get(k) || 0) + 1);
+  });
+  Array.from(ownerCounts.entries()).forEach(([k, v]) => lines.push(`  ${k}: ${v} clases`));
+
+  // Talleres
+  lines.push(`\nTalleres totales: ${store.workshops.length}`);
+  // Documentos
+  lines.push(`Documentos totales: ${store.documents.length}`);
+
+  // Alertas de salud
+  const healthAlerts = store.students.filter((s) => (s.healthAlerts || "").trim());
+  lines.push(`\nEstudiantes con alerta de salud: ${healthAlerts.length}`);
+  healthAlerts.slice(0, 15).forEach((s) => {
+    lines.push(`- ${s.fullName} (${s.course}): ${(s.healthAlerts || "").slice(0, 100)}`);
+  });
+
+  return lines.join("\n");
+};
+
 const courseMatches = (record: DataRecord, courseName: string) =>
   Object.values(record).some((value) => normalize(String(value)) === normalize(courseName) || normalize(String(value)).includes(normalize(courseName)));
 
@@ -4540,6 +4615,7 @@ function AIChatMode({
       fd.append("roster", JSON.stringify(roster));
       const coursesSeed = officialCourses.map((c) => ({ name: c.name, cycle: c.cycle }));
       fd.append("courses", JSON.stringify(coursesSeed));
+      fd.append("dataContext", buildDataContext(store));
       submittingFiles.forEach((f) => fd.append("files", f, f.name));
       const res = await fetch("/api/ai/chat", {
         method: "POST",
