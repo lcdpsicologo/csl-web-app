@@ -832,7 +832,7 @@ function EntityView({
 
   return (
     <div>
-      <div className="tz-fade mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+      <div className="mb-6 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
           <div className="flex items-center gap-3">
             <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-slate-900 to-slate-700 text-white shadow-sm">
@@ -872,7 +872,7 @@ function EntityView({
       {records.length === 0 ? (
         <EmptyState entity={entity} onAdd={onAdd} onImport={onImport} />
       ) : (
-        <section className="tz-fade overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 text-sm">
             <span className="font-semibold text-slate-700">
               Mostrando <span className="tabular-nums">{filtered.length}</span> de <span className="tabular-nums">{records.length}</span> registros
@@ -1185,7 +1185,7 @@ function CourseWorkspaceView({
 
       {current ? (
         <div className="space-y-6">
-          <section className="tz-slide-up overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <div className={`bg-gradient-to-br ${avatarTone(current.name)} px-6 py-5 text-white sm:px-8`}>
               <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
                 <div className="min-w-0">
@@ -1214,7 +1214,7 @@ function CourseWorkspaceView({
             </div>
           </section>
 
-          <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
@@ -1318,7 +1318,7 @@ function CourseWorkspaceView({
           </section>
 
           <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
-            <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
@@ -1395,7 +1395,7 @@ function CourseWorkspaceView({
               </div>
             </section>
 
-            <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="rounded-2xl border border-slate-200 bg-white p-5">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
                 <ShieldCheck className="h-5 w-5 text-rose-600" />
                 Convivencia
@@ -1416,7 +1416,7 @@ function CourseWorkspaceView({
             </section>
           </div>
 
-          <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+          <section className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
@@ -1622,7 +1622,7 @@ function OrientationCycleView({
         })}
       </div>
 
-      <section className="tz-slide-up overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className={`bg-gradient-to-br ${avatarTone(owner.name)} px-6 py-5 text-white sm:px-8`}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
@@ -1773,7 +1773,7 @@ function OrientationCycleView({
                         </button>
 
                         {expanded ? (
-                          <div className="tz-fade border-t border-slate-100 p-4">
+                          <div className="border-t border-slate-100 p-4">
                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                               <label className="block">
                                 <span className="text-xs font-semibold text-slate-700">Fecha</span>
@@ -2532,7 +2532,7 @@ function StudentDetailDialog({
           </div>
         </nav>
 
-        <div className="tz-fade flex-1 overflow-y-auto bg-slate-50 px-6 py-5">
+        <div className="flex-1 overflow-y-auto bg-slate-50 px-6 py-5">
           {activeTab === "resumen" ? (
             <div className="grid gap-5 xl:grid-cols-2">
               <div className="space-y-5">
@@ -4143,7 +4143,7 @@ function TodayView({
   };
 
   const Section = ({ title, icon: Icon, count, children, view }: { title: string; icon: LucideIcon; count: number; children: React.ReactNode; view?: ViewId }) => (
-    <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5">
       <div className="mb-3 flex items-center justify-between">
         <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
           <Icon className="h-4 w-4 text-slate-600" /> {title}
@@ -4156,7 +4156,7 @@ function TodayView({
   );
 
   return (
-    <div className="tz-fade space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Hoy</h1>
@@ -4182,7 +4182,7 @@ function TodayView({
       </div>
 
       {calendarIcalUrl ? (
-        <section className="tz-slide-up overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50 via-sky-50 to-white px-5 py-3">
             <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-700">
               <CalendarDays className="h-4 w-4" /> Google Calendar — hoy
@@ -4417,7 +4417,7 @@ function AIAssistantView({
   const [mode, setMode] = useState<AiMode>("chat");
 
   return (
-    <div className="tz-fade space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-950">
@@ -5026,7 +5026,7 @@ function AIStudentTriage({
       </section>
 
       {result ? (
-        <section className="tz-slide-up overflow-hidden rounded-2xl border border-violet-200 bg-white">
+        <section className="overflow-hidden rounded-2xl border border-violet-200 bg-white">
           <div className="bg-gradient-to-r from-violet-50 via-blue-50 to-white px-5 py-4">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen de la IA</h2>
             <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
@@ -5219,7 +5219,7 @@ function AICourseUpdate({
       </section>
 
       {result ? (
-        <section className="tz-slide-up space-y-4 overflow-hidden rounded-2xl border border-violet-200 bg-white p-5">
+        <section className="space-y-4 overflow-hidden rounded-2xl border border-violet-200 bg-white p-5">
           <div className="rounded-lg bg-gradient-to-r from-violet-50 to-blue-50 p-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen</h3>
             <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
@@ -5386,7 +5386,7 @@ function AIBulkImport({
       </section>
 
       {result ? (
-        <section className="tz-slide-up overflow-hidden rounded-2xl border border-violet-200 bg-white">
+        <section className="overflow-hidden rounded-2xl border border-violet-200 bg-white">
           <div className="bg-gradient-to-r from-violet-50 via-blue-50 to-white px-5 py-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen</h3>
             <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
@@ -5662,7 +5662,7 @@ function AIFilesImport({
       </section>
 
       {result ? (
-        <section className="tz-slide-up overflow-hidden rounded-2xl border border-violet-200 bg-white">
+        <section className="overflow-hidden rounded-2xl border border-violet-200 bg-white">
           <div className="bg-gradient-to-r from-violet-50 via-blue-50 to-white px-5 py-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen</h3>
             <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
@@ -5760,7 +5760,7 @@ function ReportsView({ store }: { store: DataStore }) {
   };
 
   return (
-    <div className="tz-fade space-y-5">
+    <div className="space-y-5">
       <div>
         <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-950">
           <PieChart className="h-7 w-7 text-slate-700" />
