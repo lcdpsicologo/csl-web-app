@@ -3454,6 +3454,32 @@ function SettingsView({
             ))}
           </div>
         </section>
+        <section className="rounded-lg border border-slate-200 bg-white p-6 xl:col-span-2">
+          <h2 className="flex items-center gap-2 text-lg font-semibold"><CalendarDays className="h-5 w-5 text-blue-600" /> Google Calendar</h2>
+          <p className="mt-1 text-sm text-slate-600">
+            Conecta tu calendario para ver las actividades de hoy en la vista <strong>Hoy</strong>. Usa la <strong>URL secreta en formato iCal</strong> (no requiere OAuth, funciona también con Outlook y Apple Calendar).
+          </p>
+          <label className="mt-4 block">
+            <span className="text-sm font-semibold text-slate-700">URL iCal</span>
+            <input
+              value={profile.calendarIcalUrl || ""}
+              onChange={(event) => setProfile({ ...profile, calendarIcalUrl: event.target.value })}
+              placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+              className="mt-2 w-full rounded-lg border border-slate-200 p-3 font-mono text-xs outline-none focus:border-blue-500"
+            />
+          </label>
+          <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+            <summary className="cursor-pointer font-semibold text-slate-700">Cómo obtener la URL iCal de Google Calendar</summary>
+            <ol className="mt-2 list-decimal space-y-1 pl-4">
+              <li>Abre <a className="text-blue-600 hover:underline" href="https://calendar.google.com/" target="_blank" rel="noopener noreferrer">Google Calendar</a> en una pestaña.</li>
+              <li>En el panel izquierdo, pasa el cursor sobre tu calendario → click en los 3 puntos → <strong>"Configuración y uso compartido"</strong>.</li>
+              <li>Baja hasta <strong>"Integrar el calendario"</strong>.</li>
+              <li>Copia la <strong>"Dirección secreta en formato iCal"</strong> (la URL que termina en <code>.ics</code>).</li>
+              <li>Pégala aquí arriba y guarda.</li>
+            </ol>
+            <p className="mt-2 text-rose-700"><strong>⚠ Importante</strong>: esta URL da acceso de lectura completo a tu calendario. No la compartas.</p>
+          </details>
+        </section>
         <section className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="text-lg font-semibold">Persistencia actual</h2>
           <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
@@ -3594,14 +3620,26 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
   );
 }
 
+type CalendarEvent = {
+  summary: string;
+  description: string;
+  location: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  url?: string;
+};
+
 function TodayView({
   store,
   onOpenStudent,
   onNavigate,
+  calendarIcalUrl,
 }: {
   store: DataStore;
   onOpenStudent: (studentId: string) => void;
   onNavigate: (view: ViewId) => void;
+  calendarIcalUrl?: string;
 }) {
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
@@ -3615,6 +3653,46 @@ function TodayView({
   const criticalCases = openCases.filter((r) => /crítica|alta/i.test(r.priority || ""));
   const healthStudents = store.students.filter((s) => (s.healthAlerts || "").trim()).slice(0, 8);
   const unplannedClasses = store.orientation.filter((r) => !(r.planificacion || "").trim() && r.date && r.date >= todayStr && r.date <= in7);
+
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [calendarError, setCalendarError] = useState("");
+  const [calendarFetchedAt, setCalendarFetchedAt] = useState<string>("");
+  const loadCalendar = React.useCallback(async () => {
+    if (!calendarIcalUrl) return;
+    setCalendarLoading(true);
+    setCalendarError("");
+    try {
+      const res = await fetch("/api/calendar/today", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url: calendarIcalUrl, date: new Date().toISOString() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        const errField = data.error;
+        const msg = typeof errField === "string" ? errField : `Error ${res.status}`;
+        throw new Error(msg);
+      }
+      setCalendarEvents(data.events || []);
+      setCalendarFetchedAt(data.fetchedAt || new Date().toISOString());
+    } catch (err) {
+      setCalendarError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setCalendarLoading(false);
+    }
+  }, [calendarIcalUrl]);
+  useEffect(() => {
+    if (calendarIcalUrl) loadCalendar();
+  }, [calendarIcalUrl, loadCalendar]);
+
+  const formatEventTime = (ev: CalendarEvent) => {
+    if (ev.allDay) return "Todo el día";
+    const s = new Date(ev.start);
+    const e = new Date(ev.end);
+    const fmt = (d: Date) => d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+    return `${fmt(s)} – ${fmt(e)}`;
+  };
 
   const Section = ({ title, icon: Icon, count, children, view }: { title: string; icon: LucideIcon; count: number; children: React.ReactNode; view?: ViewId }) => (
     <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
@@ -3654,6 +3732,58 @@ function TodayView({
           </button>
         ))}
       </div>
+
+      {calendarIcalUrl ? (
+        <section className="tz-slide-up overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50 via-sky-50 to-white px-5 py-3">
+            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-700">
+              <CalendarDays className="h-4 w-4" /> Google Calendar — hoy
+              {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
+              <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">{calendarEvents.length}</span>
+            </h2>
+            <div className="flex items-center gap-2">
+              {calendarFetchedAt ? <span className="text-[10px] text-slate-500">Actualizado {new Date(calendarFetchedAt).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</span> : null}
+              <button onClick={loadCalendar} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Recargar</button>
+            </div>
+          </div>
+          <div className="p-4">
+            {calendarError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><strong>Error:</strong> {calendarError}</div>
+            ) : calendarEvents.length === 0 ? (
+              <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No hay eventos en tu calendario para hoy.</p>
+            ) : (
+              <ul className="space-y-2">
+                {calendarEvents.map((ev, i) => (
+                  <li key={i} className="tz-card flex gap-3 rounded-xl border border-slate-200 p-3">
+                    <div className="grid h-12 w-14 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-blue-500 to-sky-600 text-center text-[10px] font-bold leading-tight text-white shadow-sm">
+                      <div>
+                        <div className="text-sm">{ev.allDay ? "—" : new Date(ev.start).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div className="text-[9px] opacity-80">{ev.allDay ? "Todo el día" : new Date(ev.end).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</div>
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-sm font-semibold text-slate-950">{ev.summary}</h3>
+                      <p className="text-xs text-slate-500">{formatEventTime(ev)}{ev.location ? ` · ${ev.location}` : ""}</p>
+                      {ev.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{ev.description}</p> : null}
+                      {ev.url ? <a href={ev.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[11px] font-semibold text-blue-600 hover:underline">Abrir ↗</a> : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-dashed border-blue-200 bg-blue-50/40 p-5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-700">
+            <CalendarDays className="h-4 w-4" /> Conecta Google Calendar
+          </h2>
+          <p className="mt-1 text-sm text-slate-700">Ve tus eventos del día junto a entrevistas, casos y protocolos. Pega la URL iCal de tu calendario en Configuración.</p>
+          <button onClick={() => onNavigate("settings")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
+            Ir a configuración
+          </button>
+        </section>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Section title="Entrevistas de hoy" icon={MessageSquareText} count={interviewsToday.length} view="interviews">
@@ -4775,7 +4905,26 @@ export default function TizaEducationApp() {
       return emptyStore();
     }
   });
-  const [activeView, setActiveView] = useState<ViewId>("dashboard");
+  const [viewHistory, setViewHistory] = useState<ViewId[]>(["dashboard"]);
+  const [historyIndex, setHistoryIndex] = useState(0);
+  const activeView = viewHistory[historyIndex];
+  const navigate = (next: ViewId) => {
+    if (next === activeView) return;
+    setViewHistory((current) => {
+      const truncated = current.slice(0, historyIndex + 1);
+      return [...truncated, next].slice(-30); // cap at 30
+    });
+    setHistoryIndex((idx) => Math.min(idx + 1, 29));
+  };
+  const setActiveView = navigate;
+  const canGoBack = historyIndex > 0;
+  const canGoForward = historyIndex < viewHistory.length - 1;
+  const goBack = () => {
+    if (canGoBack) setHistoryIndex((idx) => idx - 1);
+  };
+  const goForward = () => {
+    if (canGoForward) setHistoryIndex((idx) => idx + 1);
+  };
   const [detailStudentId, setDetailStudentId] = useState("");
   const [detailFocusField, setDetailFocusField] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
@@ -4959,6 +5108,12 @@ export default function TizaEducationApp() {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setCommandOpen((value) => !value);
+      } else if ((event.metaKey || event.ctrlKey) && event.key === "[") {
+        event.preventDefault();
+        goBack();
+      } else if ((event.metaKey || event.ctrlKey) && event.key === "]") {
+        event.preventDefault();
+        goForward();
       } else if (event.key === "/" && !commandOpen) {
         const target = event.target as HTMLElement | null;
         if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName)) return;
@@ -4968,7 +5123,7 @@ export default function TizaEducationApp() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [commandOpen]);
+  }, [commandOpen, canGoBack, canGoForward]);
 
   const addRecord = (entity: EntityId, record: DataRecord) => {
     setStore((current) => ({ ...current, [entity]: [record, ...current[entity]] }));
@@ -5186,7 +5341,7 @@ export default function TizaEducationApp() {
 
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} />;
-    if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} />;
+    if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "students") {
@@ -5281,7 +5436,27 @@ export default function TizaEducationApp() {
       <Sidebar activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} />
       <main className="lg:pl-[272px]">
         <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
-          <div className="mx-auto flex max-w-[1440px] items-center gap-3">
+          <div className="mx-auto flex max-w-[1440px] items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1">
+              <button
+                onClick={goBack}
+                disabled={!canGoBack}
+                title="Atrás (⌘[)"
+                aria-label="Atrás"
+                className="tz-press grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white/80 text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronDown className="h-4 w-4 rotate-90" />
+              </button>
+              <button
+                onClick={goForward}
+                disabled={!canGoForward}
+                title="Adelante (⌘])"
+                aria-label="Adelante"
+                className="tz-press grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white/80 text-slate-700 shadow-sm transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <ChevronDown className="h-4 w-4 -rotate-90" />
+              </button>
+            </div>
             <button
               onClick={() => setCommandOpen(true)}
               className="tz-press group flex flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-left text-sm text-slate-500 shadow-sm hover:border-slate-300 hover:bg-white"
