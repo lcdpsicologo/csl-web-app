@@ -3584,13 +3584,10 @@ function SettingsView({
           </details>
         </section>
         <section className="rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="text-lg font-semibold">Persistencia actual</h2>
-          <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-            <p className="font-semibold text-slate-900"><Lock className="mr-2 inline h-4 w-4" /> Guardado local</p>
-            <p className="mt-2">Los datos quedan en este navegador. Para uso multiusuario real, el siguiente paso es conectar Supabase con RLS y autenticación.</p>
-          </div>
+          <h2 className="text-lg font-semibold">Mantención</h2>
+          <p className="mt-2 text-sm text-slate-600">Si necesitas vaciar el caché local de tu navegador (no afecta los datos en Supabase, solo este equipo).</p>
           <button onClick={onClear} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-red-200 px-5 py-3 font-bold text-red-600 hover:bg-red-50">
-            <Trash2 className="h-5 w-5" /> Borrar datos locales
+            <Trash2 className="h-5 w-5" /> Borrar caché local
           </button>
         </section>
       </div>
@@ -3723,6 +3720,53 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
   );
 }
 
+function CalendarConnectCard({ onConnect }: { onConnect: (url: string) => void }) {
+  const [url, setUrl] = useState("");
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-sky-50 to-white p-5">
+      <span className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-blue-200/30 blur-2xl" />
+      <div className="relative flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 max-w-xl">
+          <h2 className="flex items-center gap-2 text-base font-semibold text-blue-900">
+            <CalendarDays className="h-5 w-5" /> Conecta Google Calendar
+          </h2>
+          <p className="mt-1 text-sm text-slate-700">Ve aquí mismo tus eventos del día, sin salir de la vista <strong>Hoy</strong>.</p>
+        </div>
+        {!open ? (
+          <button onClick={() => setOpen(true)} className="tz-press inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-blue-600 to-sky-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:opacity-95">
+            <CalendarDays className="h-4 w-4" /> Conectar en 30 segundos
+          </button>
+        ) : null}
+      </div>
+      {open ? (
+        <div className="tz-slide-up relative mt-4 space-y-3">
+          <ol className="list-decimal pl-5 text-xs text-slate-700 space-y-1">
+            <li>Abre <a className="font-semibold text-blue-700 hover:underline" href="https://calendar.google.com/" target="_blank" rel="noopener noreferrer">Google Calendar ↗</a></li>
+            <li>Hover sobre tu calendario → 3 puntos → <strong>Configuración y uso compartido</strong></li>
+            <li>Baja a <strong>Integrar el calendario</strong> y copia la <strong>Dirección secreta en formato iCal</strong></li>
+            <li>Pégala aquí abajo y guarda.</li>
+          </ol>
+          <div className="flex flex-wrap gap-2">
+            <input
+              autoFocus
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://calendar.google.com/calendar/ical/.../basic.ics"
+              className="flex-1 rounded-lg border border-blue-200 bg-white px-3 py-2 font-mono text-xs outline-none focus:border-blue-500"
+            />
+            <button onClick={() => { if (url.trim()) onConnect(url.trim()); }} disabled={!url.trim()} className="tz-press inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">
+              <Check className="h-4 w-4" /> Conectar
+            </button>
+            <button onClick={() => { setOpen(false); setUrl(""); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+          </div>
+          <p className="text-[11px] text-rose-700">⚠ Esta URL da acceso de lectura completo a tu calendario. No la compartas.</p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 type CalendarEvent = {
   summary: string;
   description: string;
@@ -3738,11 +3782,13 @@ function TodayView({
   onOpenStudent,
   onNavigate,
   calendarIcalUrl,
+  onConnectCalendar,
 }: {
   store: DataStore;
   onOpenStudent: (studentId: string) => void;
   onNavigate: (view: ViewId) => void;
   calendarIcalUrl?: string;
+  onConnectCalendar: (url: string) => void;
 }) {
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
@@ -3877,15 +3923,7 @@ function TodayView({
           </div>
         </section>
       ) : (
-        <section className="rounded-2xl border border-dashed border-blue-200 bg-blue-50/40 p-5">
-          <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-700">
-            <CalendarDays className="h-4 w-4" /> Conecta Google Calendar
-          </h2>
-          <p className="mt-1 text-sm text-slate-700">Ve tus eventos del día junto a entrevistas, casos y protocolos. Pega la URL iCal de tu calendario en Configuración.</p>
-          <button onClick={() => onNavigate("settings")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-700">
-            Ir a configuración
-          </button>
-        </section>
+        <CalendarConnectCard onConnect={onConnectCalendar} />
       )}
 
       <div className="grid gap-4 xl:grid-cols-2">
@@ -4028,7 +4066,7 @@ type BulkAiResponse = {
   warnings?: string;
 };
 
-type AiMode = "student" | "course" | "bulk" | "files";
+type AiMode = "chat" | "student" | "course" | "bulk" | "files";
 
 const callAiEndpoint = async (
   url: string,
@@ -4077,7 +4115,7 @@ function AIAssistantView({
   onOpenStudent: (studentId: string) => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
 }) {
-  const [mode, setMode] = useState<AiMode>("student");
+  const [mode, setMode] = useState<AiMode>("chat");
 
   return (
     <div className="tz-fade space-y-5">
@@ -4095,9 +4133,10 @@ function AIAssistantView({
 
       <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1.5">
         {([
-          ["student", "Sobre un estudiante", UserRound],
-          ["course", "Sobre un curso", BookOpen],
-          ["bulk", "Pegar planilla", FileSpreadsheet],
+          ["chat", "Chat", Sparkles],
+          ["student", "Estudiante", UserRound],
+          ["course", "Curso", BookOpen],
+          ["bulk", "Planilla", FileSpreadsheet],
           ["files", "Archivos", FolderOpen],
         ] as Array<[AiMode, string, LucideIcon]>).map(([key, label, Icon]) => (
           <button
@@ -4112,6 +4151,9 @@ function AIAssistantView({
         ))}
       </div>
 
+      {mode === "chat" ? (
+        <AIChatMode store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} onUpdateCourse={onUpdateCourse} />
+      ) : null}
       {mode === "student" ? (
         <AIStudentTriage store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} />
       ) : null}
@@ -4123,6 +4165,462 @@ function AIAssistantView({
       ) : null}
       {mode === "files" ? (
         <AIFilesImport store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} />
+      ) : null}
+    </div>
+  );
+}
+
+type ChatResult = {
+  intent?: "student_triage" | "course_update" | "bulk_import" | "file_analysis" | "answer";
+  summary?: string;
+  answer?: string;
+  involvedStudents?: Array<{ studentId?: string; studentName?: string; confidence?: number; evidence?: string }>;
+  studentRecords?: Array<{ entity: "cases" | "interviews" | "logs" | "protocols"; studentId?: string; title?: string; category?: string; priority?: string; status?: string; type?: string; date?: string; description?: string }>;
+  courseTarget?: string;
+  teamAdditions?: Array<{ name?: string; role?: string; email?: string }>;
+  ercAppend?: string;
+  courseCases?: Array<{ title?: string; category?: string; priority?: string; description?: string }>;
+  bulkEntity?: string;
+  bulkRecords?: Array<{ entity?: string; fields?: Record<string, string>; studentId?: string; confidence?: number }>;
+  notes?: string;
+};
+
+type ChatTurn = {
+  id: string;
+  userMessage: string;
+  userFiles: string[];
+  loading: boolean;
+  error?: string;
+  result?: ChatResult;
+  accepted?: Record<string, boolean>;
+};
+
+function AIChatMode({
+  store,
+  accessToken,
+  onAddRecord,
+  onOpenStudent,
+  onUpdateCourse,
+}: {
+  store: DataStore;
+  accessToken: string;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onOpenStudent: (studentId: string) => void;
+  onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+}) {
+  const [draft, setDraft] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [turns]);
+
+  const addFiles = (incoming: FileList | File[]) => {
+    setFiles((current) => [...current, ...Array.from(incoming)].slice(0, 6));
+  };
+  const removeFile = (i: number) => setFiles((c) => c.filter((_, idx) => idx !== i));
+
+  const send = async () => {
+    if (!draft.trim() && files.length === 0) return;
+    const turnId = uid();
+    const userFiles = files.map((f) => f.name);
+    const userMessage = draft.trim();
+    setTurns((current) => [...current, { id: turnId, userMessage, userFiles, loading: true, accepted: {} }]);
+    const submittingFiles = files;
+    setDraft("");
+    setFiles([]);
+
+    try {
+      const fd = new FormData();
+      fd.append("message", userMessage);
+      fd.append("today", new Date().toISOString().slice(0, 10));
+      const roster = store.students.slice(0, 500).map((s) => ({ id: s.id, name: s.fullName || "", course: s.course || "", rut: s.rut || "" }));
+      fd.append("roster", JSON.stringify(roster));
+      const coursesSeed = officialCourses.map((c) => ({ name: c.name, cycle: c.cycle }));
+      fd.append("courses", JSON.stringify(coursesSeed));
+      submittingFiles.forEach((f) => fd.append("files", f, f.name));
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: fd,
+      });
+      let data: { ok?: boolean; error?: unknown; result?: ChatResult } = {};
+      try { data = await res.json(); } catch {
+        const t = await res.text().catch(() => "");
+        throw new Error(`Respuesta inválida (${res.status}) ${t.slice(0, 200)}`);
+      }
+      if (!res.ok || !data.ok) {
+        const errField = data.error;
+        const msg = typeof errField === "string" ? errField : (errField && typeof errField === "object" ? ((errField as { message?: string }).message || JSON.stringify(errField)) : `Error ${res.status}`);
+        throw new Error(msg);
+      }
+      const result = (data.result || {}) as ChatResult;
+      const accepted: Record<string, boolean> = {};
+      (result.studentRecords || []).forEach((_, i) => { accepted[`sr-${i}`] = true; });
+      (result.teamAdditions || []).forEach((_, i) => { accepted[`ta-${i}`] = true; });
+      (result.courseCases || []).forEach((_, i) => { accepted[`cc-${i}`] = true; });
+      (result.bulkRecords || []).forEach((_, i) => { accepted[`br-${i}`] = true; });
+      if ((result.ercAppend || "").trim()) accepted["erc"] = true;
+      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, result, accepted } : t));
+    } catch (err) {
+      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: err instanceof Error ? err.message : String(err) } : t));
+    }
+  };
+
+  const toggleAccept = (turnId: string, key: string) => {
+    setTurns((current) => current.map((t) => t.id === turnId ? { ...t, accepted: { ...(t.accepted || {}), [key]: !(t.accepted?.[key]) } } : t));
+  };
+
+  const applyTurn = (turn: ChatTurn) => {
+    if (!turn.result) return;
+    const r = turn.result;
+    const acc = turn.accepted || {};
+    let count = 0;
+
+    (r.studentRecords || []).forEach((rec, i) => {
+      if (!acc[`sr-${i}`]) return;
+      const student = store.students.find((s) => s.id === rec.studentId);
+      if (!student) return;
+      onAddRecord(rec.entity, {
+        id: uid(), createdAt: nowIso(), updatedAt: nowIso(),
+        student: student.fullName || "", course: student.course || "",
+        date: rec.date || new Date().toISOString().slice(0, 10),
+        title: rec.title || "Registro IA",
+        category: rec.category || "", priority: rec.priority || "",
+        status: rec.status || (rec.entity === "cases" ? "Abierto" : ""),
+        type: rec.type || "", description: rec.description || "",
+        participant: rec.entity === "interviews" ? (rec.title || student.fullName || "") : "",
+        reason: rec.entity === "interviews" ? (rec.title || "") : "",
+      });
+      count += 1;
+    });
+
+    const courseName = (r.courseTarget || "").trim();
+    if (courseName) {
+      const saved = store.courses.find((c) => normalize(c.name || "") === normalize(courseName));
+      const team = parseClassroomTeam(saved?.classroomTeam);
+      const newMembers = (r.teamAdditions || []).filter((_, i) => acc[`ta-${i}`]);
+      if (newMembers.length > 0) {
+        const nextTeam: ClassroomTeamMember[] = [
+          ...team,
+          ...newMembers.map((m) => ({ id: uid(), name: m.name || "Sin nombre", role: m.role || "Otro apoyo", email: m.email || "", notes: "" })),
+        ];
+        onUpdateCourse(courseName, { classroomTeam: JSON.stringify(nextTeam) });
+        count += newMembers.length;
+      }
+      if (acc["erc"] && (r.ercAppend || "").trim()) {
+        const prev = saved?.ercNotes || "";
+        const next = `${prev}${prev.trim() ? "\n\n" : ""}${r.ercAppend}`.trim();
+        onUpdateCourse(courseName, { ercNotes: next });
+        count += 1;
+      }
+      (r.courseCases || []).forEach((c, i) => {
+        if (!acc[`cc-${i}`]) return;
+        onAddRecord("cases", {
+          id: uid(), createdAt: nowIso(), updatedAt: nowIso(),
+          student: courseName, course: courseName,
+          title: c.title || "Caso del curso",
+          category: c.category || "", priority: c.priority || "",
+          status: "Abierto", description: c.description || "",
+        });
+        count += 1;
+      });
+    }
+
+    const bulkEntity = (r.bulkEntity || "") as EntityId;
+    (r.bulkRecords || []).forEach((rec, i) => {
+      if (!acc[`br-${i}`]) return;
+      const entityId = (rec.entity || bulkEntity) as EntityId;
+      if (!entityId) return;
+      const fields = rec.fields || {};
+      const student = rec.studentId ? store.students.find((s) => s.id === rec.studentId) : null;
+      const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...fields };
+      if (student) {
+        if (!record.student) record.student = student.fullName || "";
+        if (!record.course) record.course = student.course || "";
+      }
+      onAddRecord(entityId, record);
+      count += 1;
+    });
+
+    if (count > 0) {
+      setTurns((current) => current.map((t) => t.id === turn.id ? { ...t, accepted: undefined, result: { ...r, summary: `✓ ${count} registro${count === 1 ? "" : "s"} creado${count === 1 ? "" : "s"} desde esta consulta.`, studentRecords: [], teamAdditions: [], courseCases: [], bulkRecords: [], ercAppend: "" } } : t));
+    }
+  };
+
+  const intentLabel: Record<string, { label: string; tone: string }> = {
+    student_triage: { label: "Sobre estudiante(s)", tone: "bg-blue-100 text-blue-700" },
+    course_update: { label: "Actualización de curso", tone: "bg-emerald-100 text-emerald-700" },
+    bulk_import: { label: "Importación masiva", tone: "bg-amber-100 text-amber-700" },
+    file_analysis: { label: "Análisis de archivo", tone: "bg-violet-100 text-violet-700" },
+    answer: { label: "Respuesta", tone: "bg-slate-100 text-slate-700" },
+  };
+
+  return (
+    <div className="flex h-[calc(100vh-260px)] min-h-[480px] flex-col rounded-2xl border border-slate-200 bg-white">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
+        {turns.length === 0 ? (
+          <div className="mx-auto max-w-2xl text-center">
+            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow-md">
+              <Sparkles className="h-7 w-7" />
+            </div>
+            <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">¿En qué te ayudo hoy?</h2>
+            <p className="mt-2 text-sm text-slate-600">Pega un correo, escribe lo que necesitas, o adjunta archivos. Yo detecto si se trata de un estudiante, un curso, o varios registros.</p>
+            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+              {[
+                "Pega el correo de la profesora jefe de 4°B sobre el conflicto en el recreo",
+                "Sube el PDF del informe psicopedagógico de María Pérez",
+                "Pega la planilla de talleres realizados este mes",
+                "Cuántos casos abiertos de convivencia hay en III° Medio",
+              ].map((s) => (
+                <button key={s} onClick={() => setDraft(s)} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-left text-sm text-slate-700 hover:bg-blue-50 hover:border-blue-200">
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="mx-auto max-w-3xl space-y-5">
+            {turns.map((turn) => (
+              <div key={turn.id} className="space-y-3">
+                <div className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl rounded-tr-md bg-blue-600 px-4 py-2.5 text-sm text-white shadow-sm">
+                    {turn.userMessage ? <p className="whitespace-pre-wrap">{turn.userMessage}</p> : <p className="italic opacity-90">(sin texto)</p>}
+                    {turn.userFiles.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {turn.userFiles.map((n, i) => <span key={i} className="rounded-md bg-white/15 px-2 py-0.5 text-[11px]">📎 {n}</span>)}
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="flex justify-start">
+                  <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+                    {turn.loading ? (
+                      <div className="flex items-center gap-2 text-slate-500">
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
+                        Analizando…
+                      </div>
+                    ) : turn.error ? (
+                      <p className="text-rose-700"><strong>Error:</strong> {turn.error}</p>
+                    ) : turn.result ? (
+                      <ChatResultRenderer
+                        turn={turn}
+                        result={turn.result}
+                        store={store}
+                        intentLabel={intentLabel}
+                        onToggle={(key) => toggleAccept(turn.id, key)}
+                        onApply={() => applyTurn(turn)}
+                        onOpenStudent={onOpenStudent}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-slate-200 bg-slate-50/40 p-3 sm:p-4">
+        <div className="mx-auto max-w-3xl">
+          {files.length > 0 ? (
+            <div className="mb-2 flex flex-wrap gap-1.5">
+              {files.map((f, i) => (
+                <span key={i} className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs">
+                  📎 {f.name} <button onClick={() => removeFile(i)} className="text-slate-400 hover:text-rose-600"><X className="h-3 w-3" /></button>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-violet-500">
+            <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,image/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
+            <button onClick={() => fileInputRef.current?.click()} title="Adjuntar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
+              <Upload className="h-4 w-4" />
+            </button>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } }}
+              placeholder="Pega un correo, escribe algo, o adjunta un archivo. ⌘+Enter para enviar."
+              rows={2}
+              className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400"
+            />
+            <button onClick={send} disabled={!draft.trim() && files.length === 0} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
+              <Sparkles className="h-4 w-4" /> Enviar
+            </button>
+          </div>
+          <p className="mt-1.5 text-[11px] text-slate-400">⌘ + Enter para enviar · La IA detecta automáticamente qué hacer.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatResultRenderer({
+  turn,
+  result,
+  store,
+  intentLabel,
+  onToggle,
+  onApply,
+  onOpenStudent,
+}: {
+  turn: ChatTurn;
+  result: ChatResult;
+  store: DataStore;
+  intentLabel: Record<string, { label: string; tone: string }>;
+  onToggle: (key: string) => void;
+  onApply: () => void;
+  onOpenStudent: (id: string) => void;
+}) {
+  const accepted = turn.accepted || {};
+  const intent = result.intent || "answer";
+  const meta = intentLabel[intent] || intentLabel.answer;
+  const hasProposals = (result.studentRecords?.length || 0)
+    + (result.teamAdditions?.length || 0)
+    + (result.courseCases?.length || 0)
+    + (result.bulkRecords?.length || 0)
+    + ((result.ercAppend || "").trim() ? 1 : 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${meta.tone}`}>{meta.label}</span>
+        {result.courseTarget ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{result.courseTarget}</span> : null}
+      </div>
+      {result.summary ? <p className="text-slate-800">{result.summary}</p> : null}
+      {result.answer ? <p className="whitespace-pre-wrap text-slate-700">{result.answer}</p> : null}
+      {result.notes ? <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>⚠</strong> {result.notes}</p> : null}
+
+      {(result.involvedStudents || []).length > 0 ? (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Estudiantes detectados</p>
+          <div className="flex flex-wrap gap-1.5">
+            {(result.involvedStudents || []).map((inv, i) => {
+              const student = store.students.find((s) => s.id === inv.studentId);
+              const conf = Math.round((inv.confidence || 0) * 100);
+              return (
+                <button key={i} onClick={() => inv.studentId && onOpenStudent(inv.studentId)} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs hover:bg-slate-50">
+                  <span>{student ? student.fullName : inv.studentName || "?"}</span>
+                  <span className={`rounded-full px-1 text-[10px] ${conf >= 80 ? "bg-emerald-100 text-emerald-700" : conf >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{conf}%</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {(result.studentRecords || []).length > 0 ? (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Registros propuestos</p>
+          <div className="space-y-1.5">
+            {(result.studentRecords || []).map((rec, i) => {
+              const student = store.students.find((s) => s.id === rec.studentId);
+              const config = entityConfigs[rec.entity as EntityId];
+              return (
+                <label key={i} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-xs hover:bg-slate-50">
+                  <input type="checkbox" checked={!!accepted[`sr-${i}`]} onChange={() => onToggle(`sr-${i}`)} className="mt-0.5 h-4 w-4" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">{config?.label || rec.entity}</span>
+                      {rec.priority ? <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{rec.priority}</span> : null}
+                      {student ? <span className="text-[10px] text-slate-500">→ {student.fullName}</span> : null}
+                    </div>
+                    <p className="mt-0.5 font-semibold text-slate-900">{rec.title}</p>
+                    {rec.description ? <p className="text-slate-600 line-clamp-2">{rec.description}</p> : null}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {(result.teamAdditions || []).length > 0 ? (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Nuevos integrantes del equipo de aula</p>
+          <div className="space-y-1.5">
+            {(result.teamAdditions || []).map((m, i) => (
+              <label key={i} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-xs hover:bg-slate-50">
+                <input type="checkbox" checked={!!accepted[`ta-${i}`]} onChange={() => onToggle(`ta-${i}`)} className="mt-0.5 h-4 w-4" />
+                <div className="flex-1">
+                  <p><strong className="text-slate-900">{m.name}</strong> <span className="text-slate-500">— {m.role}</span></p>
+                  {m.email ? <p className="text-[10px] text-slate-500">{m.email}</p> : null}
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {(result.ercAppend || "").trim() ? (
+        <label className="flex gap-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-2 text-xs">
+          <input type="checkbox" checked={!!accepted["erc"]} onChange={() => onToggle("erc")} className="mt-0.5 h-4 w-4" />
+          <div className="flex-1">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-emerald-700">Agregar a notas ERC</p>
+            <p className="mt-0.5 whitespace-pre-wrap text-slate-800">{result.ercAppend}</p>
+          </div>
+        </label>
+      ) : null}
+
+      {(result.courseCases || []).length > 0 ? (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Casos del curso</p>
+          <div className="space-y-1.5">
+            {(result.courseCases || []).map((c, i) => (
+              <label key={i} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-xs hover:bg-slate-50">
+                <input type="checkbox" checked={!!accepted[`cc-${i}`]} onChange={() => onToggle(`cc-${i}`)} className="mt-0.5 h-4 w-4" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap gap-1.5">
+                    {c.priority ? <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{c.priority}</span> : null}
+                    {c.category ? <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-700">{c.category}</span> : null}
+                  </div>
+                  <p className="mt-0.5 font-semibold text-slate-900">{c.title}</p>
+                  {c.description ? <p className="text-slate-600 line-clamp-2">{c.description}</p> : null}
+                </div>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {(result.bulkRecords || []).length > 0 ? (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Registros para crear ({result.bulkEntity || "?"})</p>
+          <div className="space-y-1.5">
+            {(result.bulkRecords || []).slice(0, 20).map((rec, i) => {
+              const conf = Math.round((rec.confidence ?? 0.8) * 100);
+              return (
+                <label key={i} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-xs hover:bg-slate-50">
+                  <input type="checkbox" checked={!!accepted[`br-${i}`]} onChange={() => onToggle(`br-${i}`)} className="mt-0.5 h-4 w-4" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${conf >= 80 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{conf}%</span>
+                    </div>
+                    <div className="mt-0.5 grid gap-x-3 sm:grid-cols-2">
+                      {Object.entries(rec.fields || {}).slice(0, 4).map(([k, v]) => (
+                        <div key={k}><strong className="text-slate-700">{k}:</strong> <span className="text-slate-600">{String(v).slice(0, 60)}</span></div>
+                      ))}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+            {(result.bulkRecords || []).length > 20 ? <p className="text-center text-[11px] text-slate-500">… y {(result.bulkRecords || []).length - 20} más</p> : null}
+          </div>
+        </div>
+      ) : null}
+
+      {hasProposals > 0 ? (
+        <div className="flex justify-end pt-1">
+          <button onClick={onApply} className="tz-press inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+            <Check className="h-3.5 w-3.5" /> Aplicar seleccionados
+          </button>
+        </div>
       ) : null}
     </div>
   );
@@ -5444,7 +5942,7 @@ export default function TizaEducationApp() {
 
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} />;
-    if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} />;
+    if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "students") {
