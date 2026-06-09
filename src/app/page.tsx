@@ -907,8 +907,34 @@ function CourseWorkspaceView({
   const [cycleTab, setCycleTab] = useState<"all" | CourseDef["cycle"]>("all");
   const [draggedStudentId, setDraggedStudentId] = useState("");
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
-  const [teamForm, setTeamForm] = useState({ name: "", role: "Profesor/a jefe", email: "", notes: "" });
+  const [teamForm, setTeamForm] = useState({ name: "", role: "Profesor/a jefe", email: "" });
   const [showTeamForm, setShowTeamForm] = useState(false);
+  const CUSTOM_ROLES_KEY = "tiza-custom-classroom-roles";
+  const [customRoles, setCustomRoles] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try { return JSON.parse(window.localStorage.getItem(CUSTOM_ROLES_KEY) || "[]"); } catch { return []; }
+  });
+  const [newRoleDraft, setNewRoleDraft] = useState("");
+  const [showNewRoleInput, setShowNewRoleInput] = useState(false);
+  const allRoles = [...classroomRoles, ...customRoles.filter((r) => !classroomRoles.includes(r))];
+  const persistCustomRoles = (next: string[]) => {
+    setCustomRoles(next);
+    try { window.localStorage.setItem(CUSTOM_ROLES_KEY, JSON.stringify(next)); } catch { /* ignore quota */ }
+  };
+  const addCustomRole = (raw: string) => {
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    if (allRoles.includes(trimmed)) {
+      setTeamForm((f) => ({ ...f, role: trimmed }));
+      setShowNewRoleInput(false);
+      setNewRoleDraft("");
+      return;
+    }
+    persistCustomRoles([...customRoles, trimmed]);
+    setTeamForm((f) => ({ ...f, role: trimmed }));
+    setShowNewRoleInput(false);
+    setNewRoleDraft("");
+  };
 
   const visibleCourses = cycleTab === "all" ? courses : courses.filter((course) => course.cycle === cycleTab);
   const current = courses.find((course) => course.name === selectedCourse) || courses[0];
@@ -959,13 +985,13 @@ function CourseWorkspaceView({
       name: teamForm.name.trim(),
       role: teamForm.role,
       email: teamForm.email.trim(),
-      notes: teamForm.notes.trim(),
+      notes: "",
     };
     onUpdateCourse(current.name, {
       classroomTeam: JSON.stringify([...classroomTeam, member]),
       headTeacher: member.role === "Profesor/a jefe" ? member.name : current.record.headTeacher || "",
     });
-    setTeamForm({ name: "", role: "Profesor/a jefe", email: "", notes: "" });
+    setTeamForm({ name: "", role: "Profesor/a jefe", email: "" });
     setShowTeamForm(false);
   };
 
@@ -1087,16 +1113,42 @@ function CourseWorkspaceView({
             </div>
 
             {showTeamForm ? (
-              <div className="tz-slide-up mb-4 grid gap-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4 lg:grid-cols-[1fr_220px_1fr_1fr_auto]">
-                <input value={teamForm.name} onChange={(event) => setTeamForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
-                <select value={teamForm.role} onChange={(event) => setTeamForm((form) => ({ ...form, role: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
-                  {classroomRoles.map((role) => <option key={role}>{role}</option>)}
-                </select>
-                <input value={teamForm.email} onChange={(event) => setTeamForm((form) => ({ ...form, email: event.target.value }))} placeholder="Correo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
-                <input value={teamForm.notes} onChange={(event) => setTeamForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notas u horario" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
-                <button onClick={addClassroomTeamMember} disabled={!teamForm.name.trim()} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
-                  <Save className="h-4 w-4" /> Guardar
-                </button>
+              <div className="tz-slide-up mb-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                <div className="grid gap-2 lg:grid-cols-[1fr_240px_1fr_auto]">
+                  <input value={teamForm.name} onChange={(event) => setTeamForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                  <select
+                    value={showNewRoleInput ? "__new__" : teamForm.role}
+                    onChange={(event) => {
+                      if (event.target.value === "__new__") setShowNewRoleInput(true);
+                      else { setShowNewRoleInput(false); setTeamForm((form) => ({ ...form, role: event.target.value })); }
+                    }}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                  >
+                    {allRoles.map((role) => <option key={role} value={role}>{role}</option>)}
+                    <option value="__new__">＋ Nuevo cargo personalizado…</option>
+                  </select>
+                  <input value={teamForm.email} onChange={(event) => setTeamForm((form) => ({ ...form, email: event.target.value }))} placeholder="Correo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                  <button onClick={addClassroomTeamMember} disabled={!teamForm.name.trim() || showNewRoleInput} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
+                    <Save className="h-4 w-4" /> Guardar
+                  </button>
+                </div>
+                {showNewRoleInput ? (
+                  <div className="tz-slide-up mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-blue-300 bg-white p-3">
+                    <input
+                      autoFocus
+                      value={newRoleDraft}
+                      onChange={(event) => setNewRoleDraft(event.target.value)}
+                      onKeyDown={(event) => { if (event.key === "Enter") addCustomRole(newRoleDraft); }}
+                      placeholder="Ej.: Fonoaudióloga, Educadora PIE, Inspectora general…"
+                      className="flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500"
+                    />
+                    <button onClick={() => addCustomRole(newRoleDraft)} disabled={!newRoleDraft.trim()} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:bg-slate-300">
+                      <Plus className="h-4 w-4" /> Crear cargo
+                    </button>
+                    <button onClick={() => { setShowNewRoleInput(false); setNewRoleDraft(""); }} className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                    <p className="w-full text-[11px] text-slate-500">Los cargos personalizados se guardan localmente y aparecen disponibles para todos los cursos.</p>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -1119,11 +1171,12 @@ function CourseWorkspaceView({
                           className="w-full border-b border-transparent bg-transparent text-sm font-semibold text-slate-950 outline-none transition hover:border-slate-200 focus:border-blue-500"
                         />
                         <select
-                          value={member.role}
+                          value={allRoles.includes(member.role) ? member.role : member.role}
                           onChange={(event) => updateClassroomTeamMember(member.id, { role: event.target.value })}
                           className="mt-1 w-full rounded border border-transparent bg-transparent text-xs text-slate-600 outline-none transition hover:border-slate-200 focus:border-blue-500"
                         >
-                          {classroomRoles.map((role) => <option key={role}>{role}</option>)}
+                          {!allRoles.includes(member.role) && member.role ? <option value={member.role}>{member.role}</option> : null}
+                          {allRoles.map((role) => <option key={role} value={role}>{role}</option>)}
                         </select>
                         <input
                           value={member.email}
@@ -1131,14 +1184,6 @@ function CourseWorkspaceView({
                           placeholder="Correo"
                           className="mt-1 w-full border-b border-transparent bg-transparent text-xs text-slate-500 outline-none transition hover:border-slate-200 focus:border-blue-500"
                         />
-                        {member.notes !== undefined ? (
-                          <input
-                            value={member.notes || ""}
-                            onChange={(event) => updateClassroomTeamMember(member.id, { notes: event.target.value })}
-                            placeholder="Notas"
-                            className="mt-1 w-full border-b border-transparent bg-transparent text-xs text-slate-500 outline-none transition hover:border-slate-200 focus:border-blue-500"
-                          />
-                        ) : null}
                       </div>
                       <button onClick={() => removeClassroomTeamMember(member.id)} className="rounded-md p-1.5 text-red-500 opacity-0 transition group-hover:opacity-100 hover:bg-red-50">
                         <Trash2 className="h-4 w-4" />
@@ -2458,63 +2503,79 @@ function StudentsWorkspaceView({
 }) {
   const [search, setSearch] = useState("");
   const [cycleFilter, setCycleFilter] = useState<"all" | CourseDef["cycle"]>("all");
-  const [openCourses, setOpenCourses] = useState<Record<string, boolean>>({});
+  const [selectedCourseName, setSelectedCourseName] = useState<string>(() => officialCourses[0]?.name || "");
 
   const searchable = normalize(search);
-  const cycleByCourse = new Map(officialCourses.map((course) => [normalize(course.name), course.cycle]));
+  const cycleByCourse = new Map(officialCourses.map((c) => [normalize(c.name), c.cycle]));
 
-  const filteredStudents = store.students.filter((student) => {
-    if (!searchable) return true;
-    return [student.fullName, student.rut, student.guardian, student.email, student.phone]
-      .map((value) => normalize(String(value || "")))
-      .some((value) => value.includes(searchable));
-  });
-
+  // Group students by course (use the course string as-is to preserve "Sin curso").
   const grouped = new Map<string, DataRecord[]>();
-  filteredStudents.forEach((student) => {
+  store.students.forEach((student) => {
     const courseKey = (student.course || "Sin curso").trim() || "Sin curso";
     if (!grouped.has(courseKey)) grouped.set(courseKey, []);
     grouped.get(courseKey)!.push(student);
   });
 
-  const officialOrder = [...officialCourses.map((course) => course.name), "Sin curso"];
+  const officialOrder = [...officialCourses.map((c) => c.name), "Sin curso"];
   const courseList = officialOrder
     .filter((name) => grouped.has(name))
     .concat(Array.from(grouped.keys()).filter((name) => !officialOrder.includes(name)))
     .map((name) => {
       const cycle = cycleByCourse.get(normalize(name)) || (name === "Sin curso" ? undefined : "III Ciclo");
-      return { name, students: grouped.get(name) || [], cycle };
+      const students = grouped.get(name) || [];
+      return { name, students, cycle };
     })
     .filter((group) => cycleFilter === "all" || group.cycle === cycleFilter);
 
-  const totalShown = courseList.reduce((sum, group) => sum + group.students.length, 0);
-  const toggleCourse = (name: string) => setOpenCourses((current) => ({ ...current, [name]: !(current[name] ?? true) }));
+  const matchesSearch = (s: DataRecord) =>
+    !searchable ||
+    [s.fullName, s.rut, s.guardian, s.email, s.phone, s.tags, s.course]
+      .map((v) => normalize(String(v || "")))
+      .some((v) => v.includes(searchable));
+
+  // When searching, prefer courses with matches and auto-select the first.
+  const filteredCourses = searchable
+    ? courseList.map((g) => ({ ...g, students: g.students.filter(matchesSearch) })).filter((g) => g.students.length > 0)
+    : courseList;
+
+  useEffect(() => {
+    if (filteredCourses.length === 0) return;
+    if (!filteredCourses.some((g) => g.name === selectedCourseName)) {
+      setSelectedCourseName(filteredCourses[0].name);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, cycleFilter]);
+
+  const currentGroup = filteredCourses.find((g) => g.name === selectedCourseName) || filteredCourses[0];
+  const currentStudents = (currentGroup?.students || []).slice().sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "es"));
+
+  const totalShown = filteredCourses.reduce((s, g) => s + g.students.length, 0);
 
   return (
     <div className="tz-fade">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Estudiantes</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Listado ordenado por curso. Haz clic en cualquier estudiante para abrir su ficha con casos, entrevistas y documentos.
+            Cursos a la izquierda, estudiantes del curso seleccionado a la derecha. Clic en cualquier estudiante para abrir su ficha.
           </p>
         </div>
-        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+        <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
           <Plus className="h-4 w-4" /> Agregar estudiante
         </button>
       </div>
 
-      <div className="mb-5 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:flex-row lg:items-center">
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:flex-row lg:items-center">
         <div className="flex flex-1 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
           <Search className="h-4 w-4 text-slate-400" />
           <input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Buscar por nombre, RUT, apoderado, correo..."
+            placeholder="Buscar por nombre, RUT, apoderado, correo, etiqueta…"
             className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
           />
           {search ? (
-            <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-700">
+            <button onClick={() => setSearch("")} className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
               <X className="h-4 w-4" />
             </button>
           ) : null}
@@ -2536,81 +2597,123 @@ function StudentsWorkspaceView({
           ))}
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-1.5 text-sm">
-          <span className="font-semibold text-slate-950">{totalShown}</span>
-          <span className="ml-1 text-slate-500">de {store.students.length} estudiantes</span>
+          <span className="font-semibold tabular-nums text-slate-950">{totalShown.toLocaleString("es-CL")}</span>
+          <span className="ml-1 text-slate-500">de {store.students.length.toLocaleString("es-CL")} estudiantes</span>
         </div>
       </div>
 
       {store.students.length === 0 ? (
         <EmptyState entity={entityConfigs.students} onAdd={onAdd} onImport={() => undefined} />
-      ) : courseList.length === 0 ? (
+      ) : filteredCourses.length === 0 ? (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-10 text-center">
           <Search className="mx-auto h-8 w-8 text-slate-400" />
           <p className="mt-3 text-sm text-slate-600">No hay estudiantes que coincidan con tu búsqueda.</p>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {courseList.map((group) => {
-            const isOpen = openCourses[group.name] ?? true;
-            return (
-              <section key={group.name} className="tz-card overflow-hidden rounded-xl border border-slate-200 bg-white">
-                <button onClick={() => toggleCourse(group.name)} className="flex w-full items-center justify-between gap-3 bg-gradient-to-br from-slate-50 to-white px-5 py-4 text-left">
-                  <div className="flex items-center gap-3">
-                    <div className={`grid h-10 w-10 place-items-center rounded-md bg-gradient-to-br ${avatarTone(group.name)} text-sm font-bold text-white shadow-sm`}>
-                      {group.name.split(" ").slice(0, 2).map((part) => part[0] || "").join("").toUpperCase().slice(0, 2)}
+        <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+          {/* Master pane: course list */}
+          <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              {filteredCourses.length} curso{filteredCourses.length === 1 ? "" : "s"}
+            </div>
+            <div className="max-h-[calc(100vh-260px)] overflow-y-auto">
+              {filteredCourses.map((group) => {
+                const active = group.name === selectedCourseName;
+                return (
+                  <button
+                    key={group.name}
+                    onClick={() => setSelectedCourseName(group.name)}
+                    className={`group flex w-full items-center gap-3 border-l-2 px-4 py-2.5 text-left transition ${
+                      active ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${avatarTone(group.name)} text-[11px] font-bold text-white shadow-sm`}>
+                      {group.name.split(" ").slice(0, 2).map((p) => p[0] || "").join("").toUpperCase().slice(0, 2)}
                     </div>
-                    <div>
-                      <h2 className="text-base font-semibold text-slate-950">{group.name}</h2>
-                      <p className="text-xs text-slate-500">{group.cycle || "Sin ciclo"} · {group.students.length} estudiante{group.students.length === 1 ? "" : "s"}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-sm font-semibold ${active ? "text-blue-900" : "text-slate-900"}`}>{group.name}</p>
+                      <p className="truncate text-[11px] text-slate-500">{group.cycle || "Sin ciclo"}</p>
                     </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${active ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700"}`}>
+                      {group.students.length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* Detail pane: students of selected course */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            {currentGroup ? (
+              <>
+                <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-slate-950">{currentGroup.name}</h2>
+                    <p className="text-xs text-slate-500">{currentGroup.cycle || "Sin ciclo"} · {currentStudents.length} estudiante{currentStudents.length === 1 ? "" : "s"}{searchable ? " que coinciden" : ""}</p>
                   </div>
-                  <ChevronDown className={`h-5 w-5 text-slate-400 transition-transform ${isOpen ? "" : "-rotate-90"}`} />
-                </button>
-                {isOpen ? (
-                  <div className="tz-fade divide-y divide-slate-100">
-                    {group.students.map((student) => {
+                </header>
+                {currentStudents.length === 0 ? (
+                  <p className="p-10 text-center text-sm text-slate-500">No hay estudiantes en este curso{searchable ? " que coincidan con la búsqueda" : ""}.</p>
+                ) : (
+                  <ol className="max-h-[calc(100vh-280px)] divide-y divide-slate-100 overflow-y-auto">
+                    {currentStudents.map((student, idx) => {
                       const caseCount = store.cases.filter((record) => studentMatches(record, student)).length;
+                      const tags = (student.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
                       return (
-                        <button
-                          key={student.id}
-                          onClick={() => onOpenStudent(student.id)}
-                          className="group flex w-full items-center gap-3 px-5 py-3 text-left transition hover:bg-blue-50/60"
-                        >
-                          <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-xs font-bold text-white`}>
-                            {student.profilePhoto ? (
-                              <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
-                            ) : (
-                              initialsOf(student.fullName)
-                            )}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-slate-950 group-hover:text-blue-700">{student.fullName || "Sin nombre"}</span>
-                            <span className="block truncate text-xs text-slate-500">{student.rut || "Sin RUT"}{student.guardian ? ` · ${student.guardian}` : ""}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {student.healthAlerts ? (
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                onClick={(event) => { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); }}
-                                onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); } }}
-                                title={student.healthAlerts}
-                                className="cursor-pointer rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100"
-                              >
-                                ⚠ Salud
-                              </span>
-                            ) : null}
-                            {caseCount ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{caseCount} caso{caseCount === 1 ? "" : "s"}</span> : null}
-                            <ChevronDown className="-rotate-90 h-4 w-4 text-slate-300 group-hover:text-blue-500" />
-                          </div>
-                        </button>
+                        <li key={student.id}>
+                          <button
+                            onClick={() => onOpenStudent(student.id)}
+                            className="group flex w-full items-center gap-3 px-5 py-2.5 text-left transition hover:bg-blue-50/40"
+                          >
+                            <span className="w-7 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-400">{idx + 1}</span>
+                            <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[11px] font-bold text-white`}>
+                              {student.profilePhoto ? (
+                                <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
+                              ) : (
+                                initialsOf(student.fullName)
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-semibold text-slate-950 group-hover:text-blue-700">{student.fullName || "Sin nombre"}</p>
+                              <p className="truncate text-[11px] text-slate-500">
+                                {student.rut ? <span>{student.rut}</span> : null}
+                                {student.guardian ? <span> · Apoderado/a: {student.guardian}</span> : null}
+                                {student.phone ? <span> · {student.phone}</span> : null}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1.5">
+                              {tags.slice(0, 2).map((tag) => (
+                                <span key={tag} className="hidden rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-blue-200 sm:inline">{tag}</span>
+                              ))}
+                              {student.healthAlerts ? (
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={(event) => { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); }}
+                                  onKeyDown={(event) => { if (event.key === "Enter") { event.stopPropagation(); onOpenStudent(student.id, "healthAlerts"); } }}
+                                  title={student.healthAlerts}
+                                  className="cursor-pointer rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200 transition hover:bg-rose-100"
+                                >
+                                  ⚠ Salud
+                                </span>
+                              ) : null}
+                              {caseCount ? (
+                                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">{caseCount} caso{caseCount === 1 ? "" : "s"}</span>
+                              ) : null}
+                              <ChevronDown className="-rotate-90 h-4 w-4 text-slate-300 group-hover:text-blue-500" />
+                            </div>
+                          </button>
+                        </li>
                       );
                     })}
-                  </div>
-                ) : null}
-              </section>
-            );
-          })}
+                  </ol>
+                )}
+              </>
+            ) : (
+              <div className="p-10 text-center text-sm text-slate-500">Selecciona un curso a la izquierda.</div>
+            )}
+          </section>
         </div>
       )}
     </div>
