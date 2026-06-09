@@ -530,7 +530,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
 const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Inicio", icon: Home },
   { id: "today", label: "Hoy", icon: CalendarDays },
-  { id: "triage", label: "Triaje IA", icon: Sparkles },
+  { id: "triage", label: "Asistente IA", icon: Sparkles },
   { id: "reports", label: "Reportes", icon: PieChart },
   { id: "import", label: "Importar con IA", icon: Wand2 },
   { id: "students", label: "Estudiantes", icon: UserRound },
@@ -3623,7 +3623,120 @@ type TriageResponse = {
   notes?: string;
 };
 
-function TriageView({
+type CourseAiResponse = {
+  summary?: string;
+  teamAdditions?: Array<{ name?: string; role?: string; email?: string; notes?: string }>;
+  ercAppend?: string;
+  courseCases?: Array<{ title?: string; category?: string; priority?: string; description?: string }>;
+  notes?: string;
+};
+
+type BulkAiResponse = {
+  summary?: string;
+  entity?: string;
+  headersDetected?: string[];
+  records?: Array<{ fields?: Record<string, string>; sourceRow?: number | string; confidence?: number; notes?: string }>;
+  skipped?: Array<{ sourceRow?: number | string; reason?: string }>;
+  warnings?: string;
+};
+
+type AiMode = "student" | "course" | "bulk";
+
+const callAiEndpoint = async (
+  url: string,
+  body: Record<string, unknown>,
+  accessToken: string,
+): Promise<{ ok: boolean; result?: unknown; error?: string }> => {
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(body),
+    });
+    let data: { ok?: boolean; error?: unknown; result?: unknown } = {};
+    try {
+      data = await res.json();
+    } catch {
+      const txt = await res.text().catch(() => "");
+      return { ok: false, error: `Respuesta no válida del servidor (${res.status}). ${txt.slice(0, 200)}` };
+    }
+    if (!res.ok || !data.ok) {
+      const errField = data.error;
+      let msg: string;
+      if (typeof errField === "string") msg = errField;
+      else if (errField && typeof errField === "object") {
+        const obj = errField as { message?: string; code?: string };
+        msg = obj.message || obj.code || JSON.stringify(errField);
+      } else msg = `Error ${res.status}`;
+      return { ok: false, error: msg };
+    }
+    return { ok: true, result: data.result };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+};
+
+function AIAssistantView({
+  store,
+  accessToken,
+  onAddRecord,
+  onOpenStudent,
+  onUpdateCourse,
+}: {
+  store: DataStore;
+  accessToken: string;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onOpenStudent: (studentId: string) => void;
+  onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+}) {
+  const [mode, setMode] = useState<AiMode>("student");
+
+  return (
+    <div className="tz-fade space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-950">
+            <Sparkles className="h-7 w-7 text-violet-600" />
+            Asistente IA
+          </h1>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Tres modos: triaje de correos sobre <strong>estudiantes</strong>, actualizaciones de <strong>cursos</strong> a partir de mensajes del equipo de aula, e <strong>importación masiva</strong> desde planillas de Google Sheets / Excel.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1.5">
+        {([
+          ["student", "Sobre un estudiante", UserRound],
+          ["course", "Sobre un curso", BookOpen],
+          ["bulk", "Importar planilla", FileSpreadsheet],
+        ] as Array<[AiMode, string, LucideIcon]>).map(([key, label, Icon]) => (
+          <button
+            key={key}
+            onClick={() => setMode(key)}
+            className={`tz-press flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition ${
+              mode === key ? "bg-slate-900 text-white shadow" : "text-slate-600 hover:bg-slate-100"
+            }`}
+          >
+            <Icon className="h-4 w-4" /> {label}
+          </button>
+        ))}
+      </div>
+
+      {mode === "student" ? (
+        <AIStudentTriage store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} />
+      ) : null}
+      {mode === "course" ? (
+        <AICourseUpdate store={store} accessToken={accessToken} onUpdateCourse={onUpdateCourse} onAddRecord={onAddRecord} />
+      ) : null}
+      {mode === "bulk" ? (
+        <AIBulkImport store={store} accessToken={accessToken} onAddRecord={onAddRecord} />
+      ) : null}
+    </div>
+  );
+}
+
+function AIStudentTriage({
   store,
   accessToken,
   onAddRecord,
@@ -3646,49 +3759,23 @@ function TriageView({
     setResult(null);
     setAccepted({});
     setLoading(true);
-    try {
-      const students = store.students.map((s) => ({
-        id: s.id,
-        name: s.fullName || "",
-        course: s.course || "",
-        rut: s.rut || "",
-        guardian: s.guardian || "",
-      }));
-      const res = await fetch("/api/triage", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${accessToken}`,
-        },
-        body: JSON.stringify({ emailText: text, students, today: new Date().toISOString().slice(0, 10) }),
-      });
-      let data: { ok?: boolean; error?: unknown; result?: TriageResponse } = {};
-      try {
-        data = await res.json();
-      } catch {
-        const fallbackText = await res.text().catch(() => "");
-        throw new Error(`Respuesta no válida del servidor (${res.status}). ${fallbackText.slice(0, 200)}`);
-      }
-      if (!res.ok || !data.ok) {
-        const errField = data.error;
-        let msg: string;
-        if (typeof errField === "string") msg = errField;
-        else if (errField && typeof errField === "object") {
-          const obj = errField as { message?: string; code?: string };
-          msg = obj.message || obj.code || JSON.stringify(errField);
-        } else msg = `Error ${res.status}`;
-        throw new Error(msg);
-      }
-      setResult(data.result || null);
+    const students = store.students.map((s) => ({
+      id: s.id,
+      name: s.fullName || "",
+      course: s.course || "",
+      rut: s.rut || "",
+      guardian: s.guardian || "",
+    }));
+    const r = await callAiEndpoint("/api/triage", { emailText: text, students, today: new Date().toISOString().slice(0, 10) }, accessToken);
+    if (!r.ok) setError(r.error || "Error inesperado");
+    else {
+      const res = r.result as TriageResponse;
+      setResult(res);
       const initial: Record<number, boolean> = {};
-      (data.result?.records || []).forEach((_: TriageRecord, idx: number) => { initial[idx] = true; });
+      (res.records || []).forEach((_, idx) => { initial[idx] = true; });
       setAccepted(initial);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setError(msg || "Error inesperado");
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const createSelected = () => {
@@ -3725,53 +3812,28 @@ function TriageView({
   };
 
   return (
-    <div className="tz-fade space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-950">
-            <Sparkles className="h-7 w-7 text-violet-600" />
-            Triaje IA
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Pega un correo, mensaje o relato sobre uno o varios estudiantes. La IA detecta a quién(es) involucra, lo resume y propone casos, entrevistas, bitácoras o protocolos pre-asociados.
-          </p>
-        </div>
-      </div>
-
+    <div className="space-y-5">
       <section className="rounded-2xl border border-slate-200 bg-white p-5">
         <label className="block">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Texto del correo o mensaje</span>
           <textarea
             value={text}
             onChange={(event) => setText(event.target.value)}
-            placeholder="Pega aquí el correo o relato completo. Ej.: 'Hola Gustavo, te escribo porque María Pérez de 4°A presentó una crisis de ansiedad en la clase de matemáticas...'"
+            placeholder="Ej.: 'Hola Gustavo, te escribo porque María Pérez de 4°A presentó una crisis de ansiedad en la clase de matemáticas...'"
             className="mt-2 min-h-44 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/30 p-3 text-sm leading-6 outline-none focus:border-violet-500 focus:bg-white"
           />
         </label>
         <div className="mt-3 flex items-center justify-between gap-3">
-          <p className="text-xs text-slate-500">{store.students.length} estudiantes disponibles en la nómina · Modelo Google Gemini 2.5 Flash Lite (gratis)</p>
+          <p className="text-xs text-slate-500">{store.students.length} estudiantes disponibles · Google Gemini gratis</p>
           <button
             onClick={analyze}
             disabled={loading || !text.trim() || store.students.length === 0}
             className="tz-press inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:opacity-95 disabled:opacity-50"
           >
-            {loading ? (
-              <>
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                Analizando…
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" /> Analizar con IA
-              </>
-            )}
+            {loading ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Analizando…</>) : (<><Sparkles className="h-4 w-4" /> Analizar con IA</>)}
           </button>
         </div>
-        {error ? (
-          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
-            <strong>Error:</strong> {error}
-          </div>
-        ) : null}
+        {error ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><strong>Error:</strong> {error}</div> : null}
       </section>
 
       {result ? (
@@ -3781,7 +3843,6 @@ function TriageView({
             <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
             {result.notes ? <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>⚠ Atención:</strong> {result.notes}</p> : null}
           </div>
-
           <div className="border-t border-slate-100 px-5 py-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Estudiantes detectados</h3>
             <div className="mt-3 flex flex-wrap gap-2">
@@ -3789,15 +3850,8 @@ function TriageView({
                 const student = store.students.find((s) => s.id === inv.studentId);
                 const conf = Math.round((inv.confidence || 0) * 100);
                 return (
-                  <button
-                    key={idx}
-                    onClick={() => inv.studentId && onOpenStudent(inv.studentId)}
-                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
-                    title={inv.evidence || ""}
-                  >
-                    <span className={`grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${avatarTone(inv.studentId || "")} text-[10px] text-white`}>
-                      {student ? initialsOf(student.fullName) : "?"}
-                    </span>
+                  <button key={idx} onClick={() => inv.studentId && onOpenStudent(inv.studentId)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-50" title={inv.evidence || ""}>
+                    <span className={`grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${avatarTone(inv.studentId || "")} text-[10px] text-white`}>{student ? initialsOf(student.fullName) : "?"}</span>
                     <span>{student ? student.fullName : inv.studentName || "Sin coincidencia"}</span>
                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${conf >= 80 ? "bg-emerald-100 text-emerald-700" : conf >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{conf}%</span>
                   </button>
@@ -3806,7 +3860,6 @@ function TriageView({
               {(result.involved || []).length === 0 ? <span className="text-sm text-slate-500">Sin coincidencias.</span> : null}
             </div>
           </div>
-
           <div className="border-t border-slate-100 px-5 py-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Registros propuestos ({(result.records || []).length})</h3>
@@ -3820,12 +3873,7 @@ function TriageView({
                 const entityLabel = entityConfigs[rec.entity as EntityId]?.label || rec.entity;
                 return (
                   <article key={idx} className="flex gap-3 rounded-xl border border-slate-200 p-3">
-                    <input
-                      type="checkbox"
-                      checked={accepted[idx] || false}
-                      onChange={(event) => setAccepted((current) => ({ ...current, [idx]: event.target.checked }))}
-                      className="mt-1.5 h-4 w-4"
-                    />
+                    <input type="checkbox" checked={accepted[idx] || false} onChange={(event) => setAccepted((c) => ({ ...c, [idx]: event.target.checked }))} className="mt-1.5 h-4 w-4" />
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-violet-700">{entityLabel}</span>
@@ -3842,6 +3890,360 @@ function TriageView({
               })}
               {(result.records || []).length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">La IA no propuso registros.</p> : null}
             </div>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function AICourseUpdate({
+  store,
+  accessToken,
+  onUpdateCourse,
+  onAddRecord,
+}: {
+  store: DataStore;
+  accessToken: string;
+  onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+}) {
+  const courseNames = officialCourses.map((c) => c.name);
+  const [courseName, setCourseName] = useState(courseNames[0] || "");
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<CourseAiResponse | null>(null);
+  const [acceptTeam, setAcceptTeam] = useState<Record<number, boolean>>({});
+  const [acceptCases, setAcceptCases] = useState<Record<number, boolean>>({});
+  const [acceptErc, setAcceptErc] = useState(true);
+
+  const savedByName = new Map(store.courses.map((c) => [normalize(c.name || ""), c]));
+  const courseRecord = savedByName.get(normalize(courseName));
+  const classroomTeam = parseClassroomTeam(courseRecord?.classroomTeam);
+  const studentNames = store.students.filter((s) => normalize(s.course || "") === normalize(courseName)).map((s) => s.fullName || "").filter(Boolean);
+
+  const analyze = async () => {
+    if (!text.trim() || !courseName) return;
+    setError("");
+    setResult(null);
+    setAcceptTeam({});
+    setAcceptCases({});
+    setAcceptErc(true);
+    setLoading(true);
+    const official = officialCourses.find((c) => c.name === courseName);
+    const courseContext = {
+      name: courseName,
+      cycle: official?.cycle,
+      orientationOwner: official?.orientationOwner,
+      convivenciaCoordinator: official?.convivenciaCoordinator,
+      classroomTeam: classroomTeam.map((m) => ({ id: m.id, name: m.name, role: m.role, email: m.email, notes: m.notes })),
+      ercNotes: courseRecord?.ercNotes || "",
+      studentNames,
+    };
+    const r = await callAiEndpoint("/api/ai/course", { text, course: courseContext, today: new Date().toISOString().slice(0, 10) }, accessToken);
+    if (!r.ok) setError(r.error || "Error inesperado");
+    else {
+      const res = r.result as CourseAiResponse;
+      setResult(res);
+      const ti: Record<number, boolean> = {};
+      (res.teamAdditions || []).forEach((_, i) => { ti[i] = true; });
+      const ci: Record<number, boolean> = {};
+      (res.courseCases || []).forEach((_, i) => { ci[i] = true; });
+      setAcceptTeam(ti);
+      setAcceptCases(ci);
+    }
+    setLoading(false);
+  };
+
+  const applySelected = () => {
+    if (!result) return;
+    const teamToAdd = (result.teamAdditions || []).filter((_, i) => acceptTeam[i]);
+    if (teamToAdd.length) {
+      const newTeam: ClassroomTeamMember[] = [
+        ...classroomTeam,
+        ...teamToAdd.map((m) => ({
+          id: uid(),
+          name: m.name || "Sin nombre",
+          role: m.role || "Otro apoyo",
+          email: m.email || "",
+          notes: m.notes || "",
+        })),
+      ];
+      onUpdateCourse(courseName, { classroomTeam: JSON.stringify(newTeam) });
+    }
+    if (acceptErc && (result.ercAppend || "").trim()) {
+      const next = `${courseRecord?.ercNotes || ""}${(courseRecord?.ercNotes || "").trim() ? "\n\n" : ""}${result.ercAppend}`.trim();
+      onUpdateCourse(courseName, { ercNotes: next });
+    }
+    (result.courseCases || []).forEach((c, i) => {
+      if (!acceptCases[i]) return;
+      const rec: DataRecord = {
+        id: uid(),
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        student: courseName,
+        course: courseName,
+        title: c.title || "Caso del curso",
+        category: c.category || "",
+        priority: c.priority || "",
+        status: "Abierto",
+        description: c.description || "",
+      };
+      onAddRecord("cases", rec);
+    });
+    setResult(null);
+    setText("");
+  };
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="grid gap-3 md:grid-cols-[260px_1fr]">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Curso</span>
+            <select value={courseName} onChange={(event) => setCourseName(event.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500">
+              {courseNames.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+              <p><strong>{classroomTeam.length}</strong> en equipo de aula · <strong>{studentNames.length}</strong> estudiantes</p>
+              {(courseRecord?.ercNotes || "").trim() ? <p className="mt-1 line-clamp-3">Notas ERC: {courseRecord?.ercNotes}</p> : null}
+            </div>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Correo o mensaje sobre el curso</span>
+            <textarea
+              value={text}
+              onChange={(event) => setText(event.target.value)}
+              placeholder="Ej.: 'Hola, soy Carolina, profe jefe de 3°B. Te aviso que esta semana se sumó al equipo Camila Soto, educadora diferencial (c.soto@colegio.cl). Además, hubo conflicto entre 4 estudiantes durante el recreo, necesitamos abordarlo en convivencia. Próxima reunión ERC el viernes 14.'"
+              className="mt-2 min-h-44 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/30 p-3 text-sm leading-6 outline-none focus:border-violet-500 focus:bg-white"
+            />
+          </label>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">La IA puede sumar miembros al equipo de aula, agregar notas ERC o crear casos del curso.</p>
+          <button onClick={analyze} disabled={loading || !text.trim()} className="tz-press inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:opacity-95 disabled:opacity-50">
+            {loading ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Analizando…</>) : (<><Sparkles className="h-4 w-4" /> Analizar con IA</>)}
+          </button>
+        </div>
+        {error ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><strong>Error:</strong> {error}</div> : null}
+      </section>
+
+      {result ? (
+        <section className="tz-slide-up space-y-4 overflow-hidden rounded-2xl border border-violet-200 bg-white p-5">
+          <div className="rounded-lg bg-gradient-to-r from-violet-50 to-blue-50 p-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
+            {result.notes ? <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>⚠</strong> {result.notes}</p> : null}
+          </div>
+
+          {(result.teamAdditions || []).length > 0 ? (
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Nuevos integrantes propuestos</h3>
+              <div className="mt-2 space-y-2">
+                {(result.teamAdditions || []).map((m, i) => (
+                  <label key={i} className="flex gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+                    <input type="checkbox" checked={acceptTeam[i] || false} onChange={(e) => setAcceptTeam((c) => ({ ...c, [i]: e.target.checked }))} className="mt-1 h-4 w-4" />
+                    <div className="flex-1">
+                      <strong className="text-sm text-slate-950">{m.name || "Sin nombre"}</strong>
+                      <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">{m.role}</span>
+                      {m.email ? <p className="text-xs text-slate-500">{m.email}</p> : null}
+                      {m.notes ? <p className="text-xs text-slate-600">{m.notes}</p> : null}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {(result.ercAppend || "").trim() ? (
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Agregar a notas ERC</h3>
+              <label className="mt-2 flex gap-3 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
+                <input type="checkbox" checked={acceptErc} onChange={(e) => setAcceptErc(e.target.checked)} className="mt-1 h-4 w-4" />
+                <p className="whitespace-pre-wrap text-sm text-slate-800">{result.ercAppend}</p>
+              </label>
+            </div>
+          ) : null}
+
+          {(result.courseCases || []).length > 0 ? (
+            <div>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Casos del curso propuestos</h3>
+              <div className="mt-2 space-y-2">
+                {(result.courseCases || []).map((c, i) => (
+                  <label key={i} className="flex gap-3 rounded-lg border border-slate-200 p-3 hover:bg-slate-50">
+                    <input type="checkbox" checked={acceptCases[i] || false} onChange={(e) => setAcceptCases((cur) => ({ ...cur, [i]: e.target.checked }))} className="mt-1 h-4 w-4" />
+                    <div className="flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <strong className="text-sm text-slate-950">{c.title}</strong>
+                        {c.priority ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{c.priority}</span> : null}
+                        {c.category ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{c.category}</span> : null}
+                      </div>
+                      {c.description ? <p className="mt-1 text-sm text-slate-700">{c.description}</p> : null}
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex justify-end">
+            <button onClick={applySelected} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+              <Check className="h-4 w-4" /> Aplicar cambios seleccionados
+            </button>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function AIBulkImport({
+  store,
+  accessToken,
+  onAddRecord,
+}: {
+  store: DataStore;
+  accessToken: string;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+}) {
+  const [entity, setEntity] = useState<EntityId>("workshops");
+  const [tableText, setTableText] = useState("");
+  const [instruction, setInstruction] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<BulkAiResponse | null>(null);
+  const [accepted, setAccepted] = useState<Record<number, boolean>>({});
+
+  const analyze = async () => {
+    if (!tableText.trim()) return;
+    setError("");
+    setResult(null);
+    setAccepted({});
+    setLoading(true);
+    const r = await callAiEndpoint("/api/ai/bulk", { tableText, entity, instruction, today: new Date().toISOString().slice(0, 10) }, accessToken);
+    if (!r.ok) setError(r.error || "Error inesperado");
+    else {
+      const res = r.result as BulkAiResponse;
+      setResult(res);
+      const initial: Record<number, boolean> = {};
+      (res.records || []).forEach((_, i) => { initial[i] = true; });
+      setAccepted(initial);
+    }
+    setLoading(false);
+  };
+
+  const createSelected = () => {
+    if (!result?.records) return;
+    let count = 0;
+    result.records.forEach((rec, i) => {
+      if (!accepted[i]) return;
+      const fields = rec.fields || {};
+      const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...fields };
+      onAddRecord(entity, record);
+      count += 1;
+    });
+    if (count > 0) {
+      setResult(null);
+      setTableText("");
+      setInstruction("");
+      setAccepted({});
+    }
+  };
+
+  const entityOptions: Array<[EntityId, string]> = [
+    ["workshops", "Talleres"],
+    ["orientation", "Clases de orientación"],
+    ["logs", "Bitácoras"],
+    ["interviews", "Entrevistas"],
+    ["cases", "Casos"],
+    ["documents", "Documentos"],
+    ["protocols", "Protocolos"],
+    ["students", "Estudiantes"],
+    ["courses", "Cursos"],
+  ];
+
+  return (
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Importar como</span>
+            <select value={entity} onChange={(e) => setEntity(e.target.value as EntityId)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500">
+              {entityOptions.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Instrucción opcional (en lenguaje natural)</span>
+            <input value={instruction} onChange={(e) => setInstruction(e.target.value)} placeholder="Ej.: 'Estos son los talleres de junio, marca como Realizado los que tienen fecha pasada'" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-500" />
+          </label>
+        </div>
+        <label className="mt-3 block">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Tabla pegada desde Google Sheets / Excel / CSV</span>
+          <textarea
+            value={tableText}
+            onChange={(e) => setTableText(e.target.value)}
+            placeholder={"Selecciona en Sheets/Excel desde la fila de headers e incluye los datos, copia con Cmd+C y pega aquí.\n\nFecha\tTaller\tParticipantes\tEstado\n2026-06-04\tEducación emocional\t3°A\tRealizado\n..."}
+            className="mt-2 min-h-44 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/30 p-3 font-mono text-xs leading-5 outline-none focus:border-violet-500 focus:bg-white"
+          />
+        </label>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">La IA mapea columnas a los campos válidos. Tú confirmas qué se crea.</p>
+          <button onClick={analyze} disabled={loading || !tableText.trim()} className="tz-press inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:opacity-95 disabled:opacity-50">
+            {loading ? (<><span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />Analizando…</>) : (<><Sparkles className="h-4 w-4" /> Analizar con IA</>)}
+          </button>
+        </div>
+        {error ? <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><strong>Error:</strong> {error}</div> : null}
+      </section>
+
+      {result ? (
+        <section className="tz-slide-up overflow-hidden rounded-2xl border border-violet-200 bg-white">
+          <div className="bg-gradient-to-r from-violet-50 via-blue-50 to-white px-5 py-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen</h3>
+            <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
+            {(result.headersDetected || []).length > 0 ? (
+              <p className="mt-2 text-xs text-slate-600">Columnas detectadas: {(result.headersDetected || []).map((h) => <code key={h} className="mx-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[11px]">{h}</code>)}</p>
+            ) : null}
+            {result.warnings ? <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>⚠</strong> {result.warnings}</p> : null}
+          </div>
+          <div className="border-t border-slate-100 px-5 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Registros listos para crear ({(result.records || []).length})</h3>
+              <button onClick={createSelected} disabled={!Object.values(accepted).some(Boolean)} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+                <Check className="h-4 w-4" /> Crear seleccionados
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(result.records || []).map((rec, i) => {
+                const conf = Math.round((rec.confidence ?? 0.8) * 100);
+                return (
+                  <label key={i} className="flex gap-3 rounded-xl border border-slate-200 p-3 hover:bg-slate-50">
+                    <input type="checkbox" checked={accepted[i] || false} onChange={(e) => setAccepted((c) => ({ ...c, [i]: e.target.checked }))} className="mt-1 h-4 w-4" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {rec.sourceRow !== undefined ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">fila {rec.sourceRow}</span> : null}
+                        <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${conf >= 80 ? "bg-emerald-100 text-emerald-700" : conf >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{conf}%</span>
+                        {rec.notes ? <span className="text-[10px] text-slate-500">— {rec.notes}</span> : null}
+                      </div>
+                      <div className="mt-1 grid gap-x-3 gap-y-0.5 text-xs sm:grid-cols-2">
+                        {Object.entries(rec.fields || {}).map(([k, v]) => (
+                          <div key={k}><strong className="text-slate-700">{k}:</strong> <span className="text-slate-600">{String(v).slice(0, 80)}</span></div>
+                        ))}
+                      </div>
+                    </div>
+                  </label>
+                );
+              })}
+              {(result.records || []).length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">La IA no extrajo registros.</p> : null}
+            </div>
+            {(result.skipped || []).length > 0 ? (
+              <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+                <strong>Filas omitidas ({(result.skipped || []).length})</strong>
+                <ul className="mt-1 list-disc pl-4">
+                  {(result.skipped || []).map((s, i) => <li key={i}>Fila {s.sourceRow}: {s.reason}</li>)}
+                </ul>
+              </div>
+            ) : null}
           </div>
         </section>
       ) : null}
@@ -4349,7 +4751,7 @@ export default function TizaEducationApp() {
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
     if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} />;
-    if (activeView === "triage") return <TriageView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} />;
+    if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "students") {
       return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
