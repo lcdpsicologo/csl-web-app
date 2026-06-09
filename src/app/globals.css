@@ -251,6 +251,16 @@ a {
   border: 2px solid transparent;
 }
 
+@media print {
+  body { background: white !important; }
+  .no-print, button, nav, aside, footer, .tz-glass, .tz-backdrop { display: none !important; }
+  .tz-print-only { display: block !important; }
+  .tz-print-card { box-shadow: none !important; border: 1px solid #cbd5e1 !important; page-break-inside: avoid; }
+  .tz-print-root { position: static !important; max-height: none !important; width: 100% !important; max-width: none !important; overflow: visible !important; }
+  textarea, input, select { border: 1px solid #cbd5e1 !important; }
+  * { animation: none !important; transition: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

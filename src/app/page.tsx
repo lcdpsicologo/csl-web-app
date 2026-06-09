@@ -8,8 +8,16 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  AlertTriangle,
+  Bell,
+  CalendarDays,
   Camera,
+  Copy,
   MapPin,
+  PieChart,
+  Printer,
+  Sparkles,
+  Tag,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -49,7 +57,7 @@ type EntityId =
   | "workshops"
   | "documents";
 
-type ViewId = "dashboard" | "import" | "team" | "settings" | EntityId;
+type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "settings" | EntityId;
 
 type DataRecord = {
   id: string;
@@ -384,6 +392,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "healthAlerts", label: "Alertas de salud/cuidados", type: "textarea", aliases: ["salud", "alertas", "cuidados"] },
       { key: "notes", label: "Dirección / Domicilio", type: "textarea", aliases: ["direccion", "domicilio", "dirección", "address", "vive", "vivienda"] },
       { key: "observations", label: "Observaciones generales", type: "textarea", aliases: ["observaciones", "notas", "comentarios", "antecedentes", "obs"] },
+      { key: "tags", label: "Etiquetas", aliases: ["etiquetas", "tags", "labels"] },
       { key: "genogram", label: "Genograma", type: "textarea", aliases: ["genograma", "familia", "grupo familiar"] },
     ],
   },
@@ -520,6 +529,9 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
 
 const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Inicio", icon: Home },
+  { id: "today", label: "Hoy", icon: CalendarDays },
+  { id: "triage", label: "Triaje IA", icon: Sparkles },
+  { id: "reports", label: "Reportes", icon: PieChart },
   { id: "import", label: "Importar con IA", icon: Wand2 },
   { id: "students", label: "Estudiantes", icon: UserRound },
   { id: "courses", label: "Cursos", icon: BookOpen },
@@ -1231,6 +1243,24 @@ function CourseWorkspaceView({
             </section>
           </div>
 
+          <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+                  <ClipboardList className="h-5 w-5 text-emerald-600" />
+                  Notas de Equipo de Aula (ERC)
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">Bitácora interna de reuniones del equipo de aula: acuerdos, seguimiento, próximos pasos.</p>
+              </div>
+            </div>
+            <textarea
+              value={current.record.ercNotes || ""}
+              onChange={(event) => onUpdateCourse(current.name, { ercNotes: event.target.value })}
+              placeholder={"Ej.: 12/06 — Reunión con prof. jefe y dupla psicosocial.\nAcuerdos: derivar a Camila P. a psicología externa, reforzar normas de convivencia con el curso.\nResponsable: convivencia.\nPróxima reunión: 26/06."}
+              className="min-h-32 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/30 p-3 text-sm leading-6 outline-none focus:border-emerald-500 focus:bg-white"
+            />
+          </section>
+
           <div className="grid gap-4 lg:grid-cols-3">
             {([
               ["Estudiantes", students.length, "students" as ViewId, UserRound],
@@ -1622,6 +1652,19 @@ function OrientationCycleView({
                                     Abrir en Canva ↗
                                   </a>
                                 ) : null}
+                                <button
+                                  onClick={() => onAddOrientationRecord({
+                                    ...record,
+                                    id: uid(),
+                                    createdAt: nowIso(),
+                                    updatedAt: nowIso(),
+                                    status: "Planificada",
+                                    topic: `${record.topic || "Clase"} (copia)`,
+                                  })}
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                >
+                                  <Copy className="h-3.5 w-3.5" /> Duplicar
+                                </button>
                                 <button onClick={() => { if (window.confirm("¿Eliminar esta clase?")) onDeleteOrientationRecord(record.id); }} className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50">
                                   <Trash2 className="h-3.5 w-3.5" /> Eliminar
                                 </button>
@@ -2067,7 +2110,7 @@ function StudentDetailDialog({
   return (
     <div className="tz-backdrop fixed inset-0 z-50 grid bg-slate-950/45 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="tz-pop m-auto flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="tz-pop tz-print-root m-auto flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="relative">
@@ -2126,6 +2169,11 @@ function StudentDetailDialog({
                     </button>
                   ) : null}
                   {cases.length ? <span className="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">{cases.length} caso{cases.length === 1 ? "" : "s"}</span> : null}
+                  {(student.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean).map((tag) => (
+                    <span key={tag} className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 ring-1 ring-blue-200">
+                      <Tag className="h-3 w-3" />{tag}
+                    </span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -2167,6 +2215,7 @@ function StudentDetailDialog({
                       ["guardian", "Apoderado/a"],
                       ["phone", "Teléfono"],
                       ["email", "Correo", "sm:col-span-2"],
+                      ["tags", "Etiquetas (separadas por coma: PIE, beca, repitente)", "sm:col-span-2"],
                     ].map(([key, label, span]) => (
                       <label key={key} className={`block ${span || ""}`}>
                         <span className="text-xs font-semibold text-slate-700">{label}</span>
@@ -2373,9 +2422,12 @@ function StudentDetailDialog({
           ) : null}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-3 text-xs text-slate-500">
+        <footer className="no-print flex items-center justify-between gap-3 border-t border-slate-200 bg-white px-6 py-3 text-xs text-slate-500">
           <span>Actualizado {new Date(student.updatedAt).toLocaleString("es-CL")}</span>
           <div className="flex gap-2">
+            <button onClick={() => window.print()} title="Imprimir ficha" className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
+              <Printer className="h-3.5 w-3.5" /> Imprimir
+            </button>
             {onNavigate ? (
               <button onClick={() => { onNavigate("students"); onClose(); }} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 font-semibold text-slate-700 hover:bg-slate-50">
                 Ver en sección Estudiantes
@@ -3387,6 +3439,474 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
   );
 }
 
+function TodayView({
+  store,
+  onOpenStudent,
+  onNavigate,
+}: {
+  store: DataStore;
+  onOpenStudent: (studentId: string) => void;
+  onNavigate: (view: ViewId) => void;
+}) {
+  const today = new Date();
+  const todayStr = today.toISOString().slice(0, 10);
+  const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+  const interviewsToday = store.interviews.filter((r) => (r.date || "").slice(0, 10) === todayStr);
+  const classesToday = store.orientation.filter((r) => (r.date || "").slice(0, 10) === todayStr);
+  const protocolsDue = store.protocols
+    .filter((r) => r.dueDate && r.dueDate >= todayStr && r.dueDate <= in7 && r.status !== "Cerrado")
+    .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
+  const openCases = store.cases.filter((r) => /abierto|seguimiento|activad/i.test(r.status || ""));
+  const criticalCases = openCases.filter((r) => /crítica|alta/i.test(r.priority || ""));
+  const healthStudents = store.students.filter((s) => (s.healthAlerts || "").trim()).slice(0, 8);
+  const unplannedClasses = store.orientation.filter((r) => !(r.planificacion || "").trim() && r.date && r.date >= todayStr && r.date <= in7);
+
+  const Section = ({ title, icon: Icon, count, children, view }: { title: string; icon: LucideIcon; count: number; children: React.ReactNode; view?: ViewId }) => (
+    <section className="tz-slide-up rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
+          <Icon className="h-4 w-4 text-slate-600" /> {title}
+          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white">{count}</span>
+        </h2>
+        {view ? <button onClick={() => onNavigate(view)} className="text-xs font-semibold text-blue-600 hover:underline">Ver todo →</button> : null}
+      </div>
+      {children}
+    </section>
+  );
+
+  return (
+    <div className="tz-fade space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Hoy</h1>
+          <p className="mt-1 text-sm text-slate-600">{today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {[
+          ["Entrevistas hoy", interviewsToday.length, MessageSquareText, "interviews" as ViewId, "from-sky-500 to-blue-600"],
+          ["Clases hoy", classesToday.length, ClipboardList, "orientation" as ViewId, "from-violet-500 to-purple-600"],
+          ["Protocolos a 7 días", protocolsDue.length, ShieldCheck, "protocols" as ViewId, "from-amber-500 to-orange-500"],
+          ["Casos críticos abiertos", criticalCases.length, AlertTriangle, "cases" as ViewId, "from-rose-500 to-pink-600"],
+        ].map(([label, count, Icon, view, tone]) => (
+          <button key={String(label)} onClick={() => onNavigate(view as ViewId)} className="tz-card rounded-2xl border border-slate-200 bg-white p-4 text-left">
+            <div className={`mb-2 grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br ${tone} text-white shadow-sm`}>
+              {React.createElement(Icon as LucideIcon, { className: "h-5 w-5" })}
+            </div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label as string}</p>
+            <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-950">{count as number}</p>
+          </button>
+        ))}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Section title="Entrevistas de hoy" icon={MessageSquareText} count={interviewsToday.length} view="interviews">
+          {interviewsToday.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin entrevistas agendadas para hoy.</p>
+          ) : (
+            <ul className="space-y-2">
+              {interviewsToday.map((r) => (
+                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <strong className="block text-slate-950">{r.reason || "Entrevista"}</strong>
+                  <span className="text-slate-600">{r.participant || "—"} · {r.student || ""}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section title="Clases de orientación de hoy" icon={ClipboardList} count={classesToday.length} view="orientation">
+          {classesToday.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin clases programadas para hoy.</p>
+          ) : (
+            <ul className="space-y-2">
+              {classesToday.map((r) => (
+                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <strong className="block text-slate-950">{r.topic}</strong>
+                  <span className="text-slate-600">{r.course} · {r.orientationOwner}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section title="Protocolos a vencer (7 días)" icon={ShieldCheck} count={protocolsDue.length} view="protocols">
+          {protocolsDue.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No hay protocolos próximos a vencer.</p>
+          ) : (
+            <ul className="space-y-2">
+              {protocolsDue.map((r) => (
+                <li key={r.id} className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <strong className="text-slate-950">{r.title}</strong>
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{r.dueDate}</span>
+                  </div>
+                  <span className="text-slate-600">{r.student || "—"} · {r.status || ""}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section title="Clases sin planificación" icon={Bell} count={unplannedClasses.length} view="orientation">
+          {unplannedClasses.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Todas las clases próximas tienen planificación.</p>
+          ) : (
+            <ul className="space-y-2">
+              {unplannedClasses.slice(0, 6).map((r) => (
+                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <strong className="block text-slate-950">{r.topic || "Clase sin tema"}</strong>
+                  <span className="text-slate-600">{r.course} · {r.date}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section title="Estudiantes con alertas de salud" icon={AlertTriangle} count={healthStudents.length} view="students">
+          {healthStudents.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin alertas activas.</p>
+          ) : (
+            <ul className="space-y-2">
+              {healthStudents.map((s) => (
+                <li key={s.id}>
+                  <button onClick={() => onOpenStudent(s.id)} className="flex w-full items-center gap-3 rounded-lg border border-rose-200 bg-rose-50/40 p-3 text-left text-sm hover:bg-rose-50">
+                    <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${avatarTone(s.id)} text-[10px] font-bold text-white`}>{initialsOf(s.fullName)}</div>
+                    <div className="min-w-0 flex-1">
+                      <strong className="block truncate text-slate-950">{s.fullName}</strong>
+                      <span className="block truncate text-xs text-slate-600">{s.course}</span>
+                    </div>
+                    <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">⚠</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section title="Casos críticos abiertos" icon={AlertTriangle} count={criticalCases.length} view="cases">
+          {criticalCases.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin casos críticos abiertos.</p>
+          ) : (
+            <ul className="space-y-2">
+              {criticalCases.slice(0, 6).map((r) => (
+                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                  <strong className="block text-slate-950">{r.title}</strong>
+                  <span className="text-slate-600">{r.student || ""} · {r.priority} · {r.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Section>
+      </div>
+    </div>
+  );
+}
+
+type TriageRecord = {
+  entity: "cases" | "interviews" | "logs" | "protocols";
+  studentId?: string;
+  title?: string;
+  category?: string;
+  priority?: string;
+  status?: string;
+  type?: string;
+  date?: string;
+  description?: string;
+};
+
+type TriageResponse = {
+  summary?: string;
+  involved?: Array<{ studentId?: string; studentName?: string; confidence?: number; evidence?: string }>;
+  records?: TriageRecord[];
+  notes?: string;
+};
+
+function TriageView({
+  store,
+  accessToken,
+  onAddRecord,
+  onOpenStudent,
+}: {
+  store: DataStore;
+  accessToken: string;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onOpenStudent: (studentId: string) => void;
+}) {
+  const [text, setText] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<TriageResponse | null>(null);
+  const [accepted, setAccepted] = useState<Record<number, boolean>>({});
+
+  const analyze = async () => {
+    if (!text.trim()) return;
+    setError("");
+    setResult(null);
+    setAccepted({});
+    setLoading(true);
+    try {
+      const students = store.students.map((s) => ({
+        id: s.id,
+        name: s.fullName || "",
+        course: s.course || "",
+        rut: s.rut || "",
+        guardian: s.guardian || "",
+      }));
+      const res = await fetch("/api/triage", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ emailText: text, students, today: new Date().toISOString().slice(0, 10) }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Error de IA");
+      setResult(data.result);
+      const initial: Record<number, boolean> = {};
+      (data.result?.records || []).forEach((_: TriageRecord, idx: number) => { initial[idx] = true; });
+      setAccepted(initial);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createSelected = () => {
+    if (!result?.records) return;
+    let created = 0;
+    result.records.forEach((rec, idx) => {
+      if (!accepted[idx]) return;
+      const student = store.students.find((s) => s.id === rec.studentId);
+      if (!student) return;
+      const record: DataRecord = {
+        id: uid(),
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        student: student.fullName || "",
+        course: student.course || "",
+        date: rec.date || new Date().toISOString().slice(0, 10),
+        title: rec.title || "Registro IA",
+        category: rec.category || "",
+        priority: rec.priority || "",
+        status: rec.status || (rec.entity === "cases" ? "Abierto" : ""),
+        type: rec.type || "",
+        description: rec.description || "",
+        participant: rec.entity === "interviews" ? (rec.title || student.fullName || "") : "",
+        reason: rec.entity === "interviews" ? (rec.title || "") : "",
+      };
+      onAddRecord(rec.entity, record);
+      created += 1;
+    });
+    if (created > 0) {
+      setResult(null);
+      setText("");
+      setAccepted({});
+    }
+  };
+
+  return (
+    <div className="tz-fade space-y-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-950">
+            <Sparkles className="h-7 w-7 text-violet-600" />
+            Triaje IA
+          </h1>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Pegá un correo, mensaje o relato sobre uno o varios estudiantes. La IA detecta a quién(es) involucra, lo resume y propone casos, entrevistas, bitácoras o protocolos pre-asociados.
+          </p>
+        </div>
+      </div>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5">
+        <label className="block">
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">Texto del correo o mensaje</span>
+          <textarea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            placeholder="Pegá aquí el correo o relato completo. Ej.: 'Hola Gustavo, te escribo porque María Pérez de 4°A presentó una crisis de ansiedad en la clase de matemáticas...'"
+            className="mt-2 min-h-44 w-full resize-y rounded-lg border border-slate-200 bg-slate-50/30 p-3 text-sm leading-6 outline-none focus:border-violet-500 focus:bg-white"
+          />
+        </label>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-500">{store.students.length} estudiantes disponibles en la nómina · Modelo Claude Sonnet 4.6</p>
+          <button
+            onClick={analyze}
+            disabled={loading || !text.trim() || store.students.length === 0}
+            className="tz-press inline-flex items-center gap-2 rounded-xl bg-gradient-to-br from-violet-600 to-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:opacity-95 disabled:opacity-50"
+          >
+            {loading ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Analizando…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" /> Analizar con IA
+              </>
+            )}
+          </button>
+        </div>
+        {error ? (
+          <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+            <strong>Error:</strong> {error}
+          </div>
+        ) : null}
+      </section>
+
+      {result ? (
+        <section className="tz-slide-up overflow-hidden rounded-2xl border border-violet-200 bg-white">
+          <div className="bg-gradient-to-r from-violet-50 via-blue-50 to-white px-5 py-4">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-violet-700">Resumen de la IA</h2>
+            <p className="mt-1 text-sm leading-6 text-slate-800">{result.summary || "—"}</p>
+            {result.notes ? <p className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>⚠ Atención:</strong> {result.notes}</p> : null}
+          </div>
+
+          <div className="border-t border-slate-100 px-5 py-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Estudiantes detectados</h3>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(result.involved || []).map((inv, idx) => {
+                const student = store.students.find((s) => s.id === inv.studentId);
+                const conf = Math.round((inv.confidence || 0) * 100);
+                return (
+                  <button
+                    key={idx}
+                    onClick={() => inv.studentId && onOpenStudent(inv.studentId)}
+                    className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-800 hover:bg-slate-50"
+                    title={inv.evidence || ""}
+                  >
+                    <span className={`grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${avatarTone(inv.studentId || "")} text-[10px] text-white`}>
+                      {student ? initialsOf(student.fullName) : "?"}
+                    </span>
+                    <span>{student ? student.fullName : inv.studentName || "Sin coincidencia"}</span>
+                    <span className={`rounded-full px-1.5 py-0.5 text-[10px] ${conf >= 80 ? "bg-emerald-100 text-emerald-700" : conf >= 50 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{conf}%</span>
+                  </button>
+                );
+              })}
+              {(result.involved || []).length === 0 ? <span className="text-sm text-slate-500">Sin coincidencias.</span> : null}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-100 px-5 py-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Registros propuestos ({(result.records || []).length})</h3>
+              <button onClick={createSelected} disabled={!Object.values(accepted).some(Boolean)} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
+                <Check className="h-4 w-4" /> Crear seleccionados
+              </button>
+            </div>
+            <div className="space-y-2">
+              {(result.records || []).map((rec, idx) => {
+                const student = store.students.find((s) => s.id === rec.studentId);
+                const entityLabel = entityConfigs[rec.entity as EntityId]?.label || rec.entity;
+                return (
+                  <article key={idx} className="flex gap-3 rounded-xl border border-slate-200 p-3">
+                    <input
+                      type="checkbox"
+                      checked={accepted[idx] || false}
+                      onChange={(event) => setAccepted((current) => ({ ...current, [idx]: event.target.checked }))}
+                      className="mt-1.5 h-4 w-4"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-violet-700">{entityLabel}</span>
+                        {rec.priority ? <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{rec.priority}</span> : null}
+                        {rec.category ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{rec.category}</span> : null}
+                        {rec.date ? <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[10px] text-slate-600">{rec.date}</span> : null}
+                      </div>
+                      <h4 className="mt-1 text-sm font-semibold text-slate-950">{rec.title || "Sin título"}</h4>
+                      <p className="mt-0.5 text-xs text-slate-500">→ {student ? `${student.fullName} (${student.course})` : "Sin estudiante asignado"}</p>
+                      {rec.description ? <p className="mt-1.5 line-clamp-3 text-sm text-slate-700">{rec.description}</p> : null}
+                    </div>
+                  </article>
+                );
+              })}
+              {(result.records || []).length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">La IA no propuso registros.</p> : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function ReportsView({ store }: { store: DataStore }) {
+  const casesByCategory = new Map<string, number>();
+  store.cases.forEach((c) => {
+    const k = c.category || "Sin categoría";
+    casesByCategory.set(k, (casesByCategory.get(k) || 0) + 1);
+  });
+  const casesByPriority = new Map<string, number>();
+  store.cases.forEach((c) => {
+    const k = c.priority || "Sin prioridad";
+    casesByPriority.set(k, (casesByPriority.get(k) || 0) + 1);
+  });
+  const casesByCourse = new Map<string, number>();
+  store.cases.forEach((c) => {
+    const k = c.course || "Sin curso";
+    casesByCourse.set(k, (casesByCourse.get(k) || 0) + 1);
+  });
+  const interviewsByMonth = new Map<string, number>();
+  store.interviews.forEach((r) => {
+    const k = (r.date || "").slice(0, 7) || "sin fecha";
+    interviewsByMonth.set(k, (interviewsByMonth.get(k) || 0) + 1);
+  });
+
+  const Bar = ({ data, color = "bg-blue-500" }: { data: Map<string, number>; color?: string }) => {
+    const entries = Array.from(data.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const max = Math.max(1, ...entries.map(([, v]) => v));
+    return (
+      <div className="space-y-1.5">
+        {entries.length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin datos.</p> : entries.map(([label, value]) => (
+          <div key={label} className="text-sm">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="truncate text-slate-700">{label}</span>
+              <span className="tabular-nums font-semibold text-slate-900">{value}</span>
+            </div>
+            <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className={`h-full rounded-full ${color}`} style={{ width: `${(value / max) * 100}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="tz-fade space-y-5">
+      <div>
+        <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-950">
+          <PieChart className="h-7 w-7 text-slate-700" />
+          Reportes
+        </h1>
+        <p className="mt-1 text-sm text-slate-600">Indicadores rápidos para tomar decisiones.</p>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Casos por categoría</h2>
+          <div className="mt-4"><Bar data={casesByCategory} color="bg-blue-500" /></div>
+        </section>
+        <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Casos por prioridad</h2>
+          <div className="mt-4"><Bar data={casesByPriority} color="bg-rose-500" /></div>
+        </section>
+        <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Top 10 cursos con más casos</h2>
+          <div className="mt-4"><Bar data={casesByCourse} color="bg-amber-500" /></div>
+        </section>
+        <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Entrevistas por mes</h2>
+          <div className="mt-4"><Bar data={interviewsByMonth} color="bg-emerald-500" /></div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 export default function TizaEducationApp() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState("");
@@ -3812,6 +4332,9 @@ export default function TizaEducationApp() {
 
   const renderView = () => {
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} />;
+    if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} />;
+    if (activeView === "triage") return <TriageView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} />;
+    if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "students") {
       return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
     }
