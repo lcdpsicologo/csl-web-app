@@ -666,20 +666,27 @@ function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label
     violet: "from-violet-500 to-purple-600 text-white",
     rose: "from-rose-500 to-pink-600 text-white",
   };
+  const tints = {
+    teal: "bg-emerald-50/50",
+    blue: "bg-sky-50/50",
+    amber: "bg-amber-50/50",
+    violet: "bg-violet-50/50",
+    rose: "bg-rose-50/50",
+  };
 
   return (
     <section className="tz-card relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="flex items-start justify-between gap-4">
+      <span className={`pointer-events-none absolute -bottom-16 -left-16 h-32 w-32 rounded-full opacity-60 ${tints[accent]}`} />
+      <div className="relative flex items-start justify-between gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
           <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950 tabular-nums">{value.toLocaleString("es-CL")}</p>
           <p className="mt-1 text-xs text-slate-500">{detail}</p>
         </div>
-        <div className={`grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br ${accents[accent]} shadow-sm`}>
-          <Icon className="h-5 w-5" />
+        <div className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br ${accents[accent]} shadow-md ring-1 ring-white/40`}>
+          <Icon className="h-6 w-6" strokeWidth={2.2} />
         </div>
       </div>
-      <span className="pointer-events-none absolute -bottom-12 -right-12 h-32 w-32 rounded-full bg-slate-50" />
     </section>
   );
 }
@@ -3075,7 +3082,7 @@ function ImportView({
   );
 }
 
-function Dashboard({ store, onNavigate, schoolName, userEmail }: { store: DataStore; onNavigate: (view: ViewId) => void; schoolName: string; userEmail: string }) {
+function Dashboard({ store, onNavigate, schoolName, userEmail, team }: { store: DataStore; onNavigate: (view: ViewId) => void; schoolName: string; userEmail: string; team: TeamMember[] }) {
   const total = Object.values(store).reduce((sum, records) => sum + records.length, 0);
   const latest = Object.entries(store)
     .flatMap(([entity, records]) => records.map((record) => ({ entity: entity as EntityId, record })))
@@ -3085,8 +3092,19 @@ function Dashboard({ store, onNavigate, schoolName, userEmail }: { store: DataSt
   const now = new Date();
   const hour = now.getHours();
   const greeting = hour < 12 ? "Buenos días" : hour < 19 ? "Buenas tardes" : "Buenas noches";
-  const namePart = (userEmail || "").split("@")[0].split(".")[0];
-  const displayName = namePart ? namePart.charAt(0).toUpperCase() + namePart.slice(1) : "";
+  const emailLower = (userEmail || "").toLowerCase().trim();
+  const teamMatch = team.find((m) => (m.email || "").toLowerCase().trim() === emailLower);
+  let displayName = "";
+  if (teamMatch?.name) {
+    // Use just the first name for a personal feel.
+    displayName = teamMatch.name.split(/\s+/)[0] || teamMatch.name;
+  } else if (emailLower) {
+    const local = emailLower.split("@")[0] || "";
+    // Heuristic: if email looks like "g.caro.m" prefer the second segment ("caro"); otherwise the first.
+    const parts = local.split(".").filter(Boolean);
+    const best = parts.find((p) => p.length >= 3) || parts[0] || local;
+    displayName = best.charAt(0).toUpperCase() + best.slice(1);
+  }
   const dateLabel = now.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
 
   return (
@@ -4786,7 +4804,7 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
-    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} />;
+    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} />;
     if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
