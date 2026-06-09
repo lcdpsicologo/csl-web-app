@@ -6165,7 +6165,7 @@ export default function TizaEducationApp() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [teamSeeding, setTeamSeeding] = useState(false);
   const [teamSeedNotice, setTeamSeedNotice] = useState("");
-  const [profile, setProfile] = useState<Record<string, string>>(() => {
+  const [profileState, setProfileState] = useState<Record<string, string>>(() => {
     const defaults = {
       organization: "Colegio San Lucas",
       role: "Orientación / Convivencia",
@@ -6181,6 +6181,20 @@ export default function TizaEducationApp() {
       return defaults;
     }
   });
+  const profile = profileState;
+  // Wrap setProfile so any update is mirrored to Supabase Auth user_metadata
+  // (synced across browsers/devices) in addition to localStorage.
+  const setProfile = (next: Record<string, string>) => {
+    setProfileState(next);
+    if (supabaseAuth) {
+      // Fire and forget — we don't block the UI on this.
+      supabaseAuth.auth
+        .updateUser({ data: { tizaProfile: next } })
+        .catch((err) => {
+          console.warn("Profile sync to Supabase failed", err);
+        });
+    }
+  };
 
   useEffect(() => {
     if (!supabaseAuth) {
@@ -6207,6 +6221,21 @@ export default function TizaEducationApp() {
       listener.subscription.unsubscribe();
     };
   }, []);
+
+  // Restore profile (including calendarIcalUrl) from Supabase Auth user_metadata
+  // whenever the auth user becomes available. This is how Settings + Calendar
+  // URL travel across browsers and devices.
+  const profileRestoredRef = React.useRef(false);
+  useEffect(() => {
+    if (!authUser || profileRestoredRef.current) return;
+    const remote = (authUser.user_metadata as { tizaProfile?: Record<string, string> } | null)?.tizaProfile;
+    if (remote && typeof remote === "object") {
+      profileRestoredRef.current = true;
+      setProfileState((current) => ({ ...current, ...remote }));
+    } else {
+      profileRestoredRef.current = true;
+    }
+  }, [authUser]);
 
   useEffect(() => {
     if (!authUser || !accessToken) {
