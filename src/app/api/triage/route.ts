@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import Anthropic from "@anthropic-ai/sdk";
 
 const normalizeSupabaseUrl = (url: string) =>
   url.replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/$/, "");
@@ -31,7 +30,8 @@ const authenticate = async (request: Request, supabase: SupabaseClient) => {
 
 type RosterStudent = { id: string; name: string; course?: string; rut?: string; guardian?: string };
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+const GEMINI_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
 const SYSTEM_PROMPT = `Eres un asistente experto en orientación escolar y convivencia, integrado en la plataforma Tiza Education del Colegio San Lucas de Lo Espejo.
 
@@ -44,7 +44,7 @@ Tipos de registro válidos para "logs": Seguimiento, Entrevista, Observación, C
 
 Cada registro debe asociarse a un studentId de la nómina que te entrego. Si detectás varios estudiantes, generá un registro por cada uno (los detalles pueden ser similares).
 
-Devolvé EXCLUSIVAMENTE un objeto JSON válido, sin texto adicional, con esta forma exacta:
+Devolvé EXCLUSIVAMENTE un objeto JSON válido, sin texto adicional. La estructura debe ser:
 {
   "summary": "resumen ejecutivo del correo en 1-2 oraciones",
   "involved": [{"studentId": "string", "studentName": "string", "confidence": 0.0-1.0, "evidence": "fragmento literal del correo que menciona al estudiante"}],
@@ -64,10 +64,47 @@ Devolvé EXCLUSIVAMENTE un objeto JSON válido, sin texto adicional, con esta fo
   "notes": "advertencias o ambigüedades que el orientador debería revisar (string corto)"
 }`;
 
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    summary: { type: "STRING" },
+    involved: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          studentId: { type: "STRING" },
+          studentName: { type: "STRING" },
+          confidence: { type: "NUMBER" },
+          evidence: { type: "STRING" },
+        },
+      },
+    },
+    records: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          entity: { type: "STRING" },
+          studentId: { type: "STRING" },
+          title: { type: "STRING" },
+          category: { type: "STRING" },
+          priority: { type: "STRING" },
+          status: { type: "STRING" },
+          type: { type: "STRING" },
+          date: { type: "STRING" },
+          description: { type: "STRING" },
+        },
+      },
+    },
+    notes: { type: "STRING" },
+  },
+};
+
 export async function POST(request: Request) {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!GEMINI_KEY) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY no está configurada en el servidor. Agregá la variable en Vercel/`.env.local`." },
+      { error: "GEMINI_API_KEY no está configurada. Agregá la variable en Vercel (Settings → Environment Variables). Obtené una key gratis en https://aistudio.google.com/app/apikey" },
       { status: 503 },
     );
   }
@@ -110,46 +147,79 @@ ${emailText}
 Analizá el mensaje, identificá los estudiantes mencionados (matchealos con la nómina por nombre o RUT), proponé registros estructurados (cases/interviews/logs/protocols) y devolvé el JSON solicitado.`;
 
   try {
-    const client = new Anthropic();
-    const completion = await client.messages.create({
-      model: MODEL,
-      max_tokens: 4000,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: userPrompt }],
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${GEMINI_KEY}`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+        contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+        generationConfig: {
+          temperature: 0.2,
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+        },
+        safetySettings: [
+          { category: "HARM_CATEGORY_HARASSMENT", threshold: "BLOCK_ONLY_HIGH" },
+          { category: "HARM_CATEGORY_HATE_SPEECH", threshold: "BLOCK_ONLY_HIGH" },
+          { category: "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold: "BLOCK_ONLY_HIGH" },
+          { category: "HARM_CATEGORY_DANGEROUS_CONTENT", threshold: "BLOCK_ONLY_HIGH" },
+        ],
+      }),
     });
 
-    const text = completion.content
-      .filter((block): block is Anthropic.TextBlock => block.type === "text")
-      .map((block) => block.text)
-      .join("\n")
-      .trim();
-
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) {
-      return NextResponse.json({ error: "La IA no devolvió un JSON válido", raw: text }, { status: 502 });
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(match[0]);
-    } catch (err) {
+    if (!res.ok) {
+      const errText = await res.text();
+      let errMsg = errText;
+      try {
+        const parsed = JSON.parse(errText);
+        errMsg = parsed?.error?.message || errText;
+      } catch {
+        // keep raw
+      }
       return NextResponse.json(
-        { error: "JSON malformado de la IA", raw: text, parseError: String(err) },
+        { error: `Gemini devolvió ${res.status}: ${errMsg}` },
         { status: 502 },
       );
+    }
+
+    const data = await res.json();
+    const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!text) {
+      return NextResponse.json(
+        { error: "Gemini no devolvió contenido", raw: JSON.stringify(data).slice(0, 500) },
+        { status: 502 },
+      );
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) {
+        return NextResponse.json({ error: "JSON malformado de la IA", raw: text }, { status: 502 });
+      }
+      try {
+        parsed = JSON.parse(match[0]);
+      } catch (err) {
+        return NextResponse.json(
+          { error: "JSON malformado de la IA", raw: text, parseError: String(err) },
+          { status: 502 },
+        );
+      }
     }
 
     return NextResponse.json({
       ok: true,
       result: parsed,
-      usage: {
-        input_tokens: completion.usage?.input_tokens,
-        output_tokens: completion.usage?.output_tokens,
-      },
+      usage: data?.usageMetadata || null,
       model: MODEL,
+      provider: "google-gemini",
     });
   } catch (error) {
     console.error("Triage failed", error);
     const message = error instanceof Error ? error.message : "Error desconocido";
-    return NextResponse.json({ error: `Error llamando a Claude: ${message}` }, { status: 500 });
+    return NextResponse.json({ error: `Error llamando a Gemini: ${message}` }, { status: 500 });
   }
 }
