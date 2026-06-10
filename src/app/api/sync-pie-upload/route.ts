@@ -272,10 +272,14 @@ export async function POST(request: Request) {
       totalParsed: excelStudents.length,
       institutionId: instId
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Sync API error:", error);
     return NextResponse.json({
-      error: error instanceof Error ? error.message : "Sync failed"
+      error: error?.message || "Sync failed",
+      details: error?.details || null,
+      hint: error?.hint || null,
+      code: error?.code || null,
+      errorObject: JSON.stringify(error)
     }, { status: 500 });
   }
 }
