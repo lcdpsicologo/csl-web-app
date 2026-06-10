@@ -662,7 +662,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
 const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Inicio", icon: Home },
   { id: "today", label: "Hoy", icon: CalendarDays },
-  { id: "triage", label: "Asistente IA", icon: Sparkles },
+  { id: "triage", label: "Tiza-IA", icon: Sparkles },
   { id: "reports", label: "Reportes", icon: PieChart },
   { id: "students", label: "Estudiantes", icon: UserRound },
   { id: "courses", label: "Cursos", icon: BookOpen },
@@ -3946,8 +3946,8 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEve
               <button onClick={() => onNavigate("today")} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
                 <CalendarDays className="h-4 w-4" /> Ver mi día
               </button>
-              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-4 py-2.5 text-sm font-semibold text-violet-700 shadow-sm hover:bg-violet-50">
-                <Sparkles className="h-4 w-4" /> Asistente IA
+              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50">
+                <Sparkles className="h-4 w-4" /> Tiza-IA
               </button>
               <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
                 <UserRound className="h-4 w-4" /> Estudiantes
@@ -4013,7 +4013,7 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEve
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <button onClick={() => onNavigate("students")} className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Crear primer estudiante</button>
-            <button onClick={() => onNavigate("triage")} className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Asistente IA</button>
+            <button onClick={() => onNavigate("triage")} className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Preguntar a Tiza-IA</button>
           </div>
         </section>
       ) : (
@@ -4678,6 +4678,41 @@ type BulkAiResponse = {
   warnings?: string;
 };
 
+function TizaIaMark({ size = 40, className = "" }: { size?: number; className?: string }) {
+  return (
+    <div
+      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-emerald-700 via-emerald-800 to-slate-900 shadow-md ${className}`}
+      style={{ width: size, height: size }}
+      aria-label="Tiza-IA"
+    >
+      <svg viewBox="0 0 40 40" width={size * 0.78} height={size * 0.78} fill="none" aria-hidden>
+        {/* trazo de tiza punteado */}
+        <path d="M7 29 Q 15 14 28 9" stroke="rgba(255,255,255,0.85)" strokeWidth="2.2" strokeLinecap="round" strokeDasharray="1 5" />
+        {/* destello al final del trazo */}
+        <path d="M31 6 l1 2.4 2.4 1 -2.4 1 -1 2.4 -1-2.4 -2.4-1 2.4-1 z" fill="#fde68a" />
+        {/* tiza */}
+        <g transform="rotate(38 24 16)">
+          <rect x="20.5" y="8" width="7" height="16" rx="2.2" fill="#fff" />
+          <rect x="20.5" y="8" width="7" height="4.5" rx="2.2" fill="#fcd34d" />
+        </g>
+        {/* polvillo de tiza */}
+        <circle cx="9" cy="32.5" r="1.1" fill="rgba(255,255,255,0.8)" />
+        <circle cx="13.5" cy="34.5" r="0.8" fill="rgba(255,255,255,0.55)" />
+        <circle cx="6" cy="35.5" r="0.7" fill="rgba(255,255,255,0.4)" />
+      </svg>
+      <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
+    </div>
+  );
+}
+
+function TizaIaWordmark({ className = "" }: { className?: string }) {
+  return (
+    <span className={className}>
+      Tiza<span className="text-emerald-600">-IA</span>
+    </span>
+  );
+}
+
 function AIAssistantView({
   store,
   accessToken,
@@ -4694,15 +4729,17 @@ function AIAssistantView({
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight text-slate-950">
-            <Sparkles className="h-7 w-7 text-violet-600" />
-            Asistente IA
-          </h1>
-          <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Pregunta lo que quieras, pega correos o tablas, o adjunta archivos (Excel, Word, PDF, imágenes).
-            El asistente responde con datos reales del colegio y propone registros listos para confirmar.
-          </p>
+        <div className="flex items-start gap-3">
+          <TizaIaMark size={48} />
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">
+              <TizaIaWordmark />
+            </h1>
+            <p className="mt-1 max-w-3xl text-sm text-slate-600">
+              La inteligencia artificial de Tiza Education. Pregunta lo que quieras, pega correos o tablas,
+              o adjunta archivos — responde con datos reales del colegio y propone registros listos para confirmar.
+            </p>
+          </div>
         </div>
       </div>
 
@@ -4905,20 +4942,35 @@ function AIChatMode({
     <div className="flex h-[calc(100vh-260px)] min-h-[480px] flex-col rounded-2xl border border-slate-200 bg-white">
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         {turns.length === 0 ? (
-          <div className="mx-auto max-w-2xl text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-violet-600 to-blue-600 text-white shadow-md">
-              <Sparkles className="h-7 w-7" />
+          <div className="mx-auto max-w-2xl">
+            {/* Pizarra de bienvenida */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900 via-emerald-950 to-slate-950 p-6 text-center shadow-lg sm:p-8">
+              {/* marco de pizarra dibujado con tiza */}
+              <div className="pointer-events-none absolute inset-3 rounded-xl border-2 border-dashed border-white/15" />
+              {/* polvillo decorativo */}
+              <div className="pointer-events-none absolute bottom-3 left-6 h-1.5 w-1.5 rounded-full bg-white/30" />
+              <div className="pointer-events-none absolute bottom-5 left-10 h-1 w-1 rounded-full bg-white/20" />
+              <div className="pointer-events-none absolute right-8 top-6 h-1 w-1 rounded-full bg-white/20" />
+
+              <TizaIaMark size={64} className="mx-auto ring-2 ring-white/20" />
+              <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                ¡Hola! Soy <span className="text-amber-300">Tiza-IA</span>
+              </h2>
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-emerald-100/90">
+                La tiza inteligente del Colegio San Lucas. Conozco los datos del colegio
+                y te ayudo a registrar, buscar y entender lo que pasa con tus estudiantes.
+              </p>
             </div>
-            <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">¿En qué te ayudo hoy?</h2>
-            <p className="mt-2 text-sm text-slate-600">Pega un correo, escribe lo que necesitas, o adjunta archivos. Yo detecto si se trata de un estudiante, un curso, o varios registros.</p>
-            <div className="mt-5 grid gap-2 sm:grid-cols-2">
+
+            <p className="mt-5 mb-2 text-center text-xs font-semibold uppercase tracking-widest text-slate-400">Prueba con algo así</p>
+            <div className="grid gap-2 sm:grid-cols-2">
               {[
                 "Pega el correo de la profesora jefe de 4°B sobre el conflicto en el recreo",
                 "Sube el PDF del informe psicopedagógico de María Pérez",
                 "Pega la planilla de talleres realizados este mes",
-                "Cuántos casos abiertos de convivencia hay en III° Medio",
+                "¿Cuántos casos abiertos de convivencia hay en III° Medio?",
               ].map((s) => (
-                <button key={s} onClick={() => setDraft(s)} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-left text-sm text-slate-700 hover:bg-blue-50 hover:border-blue-200">
+                <button key={s} onClick={() => setDraft(s)} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-left text-sm text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50">
                   {s}
                 </button>
               ))}
@@ -4939,12 +4991,13 @@ function AIChatMode({
                   </div>
                 </div>
 
-                <div className="flex justify-start">
-                  <div className="max-w-[92%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
+                <div className="flex items-start justify-start gap-2.5">
+                  <TizaIaMark size={30} className="mt-0.5" />
+                  <div className="max-w-[88%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
                     {turn.loading ? (
                       <div className="flex items-center gap-2 text-slate-500">
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-violet-500 border-t-transparent" />
-                        Analizando…
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                        Tiza-IA está escribiendo…
                       </div>
                     ) : turn.error ? (
                       <p className="text-rose-700"><strong>Error:</strong> {turn.error}</p>
@@ -4978,7 +5031,7 @@ function AIChatMode({
               ))}
             </div>
           ) : null}
-          <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-violet-500">
+          <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-emerald-600">
             <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,image/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
             <button onClick={() => fileInputRef.current?.click()} title="Adjuntar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
               <Upload className="h-4 w-4" />
@@ -4991,11 +5044,11 @@ function AIChatMode({
               rows={2}
               className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400"
             />
-            <button onClick={send} disabled={!draft.trim() && files.length === 0} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-violet-600 to-blue-600 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
+            <button onClick={send} disabled={!draft.trim() && files.length === 0} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-emerald-700 to-emerald-900 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
               <Sparkles className="h-4 w-4" /> Enviar
             </button>
           </div>
-          <p className="mt-1.5 text-[11px] text-slate-400">⌘ + Enter para enviar · La IA detecta automáticamente qué hacer.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400">⌘ + Enter para enviar · Tiza-IA detecta automáticamente qué hacer.</p>
         </div>
       </div>
     </div>
