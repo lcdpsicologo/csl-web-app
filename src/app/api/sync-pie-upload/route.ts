@@ -60,6 +60,8 @@ const normalizeCourseName = (courseCode: string) => {
   return courseCode;
 };
 
+const normalizeSupabaseUrl = (url: string) => url.replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/$/, "");
+
 export async function POST(request: Request) {
   try {
     const passcode = request.headers.get("x-sync-passcode");
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing Supabase URL or Service Role Key on server" }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey, {
+    const supabase = createClient(normalizeSupabaseUrl(supabaseUrl), supabaseKey, {
       auth: { persistSession: false }
     });
 
