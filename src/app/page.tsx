@@ -102,6 +102,8 @@ type GenogramMember = {
   email?: string;
   address?: string;
   notes: string;
+  x?: number;
+  y?: number;
 };
 
 type FieldDef = {
@@ -474,6 +476,8 @@ const parseGenogram = (value: string | undefined): GenogramMember[] => {
         email: member.email || "",
         address: member.address || "",
         notes: member.notes || "",
+        x: typeof member.x === "number" ? member.x : undefined,
+        y: typeof member.y === "number" ? member.y : undefined,
       }));
   } catch {
     return [];
@@ -2083,81 +2087,384 @@ function GenogramChart({
   members,
   selectedMemberId,
   onSelectMember,
+  onUpdateStudent,
 }: {
   student: DataRecord;
   members: GenogramMember[];
   selectedMemberId: string;
   onSelectMember: (memberId: string) => void;
+  onUpdateStudent: (studentId: string, updates: Record<string, string>) => void;
 }) {
+  const [dragging, setDragging] = useState<{ id: string; offsetX: number; offsetY: number; isStudent: boolean } | null>(null);
+  const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
+  const [localStudentPos, setLocalStudentPos] = useState<{ x: number; y: number } | null>(null);
+  const [localMemberPositions, setLocalMemberPositions] = useState<Record<string, { x: number; y: number }>>({});
+
+  // Reset local overrides when active student changes
+  useEffect(() => {
+    setLocalStudentPos(null);
+    setLocalMemberPositions({});
+  }, [student.id]);
+
+  const getStudentPos = () => {
+    if (localStudentPos) return localStudentPos;
+    const sx = student.genogramStudentX ? parseFloat(student.genogramStudentX) : 360;
+    const sy = student.genogramStudentY ? parseFloat(student.genogramStudentY) : 320;
+    return { x: sx, y: sy };
+  };
+
   const primary = members.filter((member) => ["Madre", "Padre", "Cuidador/a principal", "Apoderado/a", "Tutor/a legal"].includes(member.relation));
   const siblings = members.filter((member) => member.relation === "Hermano/a");
   const support = members.filter((member) => !primary.includes(member) && !siblings.includes(member));
-  const memberCard = (member: GenogramMember, x: number, y: number, width: number, height: number, tone = "white") => (
-    <g key={member.id} onClick={() => onSelectMember(member.id)} className="cursor-pointer">
-      <rect
-        x={x}
-        y={y}
-        width={width}
-        height={height}
-        rx="12"
-        className={`${tone === "blue" ? "fill-blue-50 stroke-blue-200" : "fill-white stroke-slate-300"} ${selectedMemberId === member.id ? "stroke-blue-500" : ""}`}
-        strokeWidth={selectedMemberId === member.id ? 3 : 1}
-        filter="url(#genogramShadow)"
-      />
-      <text x={x + width / 2} y={y + 29} textAnchor="middle" className="fill-slate-950 text-[12px] font-semibold">{member.name}</text>
-      <text x={x + width / 2} y={y + 50} textAnchor="middle" className="fill-slate-500 text-[10px]">{member.relation}</text>
-      <text x={x + width / 2} y={y + 68} textAnchor="middle" className="fill-slate-500 text-[10px]">{member.role}</text>
-    </g>
-  );
+
+  const getMemberPos = (member: GenogramMember, index: number, relationGroup: string) => {
+    if (localMemberPositions[member.id]) {
+      return localMemberPositions[member.id];
+    }
+    if (member.x !== undefined && member.y !== undefined) {
+      return { x: member.x, y: member.y };
+    }
+    if (relationGroup === "primary") {
+      return { x: 80 + index * 220, y: 95 };
+    } else if (relationGroup === "sibling") {
+      return { x: 90 + index * 180, y: 430 };
+    } else {
+      return { x: 720, y: 190 + index * 78 };
+    }
+  };
+
+  const handleDragStart = (
+    event: React.MouseEvent<SVGElement> | React.TouchEvent<SVGElement>,
+    id: string,
+    currentX: number,
+    currentY: number,
+    isStudent: boolean
+  ) => {
+    event.preventDefault();
+    const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
+    const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
+
+    const svg = event.currentTarget.ownerSVGElement || (event.currentTarget as any);
+    if (!svg) return;
+
+    try {
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const svgPoint = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+
+      setDragStartPos({ x: clientX, y: clientY });
+      setDragging({
+        id,
+        offsetX: svgPoint.x - currentX,
+        offsetY: svgPoint.y - currentY,
+        isStudent,
+      });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    if (!dragging) return;
+
+    const handleMove = (event: MouseEvent | TouchEvent) => {
+      const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
+      const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
+
+      const svg = document.getElementById("genogram-svg") as SVGSVGElement | null;
+      if (!svg) return;
+
+      try {
+        const pt = svg.createSVGPoint();
+        pt.x = clientX;
+        pt.y = clientY;
+        const svgPoint = pt.matrixTransform(svg.getScreenCTM()!.inverse());
+
+        const targetX = Math.round(svgPoint.x - dragging.offsetX);
+        const targetY = Math.round(svgPoint.y - dragging.offsetY);
+
+        // Keep inside reasonable bounds
+        const boundedX = Math.max(-50, Math.min(1000, targetX));
+        const boundedY = Math.max(-50, Math.min(600, targetY));
+
+        if (dragging.isStudent) {
+          setLocalStudentPos({ x: boundedX, y: boundedY });
+        } else {
+          setLocalMemberPositions((curr) => ({
+            ...curr,
+            [dragging.id]: { x: boundedX, y: boundedY },
+          }));
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const handleUp = (event: MouseEvent | TouchEvent) => {
+      let clientX = 0;
+      let clientY = 0;
+      if (event.type === "touchend") {
+        const touchEvent = event as TouchEvent;
+        if (touchEvent.changedTouches && touchEvent.changedTouches.length > 0) {
+          clientX = touchEvent.changedTouches[0].clientX;
+          clientY = touchEvent.changedTouches[0].clientY;
+        }
+      } else {
+        const mouseEvent = event as MouseEvent;
+        clientX = mouseEvent.clientX;
+        clientY = mouseEvent.clientY;
+      }
+
+      let moved = false;
+      if (dragStartPos) {
+        const dist = Math.hypot(clientX - dragStartPos.x, clientY - dragStartPos.y);
+        if (dist > 5) {
+          moved = true;
+        }
+      }
+
+      if (!moved) {
+        if (!dragging.isStudent) {
+          onSelectMember(dragging.id);
+        }
+      } else {
+        if (dragging.isStudent) {
+          if (localStudentPos) {
+            onUpdateStudent(student.id, {
+              genogramStudentX: String(localStudentPos.x),
+              genogramStudentY: String(localStudentPos.y),
+            });
+          }
+        } else {
+          const pos = localMemberPositions[dragging.id];
+          if (pos) {
+            const nextMembers = members.map((m) =>
+              m.id === dragging.id ? { ...m, x: pos.x, y: pos.y } : m
+            );
+            onUpdateStudent(student.id, { genogram: JSON.stringify(nextMembers) });
+          }
+        }
+      }
+
+      setDragging(null);
+      setDragStartPos(null);
+    };
+
+    window.addEventListener("mousemove", handleMove);
+    window.addEventListener("touchmove", handleMove, { passive: false });
+    window.addEventListener("mouseup", handleUp);
+    window.addEventListener("touchend", handleUp);
+
+    return () => {
+      window.removeEventListener("mousemove", handleMove);
+      window.removeEventListener("touchmove", handleMove);
+      window.removeEventListener("mouseup", handleUp);
+      window.removeEventListener("touchend", handleUp);
+    };
+  }, [dragging, dragStartPos, localStudentPos, localMemberPositions, members, student.id, onUpdateStudent, onSelectMember]);
+
+  const handleReset = () => {
+    if (window.confirm("¿Restablecer la distribución de todas las tarjetas a su posición por defecto?")) {
+      setLocalStudentPos({ x: 360, y: 320 });
+      setLocalMemberPositions({});
+
+      const cleanedMembers = members.map((m) => {
+        const { x, y, ...rest } = m;
+        return rest;
+      });
+
+      onUpdateStudent(student.id, {
+        genogramStudentX: "",
+        genogramStudentY: "",
+        genogram: JSON.stringify(cleanedMembers),
+      });
+    }
+  };
+
+  const studentPos = getStudentPos();
+  const convergenceY = studentPos.y - 50;
+
+  const memberCard = (member: GenogramMember, x: number, y: number, width: number, height: number, relationGroup: string, tone = "white") => {
+    const isSelected = selectedMemberId === member.id;
+    return (
+      <g
+        key={member.id}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return;
+          handleDragStart(e, member.id, x, y, false);
+        }}
+        onTouchStart={(e) => handleDragStart(e, member.id, x, y, false)}
+        className="cursor-move select-none"
+      >
+        <rect
+          x={x}
+          y={y}
+          width={width}
+          height={height}
+          rx="12"
+          className={`${tone === "blue" ? "fill-blue-50 stroke-blue-200" : "fill-white stroke-slate-300"} ${isSelected ? "stroke-blue-500" : ""}`}
+          strokeWidth={isSelected ? 3 : 1}
+          filter="url(#genogramShadow)"
+        />
+        <foreignObject x={x + 10} y={y + 8} width={width - 20} height={height - 16} className="pointer-events-none">
+          <div className="flex h-full flex-col justify-center text-center leading-tight">
+            <div className="line-clamp-2 text-[12px] font-semibold text-slate-950" title={member.name}>
+              {member.name}
+            </div>
+            <div className="mt-0.5 truncate text-[10px] text-slate-500">
+              {member.relation}
+            </div>
+            {member.role ? (
+              <div className="mt-0.5 truncate text-[10px] text-slate-400">
+                {member.role}
+              </div>
+            ) : null}
+          </div>
+        </foreignObject>
+      </g>
+    );
+  };
+
+  const hasCustomPositions = student.genogramStudentX || student.genogramStudentY || members.some((m) => m.x !== undefined || m.y !== undefined);
 
   return (
     <div className="overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
-      <svg viewBox="0 0 960 560" className="min-h-[440px] w-full min-w-[820px]" role="img" aria-label={`Genograma de ${student.fullName || "estudiante"}`}>
+      <svg
+        id="genogram-svg"
+        viewBox="0 0 960 560"
+        className="min-h-[440px] w-full min-w-[820px]"
+        role="img"
+        aria-label={`Genograma de ${student.fullName || "estudiante"}`}
+      >
         <defs>
           <filter id="genogramShadow" x="-10%" y="-10%" width="120%" height="130%">
             <feDropShadow dx="0" dy="8" stdDeviation="8" floodColor="#0f172a" floodOpacity="0.10" />
           </filter>
         </defs>
-        <line x1="480" y1="270" x2="480" y2="330" className="stroke-slate-300" strokeWidth="2" />
-        <rect x="360" y="320" width="240" height="88" rx="14" className="fill-slate-900" filter="url(#genogramShadow)" />
-        <text x="480" y="354" textAnchor="middle" className="fill-white text-[15px] font-bold">{student.fullName || "Estudiante"}</text>
-        <text x="480" y="378" textAnchor="middle" className="fill-slate-300 text-[12px]">{student.course || "Sin curso"}</text>
+
+        <line
+          x1={studentPos.x + 120}
+          y1={convergenceY}
+          x2={studentPos.x + 120}
+          y2={studentPos.y}
+          className="stroke-slate-300"
+          strokeWidth="2"
+        />
 
         {primary.slice(0, 4).map((member, index) => {
-          const x = 80 + index * 220;
+          const mPos = getMemberPos(member, index, "primary");
+          const cardWidth = 170;
+          const cardHeight = 92;
           return (
             <g key={member.id}>
-              <line x1={x + 85} y1="185" x2="480" y2="270" className="stroke-slate-300" strokeWidth="2" />
-              {memberCard(member, x, 95, 170, 92)}
+              <line
+                x1={mPos.x + cardWidth / 2}
+                y1={mPos.y + cardHeight}
+                x2={studentPos.x + 120}
+                y2={convergenceY}
+                className="stroke-slate-300"
+                strokeWidth="2"
+              />
+              {memberCard(member, mPos.x, mPos.y, cardWidth, cardHeight, "primary")}
             </g>
           );
         })}
 
         {siblings.slice(0, 4).map((member, index) => {
-          const x = 90 + index * 180;
+          const mPos = getMemberPos(member, index, "sibling");
+          const cardWidth = 140;
+          const cardHeight = 74;
           return (
             <g key={member.id}>
-              <line x1="480" y1="395" x2={x + 70} y2="455" className="stroke-slate-300" strokeWidth="2" />
-              {memberCard(member, x, 430, 140, 74)}
+              <line
+                x1={studentPos.x + 120}
+                y1={studentPos.y + 88}
+                x2={mPos.x + cardWidth / 2}
+                y2={mPos.y}
+                className="stroke-slate-300"
+                strokeWidth="2"
+              />
+              {memberCard(member, mPos.x, mPos.y, cardWidth, cardHeight, "sibling")}
             </g>
           );
         })}
 
         {support.slice(0, 4).map((member, index) => {
-          const y = 190 + index * 78;
+          const mPos = getMemberPos(member, index, "support");
+          const cardWidth = 170;
+          const cardHeight = 68;
+
+          const isLeftOfStudent = mPos.x + cardWidth / 2 < studentPos.x + 120;
+          const startX = isLeftOfStudent ? studentPos.x : studentPos.x + 240;
+          const startY = studentPos.y + 44;
+          const endX = isLeftOfStudent ? mPos.x + cardWidth : mPos.x;
+          const endY = mPos.y + cardHeight / 2;
+
           return (
             <g key={member.id}>
-              <line x1="600" y1="360" x2="745" y2={y + 34} className="stroke-blue-300" strokeDasharray="6 6" strokeWidth="2" />
-              {memberCard(member, 720, y, 170, 68, "blue")}
+              <line
+                x1={startX}
+                y1={startY}
+                x2={endX}
+                y2={endY}
+                className="stroke-blue-300"
+                strokeDasharray="6 6"
+                strokeWidth="2"
+              />
+              {memberCard(member, mPos.x, mPos.y, cardWidth, cardHeight, "support", "blue")}
             </g>
           );
         })}
 
+        <g
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            handleDragStart(e, student.id, studentPos.x, studentPos.y, true);
+          }}
+          onTouchStart={(e) => handleDragStart(e, student.id, studentPos.x, studentPos.y, true)}
+          className="cursor-move select-none"
+        >
+          <rect
+            x={studentPos.x}
+            y={studentPos.y}
+            width="240"
+            height="88"
+            rx="14"
+            className="fill-slate-900"
+            filter="url(#genogramShadow)"
+          />
+          <foreignObject x={studentPos.x + 10} y={studentPos.y + 8} width="220" height="72" className="pointer-events-none">
+            <div className="flex h-full flex-col justify-center text-center leading-tight text-white">
+              <div className="line-clamp-2 text-[15px] font-bold" title={student.fullName || "Estudiante"}>
+                {student.fullName || "Estudiante"}
+              </div>
+              <div className="mt-1 truncate text-[12px] text-slate-300">
+                {student.course || "Sin curso"}
+              </div>
+            </div>
+          </foreignObject>
+        </g>
+
         {members.length === 0 ? (
-          <text x="480" y="120" textAnchor="middle" className="fill-slate-500 text-[14px]">Agrega familiares o redes para construir el genograma.</text>
+          <text x="480" y="120" textAnchor="middle" className="fill-slate-500 text-[14px]">
+            Agrega familiares o redes para construir el genograma.
+          </text>
         ) : null}
       </svg>
-      <p className="mt-3 text-xs text-slate-500">Haz clic en cualquier nombre del genograma para editar datos de contacto y vinculo.</p>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-slate-500">
+          Haz clic en cualquier nombre del genograma para editar sus datos. Arrastra las tarjetas para organizar el genograma.
+        </p>
+        {hasCustomPositions ? (
+          <button
+            onClick={handleReset}
+            className="inline-flex items-center gap-1 rounded bg-slate-200 hover:bg-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-700 transition"
+          >
+            Restablecer posiciones
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -2607,7 +2914,7 @@ function StudentDetailDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="relative">
-          <div className={`bg-gradient-to-br ${avatarTone(student.id)} px-6 pt-5 pb-6 text-white sm:px-8`}>
+          <div className={`bg-gradient-to-br ${avatarTone(student.id)} px-6 pt-5 pb-12 text-white sm:px-8 sm:pb-16`}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/85">
                 <BookOpen className="h-3.5 w-3.5" />
@@ -2811,7 +3118,13 @@ function StudentDetailDialog({
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Genograma</h3>
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{genogram.length} vínculos</span>
                 </div>
-                <GenogramChart student={student} members={genogram} selectedMemberId={editingMemberId} onSelectMember={editGenogramMember} />
+                <GenogramChart
+                  student={student}
+                  members={genogram}
+                  selectedMemberId={editingMemberId}
+                  onSelectMember={editGenogramMember}
+                  onUpdateStudent={onUpdateStudent}
+                />
               </section>
               <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">{editingMember ? "Editar vínculo" : "Agregar vínculo"}</h3>
