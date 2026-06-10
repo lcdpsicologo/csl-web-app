@@ -1,7 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
 import {
   ArrowDownToLine,
@@ -2049,6 +2050,9 @@ function OrientationCycleView({
                           <span className="flex-1 truncate text-sm font-semibold text-slate-900 group-hover:text-blue-700">{student.fullName || "Sin nombre"}</span>
                           <span className="hidden text-[11px] text-slate-500 sm:inline">{student.rut || ""}</span>
                           {student.healthAlerts ? <span className="rounded-full bg-rose-50 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700" title={student.healthAlerts}>⚠</span> : null}
+                          {(student.tags || "").toUpperCase().split(",").map((t) => t.trim()).includes("PIE") ? (
+                            <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700 ring-1 ring-emerald-200" title="Estudiante PIE">PIE</span>
+                          ) : null}
                           <ChevronDown className="-rotate-90 h-3.5 w-3.5 text-slate-300 group-hover:text-blue-500" />
                         </button>
                       </li>
@@ -3277,6 +3281,7 @@ function StudentsWorkspaceView({
 }) {
   const [search, setSearch] = useState("");
   const [cycleFilter, setCycleFilter] = useState<"all" | CourseDef["cycle"]>("all");
+  const [showPieOnly, setShowPieOnly] = useState(false);
   const [selectedCourseName, setSelectedCourseName] = useState<string>(() => officialCourses[0]?.name || "");
 
   const searchable = normalize(search);
@@ -3301,14 +3306,19 @@ function StudentsWorkspaceView({
     })
     .filter((group) => cycleFilter === "all" || group.cycle === cycleFilter);
 
-  const matchesSearch = (s: DataRecord) =>
-    !searchable ||
-    [s.fullName, s.rut, s.guardian, s.email, s.phone, s.tags, s.course]
-      .map((v) => normalize(String(v || "")))
-      .some((v) => v.includes(searchable));
+  const matchesSearch = (s: DataRecord) => {
+    const isPie = (s.tags || "").toUpperCase().split(",").map((t) => t.trim()).includes("PIE");
+    if (showPieOnly && !isPie) return false;
+    return (
+      !searchable ||
+      [s.fullName, s.rut, s.guardian, s.email, s.phone, s.tags, s.course]
+        .map((v) => normalize(String(v || "")))
+        .some((v) => v.includes(searchable))
+    );
+  };
 
-  // When searching, prefer courses with matches and auto-select the first.
-  const filteredCourses = searchable
+  // When searching or filtering by PIE, prefer courses with matches and auto-select the first.
+  const filteredCourses = (searchable || showPieOnly)
     ? courseList.map((g) => ({ ...g, students: g.students.filter(matchesSearch) })).filter((g) => g.students.length > 0)
     : courseList;
 
@@ -3318,7 +3328,7 @@ function StudentsWorkspaceView({
       setSelectedCourseName(filteredCourses[0].name);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, cycleFilter]);
+  }, [search, cycleFilter, showPieOnly]);
 
   const currentGroup = filteredCourses.find((g) => g.name === selectedCourseName) || filteredCourses[0];
   const currentStudents = (currentGroup?.students || []).slice().sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "es"));
@@ -3369,6 +3379,20 @@ function StudentsWorkspaceView({
               {label}
             </button>
           ))}
+          <button
+            onClick={() => setShowPieOnly(!showPieOnly)}
+            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition flex items-center gap-1.5 ${
+              showPieOnly
+                ? "bg-emerald-600 text-white shadow"
+                : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+            }`}
+          >
+            <span className="relative flex h-2 w-2">
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${showPieOnly ? "bg-white" : "bg-emerald-400"}`}></span>
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${showPieOnly ? "bg-white" : "bg-emerald-500"}`}></span>
+            </span>
+            PIE ({store.students.filter(s => (s.tags || "").toUpperCase().split(",").map(t => t.trim()).includes("PIE")).length})
+          </button>
         </div>
         <div className="rounded-md bg-slate-50 px-3 py-1.5 text-sm">
           <span className="font-semibold tabular-nums text-slate-950">{totalShown.toLocaleString("es-CL")}</span>
@@ -3457,9 +3481,21 @@ function StudentsWorkspaceView({
                               </p>
                             </div>
                             <div className="flex shrink-0 items-center gap-1.5">
-                              {tags.slice(0, 2).map((tag) => (
-                                <span key={tag} className="hidden rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 ring-1 ring-blue-200 sm:inline">{tag}</span>
-                              ))}
+                              {tags.slice(0, 3).map((tag) => {
+                                const isPie = tag.toUpperCase() === "PIE";
+                                return (
+                                  <span
+                                    key={tag}
+                                    className={`hidden rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 sm:inline ${
+                                      isPie
+                                        ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                        : "bg-blue-50 text-blue-700 ring-blue-200"
+                                    }`}
+                                  >
+                                    {isPie ? "🧩 PIE" : tag}
+                                  </span>
+                                );
+                              })}
                               {student.healthAlerts ? (
                                 <span
                                   role="button"
@@ -3927,11 +3963,11 @@ function ImportView({
           <h2 className="text-lg font-semibold">1. Cargar archivo o pegar datos</h2>
           <label className="mt-5 flex cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-slate-300 bg-slate-50 p-8 text-center hover:bg-slate-100">
             <FileSpreadsheet className="h-10 w-10 text-slate-500" />
-            <span className="mt-3 font-semibold text-slate-950">Subir CSV / TSV</span>
-            <span className="mt-1 text-sm text-slate-600">Google Sheets: Archivo → Descargar → CSV o TSV</span>
+            <span className="mt-3 font-semibold text-slate-950">Subir CSV / TSV / Excel</span>
+            <span className="mt-1 text-sm text-slate-600">CSV, TSV o archivos Excel (.xlsx, .xlsm)</span>
             <input
               type="file"
-              accept=".csv,.tsv,.txt,.xlsx"
+              accept=".csv,.tsv,.txt,.xlsx,.xlsm"
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -3955,9 +3991,9 @@ function ImportView({
               Interpretar tabla pegada
             </button>
           </div>
-          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            <p className="font-semibold">Sobre archivos .xlsx</p>
-            <p className="mt-1">Por ahora esta versión interpreta CSV/TSV en el navegador. Para Google Sheets, descarga como CSV/TSV. Si me envías tus archivos, puedo ajustar el importador a tus columnas reales.</p>
+          <div className="mt-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+            <p className="font-semibold">¡Soporte Excel Activo! 🧩</p>
+            <p className="mt-1">Ahora puedes subir archivos Excel (.xlsx, .xlsm) directamente. Si subes la nómina oficial PIE, el sistema iniciará una sincronización inteligente de diagnósticos y profesionales.</p>
           </div>
         </section>
 
@@ -4042,6 +4078,156 @@ function ImportView({
               </button>
             </div>
           )}
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function PieImportConfirmationView({
+  data,
+  store,
+  onCancel,
+  onConfirm,
+}: {
+  data: any[];
+  store: DataStore;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const cleanRut = (r: string) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
+
+  const matchSummary = useMemo(() => {
+    let matched = 0;
+    let created = 0;
+    data.forEach((excelStudent) => {
+      const existing = store.students.find((s) => {
+        const eRut = cleanRut(s.rut);
+        const xRut = cleanRut(excelStudent.rut);
+        if (eRut && xRut && eRut === xRut) return true;
+        return normalize(s.fullName) === normalize(excelStudent.name);
+      });
+      if (existing) matched++;
+      else created++;
+    });
+    return { matched, created };
+  }, [data, store.students]);
+
+  return (
+    <div className="tz-fade">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <span className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100 text-emerald-700">🧩</span>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Sincronización de Nómina PIE</h1>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Se ha detectado la Nómina Oficial de Estudiantes del Programa de Integración Escolar (PIE) 2026.
+            Comprueba la información y confirma para sincronizar la base de datos de estudiantes del colegio.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={onCancel}
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-emerald-700 transition animate-pulse"
+          >
+            Confirmar e Importar
+          </button>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[280px_1fr]">
+        <aside className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Resumen</h3>
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="text-2xl font-bold text-slate-900 tabular-nums">{data.length}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Estudiantes detectados</p>
+              </div>
+              <div className="border-t border-slate-100 pt-3">
+                <p className="text-2xl font-bold text-blue-700 tabular-nums">{matchSummary.matched}</p>
+                <p className="text-xs text-slate-500 mt-0.5 font-semibold">Existen (se actualizarán)</p>
+              </div>
+              <div className="border-t border-slate-100 pt-3">
+                <p className="text-2xl font-bold text-emerald-700 tabular-nums">{matchSummary.created}</p>
+                <p className="text-xs text-slate-500 mt-0.5 font-semibold">Nuevos (se crearán)</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/50 p-4 text-xs text-emerald-950 leading-relaxed">
+            <h4 className="font-semibold text-emerald-800">¿Qué pasará al confirmar?</h4>
+            <ul className="mt-2 list-disc list-inside space-y-1 text-emerald-900">
+              <li>Se asignará la etiqueta <strong className="text-emerald-950">PIE</strong> a los estudiantes correspondientes.</li>
+              <li>Se registrará su diagnóstico oficial y profesional PIE asignado en su ficha.</li>
+              <li>Aparecerán automáticamente en los filtros PIE de los listados de cursos.</li>
+            </ul>
+          </div>
+        </aside>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <h3 className="text-base font-semibold text-slate-950 mb-3">Estudiantes a importar</h3>
+          <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-slate-200">
+            <table className="w-full text-left text-xs">
+              <thead className="sticky top-0 bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-3">#</th>
+                  <th className="px-4 py-3">Nombre completo</th>
+                  <th className="px-4 py-3">RUT</th>
+                  <th className="px-4 py-3">Curso</th>
+                  <th className="px-4 py-3">Diagnóstico / SIT.</th>
+                  <th className="px-4 py-3">Especialista PIE</th>
+                  <th className="px-4 py-3">Origen</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {data.map((student, idx) => {
+                  const existing = store.students.some((s) => {
+                    const eRut = cleanRut(s.rut);
+                    const xRut = cleanRut(student.rut);
+                    if (eRut && xRut && eRut === xRut) return true;
+                    return normalize(s.fullName) === normalize(student.name);
+                  });
+                  return (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="px-4 py-2 text-slate-400 font-semibold">{idx + 1}</td>
+                      <td className="px-4 py-2 font-medium text-slate-900">
+                        {student.name}
+                        {existing ? (
+                          <span className="ml-1.5 rounded bg-blue-50 px-1 py-0.5 text-[9px] font-semibold text-blue-600 ring-1 ring-blue-100">
+                            Existe
+                          </span>
+                        ) : (
+                          <span className="ml-1.5 rounded bg-emerald-50 px-1 py-0.5 text-[9px] font-semibold text-emerald-600 ring-1 ring-emerald-100">
+                            Nuevo
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 text-slate-600">{student.rut}</td>
+                      <td className="px-4 py-2 text-slate-800 font-semibold">{student.course}</td>
+                      <td className="px-4 py-2">
+                        <span className="font-semibold text-slate-900">{student.diag}</span>
+                        <span className="block text-[10px] text-slate-400 mt-0.5">{student.situacionTecnica}</span>
+                      </td>
+                      <td className="px-4 py-2 text-slate-600">{student.professional || "—"}</td>
+                      <td className="px-4 py-2">
+                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600">
+                          {student.sourceSheet}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </section>
       </div>
     </div>
@@ -5805,6 +5991,7 @@ export default function TizaEducationApp() {
   const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
+  const [pieImportData, setPieImportData] = useState<any[] | null>(null);
   const [toast, setToast] = useState("");
   const [remoteLoaded, setRemoteLoaded] = useState(!isSupabaseAuthConfigured);
   const [remoteStatus, setRemoteStatus] = useState<"local" | "loading" | "synced" | "saving" | "error">("local");
@@ -6248,11 +6435,178 @@ export default function TizaEducationApp() {
     setToast("Planilla interpretada");
   };
 
+  const importPieExcel = (workbook: XLSX.WorkBook) => {
+    try {
+      const sheetsToParse = [
+        { name: "Cupos PIE", label: "Cupos" },
+        { name: "Sobrecupos ", label: "Sobrecupos" },
+        { name: "PENDIENTES- SC", label: "Pendientes" }
+      ];
+
+      const students: any[] = [];
+
+      sheetsToParse.forEach(({ name: sheetName, label }) => {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) return;
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+        if (!rows || rows.length === 0) return;
+
+        // Normalization map for course codes
+        const normalizeCourseName = (courseCode: string): string => {
+          const code = (courseCode || "").trim().toUpperCase();
+          if (!code) return "Sin curso";
+          
+          if (code.startsWith("1PK")) {
+            const sec = code.slice(3);
+            return `Prekínder ${sec}`;
+          }
+          if (code.startsWith("1K")) {
+            const sec = code.slice(2);
+            return `Kínder ${sec}`;
+          }
+          const basMatch = code.match(/^(\d)EB([A-Z])$/);
+          if (basMatch) {
+            const grade = basMatch[1];
+            const sec = basMatch[2];
+            return `${grade}° Básico ${sec}`;
+          }
+          if (code === "IEMA") return "I° Medio A";
+          if (code === "IEMB") return "I° Medio B";
+          if (code === "IIEMA") return "II° Medio A";
+          if (code === "IIEMB") return "II° Medio B";
+          if (code === "IIIEMA") return "III° Medio A";
+          if (code === "IIITPB" || code === "IIITP") return "III° Medio B";
+          if (code === "IVEMA") return "IV° Medio A";
+          if (code === "IVTPB" || code === "IVTP") return "IV° Medio B";
+          
+          return courseCode;
+        };
+
+        rows.forEach((row, idx) => {
+          if (idx === 0 || !row || row.length < 8) return;
+          const sName = row[6];
+          const sRut = row[4];
+          const sCourse = row[2];
+          const sDiag = row[9];
+          const sSit = row[10];
+          const sProf = row[8];
+
+          if (typeof sName === "string" && sName.trim() && sName !== "NOMBRE" && sName !== "NOMBRE ") {
+            students.push({
+              name: sName.trim(),
+              rut: typeof sRut === "string" ? sRut.trim() : String(sRut || ""),
+              course: normalizeCourseName(typeof sCourse === "string" ? sCourse : String(sCourse || "")),
+              diag: typeof sDiag === "string" ? sDiag.trim() : String(sDiag || ""),
+              situacionTecnica: typeof sSit === "string" ? sSit.trim() : String(sSit || ""),
+              professional: typeof sProf === "string" ? sProf.trim() : String(sProf || ""),
+              sourceSheet: label
+            });
+          }
+        });
+      });
+
+      if (students.length === 0) {
+        setToast("No se encontraron estudiantes válidos en las hojas PIE");
+        return;
+      }
+
+      setPieImportData(students);
+      setActiveView("import");
+      setToast("Nómina PIE oficial detectada");
+    } catch (err) {
+      console.error(err);
+      setToast("Error al procesar la nómina PIE");
+    }
+  };
+
+  const confirmPieImport = () => {
+    if (!pieImportData) return;
+    const cleanRut = (r: string) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
+
+    let updatedCount = 0;
+    let createdCount = 0;
+
+    const currentStudents = [...store.students];
+
+    pieImportData.forEach((excelStudent) => {
+      // Find matching student
+      let existingIndex = currentStudents.findIndex((s) => {
+        const eRut = cleanRut(s.rut);
+        const xRut = cleanRut(excelStudent.rut);
+        if (eRut && xRut && eRut === xRut) return true;
+        return normalize(s.fullName) === normalize(excelStudent.name);
+      });
+
+      const pieDiagText = `Programa de Integración Escolar (PIE). Diagnóstico: ${excelStudent.diag} (${excelStudent.situacionTecnica}). Profesional asignado: ${excelStudent.professional}.`;
+
+      if (existingIndex >= 0) {
+        // Update existing student
+        const existing = currentStudents[existingIndex];
+        const tagsList = (existing.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+        if (!tagsList.includes("PIE")) {
+          tagsList.push("PIE");
+        }
+        currentStudents[existingIndex] = {
+          ...existing,
+          tags: tagsList.join(", "),
+          supportNeeds: pieDiagText,
+          updatedAt: nowIso()
+        };
+        updatedCount++;
+      } else {
+        // Create new student
+        const newStudent: DataRecord = {
+          id: uid(),
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
+          fullName: excelStudent.name,
+          course: excelStudent.course,
+          rut: excelStudent.rut,
+          tags: "PIE",
+          relevantInfo: `Estudiante cargado desde la Nómina Oficial PIE 2026 (${excelStudent.sourceSheet}).`,
+          supportNeeds: pieDiagText,
+          strengths: "",
+          healthAlerts: "",
+          notes: "",
+          observations: "",
+          genogram: "[]"
+        };
+        currentStudents.push(newStudent);
+        createdCount++;
+      }
+    });
+
+    setStore((current) => ({ ...current, students: currentStudents }));
+    setPieImportData(null);
+    setToast(`Nómina PIE sincronizada: ${updatedCount} actualizados, ${createdCount} creados.`);
+  };
+
   const importFile = (file: File) => {
-    if (file.name.toLowerCase().endsWith(".xlsx")) {
-      setToast("Exporta tu Google Sheet como CSV/TSV por ahora");
+    const isExcel = file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xlsm");
+    
+    if (isExcel) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const buffer = e.target?.result as ArrayBuffer;
+          const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
+          if (workbook.SheetNames.includes("Cupos PIE")) {
+            importPieExcel(workbook);
+          } else {
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const csv = XLSX.utils.sheet_to_csv(worksheet);
+            importText(csv, file.name);
+          }
+        } catch (err) {
+          console.error(err);
+          setToast("Error al leer el archivo Excel");
+        }
+      };
+      reader.readAsArrayBuffer(file);
       return;
     }
+
     const reader = new FileReader();
     reader.onload = () => importText(String(reader.result || ""), file.name);
     reader.readAsText(file, "utf-8");
@@ -6328,6 +6682,16 @@ export default function TizaEducationApp() {
       );
     }
     if (activeView === "import") {
+      if (pieImportData) {
+        return (
+          <PieImportConfirmationView
+            data={pieImportData}
+            store={store}
+            onCancel={() => setPieImportData(null)}
+            onConfirm={confirmPieImport}
+          />
+        );
+      }
       return (
         <ImportView
           parsed={parsed}
