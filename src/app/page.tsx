@@ -17,6 +17,7 @@ import {
   MapPin,
   PieChart,
   Printer,
+  Puzzle,
   Tag,
   Check,
   CheckCircle2,
@@ -57,7 +58,7 @@ type EntityId =
   | "workshops"
   | "documents";
 
-type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "settings" | EntityId;
+type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "settings" | "pie" | EntityId;
 
 type DataRecord = {
   id: string;
@@ -692,6 +693,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "triage", label: "Tiza-IA", icon: TizaIaIcon },
   { id: "reports", label: "Reportes", icon: PieChart },
   { id: "students", label: "Estudiantes", icon: UserRound },
+  { id: "pie", label: "PIE", icon: Puzzle },
   { id: "courses", label: "Cursos", icon: BookOpen },
   { id: "cases", label: "Casos", icon: FileText },
   { id: "logs", label: "Bitácoras", icon: ClipboardList },
@@ -3522,6 +3524,603 @@ function StudentsWorkspaceView({
               </>
             ) : (
               <div className="p-10 text-center text-sm text-slate-500">Selecciona un curso a la izquierda.</div>
+            )}
+          </section>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ==========================================
+// VISTA: PROGRAMA DE INTEGRACIÓN ESCOLAR (PIE)
+// ==========================================
+
+const getPieDiagnosis = (student: DataRecord) => {
+  const sn = student.supportNeeds || "";
+  const diagMatch = sn.match(/Diagnóstico:\s*([^().\n\r]+?)(?:\s*\(|\s*\.|\s*Profesional|$)/i);
+  if (diagMatch && diagMatch[1].trim()) {
+    return diagMatch[1].trim();
+  }
+  const snUpper = sn.toUpperCase();
+  if (snUpper.includes("TEA")) return "TEA";
+  if (snUpper.includes("TEL MIXTO")) return "TEL Mixto";
+  if (snUpper.includes("TEL EXPRESIVO")) return "TEL Exp.";
+  if (snUpper.includes("TEL")) return "TEL";
+  if (snUpper.includes("FIL")) return "FIL";
+  if (snUpper.includes("DIL")) return "DIL";
+  if (snUpper.includes("TDAH")) return "TDAH";
+  if (snUpper.includes("DEA")) return "DEA";
+  if (snUpper.includes("SDA")) return "SDA";
+  return "S/D";
+};
+
+const getPieSituation = (student: DataRecord) => {
+  const sn = student.supportNeeds || "";
+  const match = sn.match(/Diagnóstico:.*?\(([^)]+)\)/i);
+  if (match && match[1].trim()) {
+    return match[1].trim();
+  }
+  const snUpper = sn.toUpperCase();
+  if (snUpper.includes("PERMANENTE")) return "Permanente";
+  if (snUpper.includes("TRANSITORIO")) return "Transitorio";
+  return "No especificado";
+};
+
+const getPieProfessional = (student: DataRecord) => {
+  const sn = student.supportNeeds || "";
+  const match = sn.match(/Profesional asignado:\s*([^.\n\r]+?)(?:\.|$)/i);
+  if (match && match[1].trim()) {
+    return match[1].trim();
+  }
+  if (sn.includes("Profesional:")) {
+    const pMatch = sn.match(/Profesional:\s*([^.\n\r]+?)(?:\.|$)/i);
+    if (pMatch && pMatch[1].trim()) return pMatch[1].trim();
+  }
+  return "Sin asignar";
+};
+
+function PieWorkspaceView({
+  store,
+  onOpenStudent,
+  onNavigate,
+}: {
+  store: DataStore;
+  onOpenStudent: (studentId: string, focusField?: string) => void;
+  onNavigate: (view: ViewId) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [selectedCourse, setSelectedCourse] = useState<string>("all");
+  const [selectedDiag, setSelectedDiag] = useState<string>("all");
+  const [selectedSituation, setSelectedSituation] = useState<string>("all");
+  const [selectedProfessional, setSelectedProfessional] = useState<string>("all");
+
+  const cycleByCourse = useMemo(() => {
+    return new Map(officialCourses.map((c) => [normalize(c.name), c.cycle]));
+  }, []);
+
+  const pieStudents = useMemo(() => {
+    return store.students.filter((s) => {
+      const tagsList = (s.tags || "").toUpperCase().split(",").map((t) => t.trim()).filter(Boolean);
+      return tagsList.includes("PIE");
+    });
+  }, [store.students]);
+
+  // Statistics
+  const totalPieCount = pieStudents.length;
+  const permanenteCount = useMemo(() => pieStudents.filter(s => getPieSituation(s).toUpperCase().includes("PERMANENTE")).length, [pieStudents]);
+  const transitorioCount = useMemo(() => pieStudents.filter(s => getPieSituation(s).toUpperCase().includes("TRANSITORIO")).length, [pieStudents]);
+  const specialistCount = useMemo(() => {
+    const set = new Set<string>();
+    pieStudents.forEach((s) => {
+      const prof = getPieProfessional(s);
+      if (prof && prof !== "Sin asignar") set.add(prof);
+    });
+    return set.size;
+  }, [pieStudents]);
+
+  // Top Diagnostics Counts
+  const diagCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      TEA: 0,
+      FIL: 0,
+      DIL: 0,
+      TEL: 0,
+      TDAH: 0,
+      DEA: 0,
+      OTROS: 0,
+    };
+    pieStudents.forEach((s) => {
+      const diag = getPieDiagnosis(s).toUpperCase();
+      if (diag in counts) {
+        counts[diag]++;
+      } else {
+        counts.OTROS++;
+      }
+    });
+    return counts;
+  }, [pieStudents]);
+
+  const professionals = useMemo(() => {
+    const set = new Set<string>();
+    pieStudents.forEach((s) => {
+      const prof = getPieProfessional(s);
+      if (prof && prof !== "Sin asignar") set.add(prof);
+    });
+    return Array.from(set).sort();
+  }, [pieStudents]);
+
+  // Students matching non-course filters
+  const studentsMatchingNonCourseFilters = useMemo(() => {
+    return pieStudents.filter((s) => {
+      // Search filter
+      const searchNormalized = normalize(search);
+      if (searchNormalized) {
+        const diag = getPieDiagnosis(s);
+        const prof = getPieProfessional(s);
+        const match = [s.fullName, s.rut, s.course, diag, prof]
+          .map((v) => normalize(String(v || "")))
+          .some((v) => v.includes(searchNormalized));
+        if (!match) return false;
+      }
+
+      // Diagnostic filter
+      if (selectedDiag !== "all") {
+        const diag = getPieDiagnosis(s).toUpperCase();
+        if (selectedDiag === "OTROS") {
+          const known = ["TEA", "FIL", "DIL", "TEL", "TDAH", "DEA"];
+          if (known.includes(diag)) return false;
+        } else if (diag !== selectedDiag) {
+          return false;
+        }
+      }
+
+      // Situation filter
+      if (selectedSituation !== "all") {
+        const sit = getPieSituation(s).toUpperCase();
+        if (selectedSituation === "PERMANENTE" && !sit.includes("PERMANENTE")) return false;
+        if (selectedSituation === "TRANSITORIO" && !sit.includes("TRANSITORIO")) return false;
+      }
+
+      // Professional filter
+      if (selectedProfessional !== "all") {
+        const prof = getPieProfessional(s);
+        if (prof !== selectedProfessional) return false;
+      }
+
+      return true;
+    });
+  }, [pieStudents, search, selectedDiag, selectedSituation, selectedProfessional]);
+
+  // Group by Course
+  const officialOrder = useMemo(() => [...officialCourses.map((c) => c.name), "Sin curso"], []);
+
+  const sidebarCourseList = useMemo(() => {
+    const groupedFiltered = new Map<string, DataRecord[]>();
+    studentsMatchingNonCourseFilters.forEach((student) => {
+      const courseKey = (student.course || "Sin curso").trim() || "Sin curso";
+      if (!groupedFiltered.has(courseKey)) groupedFiltered.set(courseKey, []);
+      groupedFiltered.get(courseKey)!.push(student);
+    });
+
+    return officialOrder
+      .filter((name) => groupedFiltered.has(name))
+      .concat(Array.from(groupedFiltered.keys()).filter((name) => !officialOrder.includes(name) && groupedFiltered.has(name)))
+      .map((name) => {
+        const cycle = cycleByCourse.get(normalize(name)) || (name === "Sin curso" ? undefined : "III Ciclo");
+        const students = groupedFiltered.get(name) || [];
+        return { name, students, cycle };
+      });
+  }, [studentsMatchingNonCourseFilters, officialOrder, cycleByCourse]);
+
+  // Reset selectedCourse if not found in list
+  useEffect(() => {
+    if (selectedCourse !== "all" && !sidebarCourseList.some((c) => c.name === selectedCourse)) {
+      setSelectedCourse("all");
+    }
+  }, [selectedCourse, sidebarCourseList]);
+
+  const displayedStudents = useMemo(() => {
+    return (selectedCourse === "all"
+      ? studentsMatchingNonCourseFilters
+      : studentsMatchingNonCourseFilters.filter((s) => s.course === selectedCourse)
+    ).slice().sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "es"));
+  }, [selectedCourse, studentsMatchingNonCourseFilters]);
+
+  // Card click triggers
+  const handleStatClick = (type: "all" | "permanente" | "transitorio") => {
+    if (type === "all") {
+      setSelectedDiag("all");
+      setSelectedSituation("all");
+      setSelectedProfessional("all");
+      setSelectedCourse("all");
+    } else if (type === "permanente") {
+      setSelectedSituation("PERMANENTE");
+    } else if (type === "transitorio") {
+      setSelectedSituation("TRANSITORIO");
+    }
+  };
+
+  const diagnosticsConfig = [
+    { key: "all", label: "Todos", color: "bg-slate-900 text-white" },
+    { key: "TEA", label: "TEA", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+    { key: "FIL", label: "FIL", color: "bg-violet-50 text-violet-700 border-violet-200" },
+    { key: "DIL", label: "DIL", color: "bg-purple-50 text-purple-700 border-purple-200" },
+    { key: "TEL", label: "TEL", color: "bg-blue-50 text-blue-700 border-blue-200" },
+    { key: "TDAH", label: "TDAH", color: "bg-amber-50 text-amber-700 border-amber-200" },
+    { key: "DEA", label: "DEA", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+    { key: "OTROS", label: "Otros", color: "bg-slate-50 text-slate-700 border-slate-200" },
+  ];
+
+  return (
+    <div className="tz-fade">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-emerald-100 text-emerald-700 shadow-sm">
+              <Puzzle className="h-5 w-5" />
+            </span>
+            <h1 className="text-3xl font-bold tracking-tight text-slate-950">Programa de Integración Escolar (PIE)</h1>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Panel unificado para el seguimiento de estudiantes integrados, diagnósticos clínicos y profesionales de apoyo asignados.
+          </p>
+        </div>
+      </div>
+
+      {/* Statistics Cards */}
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {/* Total PIE Card */}
+        <button
+          onClick={() => handleStatClick("all")}
+          className="tz-press border border-slate-200 hover:border-slate-300 bg-white p-5 rounded-2xl flex items-center gap-4 text-left shadow-sm hover:shadow-md transition"
+        >
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-emerald-50 text-emerald-600">
+            <Puzzle className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{totalPieCount}</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Estudiantes PIE</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Click para limpiar filtros</p>
+          </div>
+        </button>
+
+        {/* NEEP Card */}
+        <button
+          onClick={() => handleStatClick("permanente")}
+          className={`tz-press border p-5 rounded-2xl flex items-center gap-4 text-left shadow-sm hover:shadow-md transition ${
+            selectedSituation === "PERMANENTE"
+              ? "border-purple-500 bg-purple-50/20"
+              : "border-slate-200 hover:border-slate-300 bg-white"
+          }`}
+        >
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-purple-50 text-purple-600">
+            <ShieldCheck className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{permanenteCount}</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">NEE Permanentes</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Apoyos continuos (NEEP)</p>
+          </div>
+        </button>
+
+        {/* NEET Card */}
+        <button
+          onClick={() => handleStatClick("transitorio")}
+          className={`tz-press border p-5 rounded-2xl flex items-center gap-4 text-left shadow-sm hover:shadow-md transition ${
+            selectedSituation === "TRANSITORIO"
+              ? "border-amber-500 bg-amber-50/20"
+              : "border-slate-200 hover:border-slate-300 bg-white"
+          }`}
+        >
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-amber-50 text-amber-600">
+            <ClipboardList className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{transitorioCount}</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">NEE Transitorias</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Apoyos temporales (NEET)</p>
+          </div>
+        </button>
+
+        {/* Specialists Card */}
+        <div className="border border-slate-200 bg-white p-5 rounded-2xl flex items-center gap-4 shadow-sm">
+          <div className="grid h-12 w-12 place-items-center rounded-xl bg-blue-50 text-blue-600">
+            <UsersRound className="h-6 w-6" />
+          </div>
+          <div>
+            <p className="text-2xl font-extrabold text-slate-900 tabular-nums">{specialistCount}</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Especialistas PIE</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">Docentes y terapeutas activos</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Diagnostic Chips Row */}
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Filtrar por Diagnóstico</p>
+        <div className="flex flex-wrap gap-2">
+          {diagnosticsConfig.map((diag) => {
+            const count = diag.key === "all" ? totalPieCount : diagCounts[diag.key] || 0;
+            const isActive = selectedDiag === diag.key;
+            return (
+              <button
+                key={diag.key}
+                onClick={() => setSelectedDiag(diag.key)}
+                className={`tz-press rounded-full px-3.5 py-1.5 text-xs font-semibold border transition flex items-center gap-2 ${
+                  isActive
+                    ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                    : `${diag.color} hover:bg-slate-100`
+                }`}
+              >
+                <span>{diag.label}</span>
+                <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                  isActive ? "bg-white/20 text-white" : "bg-black/5 text-slate-600"
+                }`}>
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Filters Bar */}
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:flex-row lg:items-center">
+        <div className="flex flex-1 items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+          <Search className="h-4 w-4 text-slate-400" />
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar por estudiante, RUT, curso, profesional, diagnóstico…"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500"
+          />
+          {search ? (
+            <button onClick={() => setSearch("")} className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          {/* Situation Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-slate-500">Situación:</span>
+            <select
+              value={selectedSituation}
+              onChange={(e) => setSelectedSituation(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none hover:border-slate-300"
+            >
+              <option value="all">Todas</option>
+              <option value="PERMANENTE">Permanente (NEEP)</option>
+              <option value="TRANSITORIO">Transitorio (NEET)</option>
+            </select>
+          </div>
+
+          {/* Specialist Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-slate-500">Especialista:</span>
+            <select
+              value={selectedProfessional}
+              onChange={(e) => setSelectedProfessional(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none hover:border-slate-300 max-w-[200px]"
+            >
+              <option value="all">Todos</option>
+              {professionals.map((prof) => (
+                <option key={prof} value={prof}>{prof}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Reset All Filters button if any filter is active */}
+          {(search || selectedDiag !== "all" || selectedSituation !== "all" || selectedProfessional !== "all" || selectedCourse !== "all") && (
+            <button
+              onClick={() => {
+                setSearch("");
+                setSelectedDiag("all");
+                setSelectedSituation("all");
+                setSelectedProfessional("all");
+                setSelectedCourse("all");
+              }}
+              className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 transition"
+            >
+              Limpiar Filtros
+            </button>
+          )}
+        </div>
+
+        <div className="rounded-md bg-slate-50 px-3 py-1.5 text-sm lg:ml-auto">
+          <span className="font-semibold tabular-nums text-slate-950">{displayedStudents.length}</span>
+          <span className="ml-1 text-slate-500">de {totalPieCount} estudiantes</span>
+        </div>
+      </div>
+
+      {totalPieCount === 0 ? (
+        <div className="tz-fade rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm">
+          <Puzzle className="mx-auto h-12 w-12 text-emerald-500 animate-pulse" />
+          <h2 className="mt-4 text-lg font-bold text-slate-950">Programa de Integración Escolar (PIE) vacío</h2>
+          <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">
+            Aún no has importado la nómina PIE oficial o etiquetado estudiantes con la etiqueta "PIE".
+          </p>
+          <div className="mt-6 flex justify-center gap-3">
+            <button
+              onClick={() => onNavigate("import")}
+              className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800"
+            >
+              <Upload className="h-4 w-4" /> Importar Nómina Oficial
+            </button>
+            <button
+              onClick={() => onNavigate("students")}
+              className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              Ir a Estudiantes
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+          {/* Master Course List */}
+          <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col h-[calc(100vh-320px)]">
+            <div className="border-b border-slate-100 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-50 flex items-center justify-between">
+              <span>Filtrar por Curso</span>
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 font-bold tabular-nums text-slate-700">
+                {sidebarCourseList.length}
+              </span>
+            </div>
+            <div className="overflow-y-auto flex-1 divide-y divide-slate-100">
+              {/* Option "Todos los cursos" */}
+              <button
+                onClick={() => setSelectedCourse("all")}
+                className={`group flex w-full items-center gap-3 border-l-4 px-4 py-3 text-left transition ${
+                  selectedCourse === "all"
+                    ? "border-emerald-600 bg-emerald-50/40"
+                    : "border-transparent hover:bg-slate-50"
+                }`}
+              >
+                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                  selectedCourse === "all" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-500"
+                } text-[11px] font-bold shadow-sm`}>
+                  ⚡️
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className={`truncate text-sm font-semibold ${selectedCourse === "all" ? "text-emerald-900" : "text-slate-900"}`}>Todos los cursos</p>
+                  <p className="truncate text-[10px] text-slate-400">Total general de integrados</p>
+                </div>
+                <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${
+                  selectedCourse === "all" ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700"
+                }`}>
+                  {studentsMatchingNonCourseFilters.length}
+                </span>
+              </button>
+
+              {sidebarCourseList.map((group) => {
+                const active = group.name === selectedCourse;
+                return (
+                  <button
+                    key={group.name}
+                    onClick={() => setSelectedCourse(group.name)}
+                    className={`group flex w-full items-center gap-3 border-l-4 px-4 py-3 text-left transition ${
+                      active ? "border-emerald-600 bg-emerald-50/40" : "border-transparent hover:bg-slate-50"
+                    }`}
+                  >
+                    <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${avatarTone(group.name)} text-[11px] font-bold text-white shadow-sm`}>
+                      {group.name.split(" ").slice(0, 2).map((p) => p[0] || "").join("").toUpperCase().slice(0, 2)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className={`truncate text-sm font-semibold ${active ? "text-emerald-900" : "text-slate-900"}`}>{group.name}</p>
+                      <p className="truncate text-[10px] text-slate-400">{group.cycle || "Sin ciclo"}</p>
+                    </div>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums ${active ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-700"}`}>
+                      {group.students.length}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </aside>
+
+          {/* Students list */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col h-[calc(100vh-320px)]">
+            <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 bg-slate-50">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">
+                  {selectedCourse === "all" ? "Todos los estudiantes PIE" : selectedCourse}
+                </h2>
+                <p className="text-xs text-slate-500 font-medium">
+                  {displayedStudents.length} estudiante{displayedStudents.length === 1 ? "" : "s"} integrado{displayedStudents.length === 1 ? "" : "s"}
+                </p>
+              </div>
+            </header>
+
+            {displayedStudents.length === 0 ? (
+              <div className="p-12 text-center flex-1 flex flex-col justify-center">
+                <Search className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-3 text-sm text-slate-500">Ningún estudiante integrado coincide con los filtros aplicados.</p>
+              </div>
+            ) : (
+              <div className="overflow-y-auto flex-1">
+                <table className="w-full text-left text-sm border-collapse font-sans">
+                  <thead className="bg-slate-50/50 sticky top-0 text-xs font-semibold text-slate-500 border-b border-slate-100 z-10">
+                    <tr>
+                      <th className="px-5 py-3 font-semibold">Estudiante</th>
+                      {selectedCourse === "all" && <th className="px-5 py-3 font-semibold">Curso</th>}
+                      <th className="px-5 py-3 font-semibold">RUT</th>
+                      <th className="px-5 py-3 font-semibold">Diagnóstico</th>
+                      <th className="px-5 py-3 font-semibold">Situación</th>
+                      <th className="px-5 py-3 font-semibold">Especialista PIE</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {displayedStudents.map((student) => {
+                      const diag = getPieDiagnosis(student);
+                      const sit = getPieSituation(student);
+                      const prof = getPieProfessional(student);
+
+                      const diagColor = {
+                        TEA: "bg-emerald-50 text-emerald-700 ring-emerald-200/60 border-emerald-200/40",
+                        FIL: "bg-violet-50 text-violet-700 ring-violet-200/60 border-violet-200/40",
+                        DIL: "bg-purple-50 text-purple-700 ring-purple-200/60 border-purple-200/40",
+                        TEL: "bg-blue-50 text-blue-700 ring-blue-200/60 border-blue-200/40",
+                        TDAH: "bg-amber-50 text-amber-700 ring-amber-200/60 border-amber-200/40",
+                        DEA: "bg-indigo-50 text-indigo-700 ring-indigo-200/60 border-indigo-200/40",
+                      }[diag.toUpperCase()] || "bg-slate-50 text-slate-700 ring-slate-200/60 border-slate-200/40";
+
+                      const sitColor = sit.toUpperCase().includes("PERMANENTE")
+                        ? "bg-purple-500/10 text-purple-700 ring-purple-500/25"
+                        : sit.toUpperCase().includes("TRANSITORIO")
+                          ? "bg-amber-500/10 text-amber-700 ring-amber-500/25"
+                          : "bg-slate-500/10 text-slate-600 ring-slate-500/20";
+
+                      return (
+                        <tr
+                          key={student.id}
+                          onClick={() => onOpenStudent(student.id)}
+                          className="hover:bg-slate-50/50 cursor-pointer transition"
+                        >
+                          <td className="px-5 py-3.5">
+                            <div className="flex items-center gap-3">
+                              <div className={`grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[10px] font-bold text-white shadow-sm`}>
+                                {student.profilePhoto ? (
+                                  <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
+                                ) : (
+                                  initialsOf(student.fullName)
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-semibold text-slate-900 group-hover:text-emerald-700 truncate max-w-[200px]">{student.fullName || "Sin nombre"}</p>
+                              </div>
+                            </div>
+                          </td>
+                          {selectedCourse === "all" && (
+                            <td className="px-5 py-3.5 text-slate-600 font-medium whitespace-nowrap">
+                              {student.course}
+                            </td>
+                          )}
+                          <td className="px-5 py-3.5 text-xs text-slate-500 font-mono whitespace-nowrap font-semibold">
+                            {student.rut || "—"}
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ring-1 ${diagColor}`}>
+                              {diag}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 whitespace-nowrap">
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ring-1 ${sitColor}`}>
+                              {sit || "Sin especificar"}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-slate-700 font-medium">
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"></span>
+                              <span className="truncate max-w-[150px]">{prof || "Sin asignar"}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         </div>
@@ -6657,6 +7256,9 @@ export default function TizaEducationApp() {
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "students") {
       return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
+    }
+    if (activeView === "pie") {
+      return <PieWorkspaceView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} />;
     }
     if (activeView === "courses") {
       return (
