@@ -6182,18 +6182,33 @@ export default function TizaEducationApp() {
     }
   });
   const profile = profileState;
-  // Wrap setProfile so any update is mirrored to Supabase Auth user_metadata
-  // (synced across browsers/devices) in addition to localStorage.
+  const accessTokenRef = React.useRef("");
+  const [profileSyncStatus, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  // Wrap setProfile so every update is persisted server-side to the user's
+  // Supabase metadata (global per user → travels across devices).
   const setProfile = (next: Record<string, string>) => {
     setProfileState(next);
-    if (supabaseAuth) {
-      // Fire and forget — we don't block the UI on this.
-      supabaseAuth.auth
-        .updateUser({ data: { tizaProfile: next } })
-        .catch((err) => {
-          console.warn("Profile sync to Supabase failed", err);
-        });
-    }
+    if (!accessTokenRef.current) return; // not authenticated yet; localStorage caches it
+    setProfileSyncStatus("saving");
+    fetch("/api/profile", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${accessTokenRef.current}`,
+      },
+      body: JSON.stringify({ profile: next }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || !data.ok) throw new Error(data?.error || `Error ${res.status}`);
+        setProfileSyncStatus("saved");
+        window.setTimeout(() => setProfileSyncStatus((s) => (s === "saved" ? "idle" : s)), 2000);
+      })
+      .catch((err) => {
+        console.warn("Profile sync to Supabase failed", err);
+        setProfileSyncStatus("error");
+        setToast(`No se pudo sincronizar el perfil: ${err instanceof Error ? err.message : String(err)}`);
+      });
   };
 
   useEffect(() => {
@@ -6222,20 +6237,33 @@ export default function TizaEducationApp() {
     };
   }, []);
 
-  // Restore profile (including calendarIcalUrl) from Supabase Auth user_metadata
-  // whenever the auth user becomes available. This is how Settings + Calendar
-  // URL travel across browsers and devices.
+  // Keep accessTokenRef synced with the latest token so the profile sync helper
+  // can use it without depending on stale closures.
+  useEffect(() => {
+    accessTokenRef.current = accessToken;
+  }, [accessToken]);
+
+  // Restore profile (including calendarIcalUrl) from server-stored
+  // user_metadata so settings travel across browsers and devices. Pulls
+  // fresh on every login.
   const profileRestoredRef = React.useRef(false);
   useEffect(() => {
-    if (!authUser || profileRestoredRef.current) return;
-    const remote = (authUser.user_metadata as { tizaProfile?: Record<string, string> } | null)?.tizaProfile;
-    if (remote && typeof remote === "object") {
-      profileRestoredRef.current = true;
-      setProfileState((current) => ({ ...current, ...remote }));
-    } else {
-      profileRestoredRef.current = true;
-    }
-  }, [authUser]);
+    if (!authUser || !accessToken || profileRestoredRef.current) return;
+    profileRestoredRef.current = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/profile", {
+          headers: { authorization: `Bearer ${accessToken}` },
+        });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok && data.ok && data.profile && Object.keys(data.profile).length > 0) {
+          setProfileState((current) => ({ ...current, ...data.profile }));
+        }
+      } catch (err) {
+        console.warn("Profile load from Supabase failed", err);
+      }
+    })();
+  }, [authUser, accessToken]);
 
   useEffect(() => {
     if (!authUser || !accessToken) {
