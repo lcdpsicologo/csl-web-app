@@ -5124,6 +5124,7 @@ function AIChatMode({
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
   const [recording, setRecording] = useState(false);
@@ -5131,6 +5132,25 @@ function AIChatMode({
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const recordChunksRef = React.useRef<Blob[]>([]);
   const recordTimerRef = React.useRef<number | null>(null);
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setIsDragActive(true);
+    } else if (e.type === "dragleave") {
+      setIsDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragActive(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFiles(e.dataTransfer.files);
+    }
+  };
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -5327,7 +5347,30 @@ function AIChatMode({
   };
 
   return (
-    <div className="flex h-[calc(100vh-260px)] min-h-[480px] flex-col rounded-2xl border border-slate-200 bg-white">
+    <div
+      onDragEnter={handleDrag}
+      className="relative flex h-[calc(100vh-260px)] min-h-[480px] flex-col rounded-2xl border border-slate-200 bg-white"
+    >
+      {/* Drag overlay */}
+      {isDragActive && (
+        <div
+          onDragEnter={handleDrag}
+          onDragOver={handleDrag}
+          onDragLeave={handleDrag}
+          onDrop={handleDrop}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-2xl bg-cyan-950/40 p-6 text-white backdrop-blur-[2px] transition-all duration-300"
+        >
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-cyan-400 bg-slate-900/95 p-8 text-center shadow-2xl max-w-sm mx-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="grid h-16 w-16 place-items-center rounded-full bg-cyan-950 text-cyan-400 shadow-inner mb-4 animate-bounce">
+              <Upload className="h-8 w-8" />
+            </div>
+            <h3 className="text-lg font-bold text-white">Adjuntar archivos a Tiza-IA</h3>
+            <p className="mt-2 text-xs text-cyan-200/80 leading-relaxed">
+              Suelta tus archivos (.pdf, .doc, .xlsx, imágenes o audios) para cargarlos en el chat.
+            </p>
+          </div>
+        </div>
+      )}
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         {turns.length === 0 ? (
           <div className="mx-auto max-w-2xl">
