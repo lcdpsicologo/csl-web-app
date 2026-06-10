@@ -16,7 +16,6 @@ import {
   MapPin,
   PieChart,
   Printer,
-  Sparkles,
   Tag,
   Check,
   CheckCircle2,
@@ -659,10 +658,33 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
   },
 };
 
+// Ícono propio de Tiza-IA: una tiza inclinada dejando un trazo punteado.
+// Sigue el estilo de lucide (stroke currentColor, 2px) para integrarse al menú.
+const TizaIaIcon = ((props: React.SVGProps<SVGSVGElement>) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    {/* cuerpo de la tiza */}
+    <path d="M13.2 4.8a2.6 2.6 0 0 1 3.7 0l2.3 2.3a2.6 2.6 0 0 1 0 3.7l-3.4 3.4-6-6 3.4-3.4z" />
+    {/* punta */}
+    <path d="m9.8 8.2 6 6" />
+    {/* trazo punteado que deja la tiza */}
+    <path d="M8.5 12.5 3.5 17.5" strokeDasharray="0.6 3.4" />
+    <circle cx="4" cy="20.5" r="0.2" />
+    <circle cx="7" cy="19" r="0.2" />
+  </svg>
+)) as unknown as LucideIcon;
+
 const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Inicio", icon: Home },
   { id: "today", label: "Hoy", icon: CalendarDays },
-  { id: "triage", label: "Tiza-IA", icon: Sparkles },
+  { id: "triage", label: "Tiza-IA", icon: TizaIaIcon },
   { id: "reports", label: "Reportes", icon: PieChart },
   { id: "students", label: "Estudiantes", icon: UserRound },
   { id: "courses", label: "Cursos", icon: BookOpen },
@@ -3946,8 +3968,8 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEve
               <button onClick={() => onNavigate("today")} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
                 <CalendarDays className="h-4 w-4" /> Ver mi día
               </button>
-              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50">
-                <Sparkles className="h-4 w-4" /> Tiza-IA
+              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm hover:bg-cyan-50">
+                <TizaIaIcon className="h-4 w-4" /> Tiza-IA
               </button>
               <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
                 <UserRound className="h-4 w-4" /> Estudiantes
@@ -4681,7 +4703,7 @@ type BulkAiResponse = {
 function TizaIaMark({ size = 40, className = "" }: { size?: number; className?: string }) {
   return (
     <div
-      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-emerald-700 via-emerald-800 to-slate-900 shadow-md ${className}`}
+      className={`relative grid shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-cyan-700 via-cyan-800 to-slate-900 shadow-md ${className}`}
       style={{ width: size, height: size }}
       aria-label="Tiza-IA"
     >
@@ -4689,11 +4711,11 @@ function TizaIaMark({ size = 40, className = "" }: { size?: number; className?: 
         {/* trazo de tiza punteado */}
         <path d="M7 29 Q 15 14 28 9" stroke="rgba(255,255,255,0.85)" strokeWidth="2.2" strokeLinecap="round" strokeDasharray="1 5" />
         {/* destello al final del trazo */}
-        <path d="M31 6 l1 2.4 2.4 1 -2.4 1 -1 2.4 -1-2.4 -2.4-1 2.4-1 z" fill="#fde68a" />
+        <path d="M31 6 l1 2.4 2.4 1 -2.4 1 -1 2.4 -1-2.4 -2.4-1 2.4-1 z" fill="#A7F3D0" />
         {/* tiza */}
         <g transform="rotate(38 24 16)">
           <rect x="20.5" y="8" width="7" height="16" rx="2.2" fill="#fff" />
-          <rect x="20.5" y="8" width="7" height="4.5" rx="2.2" fill="#fcd34d" />
+          <rect x="20.5" y="8" width="7" height="4.5" rx="2.2" fill="#A7F3D0" />
         </g>
         {/* polvillo de tiza */}
         <circle cx="9" cy="32.5" r="1.1" fill="rgba(255,255,255,0.8)" />
@@ -4708,7 +4730,7 @@ function TizaIaMark({ size = 40, className = "" }: { size?: number; className?: 
 function TizaIaWordmark({ className = "" }: { className?: string }) {
   return (
     <span className={className}>
-      Tiza<span className="text-emerald-600">-IA</span>
+      Tiza<span className="text-cyan-700">-IA</span>
     </span>
   );
 }
@@ -4944,7 +4966,7 @@ function AIChatMode({
         {turns.length === 0 ? (
           <div className="mx-auto max-w-2xl">
             {/* Pizarra de bienvenida */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-900 via-emerald-950 to-slate-950 p-6 text-center shadow-lg sm:p-8">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-cyan-900 via-cyan-950 to-slate-950 p-6 text-center shadow-lg sm:p-8">
               {/* marco de pizarra dibujado con tiza */}
               <div className="pointer-events-none absolute inset-3 rounded-xl border-2 border-dashed border-white/15" />
               {/* polvillo decorativo */}
@@ -4954,9 +4976,9 @@ function AIChatMode({
 
               <TizaIaMark size={64} className="mx-auto ring-2 ring-white/20" />
               <h2 className="mt-4 text-2xl font-semibold tracking-tight text-white sm:text-3xl">
-                ¡Hola! Soy <span className="text-amber-300">Tiza-IA</span>
+                ¡Hola! Soy <span className="text-emerald-200">Tiza-IA</span>
               </h2>
-              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-emerald-100/90">
+              <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-cyan-100/90">
                 La tiza inteligente del Colegio San Lucas. Conozco los datos del colegio
                 y te ayudo a registrar, buscar y entender lo que pasa con tus estudiantes.
               </p>
@@ -4970,7 +4992,7 @@ function AIChatMode({
                 "Pega la planilla de talleres realizados este mes",
                 "¿Cuántos casos abiertos de convivencia hay en III° Medio?",
               ].map((s) => (
-                <button key={s} onClick={() => setDraft(s)} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-left text-sm text-slate-700 transition hover:border-emerald-300 hover:bg-emerald-50">
+                <button key={s} onClick={() => setDraft(s)} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 text-left text-sm text-slate-700 transition hover:border-cyan-300 hover:bg-cyan-50">
                   {s}
                 </button>
               ))}
@@ -4996,7 +5018,7 @@ function AIChatMode({
                   <div className="max-w-[88%] rounded-2xl rounded-tl-md border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm">
                     {turn.loading ? (
                       <div className="flex items-center gap-2 text-slate-500">
-                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" />
+                        <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-700 border-t-transparent" />
                         Tiza-IA está escribiendo…
                       </div>
                     ) : turn.error ? (
@@ -5031,7 +5053,7 @@ function AIChatMode({
               ))}
             </div>
           ) : null}
-          <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-emerald-600">
+          <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-cyan-700">
             <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,image/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
             <button onClick={() => fileInputRef.current?.click()} title="Adjuntar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
               <Upload className="h-4 w-4" />
@@ -5044,8 +5066,8 @@ function AIChatMode({
               rows={2}
               className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400"
             />
-            <button onClick={send} disabled={!draft.trim() && files.length === 0} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-emerald-700 to-emerald-900 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
-              <Sparkles className="h-4 w-4" /> Enviar
+            <button onClick={send} disabled={!draft.trim() && files.length === 0} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-900 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
+              <TizaIaIcon className="h-4 w-4" /> Enviar
             </button>
           </div>
           <p className="mt-1.5 text-[11px] text-slate-400">⌘ + Enter para enviar · Tiza-IA detecta automáticamente qué hacer.</p>
