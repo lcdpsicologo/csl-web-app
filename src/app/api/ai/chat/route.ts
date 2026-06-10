@@ -54,6 +54,17 @@ const extractFile = async (file: File): Promise<ExtractedFile> => {
   if (type.startsWith("image/") || /\.(png|jpe?g|gif|webp|heic|heif)$/i.test(lower)) {
     return { name, type, inlinePart: { inline_data: { mime_type: type.startsWith("image/") ? type : "image/png", data: arrayBufferToBase64(buf) } } };
   }
+  // Audio (voice messages) — Gemini transcribes and interprets natively.
+  if (type.startsWith("audio/") || /\.(webm|m4a|mp3|wav|ogg|aac|flac)$/i.test(lower)) {
+    const mime = type.startsWith("audio/")
+      ? type
+      : lower.endsWith(".m4a") ? "audio/mp4"
+      : lower.endsWith(".mp3") ? "audio/mpeg"
+      : lower.endsWith(".wav") ? "audio/wav"
+      : lower.endsWith(".ogg") ? "audio/ogg"
+      : "audio/webm";
+    return { name, type, inlinePart: { inline_data: { mime_type: mime, data: arrayBufferToBase64(buf) } } };
+  }
   try {
     return { name, type, text: new TextDecoder("utf-8").decode(buf).slice(0, MAX_TEXT_PER_FILE) };
   } catch {
@@ -70,6 +81,7 @@ IDENTIDAD:
 
 Lo que puedes hacer:
 - Responder cualquier pregunta o consulta sobre los datos del colegio: cuántos casos hay, qué estudiantes tienen alertas, qué entrevistas hay esta semana, cómo está el curso X, qué intervenciones se hicieron para Y, comparativas, ranking, búsquedas. Para esto te paso un RESUMEN DE DATOS con conteos, casos recientes, entrevistas recientes y estadísticas. Úsalo libremente para responder con datos reales.
+- Si hay un ARCHIVO DE AUDIO adjunto, es un mensaje de voz del usuario: transcríbelo y trátalo exactamente igual que si lo hubiera escrito (responde la pregunta o crea los registros que dicte). No digas "recibí un audio" — actúa directamente sobre su contenido.
 - Conversar sobre orientación, convivencia escolar, sugerencias, recomendaciones, redacción de correos a apoderados, planificación de clases de orientación, etc.
 - Ayudar a crear registros cuando el usuario pega correos, mensajes, tablas, o adjunta archivos: detectas qué crear y devuelves las propuestas.
 

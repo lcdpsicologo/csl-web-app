@@ -4813,6 +4813,11 @@ function AIChatMode({
   const [turns, setTurns] = useState<ChatTurn[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const recordChunksRef = React.useRef<Blob[]>([]);
+  const recordTimerRef = React.useRef<number | null>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
@@ -4822,6 +4827,54 @@ function AIChatMode({
     setFiles((current) => [...current, ...Array.from(incoming)].slice(0, 6));
   };
   const removeFile = (i: number) => setFiles((c) => c.filter((_, idx) => idx !== i));
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : (MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "");
+      const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      recordChunksRef.current = [];
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) recordChunksRef.current.push(event.data);
+      };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blobType = recorder.mimeType || "audio/webm";
+        const blob = new Blob(recordChunksRef.current, { type: blobType });
+        if (blob.size > 1000) {
+          const ext = blobType.includes("mp4") ? "m4a" : "webm";
+          const stamp = new Date().toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).replace(/:/g, "");
+          const audioFile = new File([blob], `audio-${stamp}.${ext}`, { type: blobType });
+          setFiles((current) => [...current, audioFile].slice(0, 6));
+        }
+        recordChunksRef.current = [];
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setRecording(true);
+      setRecordSeconds(0);
+      recordTimerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
+    } catch (err) {
+      console.warn("Mic access failed", err);
+      window.alert("No se pudo acceder al micrófono. Revisa los permisos del navegador.");
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+    mediaRecorderRef.current = null;
+    setRecording(false);
+    if (recordTimerRef.current) {
+      window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
+    }
+  };
+
+  useEffect(() => () => {
+    // Cleanup if the component unmounts mid-recording.
+    mediaRecorderRef.current?.stop();
+    if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+  }, []);
 
   const send = async () => {
     if (!draft.trim() && files.length === 0) return;
@@ -5053,24 +5106,49 @@ function AIChatMode({
               ))}
             </div>
           ) : null}
-          <div className="flex items-end gap-2 rounded-2xl border border-slate-300 bg-white p-2 shadow-sm focus-within:border-cyan-700">
-            <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,image/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
+          <div className={`flex items-end gap-2 rounded-2xl border bg-white p-2 shadow-sm transition focus-within:border-cyan-700 ${recording ? "border-rose-400 ring-2 ring-rose-200" : "border-slate-300"}`}>
+            <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,image/*,audio/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
             <button onClick={() => fileInputRef.current?.click()} title="Adjuntar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
               <Upload className="h-4 w-4" />
             </button>
+            <button
+              onClick={recording ? stopRecording : startRecording}
+              title={recording ? "Detener grabación" : "Grabar mensaje de voz"}
+              className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition ${recording ? "bg-rose-600 text-white tz-pulse" : "text-slate-500 hover:bg-slate-100"}`}
+            >
+              {recording ? (
+                <span className="block h-3 w-3 rounded-sm bg-white" />
+              ) : (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
+                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                  <line x1="12" x2="12" y1="18" y2="22" />
+                </svg>
+              )}
+            </button>
+            {recording ? (
+              <span className="self-center text-xs font-semibold text-rose-600 tabular-nums">
+                ● {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}
+              </span>
+            ) : null}
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); } }}
-              placeholder="Pega un correo, escribe algo, o adjunta un archivo. ⌘+Enter para enviar."
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              placeholder={recording ? "Grabando audio… detén la grabación para adjuntarlo." : "Pega un correo, escribe algo, graba audio o adjunta un archivo."}
               rows={2}
               className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400"
             />
-            <button onClick={send} disabled={!draft.trim() && files.length === 0} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-900 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
+            <button onClick={send} disabled={(!draft.trim() && files.length === 0) || recording} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-900 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
               <TizaIaIcon className="h-4 w-4" /> Enviar
             </button>
           </div>
-          <p className="mt-1.5 text-[11px] text-slate-400">⌘ + Enter para enviar · Tiza-IA detecta automáticamente qué hacer.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400">Enter para enviar · Shift+Enter para salto de línea · 🎙 para mensaje de voz.</p>
         </div>
       </div>
     </div>
