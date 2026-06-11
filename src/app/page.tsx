@@ -917,6 +917,117 @@ function Sidebar({ activeView, onNavigate, schoolName }: { activeView: ViewId; o
   );
 }
 
+// Mobile navigation: bottom tab bar with the 4 most-used views plus a "Menú"
+// button that opens a full drawer. Only rendered below the lg breakpoint.
+const MOBILE_PRIMARY: ViewId[] = ["dashboard", "today", "triage", "students"];
+
+function MobileNav({
+  activeView,
+  onNavigate,
+  schoolName,
+}: {
+  activeView: ViewId;
+  onNavigate: (view: ViewId) => void;
+  schoolName: string;
+}) {
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const primary = viewNav.filter((item) => MOBILE_PRIMARY.includes(item.id));
+
+  const go = (view: ViewId) => {
+    onNavigate(view);
+    setDrawerOpen(false);
+  };
+
+  return (
+    <>
+      {/* Bottom tab bar */}
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden">
+        <div className="grid grid-cols-5">
+          {primary.map((item) => {
+            const Icon = item.icon;
+            const active = activeView === item.id && !drawerOpen;
+            return (
+              <button
+                key={item.id}
+                onClick={() => go(item.id)}
+                className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition ${
+                  active ? "text-cyan-700" : "text-slate-500"
+                }`}
+              >
+                <span className={`grid h-7 w-12 place-items-center rounded-full transition ${active ? "bg-cyan-50" : ""}`}>
+                  <Icon className="h-5 w-5" />
+                </span>
+                {item.label}
+              </button>
+            );
+          })}
+          <button
+            onClick={() => setDrawerOpen((value) => !value)}
+            className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition ${drawerOpen ? "text-cyan-700" : "text-slate-500"}`}
+          >
+            <span className={`grid h-7 w-12 place-items-center rounded-full transition ${drawerOpen ? "bg-cyan-50" : ""}`}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="h-5 w-5">
+                <line x1="4" x2="20" y1="6" y2="6" />
+                <line x1="4" x2="20" y1="12" y2="12" />
+                <line x1="4" x2="20" y1="18" y2="18" />
+              </svg>
+            </span>
+            Menú
+          </button>
+        </div>
+      </nav>
+
+      {/* Drawer with the full menu */}
+      {drawerOpen ? (
+        <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setDrawerOpen(false)}>
+          <div className="tz-backdrop absolute inset-0 bg-slate-950/40" />
+          <div
+            className="tz-slide-up absolute inset-x-3 bottom-[calc(64px+env(safe-area-inset-bottom))] max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-2 flex items-center gap-3 border-b border-slate-100 px-2 pb-3">
+              <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
+                <Image src="/logo-san-lucas.png" alt={schoolName} width={32} height={32} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Trabajando en</p>
+                <p className="truncate text-sm font-semibold text-slate-900">{schoolName}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              {viewNav.map((item) => {
+                const Icon = item.icon;
+                const active = activeView === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => go(item.id)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-semibold transition ${
+                      active ? "bg-slate-900 text-white shadow" : "bg-slate-50 text-slate-700 active:bg-slate-100"
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {item.label}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => go("settings")}
+                className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-semibold transition ${
+                  activeView === "settings" ? "bg-slate-900 text-white shadow" : "bg-slate-50 text-slate-700 active:bg-slate-100"
+                }`}
+              >
+                <Settings className="h-5 w-5" />
+                Ajustes
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: () => void; entity: EntityConfig }) {
   const Icon = entity.icon;
   return (
@@ -2920,7 +3031,7 @@ function StudentDetailDialog({
         onClick={(event) => event.stopPropagation()}
       >
         <header className="relative">
-          <div className={`bg-gradient-to-br ${avatarTone(student.id)} px-6 pt-5 pb-12 text-white sm:px-8 sm:pb-16`}>
+          <div className={`bg-gradient-to-br ${avatarTone(student.id)} px-6 pt-5 pb-20 text-white sm:px-8 sm:pb-24`}>
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/85">
                 <BookOpen className="h-3.5 w-3.5" />
@@ -3411,8 +3522,23 @@ function StudentsWorkspaceView({
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+          {/* Mobile course selector (the side list is hidden below lg) */}
+          <div className="lg:hidden">
+            <select
+              value={selectedCourseName}
+              onChange={(event) => setSelectedCourseName(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-500"
+            >
+              {filteredCourses.map((group) => (
+                <option key={group.name} value={group.name}>
+                  {group.name} · {group.students.length} est.
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Master pane: course list */}
-          <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <aside className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white lg:block">
             <div className="border-b border-slate-100 px-4 py-2.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
               {filteredCourses.length} curso{filteredCourses.length === 1 ? "" : "s"}
             </div>
@@ -3959,8 +4085,24 @@ function PieWorkspaceView({
         </div>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[300px_1fr]">
+          {/* Mobile course selector (the side list is hidden below lg) */}
+          <div className="lg:hidden">
+            <select
+              value={selectedCourse}
+              onChange={(event) => setSelectedCourse(event.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold outline-none focus:border-emerald-500"
+            >
+              <option value="all">Todos los cursos · {studentsMatchingNonCourseFilters.length}</option>
+              {sidebarCourseList.map((group) => (
+                <option key={group.name} value={group.name}>
+                  {group.name} · {group.students.length}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {/* Master Course List */}
-          <aside className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm flex flex-col h-[calc(100vh-320px)]">
+          <aside className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:flex flex-col h-[calc(100vh-320px)]">
             <div className="border-b border-slate-100 px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-500 bg-slate-50 flex items-center justify-between">
               <span>Filtrar por Curso</span>
               <span className="rounded-full bg-slate-200 px-2 py-0.5 font-bold tabular-nums text-slate-700">
@@ -6134,7 +6276,7 @@ function AIChatMode({
   return (
     <div
       onDragEnter={handleDrag}
-      className="relative flex h-[calc(100vh-260px)] min-h-[480px] flex-col rounded-2xl border border-slate-200 bg-white"
+      className="relative flex h-[calc(100dvh-330px)] min-h-[420px] flex-col rounded-2xl border border-slate-200 bg-white lg:h-[calc(100vh-260px)] lg:min-h-[480px]"
     >
       {/* Drag overlay */}
       {isDragActive && (
@@ -7361,7 +7503,7 @@ export default function TizaEducationApp() {
       <main className="lg:pl-[272px]">
         <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
           <div className="mx-auto flex max-w-[1440px] items-center gap-2">
-            <div className="flex shrink-0 items-center gap-1">
+            <div className="hidden shrink-0 items-center gap-1 sm:flex">
               <button
                 onClick={goBack}
                 disabled={!canGoBack}
@@ -7413,10 +7555,11 @@ export default function TizaEducationApp() {
             </button>
           </div>
         </div>
-        <div className="mx-auto max-w-[1440px] px-4 py-6 sm:px-8">
+        <div className="mx-auto max-w-[1440px] px-4 py-6 pb-28 sm:px-8 lg:pb-6">
           {renderView()}
         </div>
       </main>
+      <MobileNav activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} />
       {dialogEntity ? (
         <RecordDialog entity={entityConfigs[dialogEntity]} onClose={() => setDialogEntity(null)} onSave={(record) => addRecord(dialogEntity, record)} />
       ) : null}
