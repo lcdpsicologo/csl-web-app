@@ -1124,7 +1124,7 @@ function EntityView({
             </span>
             {query ? <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">filtro: “{query}”</span> : null}
           </div>
-          <div className="overflow-x-auto">
+          <div className="tz-contained-x">
             <table className="w-full min-w-[900px] text-left text-sm">
               <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
                 <tr>
@@ -1414,7 +1414,7 @@ function CourseWorkspaceView({
         ))}
       </div>
 
-      <div className="mb-5 overflow-x-auto rounded-xl border border-slate-200 bg-white px-3 py-3">
+      <div className="mb-5 tz-contained-x rounded-xl border border-slate-200 bg-white px-3 py-3">
         <div className="flex min-w-max gap-1.5">
           {visibleCourses.map((course) => (
             <button
@@ -2446,7 +2446,7 @@ function GenogramChart({
   const hasCustomPositions = student.genogramStudentX || student.genogramStudentY || members.some((m) => m.x !== undefined || m.y !== undefined);
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 p-4">
+    <div className="tz-contained-x rounded-lg border border-slate-200 bg-slate-50 p-4">
       <svg
         id="genogram-svg"
         viewBox="0 0 960 560"
@@ -3098,7 +3098,7 @@ function StudentDetailDialog({
         </header>
 
         <nav className="border-b border-slate-200 bg-white px-2 sm:px-6">
-          <div className="flex gap-1 overflow-x-auto">
+          <div className="flex gap-1 tz-contained-x">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               const active = activeTab === tab.id;
@@ -7498,11 +7498,11 @@ export default function TizaEducationApp() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-950">
+    <div className="tz-mobile-shell min-h-screen bg-slate-50 text-slate-950">
       <Sidebar activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} />
-      <main className="lg:pl-[272px]">
+      <main className="min-w-0 overflow-x-hidden lg:pl-[272px]">
         <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
-          <div className="mx-auto flex max-w-[1440px] items-center gap-2">
+          <div className="mx-auto flex w-full max-w-[1440px] min-w-0 items-center gap-2">
             <div className="hidden shrink-0 items-center gap-1 sm:flex">
               <button
                 onClick={goBack}
@@ -7525,7 +7525,7 @@ export default function TizaEducationApp() {
             </div>
             <button
               onClick={() => setCommandOpen(true)}
-              className="tz-press group flex flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-left text-sm text-slate-500 shadow-sm hover:border-slate-300 hover:bg-white"
+              className="tz-press group flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2 text-left text-sm text-slate-500 shadow-sm hover:border-slate-300 hover:bg-white"
             >
               <Search className="h-4 w-4 text-slate-400 transition group-hover:text-slate-600" />
               <span className="flex-1 truncate">Buscar estudiantes, casos, entrevistas, documentos…</span>
@@ -7555,7 +7555,7 @@ export default function TizaEducationApp() {
             </button>
           </div>
         </div>
-        <div className="mx-auto max-w-[1440px] px-4 py-6 pb-28 sm:px-8 lg:pb-6">
+        <div className="mx-auto w-full max-w-[1440px] min-w-0 px-4 py-6 pb-28 sm:px-8 lg:pb-6">
           {renderView()}
         </div>
       </main>
