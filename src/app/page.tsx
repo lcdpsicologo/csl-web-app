@@ -7719,6 +7719,7 @@ export default function TizaEducationApp() {
   const profile = profileState;
   const accessTokenRef = React.useRef("");
   const [profileSyncStatus, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const storeRef = React.useRef(store);
   // Wrap setProfile so every update is persisted server-side to the user's
   // Supabase metadata (global per user → travels across devices).
   const setProfile = (next: Record<string, string>) => {
@@ -7872,35 +7873,42 @@ export default function TizaEducationApp() {
 
   useEffect(() => {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    storeRef.current = store;
   }, [store]);
+
+  const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
+    if (!authUser || !accessToken || !remoteLoaded) return;
+    setRemoteStatus("saving");
+    try {
+      const response = await fetch("/api/records", {
+        method: "PUT",
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ store: nextStore }),
+      });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
+      }
+      setRemoteStatus(successStatus);
+    } catch (error) {
+      console.error(error);
+      setRemoteStatus("error");
+      setToast(`No se pudo guardar en Supabase: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }, [authUser, accessToken, remoteLoaded]);
 
   useEffect(() => {
     if (!authUser || !accessToken || !remoteLoaded) return;
 
     const timer = window.setTimeout(async () => {
-      setRemoteStatus("saving");
-      try {
-        const response = await fetch("/api/records", {
-          method: "PUT",
-          headers: {
-            authorization: `Bearer ${accessToken}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ store }),
-        });
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
-        }
-        setRemoteStatus("synced");
-      } catch (error) {
-        console.error(error);
-        setRemoteStatus("error");
-      }
+      await saveStoreSnapshot(store);
     }, 700);
 
     return () => window.clearTimeout(timer);
-  }, [store, authUser, accessToken, remoteLoaded]);
+  }, [store, authUser, accessToken, remoteLoaded, saveStoreSnapshot]);
 
   useEffect(() => {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
@@ -7963,7 +7971,10 @@ export default function TizaEducationApp() {
   }, [commandOpen, canGoBack, canGoForward]);
 
   const addRecord = (entity: EntityId, record: DataRecord) => {
-    setStore((current) => ({ ...current, [entity]: [record, ...current[entity]] }));
+    const nextStore = { ...storeRef.current, [entity]: [record, ...storeRef.current[entity]] };
+    storeRef.current = nextStore;
+    setStore(nextStore);
+    void saveStoreSnapshot(nextStore);
     setDialogEntity(null);
     setToast(`${entityConfigs[entity].singular} guardado`);
   };
