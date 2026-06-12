@@ -4186,6 +4186,7 @@ function PieWorkspaceView({
   };
 
   const transferToPie = (student: DataRecord) => {
+    if (!window.confirm(`¿Estás seguro de que deseas transferir/ingresar a ${student.fullName || "este estudiante"} al programa PIE?`)) return;
     const current = parsePieData(student);
     updatePieData(student, {
       active: true,
@@ -4197,6 +4198,7 @@ function PieWorkspaceView({
   };
 
   const dischargeFromPie = (student: DataRecord) => {
+    if (!window.confirm(`¿Estás seguro de que deseas dar de ALTA o EGRESO a ${student.fullName || "este estudiante"} del programa PIE?`)) return;
     const current = parsePieData(student);
     updatePieData(student, {
       active: false,
