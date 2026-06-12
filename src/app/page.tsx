@@ -6850,6 +6850,48 @@ type ChatTurn = {
   accepted?: Record<string, boolean>;
 };
 
+type ChatConversation = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  turns: ChatTurn[];
+};
+
+const AI_CHAT_CONVERSATIONS_KEY = "tiza-ia-conversations-v1";
+
+const makeChatConversation = (): ChatConversation => {
+  const now = nowIso();
+  return { id: uid(), title: "Nueva conversación", createdAt: now, updatedAt: now, turns: [] };
+};
+
+const chatTitleFromMessage = (message: string, files: string[]) => {
+  const clean = message.replace(/\s+/g, " ").trim();
+  if (clean) return clean.length > 42 ? `${clean.slice(0, 42)}...` : clean;
+  if (files.length) return files.length === 1 ? `Archivo: ${files[0]}` : `${files.length} archivos adjuntos`;
+  return "Nueva conversación";
+};
+
+const loadChatConversations = (): ChatConversation[] => {
+  if (typeof window === "undefined") return [makeChatConversation()];
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(AI_CHAT_CONVERSATIONS_KEY) || "[]");
+    if (!Array.isArray(parsed)) return [makeChatConversation()];
+    const conversations = parsed
+      .filter((item) => item && typeof item.id === "string")
+      .map((item) => ({
+        id: item.id,
+        title: typeof item.title === "string" && item.title.trim() ? item.title : "Conversación",
+        createdAt: typeof item.createdAt === "string" ? item.createdAt : nowIso(),
+        updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : nowIso(),
+        turns: Array.isArray(item.turns) ? item.turns : [],
+      }));
+    return conversations.length ? conversations : [makeChatConversation()];
+  } catch {
+    return [makeChatConversation()];
+  }
+};
+
 function AIChatMode({
   store,
   accessToken,
@@ -6865,7 +6907,8 @@ function AIChatMode({
 }) {
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
-  const [turns, setTurns] = useState<ChatTurn[]>([]);
+  const [conversations, setConversations] = useState<ChatConversation[]>(loadChatConversations);
+  const [activeConversationId, setActiveConversationId] = useState(() => conversations[0]?.id || "");
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
@@ -6874,6 +6917,34 @@ function AIChatMode({
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
   const recordChunksRef = React.useRef<Blob[]>([]);
   const recordTimerRef = React.useRef<number | null>(null);
+  const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || conversations[0];
+  const turns = activeConversation?.turns || [];
+
+  const setTurns = (updater: (current: ChatTurn[]) => ChatTurn[]) => {
+    setConversations((current) => {
+      const targetId = activeConversationId || current[0]?.id;
+      return current.map((conversation) => {
+        if (conversation.id !== targetId) return conversation;
+        const nextTurns = updater(conversation.turns || []);
+        return { ...conversation, turns: nextTurns, updatedAt: nowIso() };
+      });
+    });
+  };
+
+  const startNewConversation = () => {
+    const conversation = makeChatConversation();
+    setConversations((current) => [conversation, ...current]);
+    setActiveConversationId(conversation.id);
+    setDraft("");
+    setFiles([]);
+  };
+
+  const deleteConversation = (conversationId: string) => {
+    const remaining = conversations.filter((conversation) => conversation.id !== conversationId);
+    const next = remaining.length ? remaining : [makeChatConversation()];
+    setConversations(next);
+    if (conversationId === activeConversationId) setActiveConversationId(next[0].id);
+  };
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -6897,6 +6968,14 @@ function AIChatMode({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [turns]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(AI_CHAT_CONVERSATIONS_KEY, JSON.stringify(conversations.slice(0, 40)));
+    } catch {
+      // ignore local persistence errors
+    }
+  }, [conversations]);
 
   const addFiles = (incoming: FileList | File[]) => {
     setFiles((current) => [...current, ...Array.from(incoming)].slice(0, 6));
@@ -6956,7 +7035,16 @@ function AIChatMode({
     const turnId = uid();
     const userFiles = files.map((f) => f.name);
     const userMessage = draft.trim();
-    setTurns((current) => [...current, { id: turnId, userMessage, userFiles, loading: true, accepted: {} }]);
+    setConversations((current) => current.map((conversation) => {
+      if (conversation.id !== activeConversationId) return conversation;
+      const hadTurns = (conversation.turns || []).length > 0;
+      return {
+        ...conversation,
+        title: hadTurns ? conversation.title : chatTitleFromMessage(userMessage, userFiles),
+        updatedAt: nowIso(),
+        turns: [...(conversation.turns || []), { id: turnId, userMessage, userFiles, loading: true, accepted: {} }],
+      };
+    }));
     const submittingFiles = files;
     setDraft("");
     setFiles([]);
@@ -7091,7 +7179,7 @@ function AIChatMode({
   return (
     <div
       onDragEnter={handleDrag}
-      className="relative flex h-[calc(100dvh-330px)] min-h-[420px] flex-col rounded-2xl border border-slate-200 bg-white lg:h-[calc(100vh-260px)] lg:min-h-[480px]"
+      className="relative flex h-[calc(100dvh-330px)] min-h-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white lg:h-[calc(100vh-260px)] lg:min-h-[480px]"
     >
       {/* Drag overlay */}
       {isDragActive && (
@@ -7113,6 +7201,63 @@ function AIChatMode({
           </div>
         </div>
       )}
+      <aside className="hidden w-72 shrink-0 flex-col border-r border-slate-200 bg-slate-50/80 lg:flex">
+        <div className="border-b border-slate-200 p-3">
+          <button
+            onClick={startNewConversation}
+            className="tz-press inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+          >
+            <Plus className="h-4 w-4" /> Nueva conversación
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-2">
+          {[...conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((conversation) => {
+            const active = conversation.id === activeConversationId;
+            const lastTurn = conversation.turns[conversation.turns.length - 1];
+            return (
+              <div key={conversation.id} className="group relative">
+                <button
+                  onClick={() => setActiveConversationId(conversation.id)}
+                  className={`mb-1 w-full rounded-lg px-3 py-2.5 pr-9 text-left transition ${active ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200" : "text-slate-600 hover:bg-white hover:text-slate-950"}`}
+                >
+                  <span className="block truncate text-sm font-semibold">{conversation.title}</span>
+                  <span className="mt-0.5 block truncate text-[11px] text-slate-400">
+                    {lastTurn?.userMessage || (lastTurn?.userFiles?.length ? lastTurn.userFiles.join(", ") : "Sin mensajes")}
+                  </span>
+                </button>
+                <button
+                  onClick={() => deleteConversation(conversation.id)}
+                  title="Eliminar conversación"
+                  className="absolute right-2 top-2.5 grid h-7 w-7 place-items-center rounded-md text-slate-300 opacity-0 transition hover:bg-rose-50 hover:text-rose-600 group-hover:opacity-100"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-slate-200 bg-slate-50/80 p-2 lg:hidden">
+          <select
+            value={activeConversationId}
+            onChange={(event) => setActiveConversationId(event.target.value)}
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-700"
+          >
+            {[...conversations].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((conversation) => (
+              <option key={conversation.id} value={conversation.id}>{conversation.title}</option>
+            ))}
+          </select>
+          <button
+            onClick={startNewConversation}
+            title="Nueva conversación"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-900 text-white hover:bg-slate-800"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-5 sm:px-6">
         {turns.length === 0 ? (
           <div className="mx-auto max-w-2xl">
@@ -7248,6 +7393,7 @@ function AIChatMode({
           </div>
           <p className="mt-1.5 text-[11px] text-slate-400">Enter para enviar · Shift+Enter para salto de línea · 🎙 para mensaje de voz.</p>
         </div>
+      </div>
       </div>
     </div>
   );
