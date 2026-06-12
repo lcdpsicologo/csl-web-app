@@ -2008,7 +2008,7 @@ function OrientationCycleView({
           </div>
         </div>
 
-        <nav className="flex gap-1 border-b border-slate-200 bg-white px-2 sm:px-6">
+        <nav className="flex gap-1 border-b border-slate-200 bg-white px-2 sm:px-6 tz-contained-x">
           {([
             ["clases", "Clases", ClipboardList],
             ["nomina", "Nómina", UsersRound],
@@ -2017,7 +2017,7 @@ function OrientationCycleView({
             <button
               key={id}
               onClick={() => setInnerTab(id)}
-              className={`relative inline-flex items-center gap-2 px-3 py-3 text-sm font-semibold transition ${innerTab === id ? "text-blue-700" : "text-slate-500 hover:text-slate-900"}`}
+              className={`relative inline-flex shrink-0 whitespace-nowrap items-center gap-2 px-3 py-3 text-sm font-semibold transition ${innerTab === id ? "text-blue-700" : "text-slate-500 hover:text-slate-900"}`}
             >
               <Icon className="h-4 w-4" />
               {label}
