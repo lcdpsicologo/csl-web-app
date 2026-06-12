@@ -152,6 +152,32 @@ a {
   animation: tzSlideDown 260ms var(--spring) both;
 }
 
+.tz-thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(148 163 184 / 0.55) transparent;
+  overscroll-behavior: contain;
+}
+
+.tz-thin-scroll::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.tz-thin-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgb(148 163 184 / 0.45);
+}
+
+.tz-stagger-list > * {
+  animation: tzSlideUp 260ms var(--ease-out-quart) both;
+}
+
+.tz-stagger-list > *:nth-child(2) { animation-delay: 25ms; }
+.tz-stagger-list > *:nth-child(3) { animation-delay: 50ms; }
+.tz-stagger-list > *:nth-child(4) { animation-delay: 75ms; }
+.tz-stagger-list > *:nth-child(5) { animation-delay: 100ms; }
+.tz-stagger-list > *:nth-child(n + 6) { animation-delay: 120ms; }
+
 .tz-backdrop {
   animation: tzBackdrop 220ms var(--ease-out-quart) both;
   backdrop-filter: blur(12px) saturate(140%);

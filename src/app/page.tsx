@@ -4,7 +4,8 @@ import Image from "next/image";
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
-import { PIE_ROSTER } from "@/lib/pie-roster";
+import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
+import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
 import {
   ArrowDownToLine,
   BarChart3,
@@ -3663,7 +3664,137 @@ function StudentsWorkspaceView({
 // VISTA: PROGRAMA DE INTEGRACIÓN ESCOLAR (PIE)
 // ==========================================
 
+// Catálogo MINEDUC de diagnósticos / NEE (Decreto 170).
+const MINEDUC_NEE_PERMANENTE = [
+  "Discapacidad Intelectual",
+  "Discapacidad Intelectual Leve (DIL)",
+  "Discapacidad Visual",
+  "Discapacidad Auditiva",
+  "Discapacidad Múltiple (DM)",
+  "Sordoceguera",
+  "Disfasia Severa",
+  "Trastorno del Espectro Autista (TEA)",
+];
+const MINEDUC_NEE_TRANSITORIA = [
+  "Dificultades Específicas del Aprendizaje (DEA)",
+  "Trastorno Específico del Lenguaje (TEL)",
+  "Trastorno por Déficit Atencional (TDA/TDAH)",
+  "Funcionamiento Intelectual Limítrofe (FIL)",
+];
+
+// Expansión de códigos abreviados usados en la nómina oficial.
+const PIE_DIAG_LABELS: Record<string, string> = {
+  TEA: "Trastorno del Espectro Autista (TEA)",
+  DEA: "Dificultad Específica del Aprendizaje (DEA)",
+  "DEA-C": "DEA Combinada",
+  "DEA -C": "DEA Combinada",
+  TDA: "Trastorno por Déficit Atencional (TDA)",
+  TDAH: "Trastorno por Déficit Atencional e Hiperactividad (TDAH)",
+  TEL: "Trastorno Específico del Lenguaje (TEL)",
+  TL: "Trastorno del Lenguaje (TL)",
+  FIL: "Funcionamiento Intelectual Limítrofe (FIL)",
+  DIL: "Discapacidad Intelectual Leve (DIL)",
+  DM: "Discapacidad Intelectual / Múltiple (DM)",
+  "DA-HS": "Dificultad de Aprendizaje (DA-HS)",
+  GARC: "GARC",
+};
+
+const pieDiagLabel = (code: string) => {
+  const key = (code || "").trim().toUpperCase();
+  return PIE_DIAG_LABELS[key] || code || "";
+};
+
+type PieData = {
+  active: boolean;
+  diag: string;
+  diagnoses: string[];
+  tipoNEE: string; // Permanente | Transitoria | ""
+  situacion: string;
+  situaciones: string[];
+  cupo: string; // Cupo | Sobrecupo | Pendiente | ""
+  sourceSheets: string[];
+  classifications: string[];
+  entryYear: string;
+  birthDate: string;
+  diagDate: string;
+  evaluator: string;
+  evaluators: string[];
+  specialty: string;
+  specialties: string[];
+  professional: string; // profesional diferencial PIE asignado
+  professionals: string[];
+  assignedStaff: string[]; // cualquier funcionario que trabaje con el estudiante
+  platformStatus: string;
+  scannerStatus: string;
+  loadedDocument: string;
+  pendingDocument: string;
+  deadline: string;
+  approvedPreviousYears: string;
+  appealResult: string;
+  finalResult: string;
+  siblings: string;
+  records: Array<Record<string, string>>;
+  altaDate: string;
+  bajaDate: string;
+  notes: string;
+};
+
+const emptyPieData = (): PieData => ({
+  active: false, diag: "", diagnoses: [], tipoNEE: "", situacion: "", situaciones: [], cupo: "", sourceSheets: [], classifications: [], entryYear: "",
+  birthDate: "", diagDate: "", evaluator: "", evaluators: [], specialty: "", specialties: [], professional: "", professionals: [],
+  assignedStaff: [], platformStatus: "", scannerStatus: "", loadedDocument: "", pendingDocument: "", deadline: "",
+  approvedPreviousYears: "", appealResult: "", finalResult: "", siblings: "", records: [], altaDate: "", bajaDate: "", notes: "",
+});
+
+const parsePieData = (student: DataRecord): PieData => {
+  if (student.pieData) {
+    try {
+      const parsed = JSON.parse(student.pieData);
+      if (parsed && typeof parsed === "object") {
+        const base = { ...emptyPieData(), ...parsed };
+        return {
+          ...base,
+          diagnoses: Array.isArray(parsed.diagnoses) ? parsed.diagnoses : parsed.diag ? [parsed.diag] : [],
+          situaciones: Array.isArray(parsed.situaciones) ? parsed.situaciones : parsed.situacion ? [parsed.situacion] : [],
+          sourceSheets: Array.isArray(parsed.sourceSheets) ? parsed.sourceSheets : [],
+          classifications: Array.isArray(parsed.classifications) ? parsed.classifications : [],
+          evaluators: Array.isArray(parsed.evaluators) ? parsed.evaluators : parsed.evaluator ? [parsed.evaluator] : [],
+          specialties: Array.isArray(parsed.specialties) ? parsed.specialties : parsed.specialty ? [parsed.specialty] : [],
+          professionals: Array.isArray(parsed.professionals) ? parsed.professionals : parsed.professional ? [parsed.professional] : [],
+          assignedStaff: Array.isArray(parsed.assignedStaff) ? parsed.assignedStaff : [],
+          records: Array.isArray(parsed.records) ? parsed.records : [],
+        };
+      }
+    } catch {
+      // fall through to legacy parsing
+    }
+  }
+  // Legacy: derive from the supportNeeds text blob + tags.
+  const hasPieTag = (student.tags || "").split(",").some((t) => t.trim().toUpperCase() === "PIE");
+  if (!hasPieTag) return emptyPieData();
+  const sn = student.supportNeeds || "";
+  const diagMatch = sn.match(/Diagnóstico:\s*([^().\n\r]+?)(?:\s*\(|\s*\.|\s*Profesional|$)/i);
+  const sitMatch = sn.match(/Diagnóstico:.*?\(([^)]+)\)/i);
+  const profMatch = sn.match(/Profesional asignado:\s*([^.\n\r]+?)(?:\.|$)/i);
+  const sit = sitMatch ? sitMatch[1].trim() : "";
+  return {
+    ...emptyPieData(),
+    active: true,
+    diag: diagMatch ? diagMatch[1].trim() : "",
+    situacion: sit,
+    tipoNEE: /NEEP/i.test(sit) ? "Permanente" : /NEET/i.test(sit) ? "Transitoria" : "",
+    professional: profMatch ? profMatch[1].trim() : "",
+  };
+};
+
+const isPieStudent = (student: DataRecord) => {
+  if ((student.tags || "").split(",").some((t) => t.trim().toUpperCase() === "PIE")) return true;
+  return parsePieData(student).active;
+};
+
 const getPieDiagnosis = (student: DataRecord) => {
+  const pd = parsePieData(student);
+  if (pd.diag) return pd.diag;
   const sn = student.supportNeeds || "";
   const diagMatch = sn.match(/Diagnóstico:\s*([^().\n\r]+?)(?:\s*\(|\s*\.|\s*Profesional|$)/i);
   if (diagMatch && diagMatch[1].trim()) {
@@ -3682,7 +3813,16 @@ const getPieDiagnosis = (student: DataRecord) => {
   return "S/D";
 };
 
+const getPieDiagnoses = (student: DataRecord) => {
+  const pd = parsePieData(student);
+  const values = [...(pd.diagnoses || []), pd.diag].map((diag) => diag.trim()).filter(Boolean);
+  return Array.from(new Set(values));
+};
+
 const getPieSituation = (student: DataRecord) => {
+  const pd = parsePieData(student);
+  if (pd.situacion) return pd.situacion;
+  if (pd.tipoNEE) return pd.tipoNEE;
   const sn = student.supportNeeds || "";
   const match = sn.match(/Diagnóstico:.*?\(([^)]+)\)/i);
   if (match && match[1].trim()) {
@@ -3695,6 +3835,8 @@ const getPieSituation = (student: DataRecord) => {
 };
 
 const getPieProfessional = (student: DataRecord) => {
+  const pd = parsePieData(student);
+  if (pd.professional) return pd.professional;
   const sn = student.supportNeeds || "";
   const match = sn.match(/Profesional asignado:\s*([^.\n\r]+?)(?:\.|$)/i);
   if (match && match[1].trim()) {
@@ -3707,32 +3849,41 @@ const getPieProfessional = (student: DataRecord) => {
   return "Sin asignar";
 };
 
+const getPieCupoStatus = (student: DataRecord) => parsePieData(student).cupo || "Cupo";
+
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
+const appendPieNote = (current: string, note: string) => {
+  const stamp = new Date().toLocaleDateString("es-CL");
+  return [current, `[${stamp}] ${note}`].filter(Boolean).join("\n");
+};
+
 function PieWorkspaceView({
   store,
   onOpenStudent,
   onNavigate,
   onSeedPie,
+  onUpdateStudent,
 }: {
   store: DataStore;
   onOpenStudent: (studentId: string, focusField?: string) => void;
   onNavigate: (view: ViewId) => void;
   onSeedPie: () => void;
+  onUpdateStudent: (studentId: string, updates: Record<string, string>) => void;
 }) {
   const [search, setSearch] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<string>("all");
   const [selectedDiag, setSelectedDiag] = useState<string>("all");
   const [selectedSituation, setSelectedSituation] = useState<string>("all");
   const [selectedProfessional, setSelectedProfessional] = useState<string>("all");
+  const [selectedCupo, setSelectedCupo] = useState<string>("all");
 
   const cycleByCourse = useMemo(() => {
     return new Map(officialCourses.map((c) => [normalize(c.name), c.cycle]));
   }, []);
 
   const pieStudents = useMemo(() => {
-    return store.students.filter((s) => {
-      const tagsList = (s.tags || "").toUpperCase().split(",").map((t) => t.trim()).filter(Boolean);
-      return tagsList.includes("PIE");
-    });
+    return store.students.filter((s) => isPieStudent(s) && !parsePieData(s).bajaDate);
   }, [store.students]);
 
   // Statistics
@@ -3741,12 +3892,16 @@ function PieWorkspaceView({
   const transitorioCount = useMemo(() => pieStudents.filter(s => getPieSituation(s).toUpperCase().includes("TRANSITORIO")).length, [pieStudents]);
   const specialistCount = useMemo(() => {
     const set = new Set<string>();
+    PIE_PROFESSIONALS.forEach((prof) => set.add(prof.name));
     pieStudents.forEach((s) => {
       const prof = getPieProfessional(s);
       if (prof && prof !== "Sin asignar") set.add(prof);
     });
     return set.size;
   }, [pieStudents]);
+  const cupoCount = useMemo(() => pieStudents.filter(s => getPieCupoStatus(s) === "Cupo").length, [pieStudents]);
+  const sobrecupoCount = useMemo(() => pieStudents.filter(s => getPieCupoStatus(s) === "Sobrecupo").length, [pieStudents]);
+  const pendienteCount = useMemo(() => pieStudents.filter(s => getPieCupoStatus(s) === "Pendiente").length, [pieStudents]);
 
   // Top Diagnostics Counts
   const diagCounts = useMemo(() => {
@@ -3772,12 +3927,73 @@ function PieWorkspaceView({
 
   const professionals = useMemo(() => {
     const set = new Set<string>();
+    PIE_PROFESSIONALS.forEach((prof) => set.add(prof.name));
     pieStudents.forEach((s) => {
       const prof = getPieProfessional(s);
       if (prof && prof !== "Sin asignar") set.add(prof);
+      parsePieData(s).professionals.forEach((name) => name && set.add(name));
     });
     return Array.from(set).sort();
   }, [pieStudents]);
+
+  const pieCatalogStaff = useMemo(() => {
+    const set = new Set<string>();
+    PIE_PROFESSIONALS.forEach((prof) => set.add(prof.name));
+    store.students.forEach((student) => {
+      const pd = parsePieData(student);
+      [pd.professional, ...pd.professionals, ...pd.evaluators, ...pd.assignedStaff].forEach((name) => {
+        if (name) set.add(name);
+      });
+    });
+    return Array.from(set).sort();
+  }, [store.students]);
+
+  const updatePieData = (student: DataRecord, updates: Partial<PieData>, toastNote?: string) => {
+    const current = parsePieData(student);
+    const nextData = { ...current, ...updates };
+    const tags = (student.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean);
+    if (nextData.active && !tags.some((tag) => tag.toUpperCase() === "PIE")) tags.push("PIE");
+    onUpdateStudent(student.id, {
+      tags: tags.join(", "),
+      pieData: JSON.stringify(nextData),
+      supportNeeds: `Programa de Integración Escolar (PIE). Diagnóstico: ${getPieDiagnoses({ ...student, pieData: JSON.stringify(nextData) }).map(pieDiagLabel).join(", ") || "S/D"} (${nextData.situacion || nextData.tipoNEE || "Sin situación"}). Profesional asignado: ${nextData.professional || "Sin asignar"}.`,
+    });
+    if (toastNote) {
+      // updateStudentRecord already raises a generic toast; this keeps the action auditable in notes.
+      console.info(toastNote);
+    }
+  };
+
+  const transferToPie = (student: DataRecord) => {
+    const current = parsePieData(student);
+    updatePieData(student, {
+      active: true,
+      cupo: current.cupo || "Transferencia",
+      altaDate: current.altaDate || todayIso(),
+      bajaDate: "",
+      notes: appendPieNote(current.notes, "Transferido/ingresado a seguimiento PIE desde el software."),
+    });
+  };
+
+  const dischargeFromPie = (student: DataRecord) => {
+    const current = parsePieData(student);
+    updatePieData(student, {
+      active: false,
+      bajaDate: todayIso(),
+      notes: appendPieNote(current.notes, "Alta/Egreso PIE registrada desde el software."),
+    });
+  };
+
+  const assignStaff = (student: DataRecord, staffName: string) => {
+    const current = parsePieData(student);
+    const value = staffName.trim();
+    if (!value) return;
+    const assignedStaff = Array.from(new Set([...(current.assignedStaff || []), value]));
+    updatePieData(student, {
+      assignedStaff,
+      notes: appendPieNote(current.notes, `Funcionario/profesional asignado: ${value}.`),
+    });
+  };
 
   // Students matching non-course filters
   const studentsMatchingNonCourseFilters = useMemo(() => {
@@ -3814,12 +4030,17 @@ function PieWorkspaceView({
       // Professional filter
       if (selectedProfessional !== "all") {
         const prof = getPieProfessional(s);
-        if (prof !== selectedProfessional) return false;
+        const pd = parsePieData(s);
+        if (prof !== selectedProfessional && !pd.professionals.includes(selectedProfessional) && !pd.assignedStaff.includes(selectedProfessional)) return false;
+      }
+
+      if (selectedCupo !== "all" && getPieCupoStatus(s) !== selectedCupo) {
+        return false;
       }
 
       return true;
     });
-  }, [pieStudents, search, selectedDiag, selectedSituation, selectedProfessional]);
+  }, [pieStudents, search, selectedDiag, selectedSituation, selectedProfessional, selectedCupo]);
 
   // Group by Course
   const officialOrder = useMemo(() => [...officialCourses.map((c) => c.name), "Sin curso"], []);
@@ -3862,6 +4083,7 @@ function PieWorkspaceView({
       setSelectedDiag("all");
       setSelectedSituation("all");
       setSelectedProfessional("all");
+      setSelectedCupo("all");
       setSelectedCourse("all");
     } else if (type === "permanente") {
       setSelectedSituation("PERMANENTE");
@@ -3990,6 +4212,25 @@ function PieWorkspaceView({
         </div>
       </div>
 
+      <div className="mb-5 grid gap-3 md:grid-cols-3">
+        {[
+          { key: "Cupo", label: "Cupos PIE", value: cupoCount, tone: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+          { key: "Sobrecupo", label: "Sobrecupos", value: sobrecupoCount, tone: "bg-blue-50 text-blue-700 border-blue-200" },
+          { key: "Pendiente", label: "Pendientes SC", value: pendienteCount, tone: "bg-orange-50 text-orange-700 border-orange-200" },
+        ].map((item) => (
+          <button
+            key={item.key}
+            onClick={() => setSelectedCupo(selectedCupo === item.key ? "all" : item.key)}
+            className={`rounded-xl border px-4 py-3 text-left transition hover:shadow-sm ${
+              selectedCupo === item.key ? "border-slate-900 bg-slate-900 text-white" : item.tone
+            }`}
+          >
+            <p className="text-xs font-bold uppercase tracking-wider opacity-80">{item.label}</p>
+            <p className="mt-1 text-2xl font-extrabold tabular-nums">{item.value}</p>
+          </button>
+        ))}
+      </div>
+
       {/* Diagnostic Chips Row */}
       <div className="mb-4">
         <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Filtrar por Diagnóstico</p>
@@ -4066,14 +4307,29 @@ function PieWorkspaceView({
             </select>
           </div>
 
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-semibold text-slate-500">Cupo:</span>
+            <select
+              value={selectedCupo}
+              onChange={(e) => setSelectedCupo(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none hover:border-slate-300"
+            >
+              <option value="all">Todos</option>
+              <option value="Cupo">Cupo</option>
+              <option value="Sobrecupo">Sobrecupo</option>
+              <option value="Pendiente">Pendiente</option>
+            </select>
+          </div>
+
           {/* Reset All Filters button if any filter is active */}
-          {(search || selectedDiag !== "all" || selectedSituation !== "all" || selectedProfessional !== "all" || selectedCourse !== "all") && (
+          {(search || selectedDiag !== "all" || selectedSituation !== "all" || selectedProfessional !== "all" || selectedCupo !== "all" || selectedCourse !== "all") && (
             <button
               onClick={() => {
                 setSearch("");
                 setSelectedDiag("all");
                 setSelectedSituation("all");
                 setSelectedProfessional("all");
+                setSelectedCupo("all");
                 setSelectedCourse("all");
               }}
               className="rounded-lg bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 transition"
@@ -4217,14 +4473,28 @@ function PieWorkspaceView({
                       <th className="px-5 py-3 font-semibold">RUT</th>
                       <th className="px-5 py-3 font-semibold">Diagnóstico</th>
                       <th className="px-5 py-3 font-semibold">Situación</th>
+                      <th className="px-5 py-3 font-semibold">Cupo</th>
+                      <th className="px-5 py-3 font-semibold">Documentación</th>
                       <th className="px-5 py-3 font-semibold">Especialista PIE</th>
+                      <th className="px-5 py-3 font-semibold">Funcionarios</th>
+                      <th className="px-5 py-3 font-semibold">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {displayedStudents.map((student) => {
+                      const pd = parsePieData(student);
                       const diag = getPieDiagnosis(student);
+                      const diagList = getPieDiagnoses(student);
                       const sit = getPieSituation(student);
                       const prof = getPieProfessional(student);
+                      const cupo = getPieCupoStatus(student);
+                      const docSummary = [
+                        pd.platformStatus && `Plataforma: ${pd.platformStatus}`,
+                        pd.scannerStatus && `Scanner: ${pd.scannerStatus}`,
+                        pd.loadedDocument && `Doc.: ${pd.loadedDocument}`,
+                        pd.pendingDocument && `Pendiente: ${pd.pendingDocument}`,
+                        pd.deadline && `Plazo: ${pd.deadline}`,
+                      ].filter(Boolean);
 
                       const diagColor = {
                         TEA: "bg-emerald-50 text-emerald-700 ring-emerald-200/60 border-emerald-200/40",
@@ -4270,19 +4540,96 @@ function PieWorkspaceView({
                             {student.rut || "—"}
                           </td>
                           <td className="px-5 py-3.5 whitespace-nowrap">
-                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ring-1 ${diagColor}`}>
-                              {diag}
-                            </span>
+                            <div className="flex max-w-[240px] flex-wrap gap-1.5">
+                              {(diagList.length ? diagList : [diag]).map((item) => (
+                                <span key={item} className={`rounded-full px-2.5 py-0.5 text-xs font-extrabold ring-1 ${diagColor}`}>
+                                  {item}
+                                </span>
+                              ))}
+                            </div>
                           </td>
                           <td className="px-5 py-3.5 whitespace-nowrap">
                             <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ring-1 ${sitColor}`}>
                               {sit || "Sin especificar"}
                             </span>
                           </td>
+                          <td className="px-5 py-3.5">
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ring-1 ${
+                              cupo === "Pendiente"
+                                ? "bg-orange-50 text-orange-700 ring-orange-200"
+                                : cupo === "Sobrecupo"
+                                  ? "bg-blue-50 text-blue-700 ring-blue-200"
+                                  : "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                            }`}>
+                              {cupo}
+                            </span>
+                            {pd.sourceSheets.length ? (
+                              <p className="mt-1 text-[10px] font-medium text-slate-400">{pd.sourceSheets.join(" + ")}</p>
+                            ) : null}
+                          </td>
+                          <td className="px-5 py-3.5 text-xs text-slate-600">
+                            <div className="max-w-[260px] space-y-1">
+                              {docSummary.length ? docSummary.slice(0, 3).map((item) => (
+                                <p key={item} className="truncate">{item}</p>
+                              )) : <span className="text-slate-300">Sin observación</span>}
+                              {pd.records.length > 1 ? (
+                                <p className="font-semibold text-slate-400">{pd.records.length} registros de origen</p>
+                              ) : null}
+                            </div>
+                          </td>
                           <td className="px-5 py-3.5 text-slate-700 font-medium">
                             <div className="flex items-center gap-1.5">
                               <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"></span>
                               <span className="truncate max-w-[150px]">{prof || "Sin asignar"}</span>
+                            </div>
+                            {pd.evaluator ? <p className="mt-1 truncate text-[10px] text-slate-400">Eval.: {pd.evaluator}</p> : null}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="space-y-2">
+                              <select
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => {
+                                  event.stopPropagation();
+                                  assignStaff(student, event.target.value);
+                                  event.currentTarget.value = "";
+                                }}
+                                defaultValue=""
+                                className="w-44 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700"
+                              >
+                                <option value="">Asignar funcionario</option>
+                                {pieCatalogStaff.map((name) => <option key={name} value={name}>{name}</option>)}
+                              </select>
+                              {pd.assignedStaff.length ? (
+                                <div className="flex max-w-[220px] flex-wrap gap-1">
+                                  {pd.assignedStaff.map((name) => (
+                                    <span key={name} className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">{name}</span>
+                                  ))}
+                                </div>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <div className="flex flex-col gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  transferToPie(student);
+                                }}
+                                className="rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+                              >
+                                Transferir a PIE
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  dischargeFromPie(student);
+                                }}
+                                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                              >
+                                Alta/Egreso PIE
+                              </button>
                             </div>
                           </td>
                         </tr>
@@ -5789,48 +6136,146 @@ function TodayView({
   };
 
   const Section = ({ title, icon: Icon, count, children, view }: { title: string; icon: LucideIcon; count: number; children: React.ReactNode; view?: ViewId }) => (
-    <section className="rounded-2xl border border-slate-200 bg-white p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-slate-500">
-          <Icon className="h-4 w-4 text-slate-600" /> {title}
+    <section className="tz-card rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow-sm">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className="truncate">{title}</span>
           <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white">{count}</span>
         </h2>
-        {view ? <button onClick={() => onNavigate(view)} className="text-xs font-semibold text-blue-600 hover:underline">Ver todo →</button> : null}
+        {view ? <button onClick={() => onNavigate(view)} className="shrink-0 text-[11px] font-bold text-blue-600 hover:underline">Ver todo</button> : null}
       </div>
       {children}
     </section>
   );
 
-  return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Hoy</h1>
-          <p className="mt-1 text-sm text-slate-600">{today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</p>
-        </div>
-      </div>
+  const agendaLoad = interviewsToday.length + classesToday.length + calendarEvents.length;
+  const operationalAlerts = protocolsDue.length + criticalCases.length + unplannedClasses.length + healthStudents.length;
+  const dayProgress = Math.min(100, Math.max(8, Math.round(((today.getHours() * 60 + today.getMinutes()) / (18 * 60)) * 100)));
+  const schoolDay = today.toLocaleDateString("es-CL", { weekday: "long" }).toLowerCase();
+  const nowMinutes = today.getHours() * 60 + today.getMinutes();
+  const toMinutes = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+  const currentStaffSlots = STAFF_SCHEDULE
+    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
+    .sort((a, b) => a.staffName.localeCompare(b.staffName, "es"))
+    .slice(0, 12);
+  const currentCourseSlots = COURSE_SCHEDULE
+    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
+    .sort((a, b) => a.course.localeCompare(b.course, "es"))
+    .slice(0, 10);
+  const scheduleStatus = currentStaffSlots.length + currentCourseSlots.length;
+  const quickStats: Array<[string, number, LucideIcon, ViewId, string]> = [
+    ["Entrevistas", interviewsToday.length, MessageSquareText, "interviews", "bg-sky-50 text-sky-700 ring-sky-200"],
+    ["Clases", classesToday.length, ClipboardList, "orientation", "bg-violet-50 text-violet-700 ring-violet-200"],
+    ["Protocolos", protocolsDue.length, ShieldCheck, "protocols", "bg-amber-50 text-amber-700 ring-amber-200"],
+    ["Críticos", criticalCases.length, AlertTriangle, "cases", "bg-rose-50 text-rose-700 ring-rose-200"],
+  ];
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {[
-          ["Entrevistas hoy", interviewsToday.length, MessageSquareText, "interviews" as ViewId, "from-sky-500 to-blue-600"],
-          ["Clases hoy", classesToday.length, ClipboardList, "orientation" as ViewId, "from-violet-500 to-purple-600"],
-          ["Protocolos a 7 días", protocolsDue.length, ShieldCheck, "protocols" as ViewId, "from-amber-500 to-orange-500"],
-          ["Casos críticos abiertos", criticalCases.length, AlertTriangle, "cases" as ViewId, "from-rose-500 to-pink-600"],
-        ].map(([label, count, Icon, view, tone]) => (
-          <button key={String(label)} onClick={() => onNavigate(view as ViewId)} className="tz-card rounded-2xl border border-slate-200 bg-white p-4 text-left">
-            <div className={`mb-2 grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br ${tone} text-white shadow-sm`}>
-              {React.createElement(Icon as LucideIcon, { className: "h-5 w-5" })}
+  return (
+    <div className="tz-fade space-y-3">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+          <div className="min-w-0">
+            <div className="mb-1.5 inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-2.5 py-0.5 text-[11px] font-bold text-blue-700">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" })}
             </div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label as string}</p>
-            <p className="mt-1 text-3xl font-semibold tabular-nums text-slate-950">{count as number}</p>
-          </button>
-        ))}
-      </div>
+            <h1 className="text-xl font-semibold tracking-tight text-slate-950 sm:text-2xl">Mi día</h1>
+            <p className="mt-0.5 max-w-2xl text-xs text-slate-600">
+              {agendaLoad} en agenda · {operationalAlerts} alertas · {scheduleStatus} bloques activos del horario.
+            </p>
+            <div className="mt-2 h-1.5 max-w-xl overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full rounded-full bg-gradient-to-r from-blue-600 via-sky-500 to-emerald-500 transition-all duration-700" style={{ width: `${dayProgress}%` }} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:w-[440px]">
+            {quickStats.map(([label, count, Icon, view, tone]) => (
+              <button
+                key={label}
+                onClick={() => onNavigate(view)}
+                className={`tz-press rounded-lg border border-white bg-white/80 px-2.5 py-2 text-left shadow-sm ring-1 ${tone} transition hover:-translate-y-0.5 hover:shadow-md`}
+              >
+                <div className="mb-0.5 flex items-center justify-between gap-2">
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="text-lg font-black tabular-nums">{count}</span>
+                </div>
+                <p className="truncate text-[11px] font-bold uppercase tracking-wide">{label}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-3 xl:grid-cols-[1.15fr_0.85fr]">
+        <div className="tz-card rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-blue-50 text-blue-700"><MapPin className="h-3.5 w-3.5" /></span>
+              <span className="truncate">Ahora en el colegio</span>
+              <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white">{currentStaffSlots.length}</span>
+            </h2>
+            <span className="text-[10px] font-semibold text-slate-500">{SCHOOL_SCHEDULE_SUMMARY.teacherEntries} bloques sincronizados</span>
+          </div>
+          {currentStaffSlots.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">No hay bloques docentes activos para esta hora.</p>
+          ) : (
+            <ul className="tz-thin-scroll tz-stagger-list max-h-52 space-y-1.5 overflow-y-auto pr-1">
+              {currentStaffSlots.map((slot, index) => {
+                const staff = STAFF_DIRECTORY.find((member) => member.name === slot.staffName);
+                return (
+                  <li key={`${slot.staffName}-${slot.day}-${slot.startTime}-${index}`} className="rounded-lg border border-slate-200 bg-white p-2 text-xs transition hover:-translate-y-0.5 hover:border-blue-200 hover:bg-blue-50/40">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <strong className="block truncate text-slate-950">{slot.staffName}</strong>
+                        <span className="block truncate text-slate-600">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</span>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}-{slot.endTime}</span>
+                    </div>
+                    {staff?.email ? <span className="mt-0.5 block truncate text-[10px] text-slate-500">{staff.email}</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="tz-card rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <h2 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-emerald-50 text-emerald-700"><BookOpen className="h-3.5 w-3.5" /></span>
+              <span className="truncate">Cursos ahora</span>
+              <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white">{currentCourseSlots.length}</span>
+            </h2>
+            <span className="text-[10px] font-semibold text-slate-500">{SCHOOL_SCHEDULE_SUMMARY.courseEntries} bloques</span>
+          </div>
+          {currentCourseSlots.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">No hay cursos activos para esta hora.</p>
+          ) : (
+            <ul className="tz-thin-scroll tz-stagger-list max-h-52 space-y-1.5 overflow-y-auto pr-1">
+              {currentCourseSlots.map((slot, index) => (
+                <li key={`${slot.course}-${slot.day}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-2 text-xs transition hover:-translate-y-0.5 hover:border-emerald-200 hover:bg-emerald-50/40">
+                  <div className="min-w-0">
+                    <strong className="block truncate text-slate-950">{slot.course}</strong>
+                    <span className="block truncate text-slate-600">{slot.activity}</span>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </section>
 
       {calendarIcalUrl ? (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <div className="flex items-center justify-between border-b border-slate-100 bg-gradient-to-r from-blue-50 via-sky-50 to-white px-5 py-3">
-            <h2 className="flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-blue-700">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-blue-50 via-sky-50 to-white px-3 py-2">
+            <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-700">
               <CalendarDays className="h-4 w-4" /> Google Calendar — hoy
               {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
               <span className="rounded-full bg-blue-600 px-2 py-0.5 text-[10px] font-bold text-white">{calendarEvents.length}</span>
@@ -5840,18 +6285,18 @@ function TodayView({
               <button onClick={loadCalendar} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Recargar</button>
             </div>
           </div>
-          <div className="p-4">
+          <div className="p-2.5">
             {calendarError ? (
-              <div className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700"><strong>Error:</strong> {calendarError}</div>
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-700"><strong>Error:</strong> {calendarError}</div>
             ) : calendarEvents.length === 0 ? (
-              <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No hay eventos en tu calendario para hoy.</p>
+              <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">No hay eventos en tu calendario para hoy.</p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="tz-thin-scroll tz-stagger-list grid max-h-60 gap-2 overflow-y-auto pr-1 lg:grid-cols-2">
                 {calendarEvents.map((ev, i) => (
-                  <li key={i} className="tz-card flex gap-3 rounded-xl border border-slate-200 p-3">
-                    <div className="grid h-12 w-14 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-blue-500 to-sky-600 text-center text-[10px] font-bold leading-tight text-white shadow-sm">
+                  <li key={i} className="tz-card flex gap-2 rounded-lg border border-slate-200 p-2 transition hover:-translate-y-0.5">
+                    <div className="grid h-10 w-11 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-blue-500 to-sky-600 text-center text-[10px] font-bold leading-tight text-white shadow-sm">
                       <div>
-                        <div className="text-sm">{ev.allDay ? "—" : new Date(ev.start).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</div>
+                        <div className="text-xs">{ev.allDay ? "—" : new Date(ev.start).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</div>
                         <div className="text-[9px] opacity-80">{ev.allDay ? "Todo el día" : new Date(ev.end).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</div>
                       </div>
                     </div>
@@ -5874,11 +6319,11 @@ function TodayView({
       <div className="grid gap-4 xl:grid-cols-2">
         <Section title="Entrevistas de hoy" icon={MessageSquareText} count={interviewsToday.length} view="interviews">
           {interviewsToday.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin entrevistas agendadas para hoy.</p>
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin entrevistas agendadas para hoy.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-1.5 overflow-y-auto pr-1">
               {interviewsToday.map((r) => (
-                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                <li key={r.id} className="rounded-lg border border-slate-200 p-2 text-xs transition hover:bg-slate-50">
                   <strong className="block text-slate-950">{r.reason || "Entrevista"}</strong>
                   <span className="text-slate-600">{r.participant || "—"} · {r.student || ""}</span>
                 </li>
@@ -5889,11 +6334,11 @@ function TodayView({
 
         <Section title="Clases de orientación de hoy" icon={ClipboardList} count={classesToday.length} view="orientation">
           {classesToday.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin clases programadas para hoy.</p>
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin clases programadas para hoy.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-1.5 overflow-y-auto pr-1">
               {classesToday.map((r) => (
-                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                <li key={r.id} className="rounded-lg border border-slate-200 p-2 text-xs transition hover:bg-slate-50">
                   <strong className="block text-slate-950">{r.topic}</strong>
                   <span className="text-slate-600">{r.course} · {r.orientationOwner}</span>
                 </li>
@@ -5904,11 +6349,11 @@ function TodayView({
 
         <Section title="Protocolos a vencer (7 días)" icon={ShieldCheck} count={protocolsDue.length} view="protocols">
           {protocolsDue.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">No hay protocolos próximos a vencer.</p>
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">No hay protocolos próximos a vencer.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-1.5 overflow-y-auto pr-1">
               {protocolsDue.map((r) => (
-                <li key={r.id} className="rounded-lg border border-amber-200 bg-amber-50/40 p-3 text-sm">
+                <li key={r.id} className="rounded-lg border border-amber-200 bg-amber-50/40 p-2 text-xs transition hover:bg-amber-50">
                   <div className="flex items-center justify-between">
                     <strong className="text-slate-950">{r.title}</strong>
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{r.dueDate}</span>
@@ -5922,11 +6367,11 @@ function TodayView({
 
         <Section title="Clases sin planificación" icon={Bell} count={unplannedClasses.length} view="orientation">
           {unplannedClasses.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Todas las clases próximas tienen planificación.</p>
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Todas las clases próximas tienen planificación.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-1.5 overflow-y-auto pr-1">
               {unplannedClasses.slice(0, 6).map((r) => (
-                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                <li key={r.id} className="rounded-lg border border-slate-200 p-2 text-xs transition hover:bg-slate-50">
                   <strong className="block text-slate-950">{r.topic || "Clase sin tema"}</strong>
                   <span className="text-slate-600">{r.course} · {r.date}</span>
                 </li>
@@ -5937,12 +6382,12 @@ function TodayView({
 
         <Section title="Estudiantes con alertas de salud" icon={AlertTriangle} count={healthStudents.length} view="students">
           {healthStudents.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin alertas activas.</p>
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin alertas activas.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-1.5 overflow-y-auto pr-1">
               {healthStudents.map((s) => (
                 <li key={s.id}>
-                  <button onClick={() => onOpenStudent(s.id)} className="flex w-full items-center gap-3 rounded-lg border border-rose-200 bg-rose-50/40 p-3 text-left text-sm hover:bg-rose-50">
+                  <button onClick={() => onOpenStudent(s.id)} className="flex w-full items-center gap-2 rounded-lg border border-rose-200 bg-rose-50/40 p-2 text-left text-xs transition hover:-translate-y-0.5 hover:bg-rose-50">
                     <div className={`grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br ${avatarTone(s.id)} text-[10px] font-bold text-white`}>{initialsOf(s.fullName)}</div>
                     <div className="min-w-0 flex-1">
                       <strong className="block truncate text-slate-950">{s.fullName}</strong>
@@ -5958,11 +6403,11 @@ function TodayView({
 
         <Section title="Casos críticos abiertos" icon={AlertTriangle} count={criticalCases.length} view="cases">
           {criticalCases.length === 0 ? (
-            <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin casos críticos abiertos.</p>
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin casos críticos abiertos.</p>
           ) : (
-            <ul className="space-y-2">
+            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-1.5 overflow-y-auto pr-1">
               {criticalCases.slice(0, 6).map((r) => (
-                <li key={r.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                <li key={r.id} className="rounded-lg border border-slate-200 p-2 text-xs transition hover:bg-slate-50">
                   <strong className="block text-slate-950">{r.title}</strong>
                   <span className="text-slate-600">{r.student || ""} · {r.priority} · {r.status}</span>
                 </li>
@@ -7365,7 +7810,41 @@ export default function TizaEducationApp() {
     setStore((current) => {
       const next = [...current.students];
       PIE_ROSTER.forEach((entry) => {
-        const supportText = `Programa de Integración Escolar (PIE). Diagnóstico: ${entry.diag} (${entry.situacion}). Profesional asignado: ${entry.professional}.`;
+        const pieData = JSON.stringify({
+          active: true,
+          diag: entry.diag,
+          diagnoses: entry.diagnoses,
+          tipoNEE: entry.tipoNEE,
+          situacion: entry.situacion,
+          situaciones: entry.situaciones,
+          cupo: entry.cupo,
+          sourceSheets: entry.sourceSheets,
+          classifications: entry.classifications,
+          entryYear: entry.entryYear,
+          birthDate: entry.birthDate,
+          diagDate: entry.diagDate,
+          evaluator: entry.evaluator,
+          evaluators: entry.evaluators,
+          specialty: entry.specialty,
+          specialties: entry.specialties,
+          professional: entry.professional,
+          professionals: entry.professionals,
+          assignedStaff: Array.from(new Set([entry.professional, ...entry.professionals].filter(Boolean))),
+          platformStatus: entry.platformStatus,
+          scannerStatus: entry.scannerStatus,
+          loadedDocument: entry.loadedDocument,
+          pendingDocument: entry.pendingDocument,
+          deadline: entry.deadline,
+          approvedPreviousYears: entry.approvedPreviousYears,
+          appealResult: entry.appealResult,
+          finalResult: entry.finalResult,
+          siblings: entry.siblings,
+          records: entry.records,
+          altaDate: "",
+          bajaDate: "",
+          notes: "",
+        });
+        const supportText = `Programa de Integración Escolar (PIE). Diagnóstico(s): ${(entry.diagnoses.length ? entry.diagnoses : [entry.diag]).map(pieDiagLabel).join(", ")} (${entry.situacion}). Estado: ${entry.cupo}. Profesional asignado: ${entry.professional}.`;
         const idx = next.findIndex((s) => {
           const a = cleanRut(s.rut);
           const b = cleanRut(entry.rut);
@@ -7381,7 +7860,8 @@ export default function TizaEducationApp() {
             course: existing.course || entry.course,
             rut: existing.rut || entry.rut,
             tags: tags.join(", "),
-            supportNeeds: supportText,
+            pieData,
+            supportNeeds: existing.supportNeeds && !existing.supportNeeds.includes("Integración Escolar") ? existing.supportNeeds : supportText,
             updatedAt: nowIso(),
           };
           updated += 1;
@@ -7394,7 +7874,8 @@ export default function TizaEducationApp() {
             course: entry.course,
             rut: entry.rut,
             tags: "PIE",
-            relevantInfo: `Estudiante cargado desde la Nómina Oficial PIE 2026 (${entry.source}).`,
+            pieData,
+            relevantInfo: `Estudiante cargado desde la Nómina Oficial PIE 2026 (${entry.cupo}; hojas: ${entry.sourceSheets.join(", ")}).`,
             supportNeeds: supportText,
             strengths: "",
             healthAlerts: "",
@@ -7550,7 +8031,7 @@ export default function TizaEducationApp() {
       return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
     }
     if (activeView === "pie") {
-      return <PieWorkspaceView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} onSeedPie={seedPieRoster} />;
+      return <PieWorkspaceView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} onSeedPie={seedPieRoster} onUpdateStudent={updateStudentRecord} />;
     }
     if (activeView === "courses") {
       return (
