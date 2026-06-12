@@ -4,6 +4,7 @@ import Image from "next/image";
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
+import { PIE_ROSTER } from "@/lib/pie-roster";
 import {
   ArrowDownToLine,
   BarChart3,
@@ -3710,10 +3711,12 @@ function PieWorkspaceView({
   store,
   onOpenStudent,
   onNavigate,
+  onSeedPie,
 }: {
   store: DataStore;
   onOpenStudent: (studentId: string, focusField?: string) => void;
   onNavigate: (view: ViewId) => void;
+  onSeedPie: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [selectedCourse, setSelectedCourse] = useState<string>("all");
@@ -3892,7 +3895,32 @@ function PieWorkspaceView({
             Panel unificado para el seguimiento de estudiantes integrados, diagnósticos clínicos y profesionales de apoyo asignados.
           </p>
         </div>
+        <button
+          onClick={onSeedPie}
+          className="tz-press inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700"
+        >
+          <Puzzle className="h-4 w-4" />
+          {totalPieCount === 0 ? "Cargar nómina oficial PIE 2026" : "Sincronizar nómina PIE 2026"}
+        </button>
       </div>
+
+      {totalPieCount === 0 ? (
+        <div className="mb-6 rounded-2xl border border-dashed border-emerald-300 bg-emerald-50/50 p-8 text-center">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-emerald-100 text-emerald-700">
+            <Puzzle className="h-6 w-6" />
+          </span>
+          <h2 className="mt-3 text-lg font-semibold text-slate-900">Aún no hay estudiantes PIE cargados</h2>
+          <p className="mx-auto mt-1 max-w-md text-sm text-slate-600">
+            La Nómina Oficial PIE 2026 (313 estudiantes) ya viene incluida. Pulsa el botón para cargarla; se integrará con los estudiantes existentes (por RUT) y se sincronizará automáticamente.
+          </p>
+          <button
+            onClick={onSeedPie}
+            className="tz-press mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-emerald-700"
+          >
+            <Puzzle className="h-4 w-4" /> Cargar 313 estudiantes PIE
+          </button>
+        </div>
+      ) : null}
 
       {/* Statistics Cards */}
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -4998,14 +5026,14 @@ function DashboardAgenda({
     key: string;
     start: Date;
     end?: Date;
+    allDay: boolean;
     title: string;
     location: string;
     description: string;
-    type: "calendar" | "orientation_class" | "interview" | "app_orientation";
+    typeLabel: string;
     color: string;
     icon: LucideIcon;
     href?: ViewId;
-    courseHint?: string;
   };
 
   const items: AgendaItem[] = [];
@@ -5018,28 +5046,28 @@ function DashboardAgenda({
       key: `cal-${i}-${ev.start}`,
       start,
       end: new Date(ev.end),
+      allDay: ev.allDay,
       title: isOrientation ? match.displayTitle : (ev.summary || "(sin título)"),
       location: ev.location || "",
       description: ev.description || "",
-      type: isOrientation ? "orientation_class" : "calendar",
+      typeLabel: isOrientation ? "Orientación" : "Calendario",
       color: isOrientation ? "from-violet-500 to-purple-600" : "from-blue-500 to-sky-600",
       icon: isOrientation ? ClipboardList : CalendarDays,
       href: isOrientation ? "orientation" : undefined,
-      courseHint: match.course,
     });
   });
 
   store.interviews
     .filter((r) => (r.date || "").slice(0, 10) === todayStr)
     .forEach((r) => {
-      const t = new Date();
       items.push({
         key: `interview-${r.id}`,
-        start: t,
+        start: new Date(`${todayStr}T08:00:00`),
+        allDay: true,
         title: `Entrevista · ${r.participant || r.student || "?"}`,
         location: "",
         description: r.reason || "",
-        type: "interview",
+        typeLabel: "Entrevista",
         color: "from-emerald-500 to-teal-600",
         icon: MessageSquareText,
         href: "interviews",
@@ -5049,7 +5077,6 @@ function DashboardAgenda({
   store.orientation
     .filter((r) => (r.date || "").slice(0, 10) === todayStr)
     .forEach((r) => {
-      // Skip if a matching calendar event already covers it (same course).
       const dup = calendarEvents.some((ev) => {
         const match = matchOrientationEvent(ev.summary);
         return match.isOrientation && normalize(match.course) === normalize(r.course || "");
@@ -5057,39 +5084,42 @@ function DashboardAgenda({
       if (dup) return;
       items.push({
         key: `app-orient-${r.id}`,
-        start: new Date(),
+        start: new Date(`${todayStr}T08:00:00`),
+        allDay: true,
         title: `${r.topic || "Clase de orientación"} · ${r.course || ""}`,
         location: "",
         description: r.planificacion || r.notes || "",
-        type: "app_orientation",
+        typeLabel: "Orientación",
         color: "from-violet-500 to-purple-600",
         icon: ClipboardList,
         href: "orientation",
-        courseHint: r.course,
       });
     });
 
-  items.sort((a, b) => a.start.getTime() - b.start.getTime());
+  const allDayItems = items.filter((it) => it.allDay).sort((a, b) => a.title.localeCompare(b.title));
+  const timedItems = items.filter((it) => !it.allDay).sort((a, b) => a.start.getTime() - b.start.getTime());
+  const nowMs = today.getTime();
+  const nextUp = timedItems.find((it) => (it.end ? it.end.getTime() : it.start.getTime()) >= nowMs);
 
   const dateLong = today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
 
   return (
     <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-5 py-3">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-4 py-3 sm:px-5">
         <div className="flex items-center gap-3">
           <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
             <CalendarDays className="h-4 w-4" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-slate-950">Mi día</h2>
-            <p className="text-[11px] text-slate-500 capitalize">{dateLong}</p>
+            <p className="text-[11px] capitalize text-slate-500">{dateLong}</p>
           </div>
           {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
         </div>
         <div className="flex items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{items.length} {items.length === 1 ? "actividad" : "actividades"}</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{items.length} {items.length === 1 ? "actividad" : "actividades"}</span>
           {calendarIcalUrl ? (
-            <button onClick={onReloadCalendar} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Recargar</button>
+            <button onClick={onReloadCalendar} className="tz-press rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Recargar</button>
           ) : null}
         </div>
       </header>
@@ -5105,34 +5135,75 @@ function DashboardAgenda({
             </button>
           </div>
         ) : items.length === 0 ? (
-          <p className="rounded-lg bg-slate-50 p-4 text-center text-sm text-slate-500">No hay actividades para hoy.</p>
+          <div className="rounded-xl bg-slate-50 p-6 text-center">
+            <p className="text-sm font-semibold text-slate-700">Sin actividades para hoy 🎉</p>
+            <p className="mt-1 text-xs text-slate-500">Disfruta un día despejado, o revisa lo pendiente en Hoy.</p>
+            <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              Ver resumen del día
+            </button>
+          </div>
         ) : (
-          <ol className="relative space-y-2 border-l-2 border-dashed border-slate-200 pl-5">
-            {items.map((item) => {
-              const Icon = item.icon;
-              const timeLabel = item.start.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
-              const endLabel = item.end ? item.end.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
-              return (
-                <li
-                  key={item.key}
-                  className={`group relative rounded-xl border border-slate-200 bg-white p-3 ${item.href ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/30" : ""}`}
-                  onClick={() => item.href && onNavigate(item.href)}
-                >
-                  <span className={`absolute -left-[1.65rem] top-3 grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white shadow ring-4 ring-white`}>
-                    <Icon className="h-3.5 w-3.5" />
-                  </span>
-                  <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
-                    <span className="text-[11px] font-semibold text-slate-500 tabular-nums">
-                      {item.type === "interview" || item.type === "app_orientation" ? "Hoy" : (endLabel ? `${timeLabel} – ${endLabel}` : timeLabel)}
-                    </span>
-                  </div>
-                  {item.location ? <p className="mt-0.5 text-xs text-slate-600">📍 {item.location}</p> : null}
-                  {item.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{item.description}</p> : null}
-                </li>
-              );
-            })}
-          </ol>
+          <div className="space-y-4">
+            {allDayItems.length > 0 ? (
+              <div>
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Todo el día</p>
+                <div className="flex flex-wrap gap-2">
+                  {allDayItems.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.key}
+                        onClick={() => item.href && onNavigate(item.href)}
+                        className={`tz-press inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-300 ${item.href ? "cursor-pointer" : "cursor-default"}`}
+                      >
+                        <span className={`grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white`}>
+                          <Icon className="h-3 w-3" />
+                        </span>
+                        <span className="max-w-[200px] truncate">{item.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
+            {timedItems.length > 0 ? (
+              <ol className="relative ml-3 space-y-2.5 border-l-2 border-slate-100 pl-5">
+                {timedItems.map((item) => {
+                  const Icon = item.icon;
+                  const timeLabel = item.start.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+                  const endLabel = item.end ? item.end.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
+                  const isPast = (item.end ? item.end.getTime() : item.start.getTime()) < nowMs;
+                  const isNext = item.key === nextUp?.key;
+                  return (
+                    <li
+                      key={item.key}
+                      className={`group relative rounded-xl border p-3 transition ${
+                        isNext ? "border-blue-300 bg-blue-50/40 shadow-sm" : "border-slate-200 bg-white"
+                      } ${item.href ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/30" : ""} ${isPast && !isNext ? "opacity-55" : ""}`}
+                      onClick={() => item.href && onNavigate(item.href)}
+                    >
+                      <span className={`absolute -left-[1.7rem] top-3.5 grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white shadow ring-4 ring-white`}>
+                        <Icon className="h-3.5 w-3.5" />
+                      </span>
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
+                        <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
+                        <span className={`text-[11px] font-bold tabular-nums ${isNext ? "text-blue-700" : "text-slate-500"}`}>
+                          {endLabel ? `${timeLabel}–${endLabel}` : timeLabel}
+                        </span>
+                      </div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{item.typeLabel}</span>
+                        {isNext ? <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Próximo</span> : null}
+                        {item.location ? <span className="text-[11px] text-slate-600">📍 {item.location}</span> : null}
+                      </div>
+                      {item.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{item.description}</p> : null}
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : null}
+          </div>
         )}
       </div>
     </section>
@@ -7260,6 +7331,56 @@ export default function TizaEducationApp() {
     }
   };
 
+  const seedPieRoster = () => {
+    const cleanRut = (r: string) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
+    let updated = 0;
+    let created = 0;
+    const next = [...store.students];
+    PIE_ROSTER.forEach((entry) => {
+      const supportText = `Programa de Integración Escolar (PIE). Diagnóstico: ${entry.diag} (${entry.situacion}). Profesional asignado: ${entry.professional}.`;
+      const idx = next.findIndex((s) => {
+        const a = cleanRut(s.rut);
+        const b = cleanRut(entry.rut);
+        if (a && b && a === b) return true;
+        return normalize(s.fullName || "") === normalize(entry.name);
+      });
+      if (idx >= 0) {
+        const existing = next[idx];
+        const tags = (existing.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+        if (!tags.some((t) => t.toUpperCase() === "PIE")) tags.push("PIE");
+        next[idx] = {
+          ...existing,
+          course: existing.course || entry.course,
+          rut: existing.rut || entry.rut,
+          tags: tags.join(", "),
+          supportNeeds: supportText,
+          updatedAt: nowIso(),
+        };
+        updated += 1;
+      } else {
+        next.push({
+          id: uid(),
+          createdAt: nowIso(),
+          updatedAt: nowIso(),
+          fullName: entry.name,
+          course: entry.course,
+          rut: entry.rut,
+          tags: "PIE",
+          relevantInfo: `Estudiante cargado desde la Nómina Oficial PIE 2026 (${entry.source}).`,
+          supportNeeds: supportText,
+          strengths: "",
+          healthAlerts: "",
+          notes: "",
+          observations: "",
+          genogram: "[]",
+        });
+        created += 1;
+      }
+    });
+    setStore((current) => ({ ...current, students: next }));
+    setToast(`Nómina PIE cargada: ${created} nuevos, ${updated} actualizados.`);
+  };
+
   const confirmPieImport = () => {
     if (!pieImportData) return;
     const cleanRut = (r: string) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
@@ -7400,7 +7521,7 @@ export default function TizaEducationApp() {
       return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
     }
     if (activeView === "pie") {
-      return <PieWorkspaceView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} />;
+      return <PieWorkspaceView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} onSeedPie={seedPieRoster} />;
     }
     if (activeView === "courses") {
       return (
@@ -7500,7 +7621,7 @@ export default function TizaEducationApp() {
   return (
     <div className="tz-mobile-shell min-h-screen bg-slate-50 text-slate-950">
       <Sidebar activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} />
-      <main className="min-w-0 overflow-x-hidden lg:pl-[272px]">
+      <main className="tz-app-root min-w-0 lg:pl-[272px]">
         <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
           <div className="mx-auto flex w-full max-w-[1440px] min-w-0 items-center gap-2">
             <div className="hidden shrink-0 items-center gap-1 sm:flex">
