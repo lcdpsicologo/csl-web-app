@@ -4,6 +4,7 @@ import Image from "next/image";
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
+import { ORIENTATION_FIRST_CYCLE_CLASSES } from "@/lib/orientation-first-cycle";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
 import {
@@ -625,13 +626,17 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "date", label: "Fecha", type: "date", aliases: ["fecha", "date"] },
       { key: "course", label: "Curso", required: true, aliases: ["curso", "nivel", "grado"] },
       { key: "orientationOwner", label: "Orientador/a", aliases: ["orientador", "orientadora", "responsable"] },
+      { key: "orientationEmail", label: "Correo orientador/a", aliases: ["correo orientador", "email orientador", "correo responsable"] },
       { key: "topic", label: "Tema / clase", required: true, aliases: ["tema", "clase", "sesion", "actividad"] },
       { key: "axis", label: "Eje", aliases: ["eje", "unidad", "area"] },
+      { key: "week", label: "Semana", aliases: ["semana", "sem", "periodo"] },
       { key: "status", label: "Estado", type: "select", options: ["Planificada", "Realizada", "Pendiente", "Reprogramada"], aliases: ["estado", "status"] },
       { key: "canvaLink", label: "Enlace Canva", aliases: ["canva", "link canva", "presentacion", "diapositivas"] },
       { key: "evidence", label: "Evidencia / enlace", aliases: ["evidencia", "link", "enlace", "url"] },
       { key: "planificacion", label: "Planificación", type: "textarea", aliases: ["planificacion", "plan", "objetivos", "actividades"] },
+      { key: "folderLink", label: "Carpeta", aliases: ["carpeta", "drive", "folder"] },
       { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "descripcion"] },
+      { key: "source", label: "Fuente", aliases: ["fuente", "archivo origen"] },
     ],
   },
   workshops: {
@@ -820,6 +825,30 @@ function downloadText(fileName: string, content: string, type = "text/plain;char
   a.click();
   URL.revokeObjectURL(url);
 }
+
+function downloadExcel(fileName: string, sheetName: string, headers: string[], rows: string[][]) {
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const workbook = XLSX.utils.book_new();
+  worksheet["!cols"] = headers.map((header, index) => {
+    const max = Math.max(header.length, ...rows.slice(0, 300).map((row) => String(row[index] || "").length));
+    return { wch: Math.min(64, Math.max(12, max + 2)) };
+  });
+  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName.slice(0, 31) || "Datos");
+  const array = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([array], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName.endsWith(".xlsx") ? fileName : `${fileName}.xlsx`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const recordsToExcel = (fileName: string, sheetName: string, records: DataRecord[], fields: FieldDef[]) => {
+  const headers = fields.map((field) => field.label);
+  const rows = records.map((record) => fields.map((field) => record[field.key] || ""));
+  downloadExcel(fileName, sheetName, headers, rows);
+};
 
 function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label: string; value: number; detail: string; icon: LucideIcon; accent?: "teal" | "blue" | "amber" | "violet" | "rose" }) {
   const accents = {
@@ -1816,21 +1845,23 @@ function OrientationCycleView({
   };
 
   const exportOwnerClasses = () => {
-    const headers = ["Fecha", "Curso", "Tema", "Eje", "Estado", "Enlace Canva", "Planificación", "Observaciones"];
+    const headers = ["Fecha", "Semana", "Curso", "Orientador/a", "Correo", "Tema", "Eje / Acción", "Estado", "Enlace Canva", "Planificación", "Carpeta", "Observaciones", "Fuente"];
     const rows = filteredClasses.map((record) => [
       record.date || "",
+      record.week || "",
       record.course || "",
+      record.orientationOwner || "",
+      record.orientationEmail || "",
       record.topic || "",
       record.axis || "",
       record.status || "",
       record.canvaLink || record.evidence || "",
-      (record.planificacion || "").replace(/\n/g, " "),
-      (record.notes || "").replace(/\n/g, " "),
+      record.planificacion || "",
+      record.folderLink || "",
+      record.notes || "",
+      record.source || "",
     ]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => (/[",;\n]/.test(cell) ? `"${cell.replace(/"/g, '""')}"` : cell)).join(","))
-      .join("\n");
-    downloadText(`orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.csv`, csv, "text/csv;charset=utf-8");
+    downloadExcel(`orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xlsx`, "Orientación", headers, rows);
   };
 
   const statusTone = (status: string) =>
@@ -1850,7 +1881,7 @@ function OrientationCycleView({
         </div>
         <div className="flex gap-2">
           <button onClick={exportOwnerClasses} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <ArrowDownToLine className="h-4 w-4" /> Exportar CSV
+            <ArrowDownToLine className="h-4 w-4" /> Exportar Excel
           </button>
           <button onClick={openNewClass} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800">
             <Plus className="h-4 w-4" /> Nueva clase
@@ -1994,9 +2025,17 @@ function OrientationCycleView({
                       <span className="text-xs font-semibold text-slate-700">Eje</span>
                       <input value={newClassForm.axis || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, axis: event.target.value }))} placeholder="Ej.: Crecimiento personal" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                     </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Semana</span>
+                      <input value={newClassForm.week || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, week: event.target.value }))} placeholder="02/03 al 06/03 (Semana 1)" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
                     <label className="block sm:col-span-2 lg:col-span-3">
                       <span className="text-xs font-semibold text-slate-700">Enlace Canva</span>
                       <input value={newClassForm.canvaLink || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, canvaLink: event.target.value }))} placeholder="https://www.canva.com/design/..." className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block sm:col-span-2 lg:col-span-3">
+                      <span className="text-xs font-semibold text-slate-700">Carpeta / Drive</span>
+                      <input value={newClassForm.folderLink || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, folderLink: event.target.value }))} placeholder="https://drive.google.com/..." className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                     </label>
                     <label className="block sm:col-span-2 lg:col-span-3">
                       <span className="text-xs font-semibold text-slate-700">Planificación</span>
@@ -2081,6 +2120,10 @@ function OrientationCycleView({
                                 <span className="text-xs font-semibold text-slate-700">Eje</span>
                                 <input value={record.axis || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                               </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Semana</span>
+                                <input value={record.week || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { week: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                              </label>
                               <label className="block sm:col-span-2 lg:col-span-3">
                                 <span className="flex items-center gap-2 text-xs font-semibold text-violet-700">
                                   Enlace Canva
@@ -2089,6 +2132,15 @@ function OrientationCycleView({
                                   ) : null}
                                 </span>
                                 <input value={record.canvaLink || record.evidence || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { canvaLink: event.target.value })} placeholder="https://www.canva.com/design/..." className="mt-1 w-full rounded-md border border-violet-200 bg-violet-50/40 px-2.5 py-2 text-sm outline-none focus:border-violet-500" />
+                              </label>
+                              <label className="block sm:col-span-2 lg:col-span-3">
+                                <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                                  Carpeta / Drive
+                                  {record.folderLink ? (
+                                    <a href={record.folderLink} target="_blank" rel="noopener noreferrer" className="ml-auto text-[10px] font-semibold text-blue-600 hover:underline">Abrir ↗</a>
+                                  ) : null}
+                                </span>
+                                <input value={record.folderLink || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { folderLink: event.target.value })} placeholder="https://drive.google.com/..." className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                               </label>
                               <label className="block sm:col-span-2 lg:col-span-3">
                                 <span className="text-xs font-semibold text-slate-700">Planificación</span>
@@ -3807,7 +3859,8 @@ const getPieDiagnosis = (student: DataRecord) => {
   if (snUpper.includes("TEL")) return "TEL";
   if (snUpper.includes("FIL")) return "FIL";
   if (snUpper.includes("DIL")) return "DIL";
-  if (snUpper.includes("TDAH")) return "TDAH";
+  if (/\bTDAH\b/.test(snUpper)) return "TDAH";
+  if (/\bTDA\b/.test(snUpper)) return "TDA";
   if (snUpper.includes("DEA")) return "DEA";
   if (snUpper.includes("SDA")) return "SDA";
   return "S/D";
@@ -3905,25 +3958,27 @@ function PieWorkspaceView({
 
   // Top Diagnostics Counts
   const diagCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      TEA: 0,
-      FIL: 0,
-      DIL: 0,
-      TEL: 0,
-      TDAH: 0,
-      DEA: 0,
-      OTROS: 0,
-    };
+    const counts: Record<string, number> = {};
     pieStudents.forEach((s) => {
-      const diag = getPieDiagnosis(s).toUpperCase();
-      if (diag in counts) {
-        counts[diag]++;
-      } else {
-        counts.OTROS++;
-      }
+      const diag = getPieDiagnosis(s).trim().toUpperCase() || "S/D";
+      counts[diag] = (counts[diag] || 0) + 1;
     });
     return counts;
   }, [pieStudents]);
+  const diagColor = (diag: string) => ({
+    TEA: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    FIL: "bg-violet-50 text-violet-700 border-violet-200",
+    DIL: "bg-purple-50 text-purple-700 border-purple-200",
+    TEL: "bg-blue-50 text-blue-700 border-blue-200",
+    TL: "bg-blue-50 text-blue-700 border-blue-200",
+    TDA: "bg-amber-50 text-amber-700 border-amber-200",
+    TDAH: "bg-orange-50 text-orange-700 border-orange-200",
+    DEA: "bg-indigo-50 text-indigo-700 border-indigo-200",
+    "DEA-C": "bg-indigo-50 text-indigo-700 border-indigo-200",
+    "DEA -C": "bg-indigo-50 text-indigo-700 border-indigo-200",
+    GARC: "bg-rose-50 text-rose-700 border-rose-200",
+    DM: "bg-cyan-50 text-cyan-700 border-cyan-200",
+  }[diag] || "bg-slate-50 text-slate-700 border-slate-200");
 
   const professionals = useMemo(() => {
     const set = new Set<string>();
@@ -4012,10 +4067,7 @@ function PieWorkspaceView({
       // Diagnostic filter
       if (selectedDiag !== "all") {
         const diag = getPieDiagnosis(s).toUpperCase();
-        if (selectedDiag === "OTROS") {
-          const known = ["TEA", "FIL", "DIL", "TEL", "TDAH", "DEA"];
-          if (known.includes(diag)) return false;
-        } else if (diag !== selectedDiag) {
+        if (diag !== selectedDiag) {
           return false;
         }
       }
@@ -4094,13 +4146,9 @@ function PieWorkspaceView({
 
   const diagnosticsConfig = [
     { key: "all", label: "Todos", color: "bg-slate-900 text-white" },
-    { key: "TEA", label: "TEA", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    { key: "FIL", label: "FIL", color: "bg-violet-50 text-violet-700 border-violet-200" },
-    { key: "DIL", label: "DIL", color: "bg-purple-50 text-purple-700 border-purple-200" },
-    { key: "TEL", label: "TEL", color: "bg-blue-50 text-blue-700 border-blue-200" },
-    { key: "TDAH", label: "TDAH", color: "bg-amber-50 text-amber-700 border-amber-200" },
-    { key: "DEA", label: "DEA", color: "bg-indigo-50 text-indigo-700 border-indigo-200" },
-    { key: "OTROS", label: "Otros", color: "bg-slate-50 text-slate-700 border-slate-200" },
+    ...Object.entries(diagCounts)
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"))
+      .map(([key]) => ({ key, label: key, color: diagColor(key) })),
   ];
 
   return (
@@ -4501,8 +4549,12 @@ function PieWorkspaceView({
                         FIL: "bg-violet-50 text-violet-700 ring-violet-200/60 border-violet-200/40",
                         DIL: "bg-purple-50 text-purple-700 ring-purple-200/60 border-purple-200/40",
                         TEL: "bg-blue-50 text-blue-700 ring-blue-200/60 border-blue-200/40",
-                        TDAH: "bg-amber-50 text-amber-700 ring-amber-200/60 border-amber-200/40",
+                        TL: "bg-blue-50 text-blue-700 ring-blue-200/60 border-blue-200/40",
+                        TDA: "bg-amber-50 text-amber-700 ring-amber-200/60 border-amber-200/40",
+                        TDAH: "bg-orange-50 text-orange-700 ring-orange-200/60 border-orange-200/40",
                         DEA: "bg-indigo-50 text-indigo-700 ring-indigo-200/60 border-indigo-200/40",
+                        GARC: "bg-rose-50 text-rose-700 ring-rose-200/60 border-rose-200/40",
+                        DM: "bg-cyan-50 text-cyan-700 ring-cyan-200/60 border-cyan-200/40",
                       }[diag.toUpperCase()] || "bg-slate-50 text-slate-700 ring-slate-200/60 border-slate-200/40";
 
                       const sitColor = sit.toUpperCase().includes("PERMANENTE")
@@ -7736,6 +7788,33 @@ export default function TizaEducationApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteLoaded]);
 
+  const syncOrientationFirstCycle = (silent = false) => {
+    let created = 0;
+    setStore((current) => {
+      const existing = new Set(current.orientation.map((record) =>
+        normalize([record.date, record.course, record.topic, record.axis, record.source].filter(Boolean).join("|")),
+      ));
+      const missing = ORIENTATION_FIRST_CYCLE_CLASSES
+        .filter((record) => {
+          const key = normalize([record.date, record.course, record.topic, record.axis, record.source].filter(Boolean).join("|"));
+          return !existing.has(key);
+        })
+        .map((record) => ({ ...record }));
+      created = missing.length;
+      if (missing.length === 0) return current;
+      return { ...current, orientation: [...missing, ...current.orientation] };
+    });
+    if (!silent) setToast(`Clases de orientación sincronizadas: ${created} nuevas.`);
+  };
+
+  const autoSeededOrientationRef = React.useRef(false);
+  useEffect(() => {
+    if (!remoteLoaded || autoSeededOrientationRef.current) return;
+    autoSeededOrientationRef.current = true;
+    syncOrientationFirstCycle(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteLoaded]);
+
   const updateCourseRecord = (courseName: string, updates: Record<string, string>) => {
     setStore((current) => {
       const official = officialCourses.find((course) => normalize(course.name) === normalize(courseName));
@@ -8043,6 +8122,86 @@ export default function TizaEducationApp() {
     setToast(`Nómina PIE sincronizada: ${updatedCount} actualizados, ${createdCount} creados.`);
   };
 
+  const importOrientationExcel = (workbook: XLSX.WorkBook, fileName: string) => {
+    const sheetName = workbook.SheetNames.find((name) => normalize(name).includes("1 ciclo")) || workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) {
+      setToast("No se encontró una hoja de orientación válida.");
+      return;
+    }
+    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" }) as string[][];
+    const headerIndex = rows.findIndex((row) => row.map((cell) => normalize(String(cell || ""))).includes("curso"));
+    if (headerIndex < 0) {
+      setToast("No se encontraron encabezados de orientación.");
+      return;
+    }
+    const headers = rows[headerIndex].map((cell) => String(cell || "").trim());
+    const col = (label: string) => headers.findIndex((header) => normalize(header) === normalize(label));
+    const idx = {
+      date: col("SEM"),
+      week: col("FECHA"),
+      course: col("CURSO"),
+      axis: col("ACCIÓN / FORTALEZA"),
+      topic: col("TEMA / COMENTARIO"),
+      status: col("ESTADO"),
+      notes: col("OBSERVACIONES"),
+      canva: col("Canva"),
+      plan: col("Planificación"),
+      folder: col("Carpeta"),
+    };
+    const normalizeCourseName = (value: string) => String(value || "")
+      .replace(/Pre Kinder/g, "Prekínder")
+      .replace(/Kinder/g, "Kínder")
+      .trim();
+    const imported = rows.slice(headerIndex + 1).map((row): DataRecord | null => {
+      const cell = (i: number) => i >= 0 ? String(row[i] || "").trim() : "";
+      const date = cell(idx.date);
+      const course = normalizeCourseName(cell(idx.course));
+      const axis = cell(idx.axis);
+      const topic = cell(idx.topic) || axis || "Clase de orientación";
+      const canva = cell(idx.canva);
+      if (![date, course, axis, topic, cell(idx.notes), canva, cell(idx.plan), cell(idx.folder)].some(Boolean)) return null;
+      return {
+        id: `orientacion-import-${uid()}`,
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        date,
+        week: cell(idx.week),
+        course,
+        orientationOwner: "Gustavo Caro",
+        orientationEmail: "g.caro.m@colegiosanlucas.com",
+        topic,
+        axis,
+        status: cell(idx.status) || "Pendiente",
+        canvaLink: canva,
+        evidence: canva,
+        planificacion: cell(idx.plan),
+        folderLink: cell(idx.folder),
+        notes: cell(idx.notes),
+        source: fileName,
+        sourceSheet: sheetName,
+      };
+    }).filter((record): record is DataRecord => record !== null);
+
+    if (imported.length === 0) {
+      setToast("No se encontraron clases de orientación válidas.");
+      return;
+    }
+
+    setStore((current) => {
+      const existing = new Set(current.orientation.map((record) =>
+        normalize([record.date, record.course, record.topic, record.axis, record.source].filter(Boolean).join("|")),
+      ));
+      const missing = imported.filter((record) => {
+        const key = normalize([record.date, record.course, record.topic, record.axis, record.source].filter(Boolean).join("|"));
+        return !existing.has(key);
+      });
+      return { ...current, orientation: [...missing, ...current.orientation] };
+    });
+    setActiveView("orientation");
+    setToast(`Clases de orientación importadas desde Excel: ${imported.length}.`);
+  };
+
   const importFile = (file: File) => {
     const isExcel = file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xlsm");
     
@@ -8054,6 +8213,8 @@ export default function TizaEducationApp() {
           const workbook = XLSX.read(new Uint8Array(buffer), { type: "array" });
           if (workbook.SheetNames.includes("Cupos PIE")) {
             importPieExcel(workbook);
+          } else if (workbook.SheetNames.some((name) => normalize(name).includes("1 ciclo")) && file.name.toLowerCase().includes("orientacion")) {
+            importOrientationExcel(workbook, file.name);
           } else {
             const firstSheetName = workbook.SheetNames[0];
             const worksheet = workbook.Sheets[firstSheetName];
@@ -8102,7 +8263,7 @@ export default function TizaEducationApp() {
 
   const exportEntity = (entity: EntityId) => {
     const config = entityConfigs[entity];
-    downloadText(`${config.id}.csv`, recordsToCsv(store[entity], config.fields), "text/csv;charset=utf-8");
+    recordsToExcel(`${config.id}.xlsx`, config.label, store[entity], config.fields);
     setToast(`${config.label} exportado`);
   };
 
