@@ -2462,11 +2462,11 @@ function GenogramChart({
       return { x: member.x, y: member.y };
     }
     if (relationGroup === "primary") {
-      return { x: 50 + index * 230, y: 80 };
+      return { x: 40 + index * 250, y: 60 };
     } else if (relationGroup === "sibling") {
-      return { x: 70 + index * 200, y: 430 };
+      return { x: 60 + index * 220, y: 450 };
     } else {
-      return { x: 720, y: 140 + index * 96 };
+      return { x: 730, y: 140 + index * 110 };
     }
   };
 
@@ -2646,14 +2646,14 @@ function GenogramChart({
         />
         <foreignObject x={x + 10} y={y + 8} width={width - 20} height={height - 16} className="pointer-events-none">
           <div className="flex h-full flex-col justify-center text-center leading-tight">
-            <div className="line-clamp-2 text-[14px] font-bold text-slate-950" title={member.name}>
+            <div className="line-clamp-2 text-[16px] font-bold text-slate-950" title={member.name}>
               {member.name}
             </div>
-            <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-500">
+            <div className="mt-1.5 truncate text-[13px] font-semibold text-slate-500">
               {member.relation}
             </div>
             {member.role ? (
-              <div className="mt-0.5 truncate text-[11px] text-slate-400">
+              <div className="mt-1 truncate text-[12px] text-slate-400">
                 {member.role}
               </div>
             ) : null}
@@ -2691,8 +2691,8 @@ function GenogramChart({
 
         {primary.slice(0, 4).map((member, index) => {
           const mPos = getMemberPos(member, index, "primary");
-          const cardWidth = 190;
-          const cardHeight = 96;
+          const cardWidth = 210;
+          const cardHeight = 110;
           return (
             <g key={member.id}>
               <line
@@ -2710,8 +2710,8 @@ function GenogramChart({
 
         {siblings.slice(0, 4).map((member, index) => {
           const mPos = getMemberPos(member, index, "sibling");
-          const cardWidth = 170;
-          const cardHeight = 84;
+          const cardWidth = 190;
+          const cardHeight = 100;
           return (
             <g key={member.id}>
               <line
@@ -2729,8 +2729,8 @@ function GenogramChart({
 
         {support.slice(0, 4).map((member, index) => {
           const mPos = getMemberPos(member, index, "support");
-          const cardWidth = 190;
-          const cardHeight = 84;
+          const cardWidth = 210;
+          const cardHeight = 100;
 
           const isLeftOfStudent = mPos.x + cardWidth / 2 < studentPos.x + 130;
           const startX = isLeftOfStudent ? studentPos.x : studentPos.x + 260;
@@ -2765,18 +2765,18 @@ function GenogramChart({
           <rect
             x={studentPos.x}
             y={studentPos.y}
-            width="260"
-            height="96"
+            width="280"
+            height="110"
             rx="14"
             className="fill-slate-900"
             filter="url(#genogramShadow)"
           />
-          <foreignObject x={studentPos.x + 10} y={studentPos.y + 8} width="240" height="80" className="pointer-events-none">
+          <foreignObject x={studentPos.x + 10} y={studentPos.y + 8} width="260" height="94" className="pointer-events-none">
             <div className="flex h-full flex-col justify-center text-center leading-tight text-white">
-              <div className="line-clamp-2 text-[16px] font-bold" title={student.fullName || "Estudiante"}>
+              <div className="line-clamp-2 text-[18px] font-bold" title={student.fullName || "Estudiante"}>
                 {student.fullName || "Estudiante"}
               </div>
-              <div className="mt-1 truncate text-[13px] text-slate-300">
+              <div className="mt-1.5 truncate text-[14px] text-slate-300">
                 {student.course || "Sin curso"}
               </div>
             </div>
@@ -4678,8 +4678,8 @@ function PieWorkspaceView({
                 <p className="mt-3 text-sm text-slate-500">Ningún estudiante integrado coincide con los filtros aplicados.</p>
               </div>
             ) : (
-              <div className="overflow-y-auto flex-1">
-                <table className="w-full text-left text-sm border-collapse font-sans">
+              <div className="overflow-auto flex-1">
+                <table className="w-full min-w-max text-left text-sm border-collapse font-sans">
                   <thead className="text-xs font-semibold text-slate-500 border-b border-slate-100">
                     <tr>
                       <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Estudiante</th>
