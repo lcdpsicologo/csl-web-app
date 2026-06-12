@@ -168,8 +168,9 @@ const expandRRule = (ev: RawEvent, target: Date): Date[] => {
     if (weeksDiff < 0 || weeksDiff % interval !== 0) return [];
     if (count !== undefined && weeksDiff >= count * (rule.BYDAY ? rule.BYDAY.split(",").length : 1)) return [];
     if (matchesByDay(target)) {
-      const occ = new Date(target);
-      occ.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+      const sp = getSantiagoDateParts(start);
+      const tp = getSantiagoDateParts(target);
+      const occ = getSantiagoDate(tp.y, tp.m, tp.d, sp.h, sp.mi, sp.s);
       if (!ev.exdates.some((ex) => sameDayLocal(ex, occ))) out.push(occ);
     }
   } else if (freq === "MONTHLY") {
@@ -177,8 +178,9 @@ const expandRRule = (ev: RawEvent, target: Date): Date[] => {
     if (monthsDiff < 0 || monthsDiff % interval !== 0) return [];
     if (count !== undefined && monthsDiff / interval >= count) return [];
     if (target.getDate() === start.getDate()) {
-      const occ = new Date(target);
-      occ.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+      const sp = getSantiagoDateParts(start);
+      const tp = getSantiagoDateParts(target);
+      const occ = getSantiagoDate(tp.y, tp.m, tp.d, sp.h, sp.mi, sp.s);
       if (!ev.exdates.some((ex) => sameDayLocal(ex, occ))) out.push(occ);
     }
   } else if (freq === "YEARLY") {
@@ -186,8 +188,9 @@ const expandRRule = (ev: RawEvent, target: Date): Date[] => {
     if (yearsDiff < 0 || yearsDiff % interval !== 0) return [];
     if (count !== undefined && yearsDiff / interval >= count) return [];
     if (target.getMonth() === start.getMonth() && target.getDate() === start.getDate()) {
-      const occ = new Date(target);
-      occ.setHours(start.getHours(), start.getMinutes(), start.getSeconds(), 0);
+      const sp = getSantiagoDateParts(start);
+      const tp = getSantiagoDateParts(target);
+      const occ = getSantiagoDate(tp.y, tp.m, tp.d, sp.h, sp.mi, sp.s);
       if (!ev.exdates.some((ex) => sameDayLocal(ex, occ))) out.push(occ);
     }
   }

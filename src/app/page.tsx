@@ -4682,16 +4682,16 @@ function PieWorkspaceView({
                 <table className="w-full text-left text-sm border-collapse font-sans">
                   <thead className="text-xs font-semibold text-slate-500 border-b border-slate-100">
                     <tr>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Estudiante</th>
-                      {selectedCourse === "all" && <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Curso</th>}
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">RUT</th>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Diagnóstico</th>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Situación</th>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Cupo</th>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Documentación</th>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Especialista PIE</th>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Funcionarios</th>
-                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold">Acciones</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Estudiante</th>
+                      {selectedCourse === "all" && <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Curso</th>}
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">RUT</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Diagnóstico</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Situación</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Cupo</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Documentación</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Especialista PIE</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Funcionarios</th>
+                      <th className="sticky top-0 bg-slate-50 z-10 px-5 py-3 font-semibold whitespace-nowrap">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
