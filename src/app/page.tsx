@@ -1436,7 +1436,7 @@ function CourseWorkspaceView({
           <button
             key={key}
             onClick={() => setCycleTab(key)}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${cycleTab === key ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition ${cycleTab === key ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
           >
             {label}
           </button>
@@ -1449,7 +1449,7 @@ function CourseWorkspaceView({
             <button
               key={course.name}
               onClick={() => setSelectedCourse(course.name)}
-              className={`rounded-md px-3 py-2 text-sm font-semibold transition ${selectedCourse === course.name ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
+              className={`whitespace-nowrap shrink-0 rounded-md px-3 py-2 text-sm font-semibold transition ${selectedCourse === course.name ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
             >
               {course.name}
             </button>
@@ -3326,7 +3326,7 @@ function StudentDetailDialog({
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`relative inline-flex shrink-0 items-center gap-2 px-3 py-3 text-sm font-semibold transition ${active ? "text-blue-700" : "text-slate-500 hover:text-slate-900"}`}
+                  className={`relative inline-flex shrink-0 whitespace-nowrap items-center gap-2 px-3 py-3 text-sm font-semibold transition ${active ? "text-blue-700" : "text-slate-500 hover:text-slate-900"}`}
                 >
                   <Icon className="h-4 w-4" />
                   {tab.label}
@@ -3707,14 +3707,14 @@ function StudentsWorkspaceView({
             <button
               key={key}
               onClick={() => setCycleFilter(key)}
-              className={`rounded-md px-3 py-1.5 text-sm font-semibold transition ${cycleFilter === key ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
+              className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition ${cycleFilter === key ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
             >
               {label}
             </button>
           ))}
           <button
             onClick={() => setShowPieOnly(!showPieOnly)}
-            className={`rounded-md px-3 py-1.5 text-sm font-semibold transition flex items-center gap-1.5 ${
+            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition flex items-center gap-1.5 ${
               showPieOnly
                 ? "bg-emerald-600 text-white shadow"
                 : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
@@ -4456,7 +4456,7 @@ function PieWorkspaceView({
               <button
                 key={diag.key}
                 onClick={() => setSelectedDiag(diag.key)}
-                className={`tz-press rounded-full px-3.5 py-1.5 text-xs font-semibold border transition flex items-center gap-2 ${
+                className={`whitespace-nowrap tz-press rounded-full px-3.5 py-1.5 text-xs font-semibold border transition flex items-center gap-2 ${
                   isActive
                     ? "bg-slate-900 text-white border-slate-900 shadow-sm"
                     : `${diag.color} hover:bg-slate-100`
