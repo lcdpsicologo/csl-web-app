@@ -464,6 +464,13 @@ const parseInterventions = (value: string | undefined): CaseIntervention[] => {
   }
 };
 
+const formatDateTime = (value: string | undefined) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("es-CL", { dateStyle: "medium", timeStyle: "short" });
+};
+
 const parseGenogram = (value: string | undefined): GenogramMember[] => {
   if (!value) return [];
   try {
@@ -2865,6 +2872,7 @@ function CaseWithInterventions({
   const latest = interventions.length > 0 ? interventions[interventions.length - 1] : null;
   const status = caseRecord.status || "";
   const priority = caseRecord.priority || "";
+  const addedAtLabel = formatDateTime(caseRecord.createdAt || caseRecord.updatedAt);
 
   const statusTone = /cerrad/i.test(status)
     ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
@@ -2913,6 +2921,11 @@ function CaseWithInterventions({
             {caseRecord.category ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{caseRecord.category}</span> : null}
           </div>
           <h4 className="mt-1 text-sm font-semibold text-slate-950">{caseRecord.title || "Caso"}</h4>
+          {addedAtLabel ? (
+            <p className="mt-1 inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              <CalendarDays className="h-3 w-3" /> Añadido {addedAtLabel}
+            </p>
+          ) : null}
           {caseRecord.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{caseRecord.description}</p> : null}
         </div>
         <select
