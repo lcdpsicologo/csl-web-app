@@ -50,6 +50,32 @@ const parseLine = (line: string): { name: string; params: Record<string, string>
   return { name, params, value };
 };
 
+const getSantiagoDate = (Y: number, Mo: number, D: number, H: number, Mi: number, S: number, Ms: number = 0) => {
+  const dateUtc = new Date(Date.UTC(Y, Mo, D, H, Mi, S, Ms));
+  const locString = dateUtc.toLocaleString("en-US", { timeZone: "America/Santiago" });
+  const locDate = new Date(locString);
+  const utcDate = new Date(dateUtc.toLocaleString("en-US", { timeZone: "UTC" }));
+  const offsetMinutes = (locDate.getTime() - utcDate.getTime()) / (60 * 1000);
+  return new Date(dateUtc.getTime() - offsetMinutes * 60 * 1000);
+};
+
+const getSantiagoDateParts = (d: Date) => {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Santiago",
+    hour12: false,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit"
+  });
+  const parts = fmt.formatToParts(d);
+  const y = parseInt(parts.find(p => p.type === "year")!.value, 10);
+  const m = parseInt(parts.find(p => p.type === "month")!.value, 10) - 1;
+  const dVal = parseInt(parts.find(p => p.type === "day")!.value, 10);
+  const h = parseInt(parts.find(p => p.type === "hour")!.value, 10);
+  const mi = parseInt(parts.find(p => p.type === "minute")!.value, 10);
+  const s = parseInt(parts.find(p => p.type === "second")!.value, 10);
+  return { y, m, d: dVal, h, mi, s };
+};
+
 // Parse "20260609T140000Z" or "20260609T140000" or "20260609"
 const parseDateValue = (raw: string, params: Record<string, string>): { date: Date; allDay: boolean } | null => {
   const val = raw.trim();
@@ -57,7 +83,8 @@ const parseDateValue = (raw: string, params: Record<string, string>): { date: Da
     const y = parseInt(val.slice(0, 4), 10);
     const m = parseInt(val.slice(4, 6), 10) - 1;
     const d = parseInt(val.slice(6, 8), 10);
-    return { date: new Date(y, m, d), allDay: true };
+    // Parse at 00:00:00 in America/Santiago to avoid day shifting on the client
+    return { date: getSantiagoDate(y, m, d, 0, 0, 0), allDay: true };
   }
   const m = val.match(/^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})(Z?)$/);
   if (!m) return null;
@@ -68,9 +95,9 @@ const parseDateValue = (raw: string, params: Record<string, string>): { date: Da
   const H = parseInt(hh, 10);
   const Mi = parseInt(mi, 10);
   const S = parseInt(ss, 10);
-  // Treat as local time when no Z. (TZID-aware conversion is out of scope; for school agendas, server-local approximates browser-local well enough.)
   if (z === "Z") return { date: new Date(Date.UTC(Y, Mo, D, H, Mi, S)), allDay: false };
-  return { date: new Date(Y, Mo, D, H, Mi, S), allDay: false };
+  // Treat as America/Santiago local time when no Z.
+  return { date: getSantiagoDate(Y, Mo, D, H, Mi, S), allDay: false };
 };
 
 type RawEvent = {
@@ -84,11 +111,21 @@ type RawEvent = {
   exdates: Date[];
 };
 
-const sameDayLocal = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const sameDayLocal = (a: Date, b: Date) => {
+  const ap = getSantiagoDateParts(a);
+  const bp = getSantiagoDateParts(b);
+  return ap.y === bp.y && ap.m === bp.m && ap.d === bp.d;
+};
 
-const startOfDay = (d: Date) => { const c = new Date(d); c.setHours(0, 0, 0, 0); return c; };
-const endOfDay = (d: Date) => { const c = new Date(d); c.setHours(23, 59, 59, 999); return c; };
+const startOfDay = (d: Date) => {
+  const p = getSantiagoDateParts(d);
+  return getSantiagoDate(p.y, p.m, p.d, 0, 0, 0);
+};
+
+const endOfDay = (d: Date) => {
+  const p = getSantiagoDateParts(d);
+  return getSantiagoDate(p.y, p.m, p.d, 23, 59, 59, 999);
+};
 
 const BYDAY_MAP: Record<string, number> = { SU: 0, MO: 1, TU: 2, WE: 3, TH: 4, FR: 5, SA: 6 };
 
