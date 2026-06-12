@@ -1148,42 +1148,40 @@ function EntityView({
       {records.length === 0 ? (
         <EmptyState entity={entity} onAdd={onAdd} onImport={onImport} />
       ) : (
-        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 text-sm">
             <span className="font-semibold text-slate-700">
               Mostrando <span className="tabular-nums">{filtered.length}</span> de <span className="tabular-nums">{records.length}</span> registros
             </span>
             {query ? <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">filtro: “{query}”</span> : null}
           </div>
-          <div className="tz-contained-x">
-            <table className="w-full min-w-[900px] text-left text-sm">
-              <thead className="bg-slate-50 text-[11px] uppercase tracking-wider text-slate-500">
-                <tr>
-                  {entity.fields.slice(0, 6).map((field) => (
-                    <th key={field.key} className="px-5 py-3 font-semibold">{field.label}</th>
-                  ))}
-                  <th className="px-5 py-3 font-semibold">Actualizado</th>
-                  <th className="px-5 py-3" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map((record, index) => (
-                  <tr key={record.id} className={`group transition hover:bg-blue-50/50 ${index % 2 === 1 ? "bg-slate-50/30" : ""}`}>
-                    {entity.fields.slice(0, 6).map((field, fieldIndex) => (
-                      <td key={field.key} className={`max-w-[260px] truncate px-5 py-3 ${fieldIndex === 0 ? "font-semibold text-slate-950" : "text-slate-700"}`}>
-                        {record[field.key] || <span className="text-slate-300">—</span>}
-                      </td>
+          <div className="divide-y divide-slate-100">
+            {filtered.map((record) => {
+              const primary = entity.fields[0];
+              const secondary = entity.fields.slice(1, 4);
+              const extra = entity.fields.slice(4, 6);
+              return (
+                <article key={record.id} className="grid gap-3 px-4 py-3 transition hover:bg-blue-50/40 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] lg:items-center">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-950">{record[primary.key] || entity.singular}</p>
+                    <p className="mt-0.5 truncate text-xs text-slate-500">Actualizado {new Date(record.updatedAt).toLocaleString("es-CL")}</p>
+                  </div>
+                  <div className="grid gap-1 sm:grid-cols-2">
+                    {[...secondary, ...extra].map((field) => (
+                      <p key={field.key} className="min-w-0 truncate text-xs text-slate-600">
+                        <span className="font-bold text-slate-400">{field.label}: </span>
+                        <span>{record[field.key] || "—"}</span>
+                      </p>
                     ))}
-                    <td className="px-5 py-3 text-xs text-slate-500">{new Date(record.updatedAt).toLocaleString("es-CL")}</td>
-                    <td className="px-5 py-3 text-right">
-                      <button onClick={() => onDelete(record.id)} title="Eliminar" className="rounded-lg p-2 text-slate-400 opacity-0 transition group-hover:opacity-100 hover:bg-red-50 hover:text-red-600">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                  </div>
+                  <div className="flex justify-end">
+                    <button onClick={() => onDelete(record.id)} title="Eliminar" className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50">
+                      <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </section>
       )}
@@ -1872,11 +1870,11 @@ function OrientationCycleView({
 
   return (
     <div className="tz-fade">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Orientación</h1>
-          <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Workspace por orientador/a: clases con link Canva y planificación, nómina de estudiantes y cursos a cargo.
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Orientación</h1>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Clases, planificación, recursos y nóminas por ciclo.
           </p>
         </div>
         <div className="flex gap-2">
@@ -1889,7 +1887,7 @@ function OrientationCycleView({
         </div>
       </div>
 
-      <div className="mb-5 grid gap-3 md:grid-cols-3">
+      <div className="mb-4 grid gap-2 md:grid-cols-3">
         {orientationOwners.map((item) => {
           const active = item.name === selectedOwner;
           const itemClasses = store.orientation.filter((record) =>
@@ -1900,34 +1898,34 @@ function OrientationCycleView({
             <button
               key={item.email}
               onClick={() => { setSelectedOwner(item.name); setFilterCourse("all"); setExpandedClassId(""); }}
-              className={`tz-card relative overflow-hidden rounded-2xl border p-4 text-left ${
-                active ? "border-slate-900 bg-slate-900 text-white shadow-lg" : "border-slate-200 bg-white"
+              className={`tz-card relative rounded-xl border p-3 text-left ${
+                active ? "border-blue-600 bg-blue-50 text-blue-950 shadow-sm" : "border-slate-200 bg-white"
               }`}
             >
-              <div className="flex items-start gap-3">
-                <div className={`grid h-12 w-12 shrink-0 place-items-center rounded-xl text-base font-bold shadow-sm ${
-                  active ? "bg-white/15 text-white" : `bg-gradient-to-br ${avatarTone(item.name)} text-white`
+              <div className="flex items-center gap-3">
+                <div className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg text-sm font-bold shadow-sm ${
+                  active ? "bg-blue-600 text-white" : `bg-gradient-to-br ${avatarTone(item.name)} text-white`
                 }`}>
                   {initialsOf(item.name)}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className={`text-[10px] font-semibold uppercase tracking-wider ${active ? "text-white/70" : "text-slate-500"}`}>{item.cycle}</p>
-                  <h3 className={`truncate text-sm font-semibold ${active ? "text-white" : "text-slate-950"}`}>{item.name}</h3>
-                  <p className={`mt-0.5 truncate text-[11px] ${active ? "text-white/70" : "text-slate-500"}`}>{item.role}</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{item.cycle}</p>
+                  <h3 className="truncate text-sm font-semibold text-slate-950">{item.name}</h3>
+                  <p className="mt-0.5 truncate text-[11px] text-slate-500">{item.role}</p>
                 </div>
               </div>
-              <div className={`mt-3 grid grid-cols-3 gap-2 text-center text-[11px] font-semibold ${active ? "text-white/90" : "text-slate-700"}`}>
-                <div className={`rounded-lg px-2 py-1 ${active ? "bg-white/15" : "bg-slate-50"}`}>
+              <div className="mt-3 grid grid-cols-3 gap-1.5 text-center text-[11px] font-semibold text-slate-700">
+                <div className="rounded-lg bg-white px-2 py-1 ring-1 ring-slate-200">
                   <strong className="block text-base">{item.courses.length}</strong>
-                  <span className={active ? "opacity-80" : "text-slate-500"}>cursos</span>
+                  <span className="text-slate-500">cursos</span>
                 </div>
-                <div className={`rounded-lg px-2 py-1 ${active ? "bg-white/15" : "bg-slate-50"}`}>
+                <div className="rounded-lg bg-white px-2 py-1 ring-1 ring-slate-200">
                   <strong className="block text-base">{itemClasses.length}</strong>
-                  <span className={active ? "opacity-80" : "text-slate-500"}>clases</span>
+                  <span className="text-slate-500">clases</span>
                 </div>
-                <div className={`rounded-lg px-2 py-1 ${active ? "bg-white/15" : "bg-slate-50"}`}>
+                <div className="rounded-lg bg-white px-2 py-1 ring-1 ring-slate-200">
                   <strong className="block text-base">{store.students.filter((s) => item.courses.includes(s.course || "")).length}</strong>
-                  <span className={active ? "opacity-80" : "text-slate-500"}>estudiantes</span>
+                  <span className="text-slate-500">estudiantes</span>
                 </div>
               </div>
             </button>
@@ -1935,13 +1933,13 @@ function OrientationCycleView({
         })}
       </div>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className={`bg-gradient-to-br ${avatarTone(owner.name)} px-6 py-5 text-white sm:px-8`}>
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 bg-white px-4 py-3 sm:px-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0">
-              <p className="text-xs font-semibold uppercase tracking-wider text-white/85">{owner.role}</p>
-              <h2 className="mt-1 text-2xl font-semibold sm:text-3xl">{owner.name}</h2>
-              <p className="mt-1 text-sm text-white/90">{owner.email} · Coord. convivencia: <strong>{owner.convivenciaCoordinator}</strong></p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{owner.role}</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">{owner.name}</h2>
+              <p className="mt-1 truncate text-sm text-slate-600">{owner.email} · Coord. convivencia: <strong>{owner.convivenciaCoordinator}</strong></p>
             </div>
             <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
               {[
@@ -1949,9 +1947,9 @@ function OrientationCycleView({
                 ["Planificadas", classCounts.planificadas],
                 ["Pendientes", classCounts.pendientes],
               ].map(([label, count]) => (
-                <div key={String(label)} className="rounded-lg bg-white/15 px-3 py-2 backdrop-blur">
+                <div key={String(label)} className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700 ring-1 ring-slate-200">
                   <div className="text-xl font-bold leading-none">{count}</div>
-                  <div className="mt-1 opacity-85">{label}</div>
+                  <div className="mt-1 text-slate-500">{label}</div>
                 </div>
               ))}
             </div>
@@ -2060,38 +2058,54 @@ function OrientationCycleView({
                   </button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="tz-thin-scroll max-h-[68vh] space-y-2 overflow-y-auto pr-1">
                   {filteredClasses.map((record) => {
                     const expanded = expandedClassId === record.id;
                     const canvaUrl = record.canvaLink || record.evidence || "";
                     return (
-                      <article key={record.id} className={`tz-card rounded-xl border bg-white transition ${expanded ? "border-blue-300 shadow-md" : "border-slate-200"}`}>
-                        <button
-                          onClick={() => setExpandedClassId(expanded ? "" : record.id)}
-                          className="flex w-full items-center gap-3 px-4 py-3 text-left"
-                        >
-                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-xs font-bold text-slate-700">
-                            {record.date ? new Date(record.date).getDate() : "—"}
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <p className="truncate text-sm font-semibold text-slate-950">{record.topic || "Clase sin tema"}</p>
-                            <p className="truncate text-xs text-slate-500">{record.course || "Sin curso"} · {record.axis || "Sin eje"}</p>
-                          </div>
-                          <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-semibold ring-1 ${statusTone(record.status || "")}`}>
-                            {record.status || "Pendiente"}
-                          </span>
-                          {canvaUrl ? (
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(event) => { event.stopPropagation(); window.open(canvaUrl, "_blank", "noopener,noreferrer"); }}
-                              className="hidden cursor-pointer items-center gap-1 rounded-md bg-violet-50 px-2 py-1 text-[10px] font-semibold text-violet-700 ring-1 ring-violet-200 hover:bg-violet-100 sm:inline-flex"
-                            >
-                              Canva ↗
+                      <article key={record.id} className={`rounded-xl border bg-white transition ${expanded ? "border-blue-300 shadow-md" : "border-slate-200 shadow-sm"}`}>
+                        <div className="grid gap-3 px-3 py-3 sm:grid-cols-[92px_minmax(0,1fr)_auto] sm:items-center">
+                          <div className="flex items-center gap-2 sm:block">
+                            <div className="rounded-lg bg-slate-100 px-2 py-1 text-center text-[11px] font-black text-slate-700 sm:w-full">
+                              {record.date || "Sin fecha"}
+                            </div>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 sm:mt-1 sm:block sm:text-center ${statusTone(record.status || "")}`}>
+                              {record.status || "Pendiente"}
                             </span>
-                          ) : null}
-                          <ChevronDown className={`h-4 w-4 text-slate-400 transition ${expanded ? "rotate-180" : ""}`} />
-                        </button>
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex min-w-0 flex-wrap items-center gap-2">
+                              <p className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-950">{record.topic || "Clase sin tema"}</p>
+                              {record.source === "calendar" ? <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 ring-1 ring-blue-100">Calendario</span> : null}
+                            </div>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">{record.course || "Sin curso"} · {record.axis || "Sin eje"}{record.week ? ` · ${record.week}` : ""}</p>
+                            {record.notes ? <p className="mt-1 line-clamp-1 text-xs text-slate-600">{record.notes}</p> : null}
+                          </div>
+                          <div className="flex flex-wrap justify-end gap-1.5">
+                            {canvaUrl ? (
+                              <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700 hover:bg-violet-100">Canva</a>
+                            ) : null}
+                            <button onClick={() => setExpandedClassId(expanded ? "" : record.id)} className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50">
+                              {expanded ? "Cerrar" : "Editar"}
+                            </button>
+                            <button
+                              onClick={() => onAddOrientationRecord({
+                                ...record,
+                                id: uid(),
+                                createdAt: nowIso(),
+                                updatedAt: nowIso(),
+                                status: "Planificada",
+                                topic: `${record.topic || "Clase"} (copia)`,
+                              })}
+                              className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                            >
+                              Duplicar
+                            </button>
+                            <button onClick={() => { if (window.confirm("¿Eliminar esta clase?")) onDeleteOrientationRecord(record.id); }} className="rounded-md border border-red-200 bg-white px-2 py-1 text-[11px] font-bold text-red-600 hover:bg-red-50">
+                              Eliminar
+                            </button>
+                          </div>
+                        </div>
 
                         {expanded ? (
                           <div className="border-t border-slate-100 p-4">
@@ -2153,7 +2167,7 @@ function OrientationCycleView({
                             </div>
                             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                               <p className="text-[11px] text-slate-400">Actualizado {new Date(record.updatedAt).toLocaleString("es-CL")}</p>
-                              <div className="flex gap-2">
+                              <div className="hidden gap-2">
                                 {canvaUrl ? (
                                   <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100">
                                     Abrir en Canva ↗
@@ -5499,6 +5513,13 @@ function DashboardAgenda({
   const timedItems = items.filter((it) => !it.allDay).sort((a, b) => a.start.getTime() - b.start.getTime());
   const nowMs = today.getTime();
   const nextUp = timedItems.find((it) => (it.end ? it.end.getTime() : it.start.getTime()) >= nowMs);
+  const agendaRows = [...timedItems, ...allDayItems].slice(0, 8);
+  const agendaTimeLabel = (item: AgendaItem) => {
+    if (item.allDay) return "Todo el día";
+    const start = item.start.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
+    const end = item.end ? item.end.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
+    return end ? `${start}-${end}` : start;
+  };
 
   const dateLong = today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
   const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
@@ -5623,72 +5644,44 @@ function DashboardAgenda({
             </button>
           </div>
         ) : (
-          <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-2.5">
-            {allDayItems.length > 0 ? (
-              <div className="mb-2">
-                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Todo el día</p>
-                <div className="tz-thin-scroll flex max-h-20 flex-wrap gap-1.5 overflow-y-auto pr-1">
-                  {allDayItems.slice(0, 8).map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <button
-                        key={item.key}
-                        onClick={() => item.href && onNavigate(item.href)}
-                        className={`tz-press inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-2 text-[11px] font-semibold text-slate-800 shadow-sm hover:border-slate-300 ${item.href ? "cursor-pointer" : "cursor-default"}`}
-                      >
-                        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white`}>
-                          <Icon className="h-3 w-3" />
-                        </span>
-                        <span className="truncate">{item.title}</span>
-                      </button>
-                    );
-                  })}
-                  {allDayItems.length > 8 ? <button onClick={() => onNavigate("today")} className="rounded-full bg-slate-900 px-2 py-1 text-[11px] font-bold text-white">+{allDayItems.length - 8}</button> : null}
-                </div>
-              </div>
-            ) : null}
-
-            {timedItems.length > 0 ? (
-              <ol className="tz-thin-scroll tz-stagger-list relative ml-3 max-h-56 space-y-1.5 overflow-y-auto border-l-2 border-slate-100 pl-5 pr-1">
-                {timedItems.slice(0, 6).map((item) => {
-                  const Icon = item.icon;
-                  const timeLabel = item.start.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
-                  const endLabel = item.end ? item.end.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
-                  const isPast = (item.end ? item.end.getTime() : item.start.getTime()) < nowMs;
-                  const isNext = item.key === nextUp?.key;
-                  return (
-                    <li
-                      key={item.key}
-                      className={`group relative rounded-lg border p-2 transition ${
-                        isNext ? "border-blue-300 bg-blue-50/40 shadow-sm" : "border-slate-200 bg-white"
-                      } ${item.href ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/30" : ""} ${isPast && !isNext ? "opacity-55" : ""}`}
-                      onClick={() => item.href && onNavigate(item.href)}
+          <div className="rounded-lg border border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Agenda de hoy</p>
+              <button onClick={() => onNavigate("today")} className="text-[11px] font-bold text-blue-700 hover:underline">Abrir detalle</button>
+            </div>
+            <ul className="tz-thin-scroll max-h-64 divide-y divide-slate-100 overflow-y-auto">
+              {agendaRows.map((item) => {
+                const Icon = item.icon;
+                const isPast = !item.allDay && (item.end ? item.end.getTime() : item.start.getTime()) < nowMs;
+                const isNext = item.key === nextUp?.key;
+                return (
+                  <li key={item.key}>
+                    <button
+                      onClick={() => item.href ? onNavigate(item.href) : onNavigate("today")}
+                      className={`grid w-full grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left transition hover:bg-blue-50/50 ${isPast && !isNext ? "opacity-60" : ""}`}
                     >
-                      <span className={`absolute -left-[1.55rem] top-2.5 grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white shadow ring-4 ring-white`}>
+                      <span className={`rounded-md px-2 py-1 text-center text-[11px] font-black tabular-nums ${isNext ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                        {agendaTimeLabel(item)}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-slate-950">{item.title}</span>
+                        <span className="block truncate text-xs text-slate-500">{item.typeLabel}{item.location ? ` · ${item.location}` : ""}</span>
+                      </span>
+                      <span className={`grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br ${item.color} text-white`}>
                         <Icon className="h-3.5 w-3.5" />
                       </span>
-                      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                        <h3 className="text-xs font-semibold text-slate-950">{item.title}</h3>
-                        <span className={`text-[11px] font-bold tabular-nums ${isNext ? "text-blue-700" : "text-slate-500"}`}>
-                          {endLabel ? `${timeLabel}–${endLabel}` : timeLabel}
-                        </span>
-                      </div>
-                      <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{item.typeLabel}</span>
-                        {isNext ? <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">Próximo</span> : null}
-                        {item.location ? <span className="text-[11px] text-slate-600">📍 {item.location}</span> : null}
-                      </div>
-                      {item.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{item.description}</p> : null}
-                    </li>
-                  );
-                })}
-                {timedItems.length > 6 ? (
-                  <li>
-                    <button onClick={() => onNavigate("today")} className="rounded-md bg-white px-2 py-1 text-[11px] font-bold text-blue-700 ring-1 ring-slate-200 hover:bg-blue-50">Ver {timedItems.length - 6} más</button>
+                    </button>
                   </li>
-                ) : null}
-              </ol>
-            ) : null}
+                );
+              })}
+              {items.length > agendaRows.length ? (
+                <li>
+                  <button onClick={() => onNavigate("today")} className="w-full px-3 py-2 text-center text-xs font-bold text-blue-700 hover:bg-blue-50">
+                    Ver {items.length - agendaRows.length} actividades más
+                  </button>
+                </li>
+              ) : null}
+            </ul>
           </div>
         )}
       </div>
@@ -6433,21 +6426,18 @@ function TodayView({
             ) : calendarEvents.length === 0 ? (
               <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">No hay eventos en tu calendario para hoy.</p>
             ) : (
-              <ul className="tz-thin-scroll tz-stagger-list grid max-h-60 gap-2 overflow-y-auto pr-1 lg:grid-cols-2">
+              <ul className="tz-thin-scroll max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-100">
                 {calendarEvents.map((ev, i) => (
-                  <li key={i} className="tz-card flex gap-2 rounded-lg border border-slate-200 p-2 transition hover:-translate-y-0.5">
-                    <div className="grid h-10 w-11 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-blue-500 to-sky-600 text-center text-[10px] font-bold leading-tight text-white shadow-sm">
-                      <div>
-                        <div className="text-xs">{ev.allDay ? "—" : new Date(ev.start).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</div>
-                        <div className="text-[9px] opacity-80">{ev.allDay ? "Todo el día" : new Date(ev.end).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}</div>
-                      </div>
+                  <li key={i} className="grid grid-cols-[82px_minmax(0,1fr)_auto] items-center gap-3 bg-white px-3 py-2.5 transition hover:bg-blue-50/40">
+                    <span className="rounded-md bg-blue-50 px-2 py-1 text-center text-[11px] font-black tabular-nums text-blue-700">
+                      {ev.allDay ? "Todo el día" : new Date(ev.start).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                    <div className="min-w-0">
+                      <h3 className="truncate text-sm font-semibold text-slate-950">{ev.summary || "Evento sin título"}</h3>
+                      <p className="truncate text-xs text-slate-500">{formatEventTime(ev)}{ev.location ? ` · ${ev.location}` : ""}</p>
+                      {ev.description ? <p className="mt-0.5 truncate text-xs text-slate-600">{ev.description}</p> : null}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-sm font-semibold text-slate-950">{ev.summary}</h3>
-                      <p className="text-xs text-slate-500">{formatEventTime(ev)}{ev.location ? ` · ${ev.location}` : ""}</p>
-                      {ev.description ? <p className="mt-1 line-clamp-2 text-xs text-slate-600">{ev.description}</p> : null}
-                      {ev.url ? <a href={ev.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-block text-[11px] font-semibold text-blue-600 hover:underline">Abrir ↗</a> : null}
-                    </div>
+                    {ev.url ? <a href={ev.url} target="_blank" rel="noopener noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-50">Abrir</a> : null}
                   </li>
                 ))}
               </ul>
