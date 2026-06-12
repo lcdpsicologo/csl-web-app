@@ -4,7 +4,7 @@ import Image from "next/image";
 import React, { useEffect, useState, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
-import { ORIENTATION_FIRST_CYCLE_CLASSES } from "@/lib/orientation-first-cycle";
+import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
 import {
@@ -1736,6 +1736,7 @@ function OrientationCycleView({
   onAddOrientationRecord,
   onUpdateOrientationRecord,
   onDeleteOrientationRecord,
+  onGenerateAnnualPlan,
   onOpenStudent,
   calendarEvents,
 }: {
@@ -1743,6 +1744,7 @@ function OrientationCycleView({
   onAddOrientationRecord: (record: DataRecord) => void;
   onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
   onDeleteOrientationRecord: (recordId: string) => void;
+  onGenerateAnnualPlan: () => void;
   onOpenStudent: (studentId: string) => void;
   calendarEvents: CalendarEvent[];
 }) {
@@ -1750,7 +1752,9 @@ function OrientationCycleView({
   const [innerTab, setInnerTab] = useState<"clases" | "nomina" | "cursos">("clases");
   const [filterCourse, setFilterCourse] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterDate, setFilterDate] = useState<string>("all");
   const [expandedClassId, setExpandedClassId] = useState<string>("");
+  const [calendarMonth, setCalendarMonth] = useState<string>(() => new Date().toISOString().slice(0, 7));
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
 
@@ -1798,8 +1802,46 @@ function OrientationCycleView({
   const filteredClasses = ownerClasses.filter((record) => {
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
     if (filterStatus !== "all" && (record.status || "") !== filterStatus) return false;
+    if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
     return true;
   }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+
+  const classesByWeek = useMemo(() => {
+    const groups = new Map<string, DataRecord[]>();
+    filteredClasses.forEach((record) => {
+      const week = record.week || "Sin semana";
+      if (!groups.has(week)) groups.set(week, []);
+      groups.get(week)!.push(record);
+    });
+    return Array.from(groups.entries()).map(([week, records]) => ({ week, records }));
+  }, [filteredClasses]);
+
+  const calendarDays = useMemo(() => {
+    const [year, month] = calendarMonth.split("-").map(Number);
+    const first = new Date(year, month - 1, 1);
+    const last = new Date(year, month, 0);
+    const startOffset = (first.getDay() + 6) % 7;
+    const cells: Array<{ date: string; inMonth: boolean; count: number; done: number; pending: number }> = [];
+    for (let i = 0; i < startOffset; i += 1) {
+      const d = new Date(year, month - 1, 1 - startOffset + i);
+      const date = d.toISOString().slice(0, 10);
+      const dayClasses = ownerClasses.filter((r) => r.date === date);
+      cells.push({ date, inMonth: false, count: dayClasses.length, done: dayClasses.filter((r) => /realizad/i.test(r.status || "")).length, pending: dayClasses.filter((r) => !/realizad/i.test(r.status || "")).length });
+    }
+    for (let day = 1; day <= last.getDate(); day += 1) {
+      const d = new Date(year, month - 1, day);
+      const date = d.toISOString().slice(0, 10);
+      const dayClasses = ownerClasses.filter((r) => r.date === date);
+      cells.push({ date, inMonth: true, count: dayClasses.length, done: dayClasses.filter((r) => /realizad/i.test(r.status || "")).length, pending: dayClasses.filter((r) => !/realizad/i.test(r.status || "")).length });
+    }
+    while (cells.length % 7 !== 0) {
+      const d = new Date(year, month - 1, last.getDate() + (cells.length % 7));
+      const date = d.toISOString().slice(0, 10);
+      const dayClasses = ownerClasses.filter((r) => r.date === date);
+      cells.push({ date, inMonth: false, count: dayClasses.length, done: dayClasses.filter((r) => /realizad/i.test(r.status || "")).length, pending: dayClasses.filter((r) => !/realizad/i.test(r.status || "")).length });
+    }
+    return cells;
+  }, [calendarMonth, ownerClasses]);
 
   const ownerStudents = store.students.filter((student) => owner.courses.includes(student.course || ""));
   const studentsByCourse = owner.courses.map((course) => ({
@@ -1810,9 +1852,10 @@ function OrientationCycleView({
   }));
 
   const classCounts = {
-    realizadas: ownerClasses.filter((r) => r.status === "Realizada").length,
-    planificadas: ownerClasses.filter((r) => r.status === "Planificada").length,
-    pendientes: ownerClasses.filter((r) => r.status === "Pendiente" || !r.status).length,
+    realizadas: ownerClasses.filter((r) => /realizad/i.test(r.status || "")).length,
+    planificadas: ownerClasses.filter((r) => /planificad/i.test(r.status || "")).length,
+    pendientes: ownerClasses.filter((r) => /pendiente/i.test(r.status || "") || !r.status).length,
+    reprogramadas: ownerClasses.filter((r) => /reprogramad/i.test(r.status || "")).length,
   };
 
   const openNewClass = () => {
@@ -1863,10 +1906,15 @@ function OrientationCycleView({
   };
 
   const statusTone = (status: string) =>
-    status === "Realizada" ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
-      : status === "Planificada" ? "bg-blue-100 text-blue-700 ring-blue-200"
-      : status === "Reprogramada" ? "bg-amber-100 text-amber-700 ring-amber-200"
+    /realizad/i.test(status) ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
+      : /planificad/i.test(status) ? "bg-blue-100 text-blue-700 ring-blue-200"
+      : /reprogramad/i.test(status) ? "bg-amber-100 text-amber-700 ring-amber-200"
       : "bg-slate-100 text-slate-600 ring-slate-200";
+  const quickStatuses = ["Realizada", "Pendiente", "Reprogramada", "Planificada"];
+  const setClassStatus = (record: DataRecord, status: string) => {
+    if (record.source === "calendar") return;
+    onUpdateOrientationRecord(record.id, { status });
+  };
 
   return (
     <div className="tz-fade">
@@ -1880,6 +1928,9 @@ function OrientationCycleView({
         <div className="flex gap-2">
           <button onClick={exportOwnerClasses} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <ArrowDownToLine className="h-4 w-4" /> Exportar Excel
+          </button>
+          <button onClick={onGenerateAnnualPlan} className="tz-press inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+            <CalendarDays className="h-4 w-4" /> Completar año
           </button>
           <button onClick={openNewClass} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800">
             <Plus className="h-4 w-4" /> Nueva clase
@@ -1941,11 +1992,12 @@ function OrientationCycleView({
               <h2 className="mt-1 text-xl font-semibold text-slate-950">{owner.name}</h2>
               <p className="mt-1 truncate text-sm text-slate-600">{owner.email} · Coord. convivencia: <strong>{owner.convivenciaCoordinator}</strong></p>
             </div>
-            <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+            <div className="grid grid-cols-2 gap-2 text-center text-xs font-semibold sm:grid-cols-4">
               {[
                 ["Realizadas", classCounts.realizadas],
                 ["Planificadas", classCounts.planificadas],
                 ["Pendientes", classCounts.pendientes],
+                ["Reprogramadas", classCounts.reprogramadas],
               ].map(([label, count]) => (
                 <div key={String(label)} className="rounded-lg bg-slate-50 px-3 py-2 text-slate-700 ring-1 ring-slate-200">
                   <div className="text-xl font-bold leading-none">{count}</div>
@@ -1986,7 +2038,89 @@ function OrientationCycleView({
                   <option value="all">Todos los estados</option>
                   {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
                 </select>
+                {filterDate !== "all" ? (
+                  <button onClick={() => setFilterDate("all")} className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+                    {filterDate} · limpiar
+                  </button>
+                ) : null}
                 <span className="ml-auto text-xs font-semibold text-slate-500">{filteredClasses.length} clase{filteredClasses.length === 1 ? "" : "s"}</span>
+              </div>
+
+              <div className="mb-4 grid gap-3 xl:grid-cols-[320px_minmax(0,1fr)]">
+                <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <button
+                      onClick={() => {
+                        const [year, month] = calendarMonth.split("-").map(Number);
+                        setCalendarMonth(new Date(year, month - 2, 1).toISOString().slice(0, 7));
+                      }}
+                      className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                    >
+                      ←
+                    </button>
+                    <h3 className="text-sm font-bold capitalize text-slate-900">
+                      {new Date(`${calendarMonth}-02T00:00:00`).toLocaleDateString("es-CL", { month: "long", year: "numeric" })}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        const [year, month] = calendarMonth.split("-").map(Number);
+                        setCalendarMonth(new Date(year, month, 1).toISOString().slice(0, 7));
+                      }}
+                      className="rounded-md border border-slate-200 px-2 py-1 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                    >
+                      →
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-bold uppercase text-slate-400">
+                    {["L", "M", "X", "J", "V", "S", "D"].map((day) => <span key={day}>{day}</span>)}
+                  </div>
+                  <div className="mt-1 grid grid-cols-7 gap-1">
+                    {calendarDays.map((day) => {
+                      const active = filterDate === day.date;
+                      return (
+                        <button
+                          key={day.date}
+                          onClick={() => day.count > 0 ? setFilterDate(active ? "all" : day.date) : undefined}
+                          disabled={day.count === 0}
+                          className={`aspect-square rounded-md border text-[11px] font-bold transition ${
+                            active ? "border-blue-600 bg-blue-600 text-white"
+                              : day.count > 0 ? "border-blue-100 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                : day.inMonth ? "border-slate-100 bg-white text-slate-400" : "border-slate-50 bg-slate-50 text-slate-300"
+                          }`}
+                          title={day.count ? `${day.count} clases (${day.done} realizadas, ${day.pending} pendientes)` : day.date}
+                        >
+                          <span>{Number(day.date.slice(8, 10))}</span>
+                          {day.count > 0 ? <span className="mx-auto mt-0.5 block h-1 w-1 rounded-full bg-current" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="text-sm font-bold text-slate-900">Semanas del plan</h3>
+                    <span className="text-xs font-semibold text-slate-500">{classesByWeek.length} semanas visibles</span>
+                  </div>
+                  <div className="tz-thin-scroll flex max-h-40 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                    {classesByWeek.map((group) => (
+                      <button
+                        key={group.week}
+                        onClick={() => {
+                          const firstDate = group.records.map((r) => r.date).filter(Boolean).sort()[0];
+                          if (firstDate) {
+                            setFilterDate(firstDate);
+                            setCalendarMonth(firstDate.slice(0, 7));
+                          }
+                        }}
+                        className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-left text-xs hover:border-blue-200 hover:bg-blue-50"
+                      >
+                        <span className="block max-w-[190px] truncate font-bold text-slate-800">{group.week}</span>
+                        <span className="text-slate-500">{group.records.length} clases</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
               </div>
 
               {newClassOpen ? (
@@ -2080,6 +2214,24 @@ function OrientationCycleView({
                             </div>
                             <p className="mt-0.5 truncate text-xs text-slate-500">{record.course || "Sin curso"} · {record.axis || "Sin eje"}{record.week ? ` · ${record.week}` : ""}</p>
                             {record.notes ? <p className="mt-1 line-clamp-1 text-xs text-slate-600">{record.notes}</p> : null}
+                            {record.source !== "calendar" ? (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {quickStatuses.map((status) => {
+                                  const active = normalize(record.status || "") === normalize(status);
+                                  return (
+                                    <button
+                                      key={status}
+                                      onClick={() => setClassStatus(record, status)}
+                                      className={`rounded-md px-2 py-1 text-[10px] font-bold ring-1 transition ${
+                                        active ? statusTone(status) : "bg-white text-slate-600 ring-slate-200 hover:bg-slate-50"
+                                      }`}
+                                    >
+                                      {status}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            ) : null}
                           </div>
                           <div className="flex flex-wrap justify-end gap-1.5">
                             {canvaUrl ? (
@@ -7797,6 +7949,132 @@ export default function TizaEducationApp() {
     if (!silent) setToast(`Clases de orientación sincronizadas: ${created} nuevas.`);
   };
 
+  const syncOrientationAnnualPlan = (silent = false) => {
+    const firstCycleOwner = orientationOwners[0];
+    const firstCycleCourses = firstCycleOwner.courses;
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const nationalHolidays2026 = new Set([
+      "2026-01-01",
+      "2026-04-03",
+      "2026-04-04",
+      "2026-05-01",
+      "2026-05-21",
+      "2026-06-20",
+      "2026-06-29",
+      "2026-07-16",
+      "2026-08-15",
+      "2026-09-18",
+      "2026-09-19",
+      "2026-10-12",
+      "2026-10-31",
+      "2026-11-01",
+      "2026-12-08",
+      "2026-12-25",
+    ]);
+    const schoolBreaks2026 = [
+      { start: "2026-06-22", end: "2026-07-03", label: "Vacaciones de invierno" },
+      { start: "2026-09-14", end: "2026-09-18", label: "Receso Fiestas Patrias" },
+    ];
+    const parseWeekRange = (week: string) => {
+      const match = week.match(/(\d{2})\/(\d{2})\s+al\s+(\d{2})\/(\d{2})/);
+      if (!match) return null;
+      const [, startDay, startMonth, endDay, endMonth] = match;
+      return {
+        start: `2026-${startMonth}-${startDay}`,
+        end: `2026-${endMonth}-${endDay}`,
+      };
+    };
+    const dateFromIso = (iso: string) => {
+      const [year, month, day] = iso.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    };
+    const toIso = (date: Date) => {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, "0");
+      const d = String(date.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    };
+    const addDays = (iso: string, days: number) => {
+      const date = dateFromIso(iso);
+      date.setDate(date.getDate() + days);
+      return toIso(date);
+    };
+    const breakForDate = (iso: string) => schoolBreaks2026.find((range) => iso >= range.start && iso <= range.end);
+    const isBlocked = (iso: string) => {
+      const day = dateFromIso(iso).getDay();
+      return day === 0 || day === 6 || nationalHolidays2026.has(iso) || Boolean(breakForDate(iso));
+    };
+    const preferredWeekdayByCourse = new Map<string, number>();
+    firstCycleCourses.forEach((course) => {
+      const counts = new Map<number, number>();
+      ORIENTATION_FIRST_CYCLE_CLASSES
+        .filter((record) => normalize(record.course) === normalize(course) && record.date)
+        .forEach((record) => {
+          const weekday = dateFromIso(record.date).getDay();
+          if (weekday >= 1 && weekday <= 5) counts.set(weekday, (counts.get(weekday) || 0) + 1);
+        });
+      const preferred = Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] || 1;
+      preferredWeekdayByCourse.set(course, preferred);
+    });
+    const pickDateInWeek = (range: { start: string; end: string }, preferredWeekday: number) => {
+      const days: string[] = [];
+      for (let iso = range.start; iso <= range.end; iso = addDays(iso, 1)) days.push(iso);
+      const ordered = [
+        ...days.filter((iso) => dateFromIso(iso).getDay() === preferredWeekday),
+        ...days.filter((iso) => dateFromIso(iso).getDay() !== preferredWeekday),
+      ];
+      return ordered.find((iso) => !isBlocked(iso)) || "";
+    };
+
+    let created = 0;
+    setStore((current) => {
+      const existingCourseWeeks = new Set(current.orientation.map((record) =>
+        normalize([record.course, record.week].filter(Boolean).join("|")),
+      ));
+      const additions: DataRecord[] = [];
+
+      ORIENTATION_FIRST_CYCLE_CONFIG.forEach((config) => {
+        const range = parseWeekRange(config.week);
+        if (!range || range.end < todayIso) return;
+        if (breakForDate(range.start) && breakForDate(range.end)) return;
+
+        firstCycleCourses.forEach((course) => {
+          const key = normalize([course, config.week].join("|"));
+          if (existingCourseWeeks.has(key)) return;
+          const date = pickDateInWeek(range, preferredWeekdayByCourse.get(course) || 1);
+          if (!date) return;
+          const shifted = dateFromIso(date).getDay() !== (preferredWeekdayByCourse.get(course) || 1);
+          additions.push({
+            id: `orientation-plan-2026-${normalize(`${course}-${config.week}`).replace(/\s+/g, "-")}`,
+            createdAt: nowIso(),
+            updatedAt: nowIso(),
+            date,
+            week: config.week,
+            course,
+            orientationOwner: firstCycleOwner.name,
+            orientationEmail: firstCycleOwner.email,
+            topic: config.session || "Clase por definir",
+            axis: config.action || "Por definir",
+            status: "Planificada",
+            canvaLink: "",
+            evidence: "",
+            planificacion: "",
+            folderLink: "",
+            notes: shifted ? "Fecha ajustada por feriado o receso escolar configurable." : "",
+            source: "Plan anual orientación 2026",
+            sourceSheet: "Plan generado desde semanas del Excel",
+          });
+          existingCourseWeeks.add(key);
+        });
+      });
+
+      created = additions.length;
+      if (additions.length === 0) return current;
+      return { ...current, orientation: [...additions, ...current.orientation] };
+    });
+    if (!silent) setToast(`Plan anual de orientación completado: ${created} clases nuevas.`);
+  };
+
   const autoSeededOrientationRef = React.useRef(false);
   useEffect(() => {
     if (!remoteLoaded || autoSeededOrientationRef.current) return;
@@ -7804,6 +8082,25 @@ export default function TizaEducationApp() {
     syncOrientationFirstCycle(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteLoaded]);
+
+  const autoSeededOrientationPlanRef = React.useRef(false);
+  useEffect(() => {
+    if (!remoteLoaded || autoSeededOrientationPlanRef.current) return;
+    autoSeededOrientationPlanRef.current = true;
+    try {
+      if (window.localStorage.getItem("tiza-orientation-annual-plan-v1")) return;
+    } catch {
+      // ignore
+    }
+    syncOrientationAnnualPlan(true);
+    try {
+      window.localStorage.setItem("tiza-orientation-annual-plan-v1", "1");
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteLoaded]);
+
 
   const updateCourseRecord = (courseName: string, updates: Record<string, string>) => {
     setStore((current) => {
@@ -8292,6 +8589,7 @@ export default function TizaEducationApp() {
           onAddOrientationRecord={addOrientationRecord}
           onUpdateOrientationRecord={updateOrientationRecord}
           onDeleteOrientationRecord={deleteOrientationRecord}
+          onGenerateAnnualPlan={() => syncOrientationAnnualPlan(false)}
           onOpenStudent={openStudent}
           calendarEvents={calendarEvents}
         />
