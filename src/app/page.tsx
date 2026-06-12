@@ -5449,16 +5449,39 @@ function DashboardAgenda({
   const nextUp = timedItems.find((it) => (it.end ? it.end.getTime() : it.start.getTime()) >= nowMs);
 
   const dateLong = today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
+  const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
+  const protocolsDue = store.protocols.filter((r) => r.dueDate && r.dueDate >= todayStr && r.dueDate <= in7 && r.status !== "Cerrado");
+  const criticalCases = store.cases.filter((r) => /abierto|seguimiento|activad/i.test(r.status || "") && /crítica|alta/i.test(r.priority || ""));
+  const schoolDay = today.toLocaleDateString("es-CL", { weekday: "long" }).toLowerCase();
+  const nowMinutes = today.getHours() * 60 + today.getMinutes();
+  const toMinutes = (time: string) => {
+    const [hours, minutes] = time.split(":").map(Number);
+    return hours * 60 + minutes;
+  };
+  const currentStaffSlots = STAFF_SCHEDULE
+    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
+    .sort((a, b) => a.staffName.localeCompare(b.staffName, "es"))
+    .slice(0, 6);
+  const currentCourseSlots = COURSE_SCHEDULE
+    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
+    .sort((a, b) => a.course.localeCompare(b.course, "es"))
+    .slice(0, 6);
+  const miniStats: Array<[string, number, LucideIcon, ViewId, string]> = [
+    ["Agenda", items.length, CalendarDays, "today", "bg-blue-50 text-blue-700"],
+    ["Protocolos", protocolsDue.length, ShieldCheck, "protocols", "bg-amber-50 text-amber-700"],
+    ["Críticos", criticalCases.length, AlertTriangle, "cases", "bg-rose-50 text-rose-700"],
+    ["Ahora", currentStaffSlots.length + currentCourseSlots.length, MapPin, "today", "bg-emerald-50 text-emerald-700"],
+  ];
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-4 py-3 sm:px-5">
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-3 py-2.5">
         <div className="flex items-center gap-3">
-          <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
             <CalendarDays className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-base font-semibold text-slate-950">Mi día</h2>
+            <h2 className="text-sm font-semibold text-slate-950">Mi día · resumen operativo</h2>
             <p className="text-[11px] capitalize text-slate-500">{dateLong}</p>
           </div>
           {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
@@ -5471,52 +5494,111 @@ function DashboardAgenda({
         </div>
       </header>
 
-      <div className="p-4">
+      <div className="space-y-3 p-3">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+          {miniStats.map(([label, value, Icon, view, tone]) => (
+            <button key={label} onClick={() => onNavigate(view)} className={`tz-press flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left ${tone} ring-1 ring-inset ring-black/5 hover:-translate-y-0.5`}>
+              <span className="flex min-w-0 items-center gap-2">
+                <Icon className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate text-[11px] font-bold uppercase tracking-wide">{label}</span>
+              </span>
+              <span className="text-base font-black tabular-nums">{value}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-3 xl:grid-cols-2">
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500"><MapPin className="h-3.5 w-3.5 text-emerald-600" /> Ahora en el colegio</p>
+              <span className="text-[10px] text-slate-400">{SCHOOL_SCHEDULE_SUMMARY.teacherEntries} bloques</span>
+            </div>
+            {currentStaffSlots.length === 0 ? (
+              <p className="rounded-md bg-slate-50 p-2 text-xs text-slate-500">Sin bloques activos de funcionarios en este momento.</p>
+            ) : (
+              <ul className="tz-thin-scroll tz-stagger-list max-h-32 space-y-1 overflow-y-auto pr-1">
+                {currentStaffSlots.map((slot, index) => (
+                  <li key={`${slot.staffName}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs transition hover:bg-emerald-50/50">
+                    <span className="min-w-0">
+                      <strong className="block truncate text-slate-900">{slot.staffName}</strong>
+                      <span className="block truncate text-slate-500">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500"><BookOpen className="h-3.5 w-3.5 text-blue-600" /> Cursos ahora</p>
+              <span className="text-[10px] text-slate-400">{SCHOOL_SCHEDULE_SUMMARY.courseEntries} bloques</span>
+            </div>
+            {currentCourseSlots.length === 0 ? (
+              <p className="rounded-md bg-slate-50 p-2 text-xs text-slate-500">Sin cursos activos en este momento.</p>
+            ) : (
+              <ul className="tz-thin-scroll tz-stagger-list max-h-32 space-y-1 overflow-y-auto pr-1">
+                {currentCourseSlots.map((slot, index) => (
+                  <li key={`${slot.course}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs transition hover:bg-blue-50/50">
+                    <span className="min-w-0">
+                      <strong className="block truncate text-slate-900">{slot.course}</strong>
+                      <span className="block truncate text-slate-500">{slot.activity}</span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
         {!calendarIcalUrl && items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-blue-200 bg-blue-50/40 p-5 text-center">
-            <CalendarDays className="mx-auto h-7 w-7 text-blue-600" />
-            <p className="mt-2 text-sm font-semibold text-slate-900">Conecta tu Google Calendar</p>
+          <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/40 p-3 text-center">
+            <CalendarDays className="mx-auto h-5 w-5 text-blue-600" />
+            <p className="mt-1 text-sm font-semibold text-slate-900">Conecta tu Google Calendar</p>
             <p className="mt-1 text-xs text-slate-600">Verás tus clases, reuniones, entrevistas y compromisos del día integrados aquí.</p>
             <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
               Conectar ahora
             </button>
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-xl bg-slate-50 p-6 text-center">
-            <p className="text-sm font-semibold text-slate-700">Sin actividades para hoy 🎉</p>
+          <div className="rounded-lg bg-slate-50 p-3 text-center">
+            <p className="text-sm font-semibold text-slate-700">Sin actividades para hoy</p>
             <p className="mt-1 text-xs text-slate-500">Disfruta un día despejado, o revisa lo pendiente en Hoy.</p>
             <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
               Ver resumen del día
             </button>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="rounded-lg border border-slate-200 bg-slate-50/40 p-2.5">
             {allDayItems.length > 0 ? (
-              <div>
+              <div className="mb-2">
                 <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Todo el día</p>
-                <div className="flex flex-wrap gap-2">
-                  {allDayItems.map((item) => {
+                <div className="tz-thin-scroll flex max-h-20 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                  {allDayItems.slice(0, 8).map((item) => {
                     const Icon = item.icon;
                     return (
                       <button
                         key={item.key}
                         onClick={() => item.href && onNavigate(item.href)}
-                        className={`tz-press inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white py-1.5 pl-1.5 pr-3 text-xs font-semibold text-slate-800 shadow-sm hover:border-slate-300 ${item.href ? "cursor-pointer" : "cursor-default"}`}
+                        className={`tz-press inline-flex max-w-full items-center gap-1.5 rounded-full border border-slate-200 bg-white py-1 pl-1 pr-2 text-[11px] font-semibold text-slate-800 shadow-sm hover:border-slate-300 ${item.href ? "cursor-pointer" : "cursor-default"}`}
                       >
-                        <span className={`grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white`}>
+                        <span className={`grid h-5 w-5 shrink-0 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white`}>
                           <Icon className="h-3 w-3" />
                         </span>
-                        <span className="max-w-[200px] truncate">{item.title}</span>
+                        <span className="truncate">{item.title}</span>
                       </button>
                     );
                   })}
+                  {allDayItems.length > 8 ? <button onClick={() => onNavigate("today")} className="rounded-full bg-slate-900 px-2 py-1 text-[11px] font-bold text-white">+{allDayItems.length - 8}</button> : null}
                 </div>
               </div>
             ) : null}
 
             {timedItems.length > 0 ? (
-              <ol className="relative ml-3 space-y-2.5 border-l-2 border-slate-100 pl-5">
-                {timedItems.map((item) => {
+              <ol className="tz-thin-scroll tz-stagger-list relative ml-3 max-h-56 space-y-1.5 overflow-y-auto border-l-2 border-slate-100 pl-5 pr-1">
+                {timedItems.slice(0, 6).map((item) => {
                   const Icon = item.icon;
                   const timeLabel = item.start.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
                   const endLabel = item.end ? item.end.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" }) : "";
@@ -5525,16 +5607,16 @@ function DashboardAgenda({
                   return (
                     <li
                       key={item.key}
-                      className={`group relative rounded-xl border p-3 transition ${
+                      className={`group relative rounded-lg border p-2 transition ${
                         isNext ? "border-blue-300 bg-blue-50/40 shadow-sm" : "border-slate-200 bg-white"
                       } ${item.href ? "cursor-pointer hover:border-blue-300 hover:bg-blue-50/30" : ""} ${isPast && !isNext ? "opacity-55" : ""}`}
                       onClick={() => item.href && onNavigate(item.href)}
                     >
-                      <span className={`absolute -left-[1.7rem] top-3.5 grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white shadow ring-4 ring-white`}>
+                      <span className={`absolute -left-[1.55rem] top-2.5 grid h-6 w-6 place-items-center rounded-full bg-gradient-to-br ${item.color} text-white shadow ring-4 ring-white`}>
                         <Icon className="h-3.5 w-3.5" />
                       </span>
                       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-                        <h3 className="text-sm font-semibold text-slate-950">{item.title}</h3>
+                        <h3 className="text-xs font-semibold text-slate-950">{item.title}</h3>
                         <span className={`text-[11px] font-bold tabular-nums ${isNext ? "text-blue-700" : "text-slate-500"}`}>
                           {endLabel ? `${timeLabel}–${endLabel}` : timeLabel}
                         </span>
@@ -5548,6 +5630,11 @@ function DashboardAgenda({
                     </li>
                   );
                 })}
+                {timedItems.length > 6 ? (
+                  <li>
+                    <button onClick={() => onNavigate("today")} className="rounded-md bg-white px-2 py-1 text-[11px] font-bold text-blue-700 ring-1 ring-slate-200 hover:bg-blue-50">Ver {timedItems.length - 6} más</button>
+                  </li>
+                ) : null}
               </ol>
             ) : null}
           </div>
@@ -5697,16 +5784,19 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEve
           </div>
         </section>
       ) : (
-        <section className="mt-6 rounded-lg border border-slate-200 bg-white p-6">
-          <h2 className="text-lg font-semibold">Últimos registros</h2>
-          <div className="mt-4 divide-y divide-slate-100">
+        <section className="mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-950">Últimos registros</h2>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{latest.length}</span>
+          </div>
+          <div className="tz-thin-scroll mt-2 max-h-56 divide-y divide-slate-100 overflow-y-auto pr-1">
             {latest.map(({ entity, record }) => {
               const config = entityConfigs[entity];
               const titleField = config.fields.find((field) => field.required)?.key || config.fields[0].key;
               return (
-                <button key={`${entity}-${record.id}`} onClick={() => onNavigate(entity)} className="flex w-full items-center justify-between py-3 text-left">
+                <button key={`${entity}-${record.id}`} onClick={() => onNavigate(entity)} className="flex w-full items-center justify-between gap-3 py-2 text-left transition hover:bg-slate-50">
                   <span>
-                    <span className="block font-bold text-slate-950">{record[titleField] || config.singular}</span>
+                    <span className="block text-sm font-bold text-slate-950">{record[titleField] || config.singular}</span>
                     <span className="block text-xs text-slate-500">{config.label} · {new Date(record.updatedAt).toLocaleString("es-CL")}</span>
                   </span>
                   <ChevronDown className="-rotate-90 h-4 w-4 text-slate-400" />
