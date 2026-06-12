@@ -4735,7 +4735,7 @@ function PieWorkspaceView({
                           onClick={() => onOpenStudent(student.id)}
                           className="hover:bg-slate-50/50 cursor-pointer transition"
                         >
-                          <td className="px-5 py-3.5">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <div className={`grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[10px] font-bold text-white shadow-sm`}>
                                 {student.profilePhoto ? (
@@ -4771,7 +4771,7 @@ function PieWorkspaceView({
                               {sit || "Sin especificar"}
                             </span>
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ring-1 ${
                               cupo === "Pendiente"
                                 ? "bg-orange-50 text-orange-700 ring-orange-200"
@@ -4785,7 +4785,7 @@ function PieWorkspaceView({
                               <p className="mt-1 text-[10px] font-medium text-slate-400">{pd.sourceSheets.join(" + ")}</p>
                             ) : null}
                           </td>
-                          <td className="px-5 py-3.5 text-xs text-slate-600">
+                          <td className="px-5 py-3.5 text-xs text-slate-600 whitespace-nowrap">
                             <div className="max-w-[260px] space-y-1">
                               {docSummary.length ? docSummary.slice(0, 3).map((item) => (
                                 <p key={item} className="truncate">{item}</p>
@@ -4795,14 +4795,14 @@ function PieWorkspaceView({
                               ) : null}
                             </div>
                           </td>
-                          <td className="px-5 py-3.5 text-slate-700 font-medium">
+                          <td className="px-5 py-3.5 text-slate-700 font-medium whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
                               <span className="inline-block h-1.5 w-1.5 rounded-full bg-blue-500"></span>
                               <span className="truncate max-w-[150px]">{prof || "Sin asignar"}</span>
                             </div>
                             {pd.evaluator ? <p className="mt-1 truncate text-[10px] text-slate-400">Eval.: {pd.evaluator}</p> : null}
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             <div className="space-y-2">
                               <select
                                 onClick={(event) => event.stopPropagation()}
@@ -4826,7 +4826,7 @@ function PieWorkspaceView({
                               ) : null}
                             </div>
                           </td>
-                          <td className="px-5 py-3.5">
+                          <td className="px-5 py-3.5 whitespace-nowrap">
                             <div className="flex flex-col gap-1.5">
                               <button
                                 type="button"
