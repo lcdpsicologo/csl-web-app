@@ -7174,6 +7174,33 @@ export default function TizaEducationApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remoteLoaded]);
 
+  // Auto-load the Official PIE 2026 roster once, after the remote store loads,
+  // if there are no PIE-tagged students yet. A localStorage flag makes this a
+  // one-time action so the user can later remove entries without them coming
+  // back on the next visit.
+  const autoSeededPieRef = React.useRef(false);
+  useEffect(() => {
+    if (!remoteLoaded || autoSeededPieRef.current) return;
+    autoSeededPieRef.current = true;
+    try {
+      if (window.localStorage.getItem("tiza-pie-seeded-v1")) return;
+    } catch {
+      // ignore
+    }
+    const hasPie = store.students.some((s) =>
+      (s.tags || "").split(",").some((t) => t.trim().toUpperCase() === "PIE"),
+    );
+    if (!hasPie) {
+      seedPieRoster(true);
+    }
+    try {
+      window.localStorage.setItem("tiza-pie-seeded-v1", "1");
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remoteLoaded]);
+
   const updateCourseRecord = (courseName: string, updates: Record<string, string>) => {
     setStore((current) => {
       const official = officialCourses.find((course) => normalize(course.name) === normalize(courseName));
@@ -7331,54 +7358,56 @@ export default function TizaEducationApp() {
     }
   };
 
-  const seedPieRoster = () => {
+  const seedPieRoster = (silent = false) => {
     const cleanRut = (r: string) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
     let updated = 0;
     let created = 0;
-    const next = [...store.students];
-    PIE_ROSTER.forEach((entry) => {
-      const supportText = `Programa de Integración Escolar (PIE). Diagnóstico: ${entry.diag} (${entry.situacion}). Profesional asignado: ${entry.professional}.`;
-      const idx = next.findIndex((s) => {
-        const a = cleanRut(s.rut);
-        const b = cleanRut(entry.rut);
-        if (a && b && a === b) return true;
-        return normalize(s.fullName || "") === normalize(entry.name);
-      });
-      if (idx >= 0) {
-        const existing = next[idx];
-        const tags = (existing.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
-        if (!tags.some((t) => t.toUpperCase() === "PIE")) tags.push("PIE");
-        next[idx] = {
-          ...existing,
-          course: existing.course || entry.course,
-          rut: existing.rut || entry.rut,
-          tags: tags.join(", "),
-          supportNeeds: supportText,
-          updatedAt: nowIso(),
-        };
-        updated += 1;
-      } else {
-        next.push({
-          id: uid(),
-          createdAt: nowIso(),
-          updatedAt: nowIso(),
-          fullName: entry.name,
-          course: entry.course,
-          rut: entry.rut,
-          tags: "PIE",
-          relevantInfo: `Estudiante cargado desde la Nómina Oficial PIE 2026 (${entry.source}).`,
-          supportNeeds: supportText,
-          strengths: "",
-          healthAlerts: "",
-          notes: "",
-          observations: "",
-          genogram: "[]",
+    setStore((current) => {
+      const next = [...current.students];
+      PIE_ROSTER.forEach((entry) => {
+        const supportText = `Programa de Integración Escolar (PIE). Diagnóstico: ${entry.diag} (${entry.situacion}). Profesional asignado: ${entry.professional}.`;
+        const idx = next.findIndex((s) => {
+          const a = cleanRut(s.rut);
+          const b = cleanRut(entry.rut);
+          if (a && b && a === b) return true;
+          return normalize(s.fullName || "") === normalize(entry.name);
         });
-        created += 1;
-      }
+        if (idx >= 0) {
+          const existing = next[idx];
+          const tags = (existing.tags || "").split(",").map((t) => t.trim()).filter(Boolean);
+          if (!tags.some((t) => t.toUpperCase() === "PIE")) tags.push("PIE");
+          next[idx] = {
+            ...existing,
+            course: existing.course || entry.course,
+            rut: existing.rut || entry.rut,
+            tags: tags.join(", "),
+            supportNeeds: supportText,
+            updatedAt: nowIso(),
+          };
+          updated += 1;
+        } else {
+          next.push({
+            id: uid(),
+            createdAt: nowIso(),
+            updatedAt: nowIso(),
+            fullName: entry.name,
+            course: entry.course,
+            rut: entry.rut,
+            tags: "PIE",
+            relevantInfo: `Estudiante cargado desde la Nómina Oficial PIE 2026 (${entry.source}).`,
+            supportNeeds: supportText,
+            strengths: "",
+            healthAlerts: "",
+            notes: "",
+            observations: "",
+            genogram: "[]",
+          });
+          created += 1;
+        }
+      });
+      return { ...current, students: next };
     });
-    setStore((current) => ({ ...current, students: next }));
-    setToast(`Nómina PIE cargada: ${created} nuevos, ${updated} actualizados.`);
+    if (!silent) setToast(`Nómina PIE cargada: ${created} nuevos, ${updated} actualizados.`);
   };
 
   const confirmPieImport = () => {
