@@ -7961,7 +7961,10 @@ export default function TizaEducationApp() {
   const [pieImportData, setPieImportData] = useState<any[] | null>(null);
   const [toast, setToast] = useState("");
   const [remoteLoaded, setRemoteLoaded] = useState(!isSupabaseAuthConfigured);
-  const [remoteStatus, setRemoteStatus] = useState<"local" | "loading" | "synced" | "saving" | "error">("local");
+  const [remoteStatus, setRemoteStatus] = useState<"local" | "loading" | "synced" | "saving" | "error">(
+    isSupabaseAuthConfigured ? "loading" : "local",
+  );
+  const [remoteError, setRemoteError] = useState("");
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [teamSeeding, setTeamSeeding] = useState(false);
   const [teamSeedNotice, setTeamSeedNotice] = useState("");
@@ -8074,6 +8077,7 @@ export default function TizaEducationApp() {
     let cancelled = false;
     const loadRemoteStore = async () => {
       setRemoteStatus("loading");
+      setRemoteError("");
       try {
         const response = await fetch("/api/records", {
           headers: {
@@ -8093,7 +8097,8 @@ export default function TizaEducationApp() {
         console.error(error);
         if (!cancelled) {
           setRemoteLoaded(true);
-          setRemoteStatus("local");
+          setRemoteStatus("error");
+          setRemoteError(error instanceof Error ? error.message : "No se pudo sincronizar con Supabase.");
         }
       }
     };
@@ -8147,6 +8152,7 @@ export default function TizaEducationApp() {
   const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
     if (!authUser || !accessToken || !remoteLoaded) return;
     setRemoteStatus("saving");
+    setRemoteError("");
     try {
       const response = await fetch("/api/records", {
         method: "PUT",
@@ -8163,7 +8169,8 @@ export default function TizaEducationApp() {
       setRemoteStatus(successStatus);
     } catch (error) {
       console.warn("Remote records save failed; local backup remains active", error);
-      setRemoteStatus("local");
+      setRemoteStatus("error");
+      setRemoteError(error instanceof Error ? error.message : "No se pudieron guardar los datos remotos.");
     }
   }, [authUser, accessToken, remoteLoaded]);
 
@@ -9086,7 +9093,7 @@ export default function TizaEducationApp() {
   };
 
   const syncLabel = {
-    local: "Guardado local",
+    local: "Modo local",
     loading: "Cargando Supabase",
     synced: "Sincronizado",
     saving: "Guardando",
@@ -9158,7 +9165,7 @@ export default function TizaEducationApp() {
                   : remoteStatus === "error"
                     ? "bg-orange-50 text-orange-700"
                     : "bg-slate-100 text-slate-600"
-              }`}>
+              }`} title={remoteError || syncLabel}>
                 {syncLabel}
               </span>
             </div>

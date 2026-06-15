@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 
+export const maxDuration = 60;
+export const dynamic = "force-dynamic";
+
 type EntityId =
   | "students"
   | "courses"
