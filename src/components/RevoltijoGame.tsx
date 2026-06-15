@@ -87,9 +87,9 @@ export function RevoltijoGame() {
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+          <Link href="/?view=games" className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
             <ArrowLeft className="h-4 w-4" />
-            Inicio
+            Juegos Vinculares
           </Link>
           <div className="flex items-center gap-2 rounded-md border border-dashed border-slate-300 bg-white px-3 py-2">
             <span className="h-7 w-7 rounded bg-gradient-to-br from-emerald-400 via-amber-300 to-sky-500" aria-hidden="true" />

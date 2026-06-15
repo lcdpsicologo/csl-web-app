@@ -1,10 +1,9 @@
-import { ComingSoonGame } from "@/components/ComingSoonGame";
+import { notFound } from "next/navigation";
+import { PromptCardGame } from "@/components/PromptCardGame";
+import { getPromptGame } from "@/lib/promptGames";
 
 export default function BingoFortalezasPage() {
-  return (
-    <ComingSoonGame
-      title="Bingo de Fortalezas"
-      summary="Espacio preparado para un bingo socioemocional centrado en reconocer fortalezas personales y del grupo curso."
-    />
-  );
+  const game = getPromptGame("bingo-fortalezas");
+  if (!game) notFound();
+  return <PromptCardGame game={game} />;
 }

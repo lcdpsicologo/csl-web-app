@@ -63,9 +63,9 @@ export function PromptCardGame({ game }: { game: PromptGame }) {
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-          <Link href="/" className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+          <Link href="/?view=games" className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
             <ArrowLeft className="h-4 w-4" />
-            Tiza Education
+            Juegos Vinculares
           </Link>
           <span className={`rounded-md px-3 py-2 text-xs font-bold ${style.badge}`}>{drawCount} sorteos</span>
         </div>

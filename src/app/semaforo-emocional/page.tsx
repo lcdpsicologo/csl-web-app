@@ -1,10 +1,9 @@
-import { ComingSoonGame } from "@/components/ComingSoonGame";
+import { notFound } from "next/navigation";
+import { PromptCardGame } from "@/components/PromptCardGame";
+import { getPromptGame } from "@/lib/promptGames";
 
 export default function SemaforoEmocionalPage() {
-  return (
-    <ComingSoonGame
-      title="Semáforo Emocional"
-      summary="Espacio preparado para un chequeo rápido de estado emocional y elección de acciones de regulación."
-    />
-  );
+  const game = getPromptGame("semaforo-emocional");
+  if (!game) notFound();
+  return <PromptCardGame game={game} />;
 }

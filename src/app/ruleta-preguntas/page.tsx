@@ -1,10 +1,9 @@
-import { ComingSoonGame } from "@/components/ComingSoonGame";
+import { notFound } from "next/navigation";
+import { PromptCardGame } from "@/components/PromptCardGame";
+import { getPromptGame } from "@/lib/promptGames";
 
 export default function RuletaPreguntasPage() {
-  return (
-    <ComingSoonGame
-      title="Ruleta de Preguntas"
-      summary="Espacio preparado para una ruleta de conversación con preguntas breves, respetuosas y ajustables por nivel."
-    />
-  );
+  const game = getPromptGame("ruleta-preguntas");
+  if (!game) notFound();
+  return <PromptCardGame game={game} />;
 }

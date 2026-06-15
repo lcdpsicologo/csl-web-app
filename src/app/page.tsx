@@ -6141,6 +6141,11 @@ function TeamView({
 }
 
 function GamesView() {
+  const gamesByCategory = games.reduce<Record<string, typeof games>>((acc, game) => {
+    acc[game.category] = [...(acc[game.category] || []), game];
+    return acc;
+  }, {});
+
   return (
     <div>
       <div className="mb-6">
@@ -6169,37 +6174,41 @@ function GamesView() {
         </div>
       </section>
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {games.map((game) => {
-          const Icon = game.icon;
-          return (
-            <a
-              key={game.href}
-              href={game.href}
-              className="group flex min-h-[250px] flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="grid h-12 w-12 place-items-center rounded-md bg-slate-900 text-white">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <span
-                  className={`rounded-md px-2.5 py-1 text-xs font-bold ${
-                    game.status === "listo" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
-                  }`}
-                >
-                  {game.status === "listo" ? "Listo" : "Proximamente"}
-                </span>
-              </div>
-              <h2 className="mt-5 text-lg font-semibold leading-tight tracking-tight text-slate-950">{game.title}</h2>
-              <p className="mt-3 flex-1 text-sm leading-6 text-slate-600">{game.summary}</p>
-              <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{game.audience}</span>
-                <ExternalLink className="h-4 w-4 text-slate-400 transition group-hover:text-slate-900" />
-              </div>
-            </a>
-          );
-        })}
-      </section>
+      <div className="mt-6 space-y-7">
+        {Object.entries(gamesByCategory).map(([category, categoryGames]) => (
+          <section key={category}>
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-slate-950">{category}</h2>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{categoryGames.length}</span>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {categoryGames.map((game) => {
+                const Icon = game.icon;
+                return (
+                  <a
+                    key={game.href}
+                    href={game.href}
+                    className="group flex min-h-[250px] flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="grid h-12 w-12 place-items-center rounded-md bg-slate-900 text-white">
+                        <Icon className="h-6 w-6" />
+                      </div>
+                      <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Listo</span>
+                    </div>
+                    <h3 className="mt-5 text-lg font-semibold leading-tight tracking-tight text-slate-950">{game.title}</h3>
+                    <p className="mt-3 flex-1 text-sm leading-6 text-slate-600">{game.summary}</p>
+                    <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{game.audience}</span>
+                      <ExternalLink className="h-4 w-4 text-slate-400 transition group-hover:text-slate-900" />
+                    </div>
+                  </a>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 }
@@ -7742,7 +7751,11 @@ export default function TizaEducationApp() {
       return emptyStore();
     }
   });
-  const [viewHistory, setViewHistory] = useState<ViewId[]>(["dashboard"]);
+  const [viewHistory, setViewHistory] = useState<ViewId[]>(() => {
+    if (typeof window === "undefined") return ["dashboard"];
+    const view = new URLSearchParams(window.location.search).get("view");
+    return view === "games" ? ["games"] : ["dashboard"];
+  });
   const [historyIndex, setHistoryIndex] = useState(0);
   const activeView = viewHistory[historyIndex];
   const navigate = (next: ViewId) => {
