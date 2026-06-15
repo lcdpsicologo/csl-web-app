@@ -20,51 +20,246 @@ export type PromptGame = {
 
 type GameBlueprint = Omit<PromptGame, "cards"> & {
   focus: string;
+  childFocus: string;
   strength: string;
+  situations: string[];
+  actions: string[];
 };
 
-const levels: Array<{ id: LevelId; type: string; prompt: (focus: string) => string; support: string }> = [
-  {
-    id: "prebasica",
-    type: "Gesto",
-    prompt: (focus) => `Muestra con tu cara o tus manos como se ve ${focus} en el colegio.`,
-    support: "El cuerpo tambien ayuda a expresar y entender.",
-  },
-  {
-    id: "primero-segundo",
-    type: "Pregunta",
-    prompt: (focus) => `Cuenta una situacion pequena donde puedas practicar ${focus}.`,
-    support: "Las acciones pequenas construyen habitos grandes.",
-  },
-  {
-    id: "tercero-cuarto",
-    type: "Conversacion",
-    prompt: (focus) => `Que puede hacer el curso para cuidar mejor ${focus} esta semana?`,
-    support: "Cuando el grupo propone, el acuerdo se vuelve mas real.",
-  },
-  {
-    id: "segundo-ciclo",
-    type: "Reflexion",
-    prompt: (focus) => `Que dificultad aparece cuando intentamos vivir ${focus}, y como podemos enfrentarla?`,
-    support: "Mirar la dificultad permite elegir una respuesta mas justa.",
-  },
-  {
-    id: "tercer-ciclo",
-    type: "Dialogo",
-    prompt: (focus) => `Que decision concreta mostraria madurez al trabajar ${focus} en la vida diaria?`,
-    support: "La madurez se nota en decisiones sostenidas, no solo en ideas.",
-  },
-];
+type LevelTemplate = {
+  type: string;
+  prompt: (game: GameBlueprint, situation: string, action: string) => string;
+  support: string;
+};
+
+const levelTemplates: Record<LevelId, LevelTemplate[]> = {
+  prebasica: [
+    {
+      type: "Gesto",
+      prompt: (game, situation) => `Muestra con tu cara y tus manos como se ve ${game.childFocus} cuando pasa esto: ${situation}.`,
+      support: "Nombrar con el cuerpo ayuda a entender antes de hablar.",
+    },
+    {
+      type: "Movimiento",
+      prompt: (_game, situation, action) => `Haz un movimiento pequeno que ayude a ${action} en esta situacion: ${situation}.`,
+      support: "Un movimiento breve puede ordenar la energia del grupo.",
+    },
+    {
+      type: "Pregunta",
+      prompt: (game, situation) => `Que palabra amable podrias decir para cuidar ${game.childFocus} cuando ocurre esto: ${situation}?`,
+      support: "Las palabras cortas tambien pueden cuidar.",
+    },
+    {
+      type: "Imaginacion",
+      prompt: (game) => `Si ${game.childFocus} fuera un color, un clima o un animal tranquilo, cual seria? Muestralo sin explicar demasiado.`,
+      support: "La imaginacion permite hablar de cosas importantes con seguridad.",
+    },
+    {
+      type: "Respiracion",
+      prompt: (_game, situation) => `Respiren tres veces lento y luego digan que ayudaria en esta escena: ${situation}.`,
+      support: "Primero calmamos el cuerpo, despues elegimos mejor.",
+    },
+    {
+      type: "Juego oral",
+      prompt: (game, _situation, action) => `Completa la frase: "Yo puedo ${action} para que ${game.childFocus} crezca".`,
+      support: "Decirlo en primera persona aumenta compromiso.",
+    },
+    {
+      type: "Reto grupal",
+      prompt: (game) => `En ronda, cada quien dice una palabra que ayude a cuidar ${game.childFocus}. No se pueden repetir palabras.`,
+      support: "Escuchar palabras distintas amplia el vocabulario emocional.",
+    },
+    {
+      type: "Cierre",
+      prompt: (_game, situation, action) => `Elige con el pulgar: arriba, al medio o abajo. Que tan posible es ${action} cuando pasa esto: ${situation}?`,
+      support: "Responder con el cuerpo permite participar sin presion.",
+    },
+  ],
+  "primero-segundo": [
+    {
+      type: "Pregunta",
+      prompt: (game, situation) => `Cuenta una forma simple de cuidar ${game.childFocus} en esta situacion: ${situation}.`,
+      support: "Una accion pequena puede cambiar el clima de una sala.",
+    },
+    {
+      type: "Frase util",
+      prompt: (_game, situation, action) => `Inventen una frase corta para ${action} cuando ocurre esto: ${situation}.`,
+      support: "Tener frases preparadas ayuda cuando hay nervios o enojo.",
+    },
+    {
+      type: "Movimiento",
+      prompt: (_game, _situation, action) => `Haz una pose de "estoy listo" y di como podrias ${action} hoy.`,
+      support: "El cuerpo tambien ensaya decisiones.",
+    },
+    {
+      type: "Eleccion",
+      prompt: (game, situation) => `Que ayuda mas a ${game.childFocus}: hablar, respirar, pedir ayuda o esperar? Usalo con esta escena: ${situation}.`,
+      support: "Elegir entre opciones ensena regulacion.",
+    },
+    {
+      type: "Mini historia",
+      prompt: (game, situation) => `Crea una historia de tres frases donde alguien aprende a cuidar ${game.childFocus} en: ${situation}.`,
+      support: "Las historias permiten practicar sin exponer a nadie.",
+    },
+    {
+      type: "Reto oral",
+      prompt: (_game, _situation, action) => `Di tres maneras respetuosas de ${action}. El curso puede ayudar si alguien se queda pensando.`,
+      support: "Pensar en grupo baja la verguenza y sube la participacion.",
+    },
+    {
+      type: "Semaforo",
+      prompt: (game, situation) => `Rojo: que puede empeorar? Amarillo: que puedo pensar? Verde: que hago para cuidar ${game.childFocus}? Escena: ${situation}.`,
+      support: "Ordenar en pasos ayuda a no reaccionar de golpe.",
+    },
+    {
+      type: "Cierre",
+      prompt: (game) => `Nombra una persona del curso que haya mostrado ${game.childFocus} esta semana, sin burlas ni comparaciones.`,
+      support: "Reconocer a otros fortalece pertenencia.",
+    },
+  ],
+  "tercero-cuarto": [
+    {
+      type: "Conversacion",
+      prompt: (game, situation) => `Que podria hacer el curso para cuidar mejor ${game.focus} cuando pasa esto: ${situation}?`,
+      support: "Las soluciones de curso funcionan mejor cuando nacen del grupo.",
+    },
+    {
+      type: "Dilema",
+      prompt: (_game, situation, action) => `Alguien quiere ${action}, pero le da verguenza. Que consejo concreto le darias? Situacion: ${situation}.`,
+      support: "Aconsejar a otro permite descubrir recursos propios.",
+    },
+    {
+      type: "Escucha",
+      prompt: (game, situation) => `En parejas, uno responde y el otro repite la idea principal: como se cuida ${game.focus} en ${situation}?`,
+      support: "Repetir lo escuchado muestra respeto real.",
+    },
+    {
+      type: "Reparacion",
+      prompt: (_game, situation) => `Si alguien se equivoca en esta escena, que frase de reparacion podria usar? ${situation}.`,
+      support: "Reparar no borra el error, pero reconstruye confianza.",
+    },
+    {
+      type: "Mapa de opciones",
+      prompt: (_game, situation, action) => `Propongan tres opciones para ${action}. Una facil, una valiente y una para pedir ayuda. Escena: ${situation}.`,
+      support: "Tener opciones evita quedarse atrapado en una sola respuesta.",
+    },
+    {
+      type: "Reto grupal",
+      prompt: (game) => `El curso crea en voz alta una regla corta que proteja ${game.focus} durante esta semana.`,
+      support: "Una regla breve se recuerda y se practica mejor.",
+    },
+    {
+      type: "Perspectiva",
+      prompt: (_game, situation) => `Nombra dos puntos de vista posibles en esta situacion y que necesita cada persona: ${situation}.`,
+      support: "Mirar necesidades baja los juicios rapidos.",
+    },
+    {
+      type: "Compromiso",
+      prompt: (_game, _situation, action) => `Completa: "Esta semana puedo ${action} cuando note que el curso lo necesita".`,
+      support: "Un compromiso concreto es mas facil de cumplir.",
+    },
+  ],
+  "segundo-ciclo": [
+    {
+      type: "Reflexion",
+      prompt: (game, situation) => `Que tension real aparece al intentar vivir ${game.focus} en esta situacion: ${situation}?`,
+      support: "Nombrar la tension permite elegir una respuesta mas consciente.",
+    },
+    {
+      type: "Analisis",
+      prompt: (_game, situation, action) => `Que podria facilitar y que podria dificultar ${action} en esta escena: ${situation}?`,
+      support: "Anticipar obstaculos aumenta la probabilidad de actuar bien.",
+    },
+    {
+      type: "Debate breve",
+      prompt: (game, situation) => `De acuerdo o en desacuerdo: cuidar ${game.focus} depende mas de cada persona que del curso. Usen esta escena: ${situation}.`,
+      support: "Debatir con respeto entrena pensamiento y convivencia.",
+    },
+    {
+      type: "Rol",
+      prompt: (_game, situation) => `Actuen solo con voz una respuesta impulsiva y luego una respuesta madura para: ${situation}.`,
+      support: "Comparar respuestas ayuda a ver consecuencias.",
+    },
+    {
+      type: "Decision",
+      prompt: (_game, situation, action) => `Que decision concreta permitiria ${action} sin pasar a llevar a otros? Situacion: ${situation}.`,
+      support: "La convivencia se juega en decisiones concretas.",
+    },
+    {
+      type: "Limite",
+      prompt: (game, situation) => `Como se podria poner un limite respetuoso para proteger ${game.focus} en: ${situation}?`,
+      support: "Un limite claro tambien puede ser cuidadoso.",
+    },
+    {
+      type: "Reparacion",
+      prompt: (_game, situation) => `Si el dano ya ocurrio, que tres pasos de reparacion serian justos? Escena: ${situation}.`,
+      support: "Reparar requiere reconocer, actuar y sostener el cambio.",
+    },
+    {
+      type: "Acuerdo",
+      prompt: (game) => `Formulen un acuerdo de curso, breve y observable, que fortalezca ${game.focus} durante cinco dias.`,
+      support: "Lo observable se puede practicar, revisar y mejorar.",
+    },
+  ],
+  "tercer-ciclo": [
+    {
+      type: "Dialogo",
+      prompt: (game, situation) => `Que decision madura mostraria ${game.focus} en esta situacion: ${situation}?`,
+      support: "La madurez se nota en decisiones sostenidas, no solo en opiniones.",
+    },
+    {
+      type: "Criterio",
+      prompt: (_game, situation, action) => `Que criterio etico usarias para decidir como ${action} sin danar el vinculo? Caso: ${situation}.`,
+      support: "Tener criterio ayuda cuando no hay una respuesta perfecta.",
+    },
+    {
+      type: "Perspectiva",
+      prompt: (game, situation) => `Como cambiaria la respuesta si miramos ${game.focus} desde la persona afectada, el grupo y un adulto responsable? ${situation}.`,
+      support: "Mirar varias perspectivas reduce respuestas simplistas.",
+    },
+    {
+      type: "Proyecto personal",
+      prompt: (_game, _situation, action) => `Que habito personal tendrias que entrenar para ${action} con consistencia?`,
+      support: "Los habitos convierten valores en conducta cotidiana.",
+    },
+    {
+      type: "Conversacion dificil",
+      prompt: (_game, situation) => `Escribe oralmente una primera frase para iniciar una conversacion dificil sobre: ${situation}.`,
+      support: "Una buena primera frase puede abrir una reparacion.",
+    },
+    {
+      type: "Impacto",
+      prompt: (game, situation) => `Que impacto tiene en el curso ignorar ${game.focus} cuando ocurre esto: ${situation}?`,
+      support: "Ver impacto colectivo favorece responsabilidad compartida.",
+    },
+    {
+      type: "Plan",
+      prompt: (_game, situation, action) => `Disena un plan de 3 pasos para ${action} en esta escena: ${situation}.`,
+      support: "Un plan breve vuelve practicable una idea buena.",
+    },
+    {
+      type: "Cierre",
+      prompt: (game) => `Completa: "En mi etapa actual, cuidar ${game.focus} significa dejar de ____ y empezar a ____".`,
+      support: "La reflexion honesta conecta convivencia con proyecto personal.",
+    },
+  ],
+};
 
 const buildCards = (game: GameBlueprint): PromptGameCard[] =>
-  levels.map((level, index) => ({
-    id: `${game.slug}-${index + 1}`,
-    level: level.id,
-    type: level.type,
-    prompt: level.prompt(game.focus),
-    support: level.support,
-    strength: game.strength,
-  }));
+  (Object.entries(levelTemplates) as Array<[LevelId, LevelTemplate[]]>).flatMap(([level, templates]) =>
+    templates.map((template, index) => {
+      const situation = game.situations[index % game.situations.length];
+      const action = game.actions[index % game.actions.length];
+      return {
+        id: `${game.slug}-${level}-${index + 1}`,
+        level,
+        type: template.type,
+        prompt: template.prompt(game, situation, action),
+        support: template.support,
+        strength: game.strength,
+      };
+    }),
+  );
 
 const blueprints: GameBlueprint[] = [
   {
@@ -73,8 +268,20 @@ const blueprints: GameBlueprint[] = [
     category: "Fortalezas del caracter",
     summary: "Reconocimiento oral de fortalezas personales y grupales.",
     accent: "amber",
-    focus: "las fortalezas personales",
+    focus: "las fortalezas personales y grupales",
+    childFocus: "una fortaleza",
     strength: "Tengo afan de superacion",
+    situations: [
+      "alguien insiste aunque una tarea le cuesta",
+      "un companero ayuda sin que se lo pidan",
+      "el curso necesita ordenar una actividad",
+      "una estudiante se atreve a participar",
+      "alguien reconoce que se equivoco",
+      "un grupo incluye a quien estaba solo",
+      "la clase celebra un avance pequeno",
+      "alguien mantiene la calma en un desacuerdo",
+    ],
+    actions: ["reconocer una fortaleza", "agradecer un aporte", "nombrar un avance", "pedir apoyo", "intentar otra estrategia", "animar a alguien", "aprender del error", "dar un ejemplo concreto"],
   },
   {
     slug: "ruleta-preguntas",
@@ -83,7 +290,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Preguntas al azar para abrir dialogo, escucha y participacion segura.",
     accent: "violet",
     focus: "la escucha y la participacion",
+    childFocus: "escuchar y participar",
     strength: "Soy respetuoso",
+    situations: [
+      "varios quieren hablar al mismo tiempo",
+      "alguien no se anima a dar su opinion",
+      "una idea distinta causa risas",
+      "el grupo debe tomar una decision",
+      "una pregunta incomoda aparece en la conversacion",
+      "dos respuestas son muy diferentes",
+      "alguien interrumpe sin darse cuenta",
+      "una persona necesita mas tiempo para pensar",
+    ],
+    actions: ["escuchar antes de responder", "hacer una pregunta clara", "dar espacio a otra voz", "resumir lo escuchado", "opinar con respeto", "invitar a participar", "esperar el turno", "cuidar el tono"],
   },
   {
     slug: "semaforo-emocional",
@@ -91,8 +310,20 @@ const blueprints: GameBlueprint[] = [
     category: "Regulacion emocional",
     summary: "Chequeo rapido de estado emocional y eleccion de acciones de regulacion.",
     accent: "cyan",
-    focus: "el estado emocional",
+    focus: "la regulacion emocional",
+    childFocus: "el semaforo emocional",
     strength: "Hago las cosas bien",
+    situations: [
+      "llegamos agitados desde el recreo",
+      "una evaluacion dejo nervioso al curso",
+      "alguien se enojo por una broma",
+      "hay cansancio antes de terminar la jornada",
+      "un cambio de plan genero frustracion",
+      "el curso esta muy acelerado",
+      "alguien esta triste y no quiere hablar",
+      "necesitamos volver a concentrarnos",
+    ],
+    actions: ["pasar de rojo a amarillo", "elegir una pausa", "pedir ayuda", "nombrar una emocion", "respirar antes de actuar", "bajar la intensidad", "volver al presente", "cuidar el cuerpo"],
   },
   {
     slug: "termometro-del-curso",
@@ -101,7 +332,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Chequeo rapido de clima emocional, energia y convivencia del grupo.",
     accent: "cyan",
     focus: "el clima del curso",
+    childFocus: "el clima del curso",
     strength: "Soy constructivo",
+    situations: [
+      "el curso esta dividido en grupos",
+      "hay ruido y cuesta comenzar",
+      "se acerca una actividad importante",
+      "varios se sienten cansados",
+      "alguien se siente fuera del grupo",
+      "hubo un conflicto en el recreo",
+      "la sala necesita recuperar calma",
+      "el curso logro algo dificil",
+    ],
+    actions: ["medir el clima", "bajar la tension", "subir la colaboracion", "incluir a alguien", "cuidar el ambiente", "hacer un acuerdo", "celebrar un avance", "pedir una pausa"],
   },
   {
     slug: "mision-amabilidad",
@@ -109,8 +352,20 @@ const blueprints: GameBlueprint[] = [
     category: "Convivencia y buen trato",
     summary: "Retos breves para practicar cuidado, inclusion y buen trato sin materiales.",
     accent: "emerald",
-    focus: "la amabilidad",
+    focus: "la amabilidad cotidiana",
+    childFocus: "la amabilidad",
     strength: "Soy amable",
+    situations: [
+      "alguien llega tarde y se siente observado",
+      "un companero no entiende una instruccion",
+      "una persona queda sin pareja",
+      "alguien presta atencion cuando otro habla",
+      "hay que corregir sin humillar",
+      "un nuevo estudiante entra al curso",
+      "alguien pierde en un juego",
+      "una persona necesita animo",
+    ],
+    actions: ["saludar con cuidado", "ofrecer ayuda", "incluir sin forzar", "agradecer", "corregir con respeto", "acompanar", "animar", "reconocer el esfuerzo"],
   },
   {
     slug: "respira-y-responde",
@@ -119,7 +374,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Cartas de pausa, respiracion y respuesta respetuosa ante tension.",
     accent: "slate",
     focus: "la pausa antes de responder",
+    childFocus: "respirar antes de responder",
     strength: "Soy respetuoso",
+    situations: [
+      "alguien dice algo que molesta",
+      "te corrigen frente a otros",
+      "una instruccion cambia a ultimo minuto",
+      "pierdes un turno o una oportunidad",
+      "un companero interpreta mal lo que dijiste",
+      "sientes ganas de contestar fuerte",
+      "te cuesta esperar",
+      "el grupo esta discutiendo",
+    ],
+    actions: ["hacer una pausa", "respirar lento", "elegir una frase respetuosa", "pedir tiempo", "bajar el tono", "aclarar sin atacar", "escuchar primero", "responder con calma"],
   },
   {
     slug: "circulo-confianza",
@@ -127,8 +394,20 @@ const blueprints: GameBlueprint[] = [
     category: "Pertenencia y vinculo",
     summary: "Preguntas para fortalecer seguridad, pertenencia y apoyo entre pares.",
     accent: "violet",
-    focus: "la confianza",
+    focus: "la confianza en el grupo",
+    childFocus: "la confianza",
     strength: "Soy constructivo",
+    situations: [
+      "alguien comparte una preocupacion",
+      "una persona teme equivocarse",
+      "el curso necesita guardar una confidencia adecuada",
+      "alguien pide apoyo para integrarse",
+      "hay rumores circulando",
+      "un companero quiere reparar una relacion",
+      "el grupo debe cooperar",
+      "alguien quiere hablar con un adulto",
+    ],
+    actions: ["cuidar la confianza", "escuchar sin burlas", "pedir ayuda segura", "guardar respeto", "detener rumores", "acompanar", "cooperar", "reparar"],
   },
   {
     slug: "cazadores-fortalezas",
@@ -137,7 +416,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Juego oral para reconocer fortalezas propias y de companeros.",
     accent: "amber",
     focus: "las fortalezas de otros",
+    childFocus: "ver fortalezas",
     strength: "Soy amable",
+    situations: [
+      "alguien persevera en silencio",
+      "una persona organiza al grupo",
+      "un companero defiende a otro con respeto",
+      "alguien trae una idea creativa",
+      "una estudiante cumple un acuerdo",
+      "alguien reconoce una emocion",
+      "un grupo resuelve un problema",
+      "una persona transforma un error en aprendizaje",
+    ],
+    actions: ["detectar una fortaleza", "nombrar evidencia", "celebrar sin exagerar", "agradecer", "describir una conducta", "animar a repetirla", "ver lo bueno", "reconocer avances"],
   },
   {
     slug: "puente-empatia",
@@ -146,7 +437,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Cartas para imaginar perspectivas, escuchar y responder con respeto.",
     accent: "rose",
     focus: "la empatia",
+    childFocus: "ponerse en el lugar de otro",
     strength: "Soy respetuoso",
+    situations: [
+      "alguien fue excluido de un juego",
+      "una persona recibe una broma pesada",
+      "un companero esta mas callado que siempre",
+      "dos personas quieren cosas distintas",
+      "alguien se equivoca frente al curso",
+      "una familia vive un momento dificil",
+      "un estudiante nuevo no conoce las reglas",
+      "alguien pide que paren una conducta",
+    ],
+    actions: ["imaginar como se siente", "preguntar antes de asumir", "ofrecer apoyo", "validar una emocion", "cuidar las palabras", "mirar otra perspectiva", "pedir perdon", "acompanar sin invadir"],
   },
   {
     slug: "desafio-proposito",
@@ -155,7 +458,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Preguntas breves para conectar decisiones, metas y sentido personal.",
     accent: "emerald",
     focus: "el proposito personal",
+    childFocus: "tener un para que",
     strength: "Tengo proposito",
+    situations: [
+      "hay que elegir entre comodidad y esfuerzo",
+      "una meta parece lejana",
+      "alguien no sabe por donde empezar",
+      "aparece una distraccion fuerte",
+      "un logro pequeno pasa desapercibido",
+      "una decision afecta a otras personas",
+      "algo importante requiere constancia",
+      "un error obliga a ajustar el camino",
+    ],
+    actions: ["conectar con una meta", "elegir un paso pequeno", "recordar el para que", "priorizar", "pedir orientacion", "sostener un habito", "evaluar una decision", "aprender del tropiezo"],
   },
   {
     slug: "minuto-gratitud",
@@ -164,7 +479,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Juego rapido para cerrar o iniciar clases mirando lo bueno del dia.",
     accent: "amber",
     focus: "la gratitud",
+    childFocus: "agradecer",
     strength: "Soy entusiasta",
+    situations: [
+      "alguien hizo algo bueno y casi nadie lo noto",
+      "un dia dificil tuvo un momento amable",
+      "el curso recibio ayuda",
+      "una persona mejoro en algo pequeno",
+      "hay cansancio y falta motivacion",
+      "alguien compartio su tiempo",
+      "una clase salio mejor de lo esperado",
+      "el grupo necesita cerrar el dia",
+    ],
+    actions: ["agradecer en voz alta", "notar lo bueno", "reconocer un gesto", "valorar un avance", "mirar lo aprendido", "devolver una palabra amable", "celebrar sobriamente", "cerrar con bienestar"],
   },
   {
     slug: "movimiento-regulador",
@@ -173,7 +500,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Retos corporales simples para activar, bajar tension y volver al presente.",
     accent: "cyan",
     focus: "la regulacion corporal",
+    childFocus: "regular el cuerpo",
     strength: "Hago las cosas bien",
+    situations: [
+      "el cuerpo esta inquieto",
+      "la clase necesita despertar",
+      "hay tension en hombros y mandibula",
+      "cuesta volver del recreo",
+      "una emocion se siente muy grande",
+      "la energia esta muy baja",
+      "hay nervios antes de hablar",
+      "el grupo necesita concentrarse",
+    ],
+    actions: ["soltar tension", "activar con cuidado", "volver al presente", "respirar con movimiento", "estirar sin molestar", "regular la energia", "preparar el cuerpo", "cuidar el espacio"],
   },
   {
     slug: "decisiones-con-respeto",
@@ -182,7 +521,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Situaciones orales para elegir respuestas cuidadosas ante conflictos cotidianos.",
     accent: "slate",
     focus: "las decisiones respetuosas",
+    childFocus: "decidir con respeto",
     strength: "Soy respetuoso",
+    situations: [
+      "quieres decir que no sin herir",
+      "un amigo pide cubrir una falta",
+      "alguien comparte informacion privada",
+      "un grupo presiona para burlarse",
+      "te invitan a excluir a alguien",
+      "hay que escoger lideres",
+      "una norma parece injusta",
+      "una discusion se vuelve personal",
+    ],
+    actions: ["poner un limite", "decir la verdad con cuidado", "proteger la privacidad", "evitar una burla", "incluir", "elegir justamente", "pedir aclaracion", "bajar el conflicto"],
   },
   {
     slug: "convivencia-digital",
@@ -191,7 +542,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Preguntas para trabajar redes sociales, grupos de chat y cuidado online.",
     accent: "violet",
     focus: "el respeto digital",
+    childFocus: "cuidarse en internet",
     strength: "Hago las cosas bien",
+    situations: [
+      "alguien envia una captura sin permiso",
+      "un chat de curso se llena de bromas",
+      "un mensaje se malinterpreta",
+      "una foto podria avergonzar a alguien",
+      "aparece un rumor online",
+      "alguien queda fuera de un grupo",
+      "recibes un comentario hiriente",
+      "hay presion por responder de inmediato",
+    ],
+    actions: ["pedir permiso", "pensar antes de enviar", "aclarar con respeto", "proteger la imagen de otro", "detener un rumor", "incluir digitalmente", "guardar evidencia y pedir ayuda", "regular el uso"],
   },
   {
     slug: "mapa-de-redes",
@@ -200,7 +563,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Juego para reconocer personas, lugares y acciones de apoyo.",
     accent: "emerald",
     focus: "las redes de apoyo",
+    childFocus: "pedir apoyo",
     strength: "Tengo proposito",
+    situations: [
+      "alguien se siente sobrepasado",
+      "un problema no se puede resolver solo",
+      "hay una preocupacion familiar",
+      "una amistad se complico",
+      "aparece ansiedad antes de una prueba",
+      "alguien necesita orientacion",
+      "un secreto pesa demasiado",
+      "una persona quiere ayudar pero no sabe como",
+    ],
+    actions: ["identificar un adulto seguro", "pedir ayuda a tiempo", "acompanar sin resolver todo", "nombrar una red", "elegir un primer paso", "contar lo necesario", "buscar apoyo profesional", "ofrecer presencia"],
   },
   {
     slug: "acuerdos-de-curso",
@@ -209,7 +584,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Cartas para construir normas vivas, claras y cuidadosas.",
     accent: "slate",
     focus: "los acuerdos de convivencia",
+    childFocus: "hacer acuerdos",
     strength: "Soy constructivo",
+    situations: [
+      "una norma no se esta cumpliendo",
+      "el curso habla encima",
+      "hay desorden al trabajar en grupo",
+      "alguien usa bromas que molestan",
+      "varios llegan sin disposicion",
+      "el curso quiere mejorar recreos",
+      "se necesita cuidar materiales comunes",
+      "un acuerdo antiguo ya no sirve",
+    ],
+    actions: ["crear un acuerdo claro", "revisar una norma", "definir una conducta observable", "cuidar turnos", "hacer seguimiento", "reparar incumplimientos", "escuchar necesidades", "mejorar la convivencia"],
   },
   {
     slug: "manejo-del-error",
@@ -218,7 +605,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Preguntas para transformar errores en aprendizaje y reparacion.",
     accent: "rose",
     focus: "el error como aprendizaje",
+    childFocus: "aprender del error",
     strength: "Tengo afan de superacion",
+    situations: [
+      "alguien se equivoca leyendo",
+      "un grupo pierde por una mala decision",
+      "una respuesta salio mal en una prueba",
+      "se rompio un acuerdo",
+      "una broma tuvo consecuencias",
+      "alguien siente verguenza por fallar",
+      "un trabajo no resulto como esperaban",
+      "hay que pedir disculpas y mejorar",
+    ],
+    actions: ["mirar el error sin burla", "buscar aprendizaje", "reparar", "intentar otra estrategia", "pedir retroalimentacion", "tolerar la verguenza", "volver a intentarlo", "celebrar el progreso"],
   },
   {
     slug: "proyecto-de-vida",
@@ -227,7 +626,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Desafios para conversar sobre metas, valores, decisiones y futuro.",
     accent: "emerald",
     focus: "las metas de futuro",
+    childFocus: "imaginar el futuro",
     strength: "Tengo proposito",
+    situations: [
+      "una meta requiere esfuerzo sostenido",
+      "hay presion por elegir rapido",
+      "alguien compara su camino con otros",
+      "un talento necesita practica",
+      "aparece miedo a fracasar",
+      "una decision actual afecta el futuro",
+      "un adulto ofrece orientacion",
+      "un sueno necesita pasos concretos",
+    ],
+    actions: ["imaginar una meta", "elegir un siguiente paso", "conectar valores y decisiones", "pedir orientacion", "practicar constancia", "revisar prioridades", "aprender de modelos", "planificar con realismo"],
   },
   {
     slug: "resolucion-conflictos",
@@ -236,7 +647,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Situaciones para practicar reparacion, limites y acuerdos.",
     accent: "rose",
     focus: "la resolucion de conflictos",
+    childFocus: "resolver conflictos",
     strength: "Soy constructivo",
+    situations: [
+      "dos personas quieren tener la razon",
+      "una broma termino en enojo",
+      "alguien no quiere escuchar",
+      "un grupo toma partido",
+      "hay mensajes cruzados en un chat",
+      "una disculpa suena poco sincera",
+      "ambas partes se sienten heridas",
+      "se necesita un acuerdo para seguir",
+    ],
+    actions: ["escuchar versiones", "separar hechos de interpretaciones", "pedir disculpas", "poner limites", "buscar un acuerdo", "reparar el dano", "pedir mediacion", "cuidar la relacion"],
   },
   {
     slug: "autoestima-en-accion",
@@ -245,7 +668,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Cartas para reconocer valor personal, avances y voz propia.",
     accent: "amber",
     focus: "la autoestima",
+    childFocus: "valorarse",
     strength: "Tengo afan de superacion",
+    situations: [
+      "alguien se compara constantemente",
+      "una critica dolio mas de lo esperado",
+      "un logro pequeno no fue reconocido",
+      "da verguenza mostrar una habilidad",
+      "alguien dice 'no soy bueno para esto'",
+      "una persona necesita defender su voz",
+      "un error afecta la confianza",
+      "hay que reconocer una cualidad propia",
+    ],
+    actions: ["nombrar un avance", "hablarse con respeto", "aceptar una cualidad", "pedir reconocimiento sano", "intentar sin compararse", "defender una opinion", "separar error de valor personal", "mirar fortalezas"],
   },
   {
     slug: "cuidado-del-cuerpo",
@@ -254,7 +689,19 @@ const blueprints: GameBlueprint[] = [
     summary: "Preguntas y movimientos para hablar de descanso, energia y autocuidado.",
     accent: "cyan",
     focus: "el cuidado del cuerpo",
+    childFocus: "cuidar el cuerpo",
     strength: "Hago las cosas bien",
+    situations: [
+      "hay sueno durante la clase",
+      "la energia sube demasiado",
+      "alguien no reconoce sus senales corporales",
+      "una emocion se siente en el estomago",
+      "hay tension por una evaluacion",
+      "el curso necesita hidratarse o descansar",
+      "una rutina saludable se abandono",
+      "el cuerpo pide pausa",
+    ],
+    actions: ["escuchar senales del cuerpo", "regular energia", "descansar mejor", "respirar", "moverse con cuidado", "pedir una pausa", "crear una rutina", "volver al equilibrio"],
   },
   {
     slug: "pertenencia-e-inclusion",
@@ -262,8 +709,20 @@ const blueprints: GameBlueprint[] = [
     category: "Pertenencia y vinculo",
     summary: "Retos para que cada estudiante se sienta visto, invitado y cuidado.",
     accent: "violet",
-    focus: "la pertenencia",
+    focus: "la pertenencia y la inclusion",
+    childFocus: "sentirse parte",
     strength: "Soy amable",
+    situations: [
+      "alguien queda fuera de un grupo",
+      "una diferencia genera curiosidad o burla",
+      "un estudiante nuevo busca lugar",
+      "un juego siempre invita a los mismos",
+      "una opinion minoritaria queda sola",
+      "alguien falta varios dias y vuelve",
+      "un companero participa poco",
+      "el curso necesita que todos cuenten",
+    ],
+    actions: ["invitar a participar", "cuidar diferencias", "hacer espacio", "repartir turnos", "escuchar voces distintas", "acompanar el regreso", "notar a quien falta", "construir pertenencia"],
   },
 ];
 
