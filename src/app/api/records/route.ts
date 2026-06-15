@@ -268,7 +268,7 @@ export async function PUT(request: Request) {
       }
     }
 
-    await supabase.from("audit_logs").insert({
+    const { error: auditError } = await supabase.from("audit_logs").insert({
       institution_id: institutionId,
       actor_id: auth.user.id,
       action: "records_snapshot_saved",
@@ -280,6 +280,9 @@ export async function PUT(request: Request) {
         }, {}),
       },
     });
+    if (auditError) {
+      console.warn("Records audit log insert failed", auditError);
+    }
 
     return NextResponse.json({ ok: true, persistent: true });
   } catch (error) {

@@ -962,7 +962,7 @@ function Sidebar({ activeView, onNavigate, schoolName }: { activeView: ViewId; o
 
 // Mobile navigation: bottom tab bar with the 4 most-used views plus a "Menú"
 // button that opens a full drawer. Only rendered below the lg breakpoint.
-const MOBILE_PRIMARY: ViewId[] = ["dashboard", "today", "triage", "students"];
+const MOBILE_PRIMARY: ViewId[] = ["dashboard", "today", "games", "students"];
 
 function MobileNav({
   activeView,
@@ -7897,8 +7897,7 @@ export default function TizaEducationApp() {
         console.error(error);
         if (!cancelled) {
           setRemoteLoaded(true);
-          setRemoteStatus("error");
-          setToast("No se pudo sincronizar Supabase. Usando respaldo local.");
+          setRemoteStatus("local");
         }
       }
     };
@@ -7963,9 +7962,8 @@ export default function TizaEducationApp() {
       }
       setRemoteStatus(successStatus);
     } catch (error) {
-      console.error(error);
-      setRemoteStatus("error");
-      setToast(`No se pudo guardar en Supabase: ${error instanceof Error ? error.message : String(error)}`);
+      console.warn("Remote records save failed; local backup remains active", error);
+      setRemoteStatus("local");
     }
   }, [authUser, accessToken, remoteLoaded]);
 
