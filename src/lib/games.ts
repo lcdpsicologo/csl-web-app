@@ -1,11 +1,20 @@
 import {
   CircleDot,
+  Compass,
   Gauge,
   Grid3X3,
+  HeartHandshake,
   LucideIcon,
+  MessageCircle,
+  Smile,
+  Sparkles,
   Shuffle,
+  Star,
   TrafficCone,
+  UsersRound,
+  Wind,
 } from "lucide-react";
+import { promptGames } from "@/lib/promptGames";
 
 export type GameStatus = "listo" | "proximamente";
 
@@ -27,6 +36,14 @@ export const games: GameInfo[] = [
     status: "listo",
     icon: Shuffle,
   },
+  ...promptGames.map((game, index): GameInfo => ({
+    title: game.title,
+    href: `/juegos/${game.slug}`,
+    summary: game.summary,
+    audience: "Por nivel escolar",
+    status: "listo",
+    icon: [Gauge, HeartHandshake, Wind, UsersRound, Star, MessageCircle, Compass, Sparkles, Smile, CircleDot][index % 10],
+  })),
   {
     title: "Bingo de Fortalezas",
     href: "/bingo-fortalezas",

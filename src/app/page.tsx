@@ -5933,6 +5933,9 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEve
               <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm hover:bg-cyan-50">
                 <TizaIaIcon className="h-4 w-4" /> Tiza-IA
               </button>
+              <button onClick={() => onNavigate("games")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50">
+                <Gamepad2 className="h-4 w-4" /> Juegos Vinculares
+              </button>
               <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
                 <UserRound className="h-4 w-4" /> Estudiantes
               </button>
@@ -5973,6 +5976,23 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEve
         onReloadCalendar={onReloadCalendar}
         onNavigate={onNavigate}
       />
+
+      <section className="tz-card rounded-2xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50 to-cyan-50 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-emerald-600 text-white shadow-md">
+              <Gamepad2 className="h-6 w-6" />
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold text-slate-950">Juegos Vinculares San Lucas</h2>
+              <p className="mt-1 text-sm text-slate-600">Actividades socioemocionales listas para abrir en clase o compartir por QR.</p>
+            </div>
+          </div>
+          <button onClick={() => onNavigate("games")} className="tz-press rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+            Ver juegos
+          </button>
+        </div>
+      </section>
 
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
         <StatCard label="Estudiantes" value={store.students.length} detail="Registros reales" icon={UserRound} accent="blue" />
@@ -6130,7 +6150,7 @@ function GamesView() {
         </div>
         <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">Juegos Vinculares San Lucas</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          Biblioteca de juegos interactivos para abrir desde Tiza Education o compartir en Canva mediante enlace o QR.
+          Biblioteca de juegos interactivos para abrir desde Tiza Education o compartir en Canva mediante enlace o QR. Hay {games.filter((game) => game.status === "listo").length} juegos listos para usar.
         </p>
       </div>
 
@@ -6145,7 +6165,7 @@ function GamesView() {
               <p className="text-sm text-slate-600">Cada tarjeta abre una ruta independiente del juego.</p>
             </div>
           </div>
-          <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">/revoltijo-emociones</span>
+          <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">{games.length} rutas disponibles</span>
         </div>
       </section>
 
