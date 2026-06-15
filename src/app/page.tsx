@@ -724,6 +724,29 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "team", label: "Equipo", icon: UsersRound },
 ];
 
+type ViewNavItem = (typeof viewNav)[number];
+
+const NAV_ORDER_KEY = "tiza-view-nav-order-v1";
+const defaultNavOrder = viewNav.map((item) => item.id);
+
+const orderViewNav = (order: ViewId[]): ViewNavItem[] => {
+  const validIds = new Set(viewNav.map((item) => item.id));
+  const cleanOrder = order.filter((id) => validIds.has(id));
+  const missing = defaultNavOrder.filter((id) => !cleanOrder.includes(id));
+  const lookup = new Map(viewNav.map((item) => [item.id, item]));
+  return [...cleanOrder, ...missing].map((id) => lookup.get(id)).filter((item): item is ViewNavItem => Boolean(item));
+};
+
+const loadNavOrder = (): ViewId[] => {
+  if (typeof window === "undefined") return defaultNavOrder;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(NAV_ORDER_KEY) || "[]");
+    return Array.isArray(parsed) ? orderViewNav(parsed as ViewId[]).map((item) => item.id) : defaultNavOrder;
+  } catch {
+    return defaultNavOrder;
+  }
+};
+
 const emptyStore = (): DataStore => ({
   students: [],
   courses: [],
@@ -895,7 +918,21 @@ function StatCard({ label, value, detail, icon: Icon, accent = "blue" }: { label
   );
 }
 
-function Sidebar({ activeView, onNavigate, schoolName }: { activeView: ViewId; onNavigate: (view: ViewId) => void; schoolName: string }) {
+function Sidebar({
+  activeView,
+  onNavigate,
+  schoolName,
+  navItems,
+  onMoveNavItem,
+  onResetNavOrder,
+}: {
+  activeView: ViewId;
+  onNavigate: (view: ViewId) => void;
+  schoolName: string;
+  navItems: ViewNavItem[];
+  onMoveNavItem: (view: ViewId, direction: -1 | 1) => void;
+  onResetNavOrder: () => void;
+}) {
   return (
     <aside className="tz-glass fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-slate-200/80 text-slate-700 lg:flex">
       <div className="flex h-full flex-col">
@@ -914,23 +951,60 @@ function Sidebar({ activeView, onNavigate, schoolName }: { activeView: ViewId; o
           </div>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
-          {viewNav.map((item) => {
+          {navItems.map((item, index) => {
             const Icon = item.icon;
             const active = activeView === item.id;
             return (
-              <button
+              <div
                 key={item.id}
-                onClick={() => onNavigate(item.id)}
-                className={`tz-nav-item relative flex h-10 w-full items-center gap-3 overflow-hidden rounded-lg px-3 text-left text-sm font-medium ${
+                className={`group relative flex h-10 w-full items-center overflow-hidden rounded-lg ${
                   active ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
                 {active ? <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-blue-500" /> : null}
-                <Icon className={`h-4 w-4 ${active ? "text-white" : "text-slate-500"}`} />
-                {item.label}
-              </button>
+                <button
+                  onClick={() => onNavigate(item.id)}
+                  className="tz-nav-item flex h-full min-w-0 flex-1 items-center gap-3 px-3 text-left text-sm font-medium"
+                >
+                  <Icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-slate-500"}`} />
+                  <span className="truncate">{item.label}</span>
+                </button>
+                <div className={`mr-1 flex shrink-0 items-center gap-0.5 transition ${active ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}>
+                  <button
+                    type="button"
+                    onClick={() => onMoveNavItem(item.id, -1)}
+                    disabled={index === 0}
+                    title="Subir"
+                    aria-label={`Subir ${item.label}`}
+                    className={`grid h-7 w-7 place-items-center rounded-md transition ${
+                      active ? "text-white/80 hover:bg-white/10" : "text-slate-500 hover:bg-white"
+                    } disabled:cursor-not-allowed disabled:opacity-30`}
+                  >
+                    <ChevronDown className="h-3.5 w-3.5 rotate-180" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onMoveNavItem(item.id, 1)}
+                    disabled={index === navItems.length - 1}
+                    title="Bajar"
+                    aria-label={`Bajar ${item.label}`}
+                    className={`grid h-7 w-7 place-items-center rounded-md transition ${
+                      active ? "text-white/80 hover:bg-white/10" : "text-slate-500 hover:bg-white"
+                    } disabled:cursor-not-allowed disabled:opacity-30`}
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
             );
           })}
+          <button
+            type="button"
+            onClick={onResetNavOrder}
+            className="mt-3 w-full rounded-lg border border-dashed border-slate-200 px-3 py-2 text-left text-xs font-semibold text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-700"
+          >
+            Restablecer orden
+          </button>
         </nav>
         <button
           onClick={() => onNavigate("settings")}
@@ -968,13 +1042,15 @@ function MobileNav({
   activeView,
   onNavigate,
   schoolName,
+  navItems,
 }: {
   activeView: ViewId;
   onNavigate: (view: ViewId) => void;
   schoolName: string;
+  navItems: ViewNavItem[];
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const primary = viewNav.filter((item) => MOBILE_PRIMARY.includes(item.id));
+  const primary = navItems.filter((item) => MOBILE_PRIMARY.includes(item.id));
 
   const go = (view: ViewId) => {
     onNavigate(view);
@@ -1038,7 +1114,7 @@ function MobileNav({
               </div>
             </div>
             <div className="grid grid-cols-3 gap-1.5">
-              {viewNav.map((item) => {
+              {navItems.map((item) => {
                 const Icon = item.icon;
                 const active = activeView === item.id;
                 return (
@@ -6923,6 +6999,76 @@ function AIAssistantView({
   );
 }
 
+function FloatingTizaIA({
+  open,
+  store,
+  accessToken,
+  onOpenChange,
+  onAddRecord,
+  onOpenStudent,
+  onUpdateCourse,
+}: {
+  open: boolean;
+  store: DataStore;
+  accessToken: string;
+  onOpenChange: (open: boolean) => void;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onOpenStudent: (studentId: string) => void;
+  onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+}) {
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => onOpenChange(true)}
+        className={`tz-press fixed bottom-24 right-4 z-[65] grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-white/20 transition hover:-translate-y-0.5 hover:bg-slate-900 lg:bottom-6 lg:right-6 ${
+          open ? "pointer-events-none opacity-0" : "opacity-100"
+        }`}
+        title="Abrir Tiza-IA"
+        aria-label="Abrir Tiza-IA"
+      >
+        <TizaIaMark size={34} />
+      </button>
+
+      {open ? (
+        <div className="fixed inset-0 z-[80]">
+          <button
+            type="button"
+            aria-label="Cerrar Tiza-IA"
+            className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]"
+            onClick={() => onOpenChange(false)}
+          />
+          <section className="absolute inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom))] top-14 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl lg:inset-y-6 lg:left-auto lg:right-6 lg:w-[760px]">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <TizaIaMark size={40} />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold text-slate-950">
+                    <TizaIaWordmark />
+                  </p>
+                  <p className="truncate text-xs text-slate-500">Asistente disponible en esta ventana</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => onOpenChange(false)}
+                className="tz-press grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                title="Cerrar"
+                aria-label="Cerrar Tiza-IA"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="min-h-0 flex-1 overflow-hidden p-3">
+              <AIChatMode store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} onUpdateCourse={onUpdateCourse} />
+            </div>
+          </section>
+        </div>
+      ) : null}
+    </>
+  );
+}
+
 type ChatResult = {
   intent?: "student_triage" | "course_update" | "bulk_import" | "file_analysis" | "answer";
   summary?: string;
@@ -7778,9 +7924,26 @@ export default function TizaEducationApp() {
   const [detailStudentId, setDetailStudentId] = useState("");
   const [detailFocusField, setDetailFocusField] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
+  const [floatingAiOpen, setFloatingAiOpen] = useState(false);
+  const [navOrder, setNavOrder] = useState<ViewId[]>(loadNavOrder);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarFetchedAt, setCalendarFetchedAt] = useState<string>("");
+  const orderedNavItems = useMemo(() => orderViewNav(navOrder), [navOrder]);
+
+  const moveNavItem = (view: ViewId, direction: -1 | 1) => {
+    setNavOrder((current) => {
+      const next = orderViewNav(current).map((item) => item.id);
+      const index = next.indexOf(view);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= next.length) return next;
+      const [item] = next.splice(index, 1);
+      next.splice(target, 0, item);
+      return next;
+    });
+  };
+
+  const resetNavOrder = () => setNavOrder(defaultNavOrder);
 
   const openStudent = (studentId: string, focusField?: string) => {
     setDetailStudentId(studentId);
@@ -7976,6 +8139,10 @@ export default function TizaEducationApp() {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
     storeRef.current = store;
   }, [store]);
+
+  useEffect(() => {
+    window.localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(navOrder));
+  }, [navOrder]);
 
   const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
     if (!authUser || !accessToken || !remoteLoaded) return;
@@ -8942,7 +9109,14 @@ export default function TizaEducationApp() {
 
   return (
     <div className="tz-mobile-shell min-h-screen bg-slate-50 text-slate-950">
-      <Sidebar activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} />
+      <Sidebar
+        activeView={activeView}
+        onNavigate={setActiveView}
+        schoolName={profile.organization || "Colegio San Lucas"}
+        navItems={orderedNavItems}
+        onMoveNavItem={moveNavItem}
+        onResetNavOrder={resetNavOrder}
+      />
       <main className="tz-app-root min-w-0 lg:pl-[272px]">
         <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
           <div className="mx-auto flex w-full max-w-[1440px] min-w-0 items-center gap-2">
@@ -9002,7 +9176,16 @@ export default function TizaEducationApp() {
           {renderView()}
         </div>
       </main>
-      <MobileNav activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} />
+      <MobileNav activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} navItems={orderedNavItems} />
+      <FloatingTizaIA
+        open={floatingAiOpen}
+        onOpenChange={setFloatingAiOpen}
+        store={store}
+        accessToken={accessToken}
+        onAddRecord={addRecord}
+        onOpenStudent={openStudent}
+        onUpdateCourse={updateCourseRecord}
+      />
       {dialogEntity ? (
         <RecordDialog entity={entityConfigs[dialogEntity]} onClose={() => setDialogEntity(null)} onSave={(record) => addRecord(dialogEntity, record)} />
       ) : null}
