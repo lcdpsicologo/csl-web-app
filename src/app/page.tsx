@@ -8185,6 +8185,14 @@ export default function TizaEducationApp() {
   }, [store, authUser, accessToken, remoteLoaded, saveStoreSnapshot]);
 
   useEffect(() => {
+    if (remoteStatus !== "error" || !authUser || !accessToken || !remoteLoaded) return;
+    const timer = window.setTimeout(async () => {
+      await saveStoreSnapshot(storeRef.current);
+    }, 6000);
+    return () => window.clearTimeout(timer);
+  }, [remoteStatus, authUser, accessToken, remoteLoaded, saveStoreSnapshot]);
+
+  useEffect(() => {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
   }, [profile]);
 

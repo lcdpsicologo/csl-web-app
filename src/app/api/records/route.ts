@@ -19,7 +19,7 @@ type DataRecord = {
   id: string;
   createdAt: string;
   updatedAt: string;
-  [key: string]: string;
+  [key: string]: unknown;
 };
 
 type DataStore = Record<EntityId, DataRecord[]>;
@@ -27,7 +27,7 @@ type DataStore = Record<EntityId, DataRecord[]>;
 type AppRecordRow = {
   entity: EntityId;
   record_id: string;
-  data: Record<string, string>;
+  data: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 };
@@ -57,6 +57,32 @@ const emptyStore = (): DataStore => ({
   workshops: [],
   documents: [],
 });
+
+const stableRecordId = (entity: EntityId, record: DataRecord, index: number) => {
+  const current = typeof record.id === "string" ? record.id.trim() : "";
+  if (current) return current;
+  const basis = JSON.stringify(record);
+  let hash = 0;
+  for (let i = 0; i < basis.length; i += 1) {
+    hash = ((hash << 5) - hash + basis.charCodeAt(i)) | 0;
+  }
+  return `recovered-${entity}-${index}-${Math.abs(hash)}`;
+};
+
+const sanitizeData = (record: DataRecord) =>
+  Object.fromEntries(
+    Object.entries(record)
+      .filter(([key, value]) => !["id", "createdAt", "updatedAt"].includes(key) && value !== undefined)
+      .map(([key, value]) => [key, value === null ? "" : value]),
+  );
+
+const withoutUserColumns = <T extends Record<string, unknown>>(rows: T[]) =>
+  rows.map(({ created_by: _createdBy, updated_by: _updatedBy, ...row }) => row);
+
+const shouldRetryWithoutUserColumns = (error: { message?: string; details?: string } | null) => {
+  const text = `${error?.message || ""} ${error?.details || ""}`.toLowerCase();
+  return text.includes("created_by") || text.includes("updated_by");
+};
 
 const getAdminClient = () => {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -210,15 +236,13 @@ export async function PUT(request: Request) {
     const incomingStore = { ...emptyStore(), ...(body.store || {}) } as DataStore;
     const institutionId = await ensureInstitution(supabase, auth.user);
     const rows = ENTITY_IDS.flatMap((entity) =>
-      (incomingStore[entity] || []).map((record) => {
-        const data = Object.fromEntries(
-          Object.entries(record).filter(([key]) => !["id", "createdAt", "updatedAt"].includes(key))
-        );
+      (incomingStore[entity] || []).map((record, index) => {
+        const recordId = stableRecordId(entity, record, index);
         return {
           institution_id: institutionId,
           entity,
-          record_id: record.id,
-          data,
+          record_id: recordId,
+          data: sanitizeData(record),
           created_by: auth.user.id,
           updated_by: auth.user.id,
         };
@@ -232,13 +256,22 @@ export async function PUT(request: Request) {
         .from("app_records")
         .upsert(chunk, { onConflict: "institution_id,entity,record_id" });
 
-      if (upsertError) throw upsertError;
+      if (upsertError) {
+        if (shouldRetryWithoutUserColumns(upsertError)) {
+          const { error: fallbackError } = await supabase
+            .from("app_records")
+            .upsert(withoutUserColumns(chunk), { onConflict: "institution_id,entity,record_id" });
+          if (fallbackError) throw fallbackError;
+        } else {
+          throw upsertError;
+        }
+      }
     }
 
     // Compute IDs to delete by reading existing IDs and diffing against incoming.
     // This avoids huge NOT IN(...) URLs that PostgREST rejects.
     for (const entity of ENTITY_IDS) {
-      const keepIds = new Set((incomingStore[entity] || []).map((record) => record.id));
+      const keepIds = new Set((incomingStore[entity] || []).map((record, index) => stableRecordId(entity, record, index)));
 
       const existingIds: string[] = [];
       const pageSize = 1000;
