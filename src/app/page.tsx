@@ -7,6 +7,7 @@ import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
+import { games } from "@/lib/games";
 import {
   ArrowDownToLine,
   BarChart3,
@@ -27,9 +28,11 @@ import {
   ChevronDown,
   ClipboardList,
   Database,
+  ExternalLink,
   FileSpreadsheet,
   FileText,
   FolderOpen,
+  Gamepad2,
   GraduationCap,
   Home,
   Lock,
@@ -37,6 +40,7 @@ import {
   Mail,
   MessageSquareText,
   Plus,
+  QrCode,
   Save,
   Search,
   Settings,
@@ -61,7 +65,7 @@ type EntityId =
   | "workshops"
   | "documents";
 
-type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "settings" | "pie" | EntityId;
+type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "games" | "settings" | "pie" | EntityId;
 
 type DataRecord = {
   id: string;
@@ -706,6 +710,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "today", label: "Hoy", icon: CalendarDays },
   { id: "triage", label: "Tiza-IA", icon: TizaIaIcon },
   { id: "reports", label: "Reportes", icon: PieChart },
+  { id: "games", label: "Juegos Vinculares", icon: Gamepad2 },
   { id: "students", label: "Estudiantes", icon: UserRound },
   { id: "pie", label: "PIE", icon: Puzzle },
   { id: "courses", label: "Cursos", icon: BookOpen },
@@ -6115,6 +6120,70 @@ function TeamView({
   );
 }
 
+function GamesView() {
+  return (
+    <div>
+      <div className="mb-6">
+        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
+          <Gamepad2 className="h-3.5 w-3.5" />
+          Juegos socioemocionales
+        </div>
+        <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">Juegos Vinculares San Lucas</h1>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+          Biblioteca de juegos interactivos para abrir desde Tiza Education o compartir en Canva mediante enlace o QR.
+        </p>
+      </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="grid h-11 w-11 place-items-center rounded-md bg-slate-900 text-white">
+              <QrCode className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">Enlaces para Canva o QR</h2>
+              <p className="text-sm text-slate-600">Cada tarjeta abre una ruta independiente del juego.</p>
+            </div>
+          </div>
+          <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">/revoltijo-emociones</span>
+        </div>
+      </section>
+
+      <section className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {games.map((game) => {
+          const Icon = game.icon;
+          return (
+            <a
+              key={game.href}
+              href={game.href}
+              className="group flex min-h-[250px] flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="grid h-12 w-12 place-items-center rounded-md bg-slate-900 text-white">
+                  <Icon className="h-6 w-6" />
+                </div>
+                <span
+                  className={`rounded-md px-2.5 py-1 text-xs font-bold ${
+                    game.status === "listo" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  {game.status === "listo" ? "Listo" : "Proximamente"}
+                </span>
+              </div>
+              <h2 className="mt-5 text-lg font-semibold leading-tight tracking-tight text-slate-950">{game.title}</h2>
+              <p className="mt-3 flex-1 text-sm leading-6 text-slate-600">{game.summary}</p>
+              <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
+                <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{game.audience}</span>
+                <ExternalLink className="h-4 w-4 text-slate-400 transition group-hover:text-slate-900" />
+              </div>
+            </a>
+          );
+        })}
+      </section>
+    </div>
+  );
+}
+
 function SettingsView({
   profile,
   setProfile,
@@ -8737,6 +8806,7 @@ export default function TizaEducationApp() {
     if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
+    if (activeView === "games") return <GamesView />;
     if (activeView === "students") {
       return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
     }

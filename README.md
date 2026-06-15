@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tiza Education
 
-## Getting Started
+App web en Next.js para gestión institucional escolar. Incluye una pestaña interna llamada `Juegos Vinculares` con juegos socioemocionales interactivos para abrir desde la app o compartir en Canva mediante enlace o QR.
 
-First, run the development server:
+## Juegos Vinculares
+
+- Dentro de la app: menú lateral `Juegos Vinculares`.
+- `/revoltijo-emociones` juego listo: Revoltijo Vincular de las Emociones.
+- `/bingo-fortalezas` ruta preparada.
+- `/ruleta-preguntas` ruta preparada.
+- `/semaforo-emocional` ruta preparada.
+
+## Editar contenidos
+
+- Catálogo de juegos: `src/lib/games.ts`
+- Tarjetas, niveles, colores y fortalezas: `src/lib/revoltijoCards.ts`
+- Interfaz del juego Revoltijo: `src/components/RevoltijoGame.tsx`
+- Logo colegio: reemplazar `public/logo-san-lucas.png`
+- Logo fortalezas: reemplazar el bloque visual en `src/components/BrandHeader.tsx` y `src/components/RevoltijoGame.tsx` por una imagen real cuando esté disponible.
+
+## Desarrollo local
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Abrir `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Despliegue en Vercel
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+1. Subir el repositorio a GitHub.
+2. En Vercel, crear un nuevo proyecto e importar el repositorio.
+3. Framework preset: Next.js.
+4. Build command: `npm run build`.
+5. Output directory: dejar vacío.
+6. Deploy.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Luego se puede copiar cada URL de juego en Canva o generar un QR con esa ruta.
