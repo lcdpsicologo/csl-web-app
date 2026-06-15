@@ -97,19 +97,6 @@ const getAdminClient = () => {
   });
 };
 
-const getAuthClient = () => {
-  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!rawUrl || !key) return null;
-
-  return createClient(normalizeSupabaseUrl(rawUrl), key, {
-    auth: {
-      persistSession: false,
-    },
-  });
-};
-
 const getToken = (request: Request) => {
   const header = request.headers.get("authorization") || "";
   const [scheme, token] = header.split(" ");
@@ -176,12 +163,11 @@ const ensureInstitution = async (supabase: SupabaseClient, user: User) => {
 
 export async function GET(request: Request) {
   const supabase = getAdminClient();
-  const authClient = getAuthClient();
-  if (!supabase || !authClient) {
+  if (!supabase) {
     return NextResponse.json({ error: "Supabase service credentials are not configured" }, { status: 503 });
   }
 
-  const auth = await authenticate(request, authClient);
+  const auth = await authenticate(request, supabase);
   if (auth.error) return auth.error;
 
   try {
@@ -223,12 +209,11 @@ export async function GET(request: Request) {
 
 export async function PUT(request: Request) {
   const supabase = getAdminClient();
-  const authClient = getAuthClient();
-  if (!supabase || !authClient) {
+  if (!supabase) {
     return NextResponse.json({ error: "Supabase service credentials are not configured" }, { status: 503 });
   }
 
-  const auth = await authenticate(request, authClient);
+  const auth = await authenticate(request, supabase);
   if (auth.error) return auth.error;
 
   try {
@@ -268,41 +253,8 @@ export async function PUT(request: Request) {
       }
     }
 
-    // Compute IDs to delete by reading existing IDs and diffing against incoming.
-    // This avoids huge NOT IN(...) URLs that PostgREST rejects.
-    for (const entity of ENTITY_IDS) {
-      const keepIds = new Set((incomingStore[entity] || []).map((record, index) => stableRecordId(entity, record, index)));
-
-      const existingIds: string[] = [];
-      const pageSize = 1000;
-      let from = 0;
-      while (true) {
-        const { data, error } = await supabase
-          .from("app_records")
-          .select("record_id")
-          .eq("institution_id", institutionId)
-          .eq("entity", entity)
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        const batch = (data as Array<{ record_id: string }> | null) || [];
-        batch.forEach((row) => existingIds.push(row.record_id));
-        if (batch.length < pageSize) break;
-        from += pageSize;
-      }
-
-      const toDelete = existingIds.filter((id) => !keepIds.has(id));
-      const deleteChunk = 200;
-      for (let i = 0; i < toDelete.length; i += deleteChunk) {
-        const slice = toDelete.slice(i, i + deleteChunk);
-        const { error: deleteError } = await supabase
-          .from("app_records")
-          .delete()
-          .eq("institution_id", institutionId)
-          .eq("entity", entity)
-          .in("record_id", slice);
-        if (deleteError) throw deleteError;
-      }
-    }
+    // The app must prefer successful persistence over failing the whole sync
+    // because of cleanup. Deletions are handled by explicit delete calls.
 
     const { error: auditError } = await supabase.from("audit_logs").insert({
       institution_id: institutionId,
