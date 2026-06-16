@@ -335,14 +335,14 @@ a {
 }
 
 ::selection {
-  background: rgb(14 116 144 / 0.92);
-  color: #ffffff;
+  background: rgb(103 232 249 / 0.55);
+  color: #0f172a;
   text-shadow: none;
 }
 
 ::-moz-selection {
-  background: rgb(14 116 144 / 0.92);
-  color: #ffffff;
+  background: rgb(103 232 249 / 0.55);
+  color: #0f172a;
   text-shadow: none;
 }
 
@@ -364,26 +364,26 @@ textarea::-moz-selection {
 }
 
 .tz-ai-chat ::selection {
-  background: #facc15;
+  background: rgb(103 232 249 / 0.62);
   color: #0f172a;
   text-shadow: none;
 }
 
 .tz-ai-chat ::-moz-selection {
-  background: #facc15;
+  background: rgb(103 232 249 / 0.62);
   color: #0f172a;
   text-shadow: none;
 }
 
 .tz-ai-chat textarea::selection,
 .tz-ai-chat input::selection {
-  background: #0f172a;
+  background: rgb(8 145 178 / 0.82);
   color: #ffffff;
 }
 
 .tz-ai-chat textarea::-moz-selection,
 .tz-ai-chat input::-moz-selection {
-  background: #0f172a;
+  background: rgb(8 145 178 / 0.82);
   color: #ffffff;
 }
 

@@ -7390,14 +7390,21 @@ function AIChatMode({
         headers: { authorization: `Bearer ${accessToken}` },
         body: fd,
       });
+      const responseText = await res.text();
       let data: { ok?: boolean; error?: unknown; result?: ChatResult } = {};
-      try { data = await res.json(); } catch {
-        const t = await res.text().catch(() => "");
-        throw new Error(`Respuesta inválida (${res.status}) ${t.slice(0, 200)}`);
+      try { data = responseText ? JSON.parse(responseText) : {}; } catch {
+        if (res.status === 504) {
+          throw new Error("Tiza-IA tardó demasiado procesando el archivo. Prueba con una versión más liviana, divide la nómina por cursos o pega solo la tabla principal.");
+        }
+        throw new Error(`La respuesta del servidor no fue válida (${res.status}). ${responseText.slice(0, 180)}`);
       }
       if (!res.ok || !data.ok) {
         const errField = data.error;
-        const msg = typeof errField === "string" ? errField : (errField && typeof errField === "object" ? ((errField as { message?: string }).message || JSON.stringify(errField)) : `Error ${res.status}`);
+        const msg = typeof errField === "string"
+          ? errField
+          : (errField && typeof errField === "object" ? ((errField as { message?: string }).message || JSON.stringify(errField)) : (
+            res.status === 504 ? "Tiza-IA tardó demasiado procesando el archivo. Divide el documento o pega la tabla principal." : `Error ${res.status}`
+          ));
         throw new Error(msg);
       }
       const result = (data.result || {}) as ChatResult;
@@ -7411,7 +7418,7 @@ function AIChatMode({
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const message = rawMessage === "Failed to fetch"
-        ? "No se pudo subir el archivo. Suele pasar cuando el Word/PDF tiene imágenes o pesa demasiado para Vercel. Usa una versión liviana, divide el archivo o pega el contenido principal en el chat."
+        ? "No se pudo completar la conexión con Tiza-IA. Suele pasar cuando el Word/PDF pesa mucho o tarda demasiado. Usa una versión liviana, divide el archivo por cursos o pega la tabla principal en el chat."
         : rawMessage;
       setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: message } : t));
     }
@@ -7631,11 +7638,11 @@ function AIChatMode({
             {turns.map((turn) => (
               <div key={turn.id} className="space-y-3">
                 <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl rounded-tr-md bg-blue-600 px-4 py-2.5 text-sm text-white shadow-sm">
+                  <div className="max-w-[85%] rounded-2xl rounded-tr-md border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm">
                     {turn.userMessage ? <p className="whitespace-pre-wrap">{turn.userMessage}</p> : <p className="italic opacity-90">(sin texto)</p>}
                     {turn.userFiles.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-1">
-                        {turn.userFiles.map((n, i) => <span key={i} className="rounded-md bg-white/15 px-2 py-0.5 text-[11px]">📎 {n}</span>)}
+                        {turn.userFiles.map((n, i) => <span key={i} className="rounded-md border border-cyan-200 bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">📎 {n}</span>)}
                       </div>
                     ) : null}
                   </div>
@@ -7650,7 +7657,9 @@ function AIChatMode({
                         Tiza-IA está escribiendo…
                       </div>
                     ) : turn.error ? (
-                      <p className="text-rose-700"><strong>Error:</strong> {turn.error}</p>
+                      <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-800">
+                        <p><strong>Error:</strong> {turn.error}</p>
+                      </div>
                     ) : turn.result ? (
                       <ChatResultRenderer
                         turn={turn}

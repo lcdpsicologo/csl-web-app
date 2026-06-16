@@ -6,7 +6,7 @@ import { getAuthClient, authenticateRequest, getGeminiKey, DEFAULT_GEMINI_MODEL 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-const MAX_TEXT_PER_FILE = 30_000;
+const MAX_TEXT_PER_FILE = 20_000;
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 type ExtractedFile = {
@@ -188,14 +188,15 @@ async function handle(request: Request) {
   const extracted: ExtractedFile[] = [];
   for (const file of files) extracted.push(await extractFile(file));
 
-  const rosterTrimmed = roster.slice(0, 500);
+  const hasFiles = extracted.length > 0;
+  const rosterTrimmed = roster.slice(0, hasFiles ? 300 : 500);
   const rosterTable = rosterTrimmed.map((s) => `${s.id}|${s.name}|${s.course || ""}|${s.rut || ""}`).join("\n");
   const coursesList = courses.slice(0, 80).map((c) => `${c.name}${c.cycle ? ` (${c.cycle})` : ""}`).join("\n");
 
   const parts: Array<{ text?: string } | { inline_data: { mime_type: string; data: string } }> = [];
   const textBlocks: string[] = [];
   textBlocks.push(`Fecha de hoy: ${today}`);
-  if (dataContextRaw) textBlocks.push(`\nRESUMEN DE DATOS DEL COLEGIO (úsalo para responder consultas):\n${dataContextRaw.slice(0, 12000)}`);
+  if (dataContextRaw) textBlocks.push(`\nRESUMEN DE DATOS DEL COLEGIO (úsalo para responder consultas):\n${dataContextRaw.slice(0, hasFiles ? 7000 : 12000)}`);
   if (coursesList) textBlocks.push(`\nCURSOS DEL COLEGIO:\n${coursesList}`);
   if (rosterTable) textBlocks.push(`\nNÓMINA (id|nombre|curso|rut, primeros ${rosterTrimmed.length}):\n${rosterTable}`);
   if (message) textBlocks.push(`\nMENSAJE DEL USUARIO:\n"""\n${message}\n"""`);
