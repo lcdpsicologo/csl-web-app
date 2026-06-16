@@ -192,6 +192,13 @@ const normalize = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+const isValidImportedStudentName = (value: string) => {
+  const text = String(value || "").trim();
+  if (!text || /@/.test(text)) return false;
+  const words = text.split(/\s+/).filter((word) => /[a-záéíóúñ]/i.test(word));
+  return words.length >= 2;
+};
+
 const makeCourseRecord = (course: CourseDef): DataRecord => ({
   id: `course-${normalize(course.name).replace(/\s+/g, "-")}`,
   createdAt: nowIso(),
@@ -7362,6 +7369,42 @@ function AIChatMode({
       setPasteNotice(`El envío pesa ${formatFileSize(submittingSize)}. Máximo 4 MB por consulta.`);
       return;
     }
+    const wantsToApplyPrevious = submittingFiles.length === 0 && /(aplic|import|guardar|crear|agreg|anad)/.test(normalize(userMessage));
+    const reusableTurn = wantsToApplyPrevious
+      ? [...turns].reverse().find((turn) => (turn.result?.bulkRecords || []).length > 0)
+      : undefined;
+    if (reusableTurn) {
+      const count = applyTurn(reusableTurn);
+      const result: ChatResult = {
+        intent: "answer",
+        summary: "",
+        answer: count > 0
+          ? `Apliqué ${count} estudiante${count === 1 ? "" : "s"} del lote anterior. Omití cualquier fila donde el nombre fuera un correo o estuviera incompleto.`
+          : "No apliqué registros del lote anterior porque no quedaban filas válidas seleccionadas. Revisa que el nombre no sea un correo y tenga nombre y apellido.",
+        involvedStudents: [],
+        studentRecords: [],
+        courseTarget: "",
+        teamAdditions: [],
+        ercAppend: "",
+        courseCases: [],
+        bulkEntity: "",
+        bulkRecords: [],
+        notes: "",
+      };
+      setConversations((current) => current.map((conversation) => {
+        if (conversation.id !== activeConversationId) return conversation;
+        const hadTurns = (conversation.turns || []).length > 0;
+        return {
+          ...conversation,
+          title: hadTurns ? conversation.title : chatTitleFromMessage(userMessage, userFiles),
+          updatedAt: nowIso(),
+          turns: [...(conversation.turns || []), { id: turnId, userMessage, userFiles, loading: false, result, accepted: {} }],
+        };
+      }));
+      setDraft("");
+      setFiles([]);
+      return;
+    }
     setConversations((current) => current.map((conversation) => {
       if (conversation.id !== activeConversationId) return conversation;
       const hadTurns = (conversation.turns || []).length > 0;
@@ -7428,8 +7471,8 @@ function AIChatMode({
     setTurns((current) => current.map((t) => t.id === turnId ? { ...t, accepted: { ...(t.accepted || {}), [key]: !(t.accepted?.[key]) } } : t));
   };
 
-  const applyTurn = (turn: ChatTurn) => {
-    if (!turn.result) return;
+  function applyTurn(turn: ChatTurn) {
+    if (!turn.result) return 0;
     const r = turn.result;
     const acc = turn.accepted || {};
     let count = 0;
@@ -7490,6 +7533,7 @@ function AIChatMode({
       const entityId = (rec.entity || bulkEntity) as EntityId;
       if (!entityId) return;
       const fields = rec.fields || {};
+      if (entityId === "students" && !isValidImportedStudentName(fields.fullName || "")) return;
       const student = rec.studentId ? store.students.find((s) => s.id === rec.studentId) : null;
       const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...fields };
       if (student) {
@@ -7503,7 +7547,8 @@ function AIChatMode({
     if (count > 0) {
       setTurns((current) => current.map((t) => t.id === turn.id ? { ...t, accepted: undefined, result: { ...r, summary: `✓ ${count} registro${count === 1 ? "" : "s"} creado${count === 1 ? "" : "s"} desde esta consulta.`, studentRecords: [], teamAdditions: [], courseCases: [], bulkRecords: [], ercAppend: "" } } : t));
     }
-  };
+    return count;
+  }
 
   const intentLabel: Record<string, { label: string; tone: string }> = {
     student_triage: { label: "Sobre estudiante(s)", tone: "bg-blue-100 text-blue-700" },
@@ -7771,10 +7816,13 @@ function ChatResultRenderer({
   const accepted = turn.accepted || {};
   const intent = result.intent || "answer";
   const meta = intentLabel[intent] || intentLabel.answer;
+  const visibleBulkRecords = (result.bulkRecords || [])
+    .map((rec, i) => ({ rec, i }))
+    .filter(({ rec }) => ((rec.entity || result.bulkEntity) !== "students") || isValidImportedStudentName(rec.fields?.fullName || ""));
   const hasProposals = (result.studentRecords?.length || 0)
     + (result.teamAdditions?.length || 0)
     + (result.courseCases?.length || 0)
-    + (result.bulkRecords?.length || 0)
+    + visibleBulkRecords.length
     + ((result.ercAppend || "").trim() ? 1 : 0);
 
   return (
@@ -7879,11 +7927,11 @@ function ChatResultRenderer({
         </div>
       ) : null}
 
-      {(result.bulkRecords || []).length > 0 ? (
+      {visibleBulkRecords.length > 0 ? (
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Registros para crear ({result.bulkEntity || "?"})</p>
           <div className="space-y-1.5">
-            {(result.bulkRecords || []).slice(0, 20).map((rec, i) => {
+            {visibleBulkRecords.slice(0, 20).map(({ rec, i }) => {
               const conf = Math.round((rec.confidence ?? 0.8) * 100);
               return (
                 <label key={i} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-xs hover:bg-slate-50">
@@ -7901,7 +7949,7 @@ function ChatResultRenderer({
                 </label>
               );
             })}
-            {(result.bulkRecords || []).length > 20 ? <p className="text-center text-[11px] text-slate-500">… y {(result.bulkRecords || []).length - 20} más</p> : null}
+            {visibleBulkRecords.length > 20 ? <p className="text-center text-[11px] text-slate-500">… y {visibleBulkRecords.length - 20} más</p> : null}
           </div>
         </div>
       ) : null}

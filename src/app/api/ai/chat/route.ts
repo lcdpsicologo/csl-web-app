@@ -57,9 +57,17 @@ const looksLikeCourse = (value: string) => {
 };
 
 const looksLikeName = (value: string) => {
+  if (/@/.test(value)) return false;
   const clean = String(value || "").replace(/\d+/g, " ").replace(/[|,;:\t]/g, " ").trim();
   const parts = clean.split(/\s+/).filter(Boolean);
   return parts.length >= 2 && /[a-záéíóúñ]/i.test(clean) && !looksLikeCourse(clean);
+};
+
+const emailPattern = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
+
+const nameFromCell = (value: string) => {
+  const withoutEmail = String(value || "").replace(emailPattern, " ").replace(/\s+/g, " ").trim();
+  return looksLikeName(withoutEmail) ? withoutEmail : "";
 };
 
 const splitRow = (line: string) => {
@@ -118,17 +126,18 @@ const parseRosterFromText = (text: string, existingRoster: RosterStudent[]) => {
     } else {
       const rutCell = cells.find((cell) => /\b\d{1,2}\.?\d{3}\.?\d{3}-?[0-9kK]\b/.test(cell) || /^\d{7,9}[0-9kK]$/.test(cleanRut(cell)));
       const courseCell = cells.find(looksLikeCourse) || currentCourse;
-      const nameCell = cells.find((cell) => cell !== rutCell && cell !== courseCell && looksLikeName(cell));
-      if (nameCell) fields.fullName = nameCell;
+      const nameCell = cells.find((cell) => cell !== rutCell && cell !== courseCell && nameFromCell(cell));
+      if (nameCell) fields.fullName = nameFromCell(nameCell);
       if (courseCell) fields.course = courseCell;
       if (rutCell) fields.rut = rutCell;
-      const email = cells.find((cell) => /@/.test(cell));
+      const email = cells.map((cell) => cell.match(emailPattern)?.[0] || "").find(Boolean);
       if (email) fields.guardianEmail = email;
       const phone = cells.find((cell) => /(?:\+?56)?\s*9\s*\d{4}\s*\d{4}/.test(cell.replace(/\D/g, "")) || /\b\d{8,9}\b/.test(cell.replace(/\D/g, "")));
       if (phone) fields.guardianPhone = phone;
     }
 
-    fields.fullName = titleCaseName(fields.fullName || "");
+    fields.fullName = titleCaseName(nameFromCell(fields.fullName || "") || fields.fullName || "");
+    if (/@/.test(fields.fullName)) return;
     fields.course = normalizeCourseName(fields.course || currentCourse || "");
     fields.rut = fields.rut || "";
     if (!fields.fullName) return;
