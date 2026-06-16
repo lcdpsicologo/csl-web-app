@@ -7394,7 +7394,7 @@ function AIChatMode({
       let data: { ok?: boolean; error?: unknown; result?: ChatResult } = {};
       try { data = responseText ? JSON.parse(responseText) : {}; } catch {
         if (res.status === 504) {
-          throw new Error("Tiza-IA tardó demasiado procesando el archivo. Prueba con una versión más liviana, divide la nómina por cursos o pega solo la tabla principal.");
+          throw new Error("Tiza-IA tardó demasiado en responder. El archivo puede ser simple, pero el modelo no alcanzó a procesarlo a tiempo. Intenta reenviarlo; ahora se usarán modelos rápidos primero.");
         }
         throw new Error(`La respuesta del servidor no fue válida (${res.status}). ${responseText.slice(0, 180)}`);
       }
@@ -7403,7 +7403,7 @@ function AIChatMode({
         const msg = typeof errField === "string"
           ? errField
           : (errField && typeof errField === "object" ? ((errField as { message?: string }).message || JSON.stringify(errField)) : (
-            res.status === 504 ? "Tiza-IA tardó demasiado procesando el archivo. Divide el documento o pega la tabla principal." : `Error ${res.status}`
+            res.status === 504 ? "Tiza-IA tardó demasiado en responder. Intenta reenviar el archivo; ahora se priorizan modelos rápidos." : `Error ${res.status}`
           ));
         throw new Error(msg);
       }
@@ -7418,7 +7418,7 @@ function AIChatMode({
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const message = rawMessage === "Failed to fetch"
-        ? "No se pudo completar la conexión con Tiza-IA. Suele pasar cuando el Word/PDF pesa mucho o tarda demasiado. Usa una versión liviana, divide el archivo por cursos o pega la tabla principal en el chat."
+        ? "No se pudo completar la conexión con Tiza-IA. Puede ser un corte temporal de la función o del modelo. Intenta reenviar el archivo; si se repite, pega el texto principal en el chat."
         : rawMessage;
       setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: message } : t));
     }

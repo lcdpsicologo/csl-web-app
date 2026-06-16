@@ -225,18 +225,21 @@ async function handle(request: Request) {
     ],
   };
 
-  const fallbackChain = [DEFAULT_GEMINI_MODEL, "gemini-2.5-flash-lite", "gemini-2.0-flash"].filter((m, i, arr) => arr.indexOf(m) === i);
+  const fallbackChain = (hasFiles
+    ? ["gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash", DEFAULT_GEMINI_MODEL]
+    : [DEFAULT_GEMINI_MODEL, "gemini-2.5-flash-lite", "gemini-2.0-flash-lite", "gemini-2.0-flash"]
+  ).filter((m, i, arr) => arr.indexOf(m) === i);
   let parsed: unknown = null;
   let usedModel = DEFAULT_GEMINI_MODEL;
   let lastStatus = 0;
   let lastMsg = "";
 
   outer: for (const candidate of fallbackChain) {
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < (hasFiles ? 1 : 2); attempt += 1) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 800));
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${candidate}:generateContent?key=${apiKey}`;
       const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 50_000);
+      const timer = setTimeout(() => ctrl.abort(), hasFiles ? 16_000 : 25_000);
       let res: Response;
       try {
         res = await fetch(url, {
