@@ -7638,7 +7638,7 @@ function AIChatMode({
             {turns.map((turn) => (
               <div key={turn.id} className="space-y-3">
                 <div className="flex justify-end">
-                  <div className="max-w-[85%] rounded-2xl rounded-tr-md border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm">
+                  <div className="max-w-[85%] rounded-2xl rounded-tr-md border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm text-slate-800 shadow-sm">
                     {turn.userMessage ? <p className="whitespace-pre-wrap">{turn.userMessage}</p> : <p className="italic opacity-90">(sin texto)</p>}
                     {turn.userFiles.length > 0 ? (
                       <div className="mt-2 flex flex-wrap gap-1">

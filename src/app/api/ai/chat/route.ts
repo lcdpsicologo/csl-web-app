@@ -43,6 +43,7 @@ const titleCaseName = (value: string) =>
 
 const normalizeCourseName = (value: string) =>
   String(value || "")
+    .replace(/\bprekinder\b/gi, "Prekínder")
     .replace(/\bpre\s*kinder\b/gi, "Prekínder")
     .replace(/\bkinder\b/gi, "Kínder")
     .replace(/\bpk\b/gi, "Prekínder")
@@ -130,7 +131,8 @@ const parseRosterFromText = (text: string, existingRoster: RosterStudent[]) => {
     fields.fullName = titleCaseName(fields.fullName || "");
     fields.course = normalizeCourseName(fields.course || currentCourse || "");
     fields.rut = fields.rut || "";
-    if (!fields.fullName || !fields.course) return;
+    if (!fields.fullName) return;
+    if (!fields.course) fields.notes = "Curso no detectado automáticamente. Revisar antes de guardar.";
 
     const rut = cleanRut(fields.rut);
     const key = `${normalizeText(fields.fullName)}|${normalizeText(fields.course)}`;
@@ -142,7 +144,7 @@ const parseRosterFromText = (text: string, existingRoster: RosterStudent[]) => {
       skipped.push(`${fields.fullName} ${fields.course}`.trim());
       return;
     }
-    parsed.push({ fields, confidence: fields.rut ? 0.92 : 0.78 });
+    parsed.push({ fields, confidence: fields.rut ? 0.92 : fields.course ? 0.78 : 0.58 });
   });
 
   return { parsed, skipped };
@@ -153,8 +155,9 @@ const shouldDirectImportStudents = (message: string, extracted: ExtractedFile[])
   const text = extracted.map((file) => file.text || "").join("\n");
   if (!text.trim()) return false;
   const asksImport = /(nomina|listado|planilla|estudiantes|alumnos|curso|anad|agreg|import|base de datos)/.test(m);
-  const looksRoster = /(rut|run|curso|estudiante|alumno|pre\s*kinder|kinder|basico|medio)/i.test(text);
-  return asksImport && looksRoster;
+  const normalizedFileText = normalizeText(text);
+  const looksRoster = /(rut|run|curso|estudiante|alumno|pre\s*kinder|prekinder|kinder|basico|medio)/.test(normalizedFileText);
+  return asksImport || looksRoster;
 };
 
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
@@ -340,34 +343,41 @@ async function handle(request: Request) {
         }),
         { parsed: [] as Array<{ fields: Record<string, string>; confidence: number }>, skipped: [] as string[] },
       );
-    if (parsed.parsed.length > 0) {
-      return NextResponse.json({
-        ok: true,
-        result: {
-          intent: "bulk_import",
-          summary: `Encontré ${parsed.parsed.length} estudiante${parsed.parsed.length === 1 ? "" : "s"} nuevos para revisar antes de guardar.`,
-          answer: "",
-          involvedStudents: [],
-          studentRecords: [],
-          courseTarget: "",
-          teamAdditions: [],
-          ercAppend: "",
-          courseCases: [],
-          bulkEntity: "students",
-          bulkRecords: parsed.parsed.map((item) => ({
-            entity: "students",
-            fields: item.fields,
-            studentId: "",
-            confidence: item.confidence,
-          })),
-          notes: parsed.skipped.length
+    const hasParsedRows = parsed.parsed.length > 0;
+    return NextResponse.json({
+      ok: true,
+      result: {
+        intent: hasParsedRows ? "bulk_import" : "file_analysis",
+        summary: hasParsedRows
+          ? `Encontré ${parsed.parsed.length} estudiante${parsed.parsed.length === 1 ? "" : "s"} nuevos para revisar antes de guardar.`
+          : "Leí el archivo, pero no detecté filas completas de estudiantes para importar.",
+        answer: hasParsedRows
+          ? ""
+          : "Pude leer el archivo sin llamar a Gemini, para evitar el timeout. No encontré nombres con estructura suficiente para importarlos con seguridad. Conviene reenviarlo como Excel/CSV o pegar aquí algunas filas de ejemplo con nombre y curso.",
+        involvedStudents: [],
+        studentRecords: [],
+        courseTarget: "",
+        teamAdditions: [],
+        ercAppend: "",
+        courseCases: [],
+        bulkEntity: hasParsedRows ? "students" : "",
+        bulkRecords: parsed.parsed.map((item) => ({
+          entity: "students",
+          fields: item.fields,
+          studentId: "",
+          confidence: item.confidence,
+        })),
+        notes: hasParsedRows
+          ? parsed.skipped.length
             ? `Salté ${parsed.skipped.length} fila${parsed.skipped.length === 1 ? "" : "s"} por posible duplicado, retiro/baja o datos insuficientes. Revisa antes de confirmar.`
-            : "Importación detectada automáticamente desde el archivo. Revisa antes de confirmar.",
-        },
-        model: "direct-roster-parser",
-        filesProcessed: extracted.map((e) => ({ name: e.name, kind: e.inlinePart ? "binary" : "text" })),
-      });
-    }
+            : "Importación detectada automáticamente desde el archivo. Revisa antes de confirmar."
+          : parsed.skipped.length
+            ? `No quedaron filas importables. Además, salté ${parsed.skipped.length} fila${parsed.skipped.length === 1 ? "" : "s"} por posible duplicado, retiro/baja o datos insuficientes.`
+            : "No se llamó a Gemini porque esta solicitud parece una importación de nómina y se procesó localmente para evitar esperas largas.",
+      },
+      model: "direct-roster-parser",
+      filesProcessed: extracted.map((e) => ({ name: e.name, kind: e.inlinePart ? "binary" : "text" })),
+    });
   }
 
   const hasFiles = extracted.length > 0;
