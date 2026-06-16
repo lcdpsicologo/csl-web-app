@@ -7509,7 +7509,7 @@ function AIChatMode({
   return (
     <div
       onDragEnter={handleDrag}
-      className={`relative flex overflow-hidden rounded-2xl border border-slate-200 bg-white ${
+      className={`tz-ai-chat relative flex overflow-hidden rounded-2xl border border-slate-200 bg-white ${
         compact ? "h-full min-h-0" : "h-[calc(100dvh-330px)] min-h-[420px] lg:h-[calc(100vh-260px)] lg:min-h-[480px]"
       }`}
     >

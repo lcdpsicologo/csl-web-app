@@ -335,7 +335,56 @@ a {
 }
 
 ::selection {
-  background: rgb(37 99 235 / 0.20);
+  background: rgb(14 116 144 / 0.92);
+  color: #ffffff;
+  text-shadow: none;
+}
+
+::-moz-selection {
+  background: rgb(14 116 144 / 0.92);
+  color: #ffffff;
+  text-shadow: none;
+}
+
+input::selection,
+textarea::selection {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+input::-moz-selection,
+textarea::-moz-selection {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.tz-ai-chat,
+.tz-ai-chat * {
+  user-select: text;
+}
+
+.tz-ai-chat ::selection {
+  background: #facc15;
+  color: #0f172a;
+  text-shadow: none;
+}
+
+.tz-ai-chat ::-moz-selection {
+  background: #facc15;
+  color: #0f172a;
+  text-shadow: none;
+}
+
+.tz-ai-chat textarea::selection,
+.tz-ai-chat input::selection {
+  background: #0f172a;
+  color: #ffffff;
+}
+
+.tz-ai-chat textarea::-moz-selection,
+.tz-ai-chat input::-moz-selection {
+  background: #0f172a;
+  color: #ffffff;
 }
 
 ::-webkit-scrollbar {
