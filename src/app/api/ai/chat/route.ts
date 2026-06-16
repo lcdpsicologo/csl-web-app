@@ -37,7 +37,18 @@ const extractFile = async (file: File): Promise<ExtractedFile> => {
     });
     return { name, type, text: parts.join("\n\n").slice(0, MAX_TEXT_PER_FILE) };
   }
-  if (lower.endsWith(".csv") || lower.endsWith(".tsv") || lower.endsWith(".txt") || type.startsWith("text/")) {
+  if (
+    lower.endsWith(".csv") ||
+    lower.endsWith(".tsv") ||
+    lower.endsWith(".txt") ||
+    lower.endsWith(".md") ||
+    lower.endsWith(".markdown") ||
+    lower.endsWith(".json") ||
+    lower.endsWith(".html") ||
+    lower.endsWith(".htm") ||
+    type.startsWith("text/") ||
+    type.includes("json")
+  ) {
     return { name, type, text: new TextDecoder("utf-8").decode(buf).slice(0, MAX_TEXT_PER_FILE) };
   }
   if (lower.endsWith(".docx") || type.includes("wordprocessingml") || type.includes("msword")) {
@@ -84,6 +95,8 @@ Lo que puedes hacer:
 - Si hay un ARCHIVO DE AUDIO adjunto, es un mensaje de voz del usuario: transcríbelo y trátalo exactamente igual que si lo hubiera escrito (responde la pregunta o crea los registros que dicte). No digas "recibí un audio" — actúa directamente sobre su contenido.
 - Conversar sobre orientación, convivencia escolar, sugerencias, recomendaciones, redacción de correos a apoderados, planificación de clases de orientación, etc.
 - Ayudar a crear registros cuando el usuario pega correos, mensajes, tablas, o adjunta archivos: detectas qué crear y devuelves las propuestas.
+- Si el usuario adjunta o pega una nómina/listado/planilla de estudiantes de un curso, interpreta columnas aunque tengan nombres distintos (Nombre, Estudiante, Alumno, Curso, RUT, RUN, Apoderado, Teléfono, Correo, Observaciones). Propón bulk_import hacia "students" con fields compatibles: fullName, course, rut, guardianName, guardianPhone, guardianEmail, relevantInfo, supportNeeds, notes, tags.
+- Si el archivo es una captura de pantalla con una tabla o listado, lee visualmente la información y propón una importación revisable. Si algún dato no se ve claro, indícalo en notes en vez de inventarlo.
 
 REGLA CLAVE: si el usuario hace una PREGUNTA o pide información, NO le digas que "tu función es generar registros". Respondele directamente usando el RESUMEN DE DATOS y tu conocimiento del rol de orientador. Solo creas registros si el usuario explícitamente pide guardar/agregar algo o si pegó contenido que claramente debe convertirse en registros (un correo de la profe jefe, una tabla de talleres, etc.).
 

@@ -7018,17 +7018,20 @@ function FloatingTizaIA({
 }) {
   return (
     <>
-      <button
-        type="button"
-        onClick={() => onOpenChange(true)}
-        className={`tz-press fixed bottom-24 right-4 z-[65] grid h-14 w-14 place-items-center rounded-2xl bg-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-white/20 transition hover:-translate-y-0.5 hover:bg-slate-900 lg:bottom-6 lg:right-6 ${
-          open ? "pointer-events-none opacity-0" : "opacity-100"
-        }`}
-        title="Abrir Tiza-IA"
-        aria-label="Abrir Tiza-IA"
-      >
-        <TizaIaMark size={34} />
-      </button>
+      <div className={`fixed bottom-24 right-4 z-[65] flex flex-col items-end gap-2 transition lg:bottom-6 lg:right-6 ${open ? "pointer-events-none opacity-0" : "opacity-100"}`}>
+        <span className="hidden rounded-full border border-slate-200 bg-white/95 px-3 py-1 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur sm:inline-flex">
+          Tiza-IA
+        </span>
+        <button
+          type="button"
+          onClick={() => onOpenChange(true)}
+          className="tz-press grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-cyan-700 via-slate-900 to-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-white/20 transition hover:-translate-y-0.5"
+          title="Abrir Tiza-IA"
+          aria-label="Abrir Tiza-IA"
+        >
+          <TizaIaMark size={40} />
+        </button>
+      </div>
 
       {open ? (
         <div className="fixed inset-0 z-[80]">
@@ -7038,29 +7041,39 @@ function FloatingTizaIA({
             className="absolute inset-0 bg-slate-950/35 backdrop-blur-[2px]"
             onClick={() => onOpenChange(false)}
           />
-          <section className="absolute inset-x-3 bottom-[calc(76px+env(safe-area-inset-bottom))] top-14 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl lg:inset-y-6 lg:left-auto lg:right-6 lg:w-[760px]">
-            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <section className="absolute inset-x-2 bottom-[calc(76px+env(safe-area-inset-bottom))] top-10 flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl sm:inset-x-4 lg:inset-y-5 lg:left-auto lg:right-5 lg:w-[min(920px,calc(100vw-330px))]">
+            <header className="relative shrink-0 overflow-hidden border-b border-slate-200 bg-gradient-to-br from-slate-950 via-cyan-950 to-slate-900 px-4 py-3 text-white">
+              <div className="pointer-events-none absolute inset-3 rounded-xl border border-dashed border-white/10" />
+              <div className="relative flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <TizaIaMark size={40} />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-950">
+                  <p className="truncate text-sm font-semibold text-white">
                     <TizaIaWordmark />
                   </p>
-                  <p className="truncate text-xs text-slate-500">Asistente disponible en esta ventana</p>
+                  <p className="truncate text-xs text-cyan-100/85">Pega screenshots, arrastra archivos o sube planillas para importar con revisión.</p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => onOpenChange(false)}
-                className="tz-press grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                className="tz-press grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/15 bg-white/10 text-white hover:bg-white/20"
                 title="Cerrar"
                 aria-label="Cerrar Tiza-IA"
               >
                 <X className="h-4 w-4" />
               </button>
+              </div>
             </header>
-            <div className="min-h-0 flex-1 overflow-hidden p-3">
-              <AIChatMode store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} onUpdateCourse={onUpdateCourse} />
+            <div className="min-h-0 flex-1 overflow-hidden bg-slate-50 p-2 sm:p-3">
+              <AIChatMode
+                store={store}
+                accessToken={accessToken}
+                onAddRecord={onAddRecord}
+                onOpenStudent={onOpenStudent}
+                onUpdateCourse={onUpdateCourse}
+                compact
+              />
             </div>
           </section>
         </div>
@@ -7142,15 +7155,18 @@ function AIChatMode({
   onAddRecord,
   onOpenStudent,
   onUpdateCourse,
+  compact = false,
 }: {
   store: DataStore;
   accessToken: string;
   onAddRecord: (entity: EntityId, record: DataRecord) => void;
   onOpenStudent: (studentId: string) => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+  compact?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [pasteNotice, setPasteNotice] = useState("");
   const [conversations, setConversations] = useState<ChatConversation[]>(loadChatConversations);
   const [activeConversationId, setActiveConversationId] = useState(() => conversations[0]?.id || "");
   const [isDragActive, setIsDragActive] = useState(false);
@@ -7221,10 +7237,51 @@ function AIChatMode({
     }
   }, [conversations]);
 
+  useEffect(() => {
+    if (!pasteNotice) return;
+    const timer = window.setTimeout(() => setPasteNotice(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [pasteNotice]);
+
   const addFiles = (incoming: FileList | File[]) => {
-    setFiles((current) => [...current, ...Array.from(incoming)].slice(0, 6));
+    const accepted = Array.from(incoming).filter((file) => file.size > 0);
+    if (!accepted.length) return;
+    setFiles((current) => {
+      const next = [...current, ...accepted].slice(0, 10);
+      if (current.length + accepted.length > 10) setPasteNotice("Se adjuntaron los primeros 10 archivos.");
+      return next;
+    });
   };
   const removeFile = (i: number) => setFiles((c) => c.filter((_, idx) => idx !== i));
+
+  const fileExtensionFromMime = (mime: string) => {
+    if (mime.includes("jpeg")) return "jpg";
+    if (mime.includes("png")) return "png";
+    if (mime.includes("webp")) return "webp";
+    if (mime.includes("gif")) return "gif";
+    if (mime.includes("pdf")) return "pdf";
+    return "archivo";
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = Array.from(event.clipboardData.items || []);
+    const pastedFiles = items
+      .filter((item) => item.kind === "file")
+      .map((item, index) => {
+        const file = item.getAsFile();
+        if (!file) return null;
+        const hasName = file.name && file.name.trim();
+        const ext = fileExtensionFromMime(file.type || "image/png");
+        const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const name = hasName ? file.name : `screenshot-${stamp}-${index + 1}.${ext}`;
+        return new File([file], name, { type: file.type || "application/octet-stream", lastModified: Date.now() });
+      })
+      .filter((file): file is File => Boolean(file));
+    if (!pastedFiles.length) return;
+    addFiles(pastedFiles);
+    setPasteNotice(pastedFiles.length === 1 ? `${pastedFiles[0].name} adjuntado desde el portapapeles.` : `${pastedFiles.length} archivos adjuntados desde el portapapeles.`);
+    event.preventDefault();
+  };
 
   const startRecording = async () => {
     try {
@@ -7423,7 +7480,9 @@ function AIChatMode({
   return (
     <div
       onDragEnter={handleDrag}
-      className="relative flex h-[calc(100dvh-330px)] min-h-[420px] overflow-hidden rounded-2xl border border-slate-200 bg-white lg:h-[calc(100vh-260px)] lg:min-h-[480px]"
+      className={`relative flex overflow-hidden rounded-2xl border border-slate-200 bg-white ${
+        compact ? "h-full min-h-0" : "h-[calc(100dvh-330px)] min-h-[420px] lg:h-[calc(100vh-260px)] lg:min-h-[480px]"
+      }`}
     >
       {/* Drag overlay */}
       {isDragActive && (
@@ -7584,6 +7643,16 @@ function AIChatMode({
 
       <div className="border-t border-slate-200 bg-slate-50/40 p-3 sm:p-4">
         <div className="mx-auto max-w-3xl">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
+            {["Excel", "CSV", "PDF", "Word", "TXT/JSON", "imagenes", "screenshots", "audio"].map((label) => (
+              <span key={label} className="rounded-full border border-slate-200 bg-white px-2 py-1">{label}</span>
+            ))}
+          </div>
+          {pasteNotice ? (
+            <div className="mb-2 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800">
+              {pasteNotice}
+            </div>
+          ) : null}
           {files.length > 0 ? (
             <div className="mb-2 flex flex-wrap gap-1.5">
               {files.map((f, i) => (
@@ -7594,7 +7663,7 @@ function AIChatMode({
             </div>
           ) : null}
           <div className={`flex items-end gap-2 rounded-2xl border bg-white p-2 shadow-sm transition focus-within:border-cyan-700 ${recording ? "border-rose-400 ring-2 ring-rose-200" : "border-slate-300"}`}>
-            <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,image/*,audio/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
+            <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.markdown,.json,.html,.htm,image/*,audio/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
             <button onClick={() => fileInputRef.current?.click()} title="Adjuntar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
               <Upload className="h-4 w-4" />
             </button>
@@ -7621,13 +7690,14 @@ function AIChatMode({
             <textarea
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onPaste={handlePaste}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault();
                   send();
                 }
               }}
-              placeholder={recording ? "Grabando audio… detén la grabación para adjuntarlo." : "Pega un correo, escribe algo, graba audio o adjunta un archivo."}
+              placeholder={recording ? "Grabando audio… detén la grabación para adjuntarlo." : "Escribe, pega un correo o usa Ctrl+V para adjuntar un screenshot."}
               rows={2}
               className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400"
             />
@@ -7635,7 +7705,7 @@ function AIChatMode({
               <TizaIaIcon className="h-4 w-4" /> Enviar
             </button>
           </div>
-          <p className="mt-1.5 text-[11px] text-slate-400">Enter para enviar · Shift+Enter para salto de línea · 🎙 para mensaje de voz.</p>
+          <p className="mt-1.5 text-[11px] text-slate-400">Enter para enviar · Shift+Enter para salto de línea · Ctrl+V adjunta screenshots copiados · Arrastra archivos sobre el chat.</p>
         </div>
       </div>
       </div>
