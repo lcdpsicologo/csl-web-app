@@ -6,7 +6,7 @@ import { getAuthClient, authenticateRequest, getGeminiKey, DEFAULT_GEMINI_MODEL 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
-const MAX_TEXT_PER_FILE = 20_000;
+const MAX_TEXT_PER_FILE = 120_000;
 const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 type ExtractedFile = {
@@ -46,6 +46,17 @@ const normalizeCourseName = (value: string) =>
     .replace(/\bprekinder\b/gi, "Prekínder")
     .replace(/\bpre\s*kinder\b/gi, "Prekínder")
     .replace(/\bkinder\b/gi, "Kínder")
+    .replace(/\bKA\b/g, "Kínder A")
+    .replace(/\bKB\b/g, "Kínder B")
+    .replace(/\bKC\b/g, "Kínder C")
+    .replace(/(^|\s)1\s*[ªA](?=\s|$)/gi, (_match, prefix) => `${prefix}1° básico A`)
+    .replace(/(^|\s)1\s*B(?=\s|$)/gi, (_match, prefix) => `${prefix}1° básico B`)
+    .replace(/(^|\s)2\s*[ªA](?=\s|$)/gi, (_match, prefix) => `${prefix}2° básico A`)
+    .replace(/(^|\s)2\s*B(?=\s|$)/gi, (_match, prefix) => `${prefix}2° básico B`)
+    .replace(/(^|\s)3\s*[ªA](?=\s|$)/gi, (_match, prefix) => `${prefix}3° básico A`)
+    .replace(/(^|\s)3\s*B(?=\s|$)/gi, (_match, prefix) => `${prefix}3° básico B`)
+    .replace(/(^|\s)4\s*[ªA](?=\s|$)/gi, (_match, prefix) => `${prefix}4° básico A`)
+    .replace(/(^|\s)4\s*B(?=\s|$)/gi, (_match, prefix) => `${prefix}4° básico B`)
     .replace(/\bpk\b/gi, "Prekínder")
     .replace(/\bk\b/gi, "Kínder")
     .replace(/\s+/g, " ")
@@ -53,7 +64,7 @@ const normalizeCourseName = (value: string) =>
 
 const looksLikeCourse = (value: string) => {
   const text = normalizeText(value);
-  return /\b(pre\s*kinder|prekinder|kinder|[1-8]\s*[°º]?\s*(basico|basica)|i{1,3}\s*[°º]?\s*medio|iv\s*[°º]?\s*medio)\b/.test(text);
+  return /\b(pre\s*kinder|prekinder|kinder|k[abc]|[1-8]\s*[°ºª]?\s*[ab]?\s*(basico|basica)?|i{1,3}\s*[°º]?\s*medio|iv\s*[°º]?\s*medio)\b/.test(text);
 };
 
 const looksLikeName = (value: string) => {
@@ -102,7 +113,7 @@ const parseRosterFromText = (text: string, existingRoster: RosterStudent[]) => {
   let headerMap: string[] = [];
 
   lines.forEach((line) => {
-    if (/retirad[oa]|baja|egresad[oa]/i.test(line)) {
+    if (/retirad[oa]|baja|egresad[oa]|cambiad[oa]/i.test(line)) {
       skipped.push(line.slice(0, 120));
       return;
     }
@@ -177,6 +188,49 @@ const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   return Buffer.from(binary, "binary").toString("base64");
 };
 
+const decodeHtml = (value: string) =>
+  String(value || "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_match, code) => String.fromCharCode(parseInt(code, 16)));
+
+const htmlText = (value: string) =>
+  decodeHtml(String(value || "").replace(/<[^>]+>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+
+const wordHtmlToTabularText = (html: string) => {
+  const parts: string[] = [];
+  let currentCourse = "";
+  const tokenPattern = /<p[^>]*>[\s\S]*?<\/p>|<table[^>]*>[\s\S]*?<\/table>/gi;
+  const tokens = String(html || "").match(tokenPattern) || [];
+
+  tokens.forEach((token) => {
+    if (/^<p/i.test(token)) {
+      const text = htmlText(token);
+      if (text && looksLikeCourse(text)) currentCourse = normalizeCourseName(text);
+      return;
+    }
+    if (!/^<table/i.test(token)) return;
+    const rows = token.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi) || [];
+    if (!rows.length) return;
+    if (currentCourse) parts.push(currentCourse);
+    rows.forEach((row) => {
+      const cells = row.match(/<t[dh][^>]*>[\s\S]*?<\/t[dh]>/gi) || [];
+      const values = cells.map(htmlText);
+      if (values.some(Boolean)) parts.push(values.join("\t"));
+    });
+    parts.push("");
+  });
+
+  return parts.join("\n").trim();
+};
+
 const extractFile = async (file: File): Promise<ExtractedFile> => {
   const name = file.name || "archivo";
   const type = (file.type || "").toLowerCase();
@@ -207,6 +261,9 @@ const extractFile = async (file: File): Promise<ExtractedFile> => {
   }
   if (lower.endsWith(".docx") || type.includes("wordprocessingml") || type.includes("msword")) {
     try {
+      const html = await mammoth.convertToHtml({ buffer: Buffer.from(buf) });
+      const tabular = wordHtmlToTabularText(html.value || "");
+      if (tabular) return { name, type, text: tabular.slice(0, MAX_TEXT_PER_FILE) };
       const result = await mammoth.extractRawText({ buffer: Buffer.from(buf) });
       return { name, type, text: (result.value || "").slice(0, MAX_TEXT_PER_FILE) };
     } catch (err) {
