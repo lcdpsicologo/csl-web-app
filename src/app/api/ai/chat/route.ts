@@ -16,6 +16,147 @@ type ExtractedFile = {
   inlinePart?: { inline_data: { mime_type: string; data: string } };
 };
 
+type RosterStudent = {
+  id: string;
+  name: string;
+  course?: string;
+  rut?: string;
+};
+
+const normalizeText = (value: string) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+const cleanRut = (value: string) => String(value || "").replace(/[^0-9kK]/g, "").toUpperCase();
+
+const titleCaseName = (value: string) =>
+  String(value || "")
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : part)
+    .join(" ")
+    .trim();
+
+const normalizeCourseName = (value: string) =>
+  String(value || "")
+    .replace(/\bpre\s*kinder\b/gi, "Prekínder")
+    .replace(/\bkinder\b/gi, "Kínder")
+    .replace(/\bpk\b/gi, "Prekínder")
+    .replace(/\bk\b/gi, "Kínder")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const looksLikeCourse = (value: string) => {
+  const text = normalizeText(value);
+  return /\b(pre\s*kinder|prekinder|kinder|[1-8]\s*[°º]?\s*(basico|basica)|i{1,3}\s*[°º]?\s*medio|iv\s*[°º]?\s*medio)\b/.test(text);
+};
+
+const looksLikeName = (value: string) => {
+  const clean = String(value || "").replace(/\d+/g, " ").replace(/[|,;:\t]/g, " ").trim();
+  const parts = clean.split(/\s+/).filter(Boolean);
+  return parts.length >= 2 && /[a-záéíóúñ]/i.test(clean) && !looksLikeCourse(clean);
+};
+
+const splitRow = (line: string) => {
+  if (line.includes("\t")) return line.split("\t").map((cell) => cell.trim());
+  if (line.includes(";")) return line.split(";").map((cell) => cell.trim());
+  if (line.includes(",")) return line.split(",").map((cell) => cell.trim());
+  return line.split(/\s{2,}/).map((cell) => cell.trim()).filter(Boolean);
+};
+
+const fieldForHeader = (header: string) => {
+  const h = normalizeText(header);
+  if (/(nombre|estudiante|alumno|alumna|apellidos)/.test(h)) return "fullName";
+  if (/(curso|nivel)/.test(h)) return "course";
+  if (/(rut|run)/.test(h)) return "rut";
+  if (/(apoderado|madre|padre|tutor)/.test(h)) return "guardianName";
+  if (/(telefono|celular|fono)/.test(h)) return "guardianPhone";
+  if (/(correo|email|mail)/.test(h)) return "guardianEmail";
+  if (/(observacion|nota|diagnostico|pie|nee|apoyo)/.test(h)) return "notes";
+  return "";
+};
+
+const parseRosterFromText = (text: string, existingRoster: RosterStudent[]) => {
+  const lines = String(text || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line && !/^=+\s*hoja/i.test(line));
+  const existingRut = new Set(existingRoster.map((student) => cleanRut(student.rut || "")).filter(Boolean));
+  const existingNameCourse = new Set(existingRoster.map((student) => `${normalizeText(student.name)}|${normalizeText(student.course || "")}`));
+  const parsed: Array<{ fields: Record<string, string>; confidence: number }> = [];
+  const skipped: string[] = [];
+  let currentCourse = "";
+  let headerMap: string[] = [];
+
+  lines.forEach((line) => {
+    if (/retirad[oa]|baja|egresad[oa]/i.test(line)) {
+      skipped.push(line.slice(0, 120));
+      return;
+    }
+    const cells = splitRow(line).filter(Boolean);
+    if (cells.length === 1 && looksLikeCourse(cells[0])) {
+      currentCourse = normalizeCourseName(cells[0]);
+      return;
+    }
+    const mapped = cells.map(fieldForHeader);
+    if (mapped.filter(Boolean).length >= 2) {
+      headerMap = mapped;
+      return;
+    }
+
+    const fields: Record<string, string> = {};
+    if (headerMap.length && cells.length >= 2) {
+      cells.forEach((cell, index) => {
+        const key = headerMap[index];
+        if (key) fields[key] = cell;
+      });
+    } else {
+      const rutCell = cells.find((cell) => /\b\d{1,2}\.?\d{3}\.?\d{3}-?[0-9kK]\b/.test(cell) || /^\d{7,9}[0-9kK]$/.test(cleanRut(cell)));
+      const courseCell = cells.find(looksLikeCourse) || currentCourse;
+      const nameCell = cells.find((cell) => cell !== rutCell && cell !== courseCell && looksLikeName(cell));
+      if (nameCell) fields.fullName = nameCell;
+      if (courseCell) fields.course = courseCell;
+      if (rutCell) fields.rut = rutCell;
+      const email = cells.find((cell) => /@/.test(cell));
+      if (email) fields.guardianEmail = email;
+      const phone = cells.find((cell) => /(?:\+?56)?\s*9\s*\d{4}\s*\d{4}/.test(cell.replace(/\D/g, "")) || /\b\d{8,9}\b/.test(cell.replace(/\D/g, "")));
+      if (phone) fields.guardianPhone = phone;
+    }
+
+    fields.fullName = titleCaseName(fields.fullName || "");
+    fields.course = normalizeCourseName(fields.course || currentCourse || "");
+    fields.rut = fields.rut || "";
+    if (!fields.fullName || !fields.course) return;
+
+    const rut = cleanRut(fields.rut);
+    const key = `${normalizeText(fields.fullName)}|${normalizeText(fields.course)}`;
+    if ((rut && existingRut.has(rut)) || existingNameCourse.has(key)) {
+      skipped.push(`${fields.fullName} ${fields.course}`.trim());
+      return;
+    }
+    if (parsed.some((item) => `${normalizeText(item.fields.fullName)}|${normalizeText(item.fields.course)}` === key || (rut && cleanRut(item.fields.rut || "") === rut))) {
+      skipped.push(`${fields.fullName} ${fields.course}`.trim());
+      return;
+    }
+    parsed.push({ fields, confidence: fields.rut ? 0.92 : 0.78 });
+  });
+
+  return { parsed, skipped };
+};
+
+const shouldDirectImportStudents = (message: string, extracted: ExtractedFile[]) => {
+  const m = normalizeText(message);
+  const text = extracted.map((file) => file.text || "").join("\n");
+  if (!text.trim()) return false;
+  const asksImport = /(nomina|listado|planilla|estudiantes|alumnos|curso|anad|agreg|import|base de datos)/.test(m);
+  const looksRoster = /(rut|run|curso|estudiante|alumno|pre\s*kinder|kinder|basico|medio)/i.test(text);
+  return asksImport && looksRoster;
+};
+
 const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
   const bytes = new Uint8Array(buffer);
   let binary = "";
@@ -187,6 +328,47 @@ async function handle(request: Request) {
 
   const extracted: ExtractedFile[] = [];
   for (const file of files) extracted.push(await extractFile(file));
+
+  if (shouldDirectImportStudents(message, extracted)) {
+    const parsed = extracted
+      .filter((file) => file.text)
+      .map((file) => parseRosterFromText(file.text || "", roster))
+      .reduce(
+        (acc, item) => ({
+          parsed: [...acc.parsed, ...item.parsed],
+          skipped: [...acc.skipped, ...item.skipped],
+        }),
+        { parsed: [] as Array<{ fields: Record<string, string>; confidence: number }>, skipped: [] as string[] },
+      );
+    if (parsed.parsed.length > 0) {
+      return NextResponse.json({
+        ok: true,
+        result: {
+          intent: "bulk_import",
+          summary: `Encontré ${parsed.parsed.length} estudiante${parsed.parsed.length === 1 ? "" : "s"} nuevos para revisar antes de guardar.`,
+          answer: "",
+          involvedStudents: [],
+          studentRecords: [],
+          courseTarget: "",
+          teamAdditions: [],
+          ercAppend: "",
+          courseCases: [],
+          bulkEntity: "students",
+          bulkRecords: parsed.parsed.map((item) => ({
+            entity: "students",
+            fields: item.fields,
+            studentId: "",
+            confidence: item.confidence,
+          })),
+          notes: parsed.skipped.length
+            ? `Salté ${parsed.skipped.length} fila${parsed.skipped.length === 1 ? "" : "s"} por posible duplicado, retiro/baja o datos insuficientes. Revisa antes de confirmar.`
+            : "Importación detectada automáticamente desde el archivo. Revisa antes de confirmar.",
+        },
+        model: "direct-roster-parser",
+        filesProcessed: extracted.map((e) => ({ name: e.name, kind: e.inlinePart ? "binary" : "text" })),
+      });
+    }
+  }
 
   const hasFiles = extracted.length > 0;
   const rosterTrimmed = roster.slice(0, hasFiles ? 300 : 500);
