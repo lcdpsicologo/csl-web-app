@@ -7116,6 +7116,8 @@ type ChatConversation = {
 };
 
 const AI_CHAT_CONVERSATIONS_KEY = "tiza-ia-conversations-v1";
+const AI_MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+const formatFileSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
 
 const makeChatConversation = (): ChatConversation => {
   const now = nowIso();
@@ -7244,11 +7246,29 @@ function AIChatMode({
   }, [pasteNotice]);
 
   const addFiles = (incoming: FileList | File[]) => {
-    const accepted = Array.from(incoming).filter((file) => file.size > 0);
+    const incomingFiles = Array.from(incoming).filter((file) => file.size > 0);
+    const oversized = incomingFiles.filter((file) => file.size > AI_MAX_UPLOAD_BYTES);
+    if (oversized.length) {
+      const names = oversized.slice(0, 2).map((file) => `${file.name} (${formatFileSize(file.size)})`).join(", ");
+      setPasteNotice(`${names} supera el máximo de 4 MB. Divide el archivo, quita imágenes pesadas o exporta una versión liviana antes de subirlo.`);
+    }
+    const accepted = incomingFiles.filter((file) => file.size <= AI_MAX_UPLOAD_BYTES);
     if (!accepted.length) return;
     setFiles((current) => {
-      const next = [...current, ...accepted].slice(0, 10);
-      if (current.length + accepted.length > 10) setPasteNotice("Se adjuntaron los primeros 10 archivos.");
+      const total = current.reduce((sum, file) => sum + file.size, 0);
+      const nextFiles: File[] = [];
+      let nextTotal = total;
+      accepted.forEach((file) => {
+        if (nextTotal + file.size <= AI_MAX_UPLOAD_BYTES) {
+          nextFiles.push(file);
+          nextTotal += file.size;
+        }
+      });
+      if (nextFiles.length < accepted.length) {
+        setPasteNotice(`El envío completo no puede superar 4 MB. Se adjuntaron ${nextFiles.length} archivo${nextFiles.length === 1 ? "" : "s"}.`);
+      }
+      const next = [...current, ...nextFiles].slice(0, 10);
+      if (current.length + nextFiles.length > 10) setPasteNotice("Se adjuntaron los primeros 10 archivos.");
       return next;
     });
   };
@@ -7336,6 +7356,12 @@ function AIChatMode({
     const turnId = uid();
     const userFiles = files.map((f) => f.name);
     const userMessage = draft.trim();
+    const submittingFiles = files;
+    const submittingSize = submittingFiles.reduce((sum, file) => sum + file.size, 0);
+    if (submittingSize > AI_MAX_UPLOAD_BYTES) {
+      setPasteNotice(`El envío pesa ${formatFileSize(submittingSize)}. Máximo 4 MB por consulta.`);
+      return;
+    }
     setConversations((current) => current.map((conversation) => {
       if (conversation.id !== activeConversationId) return conversation;
       const hadTurns = (conversation.turns || []).length > 0;
@@ -7346,7 +7372,6 @@ function AIChatMode({
         turns: [...(conversation.turns || []), { id: turnId, userMessage, userFiles, loading: true, accepted: {} }],
       };
     }));
-    const submittingFiles = files;
     setDraft("");
     setFiles([]);
 
@@ -7384,7 +7409,11 @@ function AIChatMode({
       if ((result.ercAppend || "").trim()) accepted["erc"] = true;
       setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, result, accepted } : t));
     } catch (err) {
-      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: err instanceof Error ? err.message : String(err) } : t));
+      const rawMessage = err instanceof Error ? err.message : String(err);
+      const message = rawMessage === "Failed to fetch"
+        ? "No se pudo subir el archivo. Suele pasar cuando el Word/PDF tiene imágenes o pesa demasiado para Vercel. Usa una versión liviana, divide el archivo o pega el contenido principal en el chat."
+        : rawMessage;
+      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: message } : t));
     }
   };
 

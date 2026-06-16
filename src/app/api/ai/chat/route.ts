@@ -7,6 +7,7 @@ export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
 const MAX_TEXT_PER_FILE = 30_000;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 
 type ExtractedFile = {
   name: string;
@@ -180,8 +181,8 @@ async function handle(request: Request) {
   }
 
   const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-  if (totalSize > 12 * 1024 * 1024) {
-    return NextResponse.json({ error: `Archivos demasiado grandes (${(totalSize / 1024 / 1024).toFixed(1)} MB). Máximo 12 MB.` }, { status: 413 });
+  if (totalSize > MAX_UPLOAD_BYTES) {
+    return NextResponse.json({ error: `Archivos demasiado grandes (${(totalSize / 1024 / 1024).toFixed(1)} MB). Máximo 4 MB por envío.` }, { status: 413 });
   }
 
   const extracted: ExtractedFile[] = [];
