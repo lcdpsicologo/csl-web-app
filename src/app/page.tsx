@@ -1350,6 +1350,12 @@ function WorkshopsView({
   const [draftFileNotice, setDraftFileNotice] = useState("");
   const [attendanceQuery, setAttendanceQuery] = useState("");
   const [fileNotice, setFileNotice] = useState("");
+  const [editingWorkshopId, setEditingWorkshopId] = useState("");
+  const [editWorkshop, setEditWorkshop] = useState({ date: "", title: "", responsible: "", status: "Planificado", notes: "" });
+  const [editCourses, setEditCourses] = useState<string[]>([]);
+  const [editPresentIds, setEditPresentIds] = useState<string[]>([]);
+  const [editAbsentIds, setEditAbsentIds] = useState<string[]>([]);
+  const [editAttachments, setEditAttachments] = useState<WorkshopAttachment[]>([]);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
   const draftFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
@@ -1358,8 +1364,13 @@ function WorkshopsView({
   const presentIds = selected ? parseJsonArray<string>(selected.presentStudentIds) : [];
   const absentIds = selected ? parseJsonArray<string>(selected.absentStudentIds) : [];
   const attachments = selected ? parseJsonArray<WorkshopAttachment>(selected.attachments) : [];
-  const selectedCourseSet = new Set(selectedCourses);
-  const selectedStudents = selectedCourses.length
+  const isEditingSelected = Boolean(selected && editingWorkshopId === selected.id);
+  const visibleCourses = isEditingSelected ? editCourses : selectedCourses;
+  const visiblePresentIds = isEditingSelected ? editPresentIds : presentIds;
+  const visibleAbsentIds = isEditingSelected ? editAbsentIds : absentIds;
+  const visibleAttachments = isEditingSelected ? editAttachments : attachments;
+  const selectedCourseSet = new Set(visibleCourses);
+  const selectedStudents = visibleCourses.length
     ? store.students.filter((student) => selectedCourseSet.has(student.course || ""))
     : [];
   const attendanceSearch = normalize(attendanceQuery);
@@ -1418,28 +1429,67 @@ function WorkshopsView({
 
   const toggleSelectedCourse = (courseName: string) => {
     if (!selected) return;
-    const next = selectedCourses.includes(courseName)
-      ? selectedCourses.filter((course) => course !== courseName)
-      : [...selectedCourses, courseName];
+    if (!isEditingSelected) return;
+    const next = editCourses.includes(courseName)
+      ? editCourses.filter((course) => course !== courseName)
+      : [...editCourses, courseName];
     const allowedStudents = new Set(store.students.filter((student) => next.includes(student.course || "")).map((student) => student.id));
-    updateSelected({
-      targetCourses: JSON.stringify(next),
-      audience: next.join(", "),
-      presentStudentIds: JSON.stringify(presentIds.filter((id) => allowedStudents.has(id))),
-      absentStudentIds: JSON.stringify(absentIds.filter((id) => allowedStudents.has(id))),
-    });
+    setEditCourses(next);
+    setEditPresentIds((current) => current.filter((id) => allowedStudents.has(id)));
+    setEditAbsentIds((current) => current.filter((id) => allowedStudents.has(id)));
   };
 
   const setAttendance = (studentId: string, status: "present" | "absent" | "clear") => {
-    if (!selected) return;
-    const nextPresent = presentIds.filter((id) => id !== studentId);
-    const nextAbsent = absentIds.filter((id) => id !== studentId);
-    if (status === "present") nextPresent.push(studentId);
-    if (status === "absent") nextAbsent.push(studentId);
-    updateSelected({
-      presentStudentIds: JSON.stringify(Array.from(new Set(nextPresent))),
-      absentStudentIds: JSON.stringify(Array.from(new Set(nextAbsent))),
+    if (!selected || !isEditingSelected) return;
+    setEditPresentIds((current) => {
+      const next = current.filter((id) => id !== studentId);
+      return status === "present" ? Array.from(new Set([...next, studentId])) : next;
     });
+    setEditAbsentIds((current) => {
+      const next = current.filter((id) => id !== studentId);
+      return status === "absent" ? Array.from(new Set([...next, studentId])) : next;
+    });
+  };
+
+  const beginEditSelected = () => {
+    if (!selected) return;
+    setEditingWorkshopId(selected.id);
+    setEditWorkshop({
+      date: selected.date || "",
+      title: selected.title || "",
+      responsible: selected.responsible || "",
+      status: selected.status || "Planificado",
+      notes: selected.notes || "",
+    });
+    setEditCourses(selectedCourses);
+    setEditPresentIds(presentIds);
+    setEditAbsentIds(absentIds);
+    setEditAttachments(attachments);
+    setAttendanceQuery("");
+    setFileNotice("");
+  };
+
+  const cancelEditSelected = () => {
+    setEditingWorkshopId("");
+    setEditWorkshop({ date: "", title: "", responsible: "", status: "Planificado", notes: "" });
+    setEditCourses([]);
+    setEditPresentIds([]);
+    setEditAbsentIds([]);
+    setEditAttachments([]);
+    setFileNotice("");
+  };
+
+  const saveEditSelected = () => {
+    if (!selected) return;
+    onUpdateWorkshop(selected.id, {
+      ...editWorkshop,
+      targetCourses: JSON.stringify(editCourses),
+      audience: editCourses.join(", "),
+      presentStudentIds: JSON.stringify(editPresentIds),
+      absentStudentIds: JSON.stringify(editAbsentIds),
+      attachments: JSON.stringify(editAttachments),
+    });
+    cancelEditSelected();
   };
 
   const setDraftAttendance = (studentId: string, status: "present" | "absent" | "clear") => {
@@ -1465,7 +1515,7 @@ function WorkshopsView({
   };
 
   const addAttachments = (fileList: FileList | null) => {
-    if (!selected || !fileList?.length) return;
+    if (!selected || !isEditingSelected || !fileList?.length) return;
     setFileNotice("");
     const incoming = Array.from(fileList).slice(0, 6);
     const oversized = incoming.find((file) => file.size > 1_800_000);
@@ -1479,8 +1529,7 @@ function WorkshopsView({
       reader.readAsDataURL(file);
     }))).then((nextAttachments) => {
       if (!nextAttachments.length) return;
-      const next = [...parseJsonArray<WorkshopAttachment>(selected.attachments), ...nextAttachments];
-      onUpdateWorkshop(selected.id, { attachments: JSON.stringify(next) });
+      setEditAttachments((current) => [...current, ...nextAttachments]);
     });
   };
 
@@ -1503,14 +1552,14 @@ function WorkshopsView({
   };
 
   const removeAttachment = (attachmentId: string) => {
-    if (!selected) return;
-    updateSelected({ attachments: JSON.stringify(attachments.filter((attachment) => attachment.id !== attachmentId)) });
+    if (!selected || !isEditingSelected) return;
+    setEditAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId));
   };
 
-  const courseStats = selectedCourses.map((course) => {
+  const courseStats = visibleCourses.map((course) => {
     const total = store.students.filter((student) => student.course === course).length;
-    const present = store.students.filter((student) => student.course === course && presentIds.includes(student.id)).length;
-    const absent = store.students.filter((student) => student.course === course && absentIds.includes(student.id)).length;
+    const present = store.students.filter((student) => student.course === course && visiblePresentIds.includes(student.id)).length;
+    const absent = store.students.filter((student) => student.course === course && visibleAbsentIds.includes(student.id)).length;
     return { course, total, present, absent };
   });
   const draftCourseSet = new Set(draftCourses);
@@ -1560,7 +1609,7 @@ function WorkshopsView({
                 const courses = parseJsonArray<string>(workshop.targetCourses);
                 const active = selected?.id === workshop.id;
                 return (
-                  <button key={workshop.id} onClick={() => setSelectedId(workshop.id)} className={`w-full px-4 py-3 text-left transition ${active ? "bg-cyan-50" : "hover:bg-slate-50"}`}>
+                  <button key={workshop.id} onClick={() => { cancelEditSelected(); setSelectedId(workshop.id); }} className={`w-full px-4 py-3 text-left transition ${active ? "bg-cyan-50" : "hover:bg-slate-50"}`}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-slate-950">{workshop.title || "Taller sin nombre"}</p>
@@ -1588,34 +1637,71 @@ function WorkshopsView({
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
                   <div className="min-w-0">
-                    <input value={selected.title || ""} onChange={(event) => updateSelected({ title: event.target.value })} className="w-full rounded-lg border border-transparent px-0 text-xl font-semibold text-slate-950 outline-none focus:border-slate-200 focus:px-2" />
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                      <input type="date" value={selected.date || ""} onChange={(event) => updateSelected({ date: event.target.value })} className="rounded-md border border-slate-200 px-2 py-1" />
-                      <select value={selected.status || "Planificado"} onChange={(event) => updateSelected({ status: event.target.value })} className="rounded-md border border-slate-200 px-2 py-1">
-                        {["Planificado", "Realizado", "Pendiente"].map((status) => <option key={status}>{status}</option>)}
-                      </select>
-                      <input value={selected.responsible || ""} onChange={(event) => updateSelected({ responsible: event.target.value })} placeholder="Responsable" className="rounded-md border border-slate-200 px-2 py-1" />
-                    </div>
+                    {isEditingSelected ? (
+                      <>
+                        <input value={editWorkshop.title} onChange={(event) => setEditWorkshop((current) => ({ ...current, title: event.target.value }))} className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xl font-semibold text-slate-950 outline-none focus:border-blue-500" />
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
+                          <input type="date" value={editWorkshop.date} onChange={(event) => setEditWorkshop((current) => ({ ...current, date: event.target.value }))} className="rounded-md border border-slate-200 px-2 py-1" />
+                          <select value={editWorkshop.status} onChange={(event) => setEditWorkshop((current) => ({ ...current, status: event.target.value }))} className="rounded-md border border-slate-200 px-2 py-1">
+                            {["Planificado", "Realizado", "Pendiente"].map((status) => <option key={status}>{status}</option>)}
+                          </select>
+                          <input value={editWorkshop.responsible} onChange={(event) => setEditWorkshop((current) => ({ ...current, responsible: event.target.value }))} placeholder="Responsable" className="rounded-md border border-slate-200 px-2 py-1" />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h2 className="text-xl font-semibold text-slate-950">{selected.title || "Taller sin nombre"}</h2>
+                        <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">{selected.date || "Sin fecha"}</span>
+                          <span className="rounded-full bg-cyan-50 px-2.5 py-1 font-semibold text-cyan-800">{selected.status || "Sin estado"}</span>
+                          {selected.responsible ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">{selected.responsible}</span> : null}
+                        </div>
+                      </>
+                    )}
                   </div>
-                  <button onClick={() => onDeleteWorkshop(selected.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">
-                    <Trash2 className="h-3.5 w-3.5" /> Eliminar
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {isEditingSelected ? (
+                      <>
+                        <button onClick={cancelEditSelected} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                        <button onClick={saveEditSelected} disabled={!editWorkshop.title.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"><Check className="h-3.5 w-3.5" /> Guardar cambios</button>
+                      </>
+                    ) : (
+                      <button onClick={beginEditSelected} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><Settings className="h-3.5 w-3.5" /> Editar</button>
+                    )}
+                    <button onClick={() => onDeleteWorkshop(selected.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">
+                      <Trash2 className="h-3.5 w-3.5" /> Eliminar
+                    </button>
+                  </div>
                 </div>
-                <textarea value={selected.notes || ""} onChange={(event) => updateSelected({ notes: event.target.value })} rows={3} placeholder="Observaciones del taller" className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                {isEditingSelected ? (
+                  <textarea value={editWorkshop.notes} onChange={(event) => setEditWorkshop((current) => ({ ...current, notes: event.target.value }))} rows={3} placeholder="Observaciones del taller" className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                ) : (
+                  <p className="mt-3 whitespace-pre-wrap rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">{selected.notes || "Sin observaciones registradas."}</p>
+                )}
               </div>
 
               <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <h2 className="text-sm font-semibold text-slate-950">Cursos orientados</h2>
-                  <span className="text-xs font-semibold text-slate-500">{selectedCourses.length} seleccionados</span>
+                  <span className="text-xs font-semibold text-slate-500">{visibleCourses.length} seleccionados</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {officialCourses.map((course) => (
-                    <button key={course.name} type="button" onClick={() => toggleSelectedCourse(course.name)} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${selectedCourses.includes(course.name) ? "border-cyan-300 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
-                      {course.name}
-                    </button>
-                  ))}
-                </div>
+                {isEditingSelected ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {officialCourses.map((course) => (
+                      <button key={course.name} type="button" onClick={() => toggleSelectedCourse(course.name)} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${visibleCourses.includes(course.name) ? "border-cyan-300 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                        {course.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : visibleCourses.length ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {visibleCourses.map((course) => (
+                      <span key={course} className="rounded-full border border-cyan-200 bg-cyan-50 px-2.5 py-1 text-xs font-semibold text-cyan-800">{course}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-dashed border-slate-200 p-3 text-sm text-slate-500">Sin cursos orientados registrados.</p>
+                )}
                 {courseStats.length ? (
                   <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                     {courseStats.map((stat) => (
@@ -1632,31 +1718,37 @@ function WorkshopsView({
                 <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                   <div>
                     <h2 className="text-sm font-semibold text-slate-950">Asistencia</h2>
-                    <p className="text-xs text-slate-500">{presentIds.length} presentes · {absentIds.length} ausentes · {selectedStudents.length} estudiantes en cursos seleccionados</p>
+                    <p className="text-xs text-slate-500">{visiblePresentIds.length} presentes · {visibleAbsentIds.length} ausentes · {selectedStudents.length} estudiantes en cursos seleccionados</p>
                   </div>
                   <input value={attendanceQuery} onChange={(event) => setAttendanceQuery(event.target.value)} placeholder="Buscar estudiante..." className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
                 </div>
-                {selectedCourses.length === 0 ? (
+                {visibleCourses.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">Selecciona cursos para cargar la lista de estudiantes.</p>
                 ) : (
                   <div className="max-h-[520px] divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-100">
                     {attendanceStudents.map((student) => {
-                      const isPresent = presentIds.includes(student.id);
-                      const isAbsent = absentIds.includes(student.id);
+                      const isPresent = visiblePresentIds.includes(student.id);
+                      const isAbsent = visibleAbsentIds.includes(student.id);
                       return (
                         <div key={student.id} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                           <div className="min-w-0">
                             <p className="truncate text-sm font-semibold text-slate-900">{student.fullName || "Sin nombre"}</p>
                             <p className="text-xs text-slate-500">{student.course || "Sin curso"}</p>
                           </div>
-                          <div className="flex gap-1.5">
-                            <button onClick={() => setAttendance(student.id, isPresent ? "clear" : "present")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${isPresent ? "bg-emerald-600 text-white" : "border border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"}`}>
-                              Presente
-                            </button>
-                            <button onClick={() => setAttendance(student.id, isAbsent ? "clear" : "absent")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${isAbsent ? "bg-rose-600 text-white" : "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"}`}>
-                              Ausente
-                            </button>
-                          </div>
+                          {isEditingSelected ? (
+                            <div className="flex gap-1.5">
+                              <button onClick={() => setAttendance(student.id, isPresent ? "clear" : "present")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${isPresent ? "bg-emerald-600 text-white" : "border border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"}`}>
+                                Presente
+                              </button>
+                              <button onClick={() => setAttendance(student.id, isAbsent ? "clear" : "absent")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${isAbsent ? "bg-rose-600 text-white" : "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"}`}>
+                                Ausente
+                              </button>
+                            </div>
+                          ) : (
+                            <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${isPresent ? "bg-emerald-50 text-emerald-700" : isAbsent ? "bg-rose-50 text-rose-700" : "bg-slate-100 text-slate-500"}`}>
+                              {isPresent ? "Presente" : isAbsent ? "Ausente" : "Sin marcar"}
+                            </span>
+                          )}
                         </div>
                       );
                     })}
@@ -1670,19 +1762,21 @@ function WorkshopsView({
                     <h2 className="text-sm font-semibold text-slate-950">Adjuntos</h2>
                     <p className="text-xs text-slate-500">Fotos, escaneos o PDF de hojas de asistencia.</p>
                   </div>
+                  {isEditingSelected ? (
                   <div>
                     <input ref={fileInputRef} type="file" multiple accept="image/*,.pdf" className="hidden" onChange={(event) => addAttachments(event.target.files)} />
                     <button onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                       <Upload className="h-3.5 w-3.5" /> Adjuntar archivo
                     </button>
                   </div>
+                  ) : null}
                 </div>
                 {fileNotice ? <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-700">{fileNotice}</p> : null}
-                {attachments.length === 0 ? (
+                {visibleAttachments.length === 0 ? (
                   <p className="rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">Aún no hay adjuntos para este taller.</p>
                 ) : (
                   <div className="grid gap-3 sm:grid-cols-2">
-                    {attachments.map((attachment) => (
+                    {visibleAttachments.map((attachment) => (
                       <article key={attachment.id} className="overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
                         {attachment.type.startsWith("image/") ? (
                           <div className="h-44 bg-cover bg-center" style={{ backgroundImage: `url(${attachment.dataUrl})` }} />
@@ -1691,7 +1785,7 @@ function WorkshopsView({
                         )}
                         <div className="flex items-center justify-between gap-2 p-3">
                           <a href={attachment.dataUrl} target="_blank" rel="noreferrer" className="min-w-0 truncate text-xs font-semibold text-slate-700 hover:text-blue-700">{attachment.name}</a>
-                          <button onClick={() => removeAttachment(attachment.id)} className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button>
+                          {isEditingSelected ? <button onClick={() => removeAttachment(attachment.id)} className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-3.5 w-3.5" /></button> : null}
                         </div>
                       </article>
                     ))}
