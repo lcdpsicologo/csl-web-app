@@ -1334,17 +1334,24 @@ function WorkshopsView({
 }) {
   const [selectedId, setSelectedId] = useState(store.workshops[0]?.id || "");
   const [query, setQuery] = useState("");
-  const [newWorkshop, setNewWorkshop] = useState({
+  const [createOpen, setCreateOpen] = useState(false);
+  const [draftWorkshop, setDraftWorkshop] = useState({
     date: new Date().toISOString().slice(0, 10),
     title: "",
     responsible: "",
     status: "Planificado",
     notes: "",
   });
-  const [targetCourses, setTargetCourses] = useState<string[]>([]);
+  const [draftCourses, setDraftCourses] = useState<string[]>([]);
+  const [draftPresentIds, setDraftPresentIds] = useState<string[]>([]);
+  const [draftAbsentIds, setDraftAbsentIds] = useState<string[]>([]);
+  const [draftAttachments, setDraftAttachments] = useState<WorkshopAttachment[]>([]);
+  const [draftAttendanceQuery, setDraftAttendanceQuery] = useState("");
+  const [draftFileNotice, setDraftFileNotice] = useState("");
   const [attendanceQuery, setAttendanceQuery] = useState("");
   const [fileNotice, setFileNotice] = useState("");
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const draftFileInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const selected = store.workshops.find((record) => record.id === selectedId) || store.workshops[0];
   const selectedCourses = selected ? parseJsonArray<string>(selected.targetCourses) : [];
@@ -1362,7 +1369,7 @@ function WorkshopsView({
   const filteredWorkshops = store.workshops.filter((workshop) => {
     const text = `${workshop.title || ""} ${workshop.responsible || ""} ${workshop.audience || ""} ${parseJsonArray<string>(workshop.targetCourses).join(" ")}`;
     return !query.trim() || normalize(text).includes(normalize(query));
-  });
+  }).sort((a, b) => String(b.date || b.createdAt || "").localeCompare(String(a.date || a.createdAt || "")) || String(a.title || "").localeCompare(String(b.title || "")));
 
   useEffect(() => {
     if (selectedId && store.workshops.some((record) => record.id === selectedId)) return;
@@ -1370,22 +1377,28 @@ function WorkshopsView({
   }, [selectedId, store.workshops]);
 
   const createWorkshop = () => {
-    if (!newWorkshop.title.trim()) return;
+    if (!draftWorkshop.title.trim()) return;
     const record: DataRecord = {
       id: uid(),
       createdAt: nowIso(),
       updatedAt: nowIso(),
-      ...newWorkshop,
-      targetCourses: JSON.stringify(targetCourses),
-      audience: targetCourses.join(", "),
-      presentStudentIds: "[]",
-      absentStudentIds: "[]",
-      attachments: "[]",
+      ...draftWorkshop,
+      targetCourses: JSON.stringify(draftCourses),
+      audience: draftCourses.join(", "),
+      presentStudentIds: JSON.stringify(draftPresentIds),
+      absentStudentIds: JSON.stringify(draftAbsentIds),
+      attachments: JSON.stringify(draftAttachments),
     };
     onAddWorkshop(record);
     setSelectedId(record.id);
-    setNewWorkshop({ date: new Date().toISOString().slice(0, 10), title: "", responsible: "", status: "Planificado", notes: "" });
-    setTargetCourses([]);
+    setDraftWorkshop({ date: new Date().toISOString().slice(0, 10), title: "", responsible: "", status: "Planificado", notes: "" });
+    setDraftCourses([]);
+    setDraftPresentIds([]);
+    setDraftAbsentIds([]);
+    setDraftAttachments([]);
+    setDraftAttendanceQuery("");
+    setDraftFileNotice("");
+    setCreateOpen(false);
   };
 
   const updateSelected = (updates: Record<string, string>) => {
@@ -1394,10 +1407,13 @@ function WorkshopsView({
   };
 
   const toggleCourse = (courseName: string) => {
-    const next = targetCourses.includes(courseName)
-      ? targetCourses.filter((course) => course !== courseName)
-      : [...targetCourses, courseName];
-    setTargetCourses(next);
+    const next = draftCourses.includes(courseName)
+      ? draftCourses.filter((course) => course !== courseName)
+      : [...draftCourses, courseName];
+    const allowedStudents = new Set(store.students.filter((student) => next.includes(student.course || "")).map((student) => student.id));
+    setDraftCourses(next);
+    setDraftPresentIds((current) => current.filter((id) => allowedStudents.has(id)));
+    setDraftAbsentIds((current) => current.filter((id) => allowedStudents.has(id)));
   };
 
   const toggleSelectedCourse = (courseName: string) => {
@@ -1426,6 +1442,28 @@ function WorkshopsView({
     });
   };
 
+  const setDraftAttendance = (studentId: string, status: "present" | "absent" | "clear") => {
+    setDraftPresentIds((current) => {
+      const next = current.filter((id) => id !== studentId);
+      return status === "present" ? Array.from(new Set([...next, studentId])) : next;
+    });
+    setDraftAbsentIds((current) => {
+      const next = current.filter((id) => id !== studentId);
+      return status === "absent" ? Array.from(new Set([...next, studentId])) : next;
+    });
+  };
+
+  const clearDraft = () => {
+    setDraftWorkshop({ date: new Date().toISOString().slice(0, 10), title: "", responsible: "", status: "Planificado", notes: "" });
+    setDraftCourses([]);
+    setDraftPresentIds([]);
+    setDraftAbsentIds([]);
+    setDraftAttachments([]);
+    setDraftAttendanceQuery("");
+    setDraftFileNotice("");
+    setCreateOpen(false);
+  };
+
   const addAttachments = (fileList: FileList | null) => {
     if (!selected || !fileList?.length) return;
     setFileNotice("");
@@ -1446,6 +1484,24 @@ function WorkshopsView({
     });
   };
 
+  const addDraftAttachments = (fileList: FileList | null) => {
+    if (!fileList?.length) return;
+    setDraftFileNotice("");
+    const incoming = Array.from(fileList).slice(0, 6);
+    const oversized = incoming.find((file) => file.size > 1_800_000);
+    if (oversized) {
+      setDraftFileNotice(`${oversized.name} supera 1.8 MB. Usa una foto más liviana o comprímela antes de subirla.`);
+    }
+    const validFiles = incoming.filter((file) => file.size <= 1_800_000);
+    Promise.all(validFiles.map((file) => new Promise<WorkshopAttachment>((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve({ id: uid(), name: file.name, type: file.type || "archivo", size: file.size, dataUrl: String(reader.result || ""), uploadedAt: nowIso() });
+      reader.readAsDataURL(file);
+    }))).then((nextAttachments) => {
+      if (nextAttachments.length) setDraftAttachments((current) => [...current, ...nextAttachments]);
+    });
+  };
+
   const removeAttachment = (attachmentId: string) => {
     if (!selected) return;
     updateSelected({ attachments: JSON.stringify(attachments.filter((attachment) => attachment.id !== attachmentId)) });
@@ -1457,8 +1513,21 @@ function WorkshopsView({
     const absent = store.students.filter((student) => student.course === course && absentIds.includes(student.id)).length;
     return { course, total, present, absent };
   });
+  const draftCourseSet = new Set(draftCourses);
+  const draftStudents = draftCourses.length ? store.students.filter((student) => draftCourseSet.has(student.course || "")) : [];
+  const draftSearch = normalize(draftAttendanceQuery);
+  const draftAttendanceStudents = draftStudents.filter((student) =>
+    !draftSearch || normalize(`${student.fullName || ""} ${student.course || ""}`).includes(draftSearch)
+  );
+  const draftCourseStats = draftCourses.map((course) => {
+    const total = store.students.filter((student) => student.course === course).length;
+    const present = store.students.filter((student) => student.course === course && draftPresentIds.includes(student.id)).length;
+    const absent = store.students.filter((student) => student.course === course && draftAbsentIds.includes(student.id)).length;
+    return { course, total, present, absent };
+  });
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
         <div>
@@ -1470,42 +1539,19 @@ function WorkshopsView({
           </div>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">Planifica talleres, vincúlalos a cursos, registra presentes y ausentes, y guarda evidencias como hojas de asistencia fotografiadas.</p>
         </div>
-        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm xl:w-80">
-          <Search className="h-4 w-4 text-slate-400" />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar talleres..." className="w-full bg-transparent text-sm outline-none" />
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm xl:w-80">
+            <Search className="h-4 w-4 text-slate-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar talleres..." className="w-full bg-transparent text-sm outline-none" />
+          </div>
+          <button onClick={() => setCreateOpen(true)} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-slate-800">
+            <Plus className="h-4 w-4" /> Nuevo taller
+          </button>
         </div>
       </div>
 
       <section className="grid gap-4 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.35fr)]">
         <div className="space-y-4">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-950">Nuevo taller</h2>
-            <div className="mt-3 grid gap-2">
-              <input value={newWorkshop.title} onChange={(event) => setNewWorkshop((current) => ({ ...current, title: event.target.value }))} placeholder="Nombre del taller" className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-              <div className="grid gap-2 sm:grid-cols-2">
-                <input type="date" value={newWorkshop.date} onChange={(event) => setNewWorkshop((current) => ({ ...current, date: event.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-                <select value={newWorkshop.status} onChange={(event) => setNewWorkshop((current) => ({ ...current, status: event.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500">
-                  {["Planificado", "Realizado", "Pendiente"].map((status) => <option key={status}>{status}</option>)}
-                </select>
-              </div>
-              <input value={newWorkshop.responsible} onChange={(event) => setNewWorkshop((current) => ({ ...current, responsible: event.target.value }))} placeholder="Responsable" className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-              <textarea value={newWorkshop.notes} onChange={(event) => setNewWorkshop((current) => ({ ...current, notes: event.target.value }))} placeholder="Observaciones" rows={3} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
-              <div className="rounded-lg border border-slate-200 p-2">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Cursos orientados</p>
-                <div className="flex max-h-44 flex-wrap gap-1.5 overflow-y-auto">
-                  {officialCourses.map((course) => (
-                    <button key={course.name} type="button" onClick={() => toggleCourse(course.name)} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${targetCourses.includes(course.name) ? "border-cyan-300 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
-                      {course.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <button onClick={createWorkshop} disabled={!newWorkshop.title.trim()} className="tz-press inline-flex items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">
-                <Plus className="h-4 w-4" /> Crear taller
-              </button>
-            </div>
-          </div>
-
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="border-b border-slate-100 px-4 py-3 text-sm font-semibold text-slate-700">Talleres registrados ({filteredWorkshops.length})</div>
             <div className="max-h-[560px] divide-y divide-slate-100 overflow-y-auto">
@@ -1657,6 +1703,150 @@ function WorkshopsView({
         </div>
       </section>
     </div>
+
+    {createOpen ? (
+      <div className="fixed inset-0 z-50 grid bg-slate-950/45 p-3 sm:p-6" onClick={clearDraft}>
+        <section className="mx-auto flex h-full w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+          <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-950">Nuevo taller</h2>
+              <p className="text-sm text-slate-500">Registra detalles, cursos, asistencia y evidencias antes de guardar.</p>
+            </div>
+            <button onClick={clearDraft} className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="grid min-h-0 flex-1 gap-0 overflow-hidden lg:grid-cols-[360px_minmax(0,1fr)]">
+            <div className="min-h-0 overflow-y-auto border-r border-slate-200 p-5">
+              <div className="space-y-3">
+                <input value={draftWorkshop.title} onChange={(event) => setDraftWorkshop((current) => ({ ...current, title: event.target.value }))} placeholder="Nombre del taller" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                  <input type="date" value={draftWorkshop.date} onChange={(event) => setDraftWorkshop((current) => ({ ...current, date: event.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                  <select value={draftWorkshop.status} onChange={(event) => setDraftWorkshop((current) => ({ ...current, status: event.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500">
+                    {["Planificado", "Realizado", "Pendiente"].map((status) => <option key={status}>{status}</option>)}
+                  </select>
+                </div>
+                <input value={draftWorkshop.responsible} onChange={(event) => setDraftWorkshop((current) => ({ ...current, responsible: event.target.value }))} placeholder="Responsable" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <textarea value={draftWorkshop.notes} onChange={(event) => setDraftWorkshop((current) => ({ ...current, notes: event.target.value }))} placeholder="Observaciones" rows={4} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+              </div>
+
+              <div className="mt-5 rounded-xl border border-slate-200 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Cursos orientados</p>
+                  <span className="rounded-full bg-cyan-50 px-2 py-0.5 text-[11px] font-semibold text-cyan-800">{draftCourses.length}</span>
+                </div>
+                <div className="flex max-h-56 flex-wrap gap-1.5 overflow-y-auto pr-1">
+                  {officialCourses.map((course) => (
+                    <button key={course.name} type="button" onClick={() => toggleCourse(course.name)} className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${draftCourses.includes(course.name) ? "border-cyan-300 bg-cyan-50 text-cyan-800" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                      {course.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-5 rounded-xl border border-slate-200 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Adjuntos</p>
+                  <button onClick={() => draftFileInputRef.current?.click()} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    <Upload className="h-3.5 w-3.5" /> Añadir
+                  </button>
+                </div>
+                <input ref={draftFileInputRef} type="file" multiple accept="image/*,.pdf" className="hidden" onChange={(event) => addDraftAttachments(event.target.files)} />
+                {draftFileNotice ? <p className="mb-2 rounded-lg bg-amber-50 px-2 py-1.5 text-xs text-amber-700">{draftFileNotice}</p> : null}
+                {draftAttachments.length === 0 ? (
+                  <p className="text-sm text-slate-500">Puedes adjuntar foto, escaneo o PDF de la hoja de asistencia.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {draftAttachments.map((attachment) => (
+                      <div key={attachment.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5">
+                        <span className="min-w-0 truncate text-xs font-semibold text-slate-700">{attachment.name}</span>
+                        <button onClick={() => setDraftAttachments((current) => current.filter((item) => item.id !== attachment.id))} className="rounded p-1 text-slate-400 hover:bg-red-50 hover:text-red-600">
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="min-h-0 overflow-y-auto p-5">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Cursos</p>
+                  <p className="mt-1 text-2xl font-bold text-slate-950">{draftCourses.length}</p>
+                </div>
+                <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-emerald-700">Presentes</p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-800">{draftPresentIds.length}</p>
+                </div>
+                <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-rose-700">Ausentes</p>
+                  <p className="mt-1 text-2xl font-bold text-rose-800">{draftAbsentIds.length}</p>
+                </div>
+              </div>
+
+              {draftCourseStats.length ? (
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {draftCourseStats.map((stat) => (
+                    <div key={stat.course} className="rounded-lg border border-slate-100 bg-white p-3 shadow-sm">
+                      <p className="text-xs font-semibold text-slate-900">{stat.course}</p>
+                      <p className="mt-1 text-[11px] text-slate-500">{stat.present} presentes · {stat.absent} ausentes · {stat.total} estudiantes</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-4 rounded-lg border border-dashed border-slate-200 p-4 text-sm text-slate-500">Selecciona uno o más cursos para cargar participantes y marcar asistencia.</p>
+              )}
+
+              <div className="mt-5 rounded-xl border border-slate-200 bg-white">
+                <div className="flex flex-col justify-between gap-2 border-b border-slate-100 p-3 sm:flex-row sm:items-center">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-950">Participantes</h3>
+                    <p className="text-xs text-slate-500">Marca presentes o ausentes antes de guardar el taller.</p>
+                  </div>
+                  <input value={draftAttendanceQuery} onChange={(event) => setDraftAttendanceQuery(event.target.value)} placeholder="Buscar estudiante..." className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                </div>
+                <div className="max-h-[430px] divide-y divide-slate-100 overflow-y-auto">
+                  {draftAttendanceStudents.length === 0 ? (
+                    <p className="p-4 text-sm text-slate-500">No hay estudiantes para mostrar.</p>
+                  ) : null}
+                  {draftAttendanceStudents.map((student) => {
+                    const isPresent = draftPresentIds.includes(student.id);
+                    const isAbsent = draftAbsentIds.includes(student.id);
+                    return (
+                      <div key={student.id} className="grid gap-2 px-3 py-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold text-slate-900">{student.fullName || "Sin nombre"}</p>
+                          <p className="text-xs text-slate-500">{student.course || "Sin curso"}</p>
+                        </div>
+                        <div className="flex gap-1.5">
+                          <button onClick={() => setDraftAttendance(student.id, isPresent ? "clear" : "present")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${isPresent ? "bg-emerald-600 text-white" : "border border-emerald-200 bg-white text-emerald-700 hover:bg-emerald-50"}`}>
+                            Presente
+                          </button>
+                          <button onClick={() => setDraftAttendance(student.id, isAbsent ? "clear" : "absent")} className={`rounded-md px-2.5 py-1 text-xs font-semibold ${isAbsent ? "bg-rose-600 text-white" : "border border-rose-200 bg-white text-rose-700 hover:bg-rose-50"}`}>
+                            Ausente
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
+            <button onClick={clearDraft} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+            <button onClick={createWorkshop} disabled={!draftWorkshop.title.trim()} className="tz-press rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:opacity-50">
+              Guardar taller
+            </button>
+          </div>
+        </section>
+      </div>
+    ) : null}
+    </>
   );
 }
 
