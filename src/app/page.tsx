@@ -33,6 +33,7 @@ import {
   FileText,
   FolderOpen,
   Gamepad2,
+  GripVertical,
   GraduationCap,
   Home,
   Lock,
@@ -930,16 +931,24 @@ function Sidebar({
   onNavigate,
   schoolName,
   navItems,
-  onMoveNavItem,
+  onReorderNavItem,
   onResetNavOrder,
 }: {
   activeView: ViewId;
   onNavigate: (view: ViewId) => void;
   schoolName: string;
   navItems: ViewNavItem[];
-  onMoveNavItem: (view: ViewId, direction: -1 | 1) => void;
+  onReorderNavItem: (source: ViewId, target: ViewId) => void;
   onResetNavOrder: () => void;
 }) {
+  const [draggedView, setDraggedView] = useState<ViewId | null>(null);
+  const [dragOverView, setDragOverView] = useState<ViewId | null>(null);
+
+  const finishDrag = () => {
+    setDraggedView(null);
+    setDragOverView(null);
+  };
+
   return (
     <aside className="tz-glass fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-slate-200/80 text-slate-700 lg:flex">
       <div className="flex h-full flex-col">
@@ -958,50 +967,54 @@ function Sidebar({
           </div>
         </div>
         <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
-          {navItems.map((item, index) => {
+          {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;
+            const dragging = draggedView === item.id;
+            const dragTarget = dragOverView === item.id && draggedView !== item.id;
             return (
               <div
                 key={item.id}
-                className={`group relative flex h-10 w-full items-center overflow-hidden rounded-lg ${
+                draggable
+                onDragStart={(event) => {
+                  setDraggedView(item.id);
+                  event.dataTransfer.effectAllowed = "move";
+                  event.dataTransfer.setData("text/plain", item.id);
+                }}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  setDragOverView(item.id);
+                }}
+                onDragLeave={() => setDragOverView((current) => (current === item.id ? null : current))}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  const source = (event.dataTransfer.getData("text/plain") || draggedView) as ViewId | null;
+                  if (source && source !== item.id) onReorderNavItem(source, item.id);
+                  finishDrag();
+                }}
+                onDragEnd={finishDrag}
+                className={`group relative flex h-10 w-full items-center overflow-hidden rounded-lg transition ${
                   active ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                }`}
+                } ${dragTarget ? "ring-2 ring-cyan-300 ring-offset-1" : ""} ${dragging ? "opacity-55" : ""}`}
               >
                 {active ? <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-blue-500" /> : null}
+                <span
+                  title="Arrastrar para reordenar"
+                  aria-label={`Arrastrar ${item.label}`}
+                  className={`ml-1 grid h-8 w-7 shrink-0 cursor-grab place-items-center rounded-md active:cursor-grabbing ${
+                    active ? "text-white/65 hover:bg-white/10" : "text-slate-400 hover:bg-white hover:text-slate-600"
+                  }`}
+                >
+                  <GripVertical className="h-4 w-4" />
+                </span>
                 <button
                   onClick={() => onNavigate(item.id)}
-                  className="tz-nav-item flex h-full min-w-0 flex-1 items-center gap-3 px-3 text-left text-sm font-medium"
+                  className="tz-nav-item flex h-full min-w-0 flex-1 items-center gap-3 px-2 pr-3 text-left text-sm font-medium"
                 >
                   <Icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-slate-500"}`} />
                   <span className="truncate">{item.label}</span>
                 </button>
-                <div className={`mr-1 flex shrink-0 items-center gap-0.5 transition ${active ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100"}`}>
-                  <button
-                    type="button"
-                    onClick={() => onMoveNavItem(item.id, -1)}
-                    disabled={index === 0}
-                    title="Subir"
-                    aria-label={`Subir ${item.label}`}
-                    className={`grid h-7 w-7 place-items-center rounded-md transition ${
-                      active ? "text-white/80 hover:bg-white/10" : "text-slate-500 hover:bg-white"
-                    } disabled:cursor-not-allowed disabled:opacity-30`}
-                  >
-                    <ChevronDown className="h-3.5 w-3.5 rotate-180" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onMoveNavItem(item.id, 1)}
-                    disabled={index === navItems.length - 1}
-                    title="Bajar"
-                    aria-label={`Bajar ${item.label}`}
-                    className={`grid h-7 w-7 place-items-center rounded-md transition ${
-                      active ? "text-white/80 hover:bg-white/10" : "text-slate-500 hover:bg-white"
-                    } disabled:cursor-not-allowed disabled:opacity-30`}
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
               </div>
             );
           })}
@@ -8087,14 +8100,15 @@ export default function TizaEducationApp() {
   const [calendarFetchedAt, setCalendarFetchedAt] = useState<string>("");
   const orderedNavItems = useMemo(() => orderViewNav(navOrder), [navOrder]);
 
-  const moveNavItem = (view: ViewId, direction: -1 | 1) => {
+  const reorderNavItem = (source: ViewId, target: ViewId) => {
+    if (source === target) return;
     setNavOrder((current) => {
       const next = orderViewNav(current).map((item) => item.id);
-      const index = next.indexOf(view);
-      const target = index + direction;
-      if (index < 0 || target < 0 || target >= next.length) return next;
-      const [item] = next.splice(index, 1);
-      next.splice(target, 0, item);
+      const fromIndex = next.indexOf(source);
+      const targetIndex = next.indexOf(target);
+      if (fromIndex < 0 || targetIndex < 0) return next;
+      const [item] = next.splice(fromIndex, 1);
+      next.splice(targetIndex, 0, item);
       return next;
     });
   };
@@ -9285,7 +9299,7 @@ export default function TizaEducationApp() {
         onNavigate={setActiveView}
         schoolName={profile.organization || "Colegio San Lucas"}
         navItems={orderedNavItems}
-        onMoveNavItem={moveNavItem}
+        onReorderNavItem={reorderNavItem}
         onResetNavOrder={resetNavOrder}
       />
       <main className="tz-app-root min-w-0 lg:pl-[272px]">
