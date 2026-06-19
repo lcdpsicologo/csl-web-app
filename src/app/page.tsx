@@ -8,6 +8,7 @@ import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from 
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
 import { games } from "@/lib/games";
+import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
 import {
   ArrowDownToLine,
   BarChart3,
@@ -4378,15 +4379,20 @@ function StudentsWorkspaceView({
   store,
   onAdd,
   onOpenStudent,
+  onReplaceFirstCycleRoster,
+  replacingFirstCycleRoster = false,
 }: {
   store: DataStore;
   onAdd: () => void;
   onOpenStudent: (studentId: string, focusField?: string) => void;
+  onReplaceFirstCycleRoster?: (file: File) => void;
+  replacingFirstCycleRoster?: boolean;
 }) {
   const [search, setSearch] = useState("");
   const [cycleFilter, setCycleFilter] = useState<"all" | CourseDef["cycle"]>("all");
   const [showPieOnly, setShowPieOnly] = useState(false);
   const [selectedCourseName, setSelectedCourseName] = useState<string>(() => officialCourses[0]?.name || "");
+  const rosterInputRef = React.useRef<HTMLInputElement | null>(null);
 
   const searchable = normalize(search);
   const cycleByCourse = new Map(officialCourses.map((c) => [normalize(c.name), c.cycle]));
@@ -4448,9 +4454,35 @@ function StudentsWorkspaceView({
             Cursos a la izquierda, estudiantes del curso seleccionado a la derecha. Clic en cualquier estudiante para abrir su ficha.
           </p>
         </div>
-        <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
-          <Plus className="h-4 w-4" /> Agregar estudiante
-        </button>
+        <div className="flex flex-wrap gap-2">
+          {onReplaceFirstCycleRoster ? (
+            <>
+              <input
+                ref={rosterInputRef}
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) onReplaceFirstCycleRoster(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+              <button
+                onClick={() => rosterInputRef.current?.click()}
+                disabled={replacingFirstCycleRoster}
+                className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-70"
+                title="Reemplaza Prekínder a 4° básico con la nómina oficial y elimina duplicados."
+              >
+                <Upload className="h-4 w-4" />
+                {replacingFirstCycleRoster ? "Corrigiendo..." : "Reemplazar Primer Ciclo"}
+              </button>
+            </>
+          ) : null}
+          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
+            <Plus className="h-4 w-4" /> Agregar estudiante
+          </button>
+        </div>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 lg:flex-row lg:items-center">
@@ -8795,6 +8827,7 @@ export default function TizaEducationApp() {
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [teamSeeding, setTeamSeeding] = useState(false);
   const [teamSeedNotice, setTeamSeedNotice] = useState("");
+  const [replacingFirstCycleRoster, setReplacingFirstCycleRoster] = useState(false);
   const [profileState, setProfileState] = useState<Record<string, string>>(() => {
     const defaults = {
       organization: "Colegio San Lucas",
@@ -9098,6 +9131,92 @@ export default function TizaEducationApp() {
     storeRef.current = nextStore;
     setStore(nextStore);
     void saveStoreSnapshot(nextStore);
+  };
+
+  const replaceFirstCycleRoster = async (file: File) => {
+    if (!accessToken) {
+      setToast("Inicia sesion para sincronizar la nomina oficial.");
+      return;
+    }
+    setReplacingFirstCycleRoster(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file, file.name);
+      const response = await fetch("/api/first-cycle-roster", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: formData,
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload?.error || "No se pudo leer la nomina oficial.");
+      }
+
+      const officialStudents = Array.isArray(payload.students) ? payload.students : [];
+      if (officialStudents.length < 50) throw new Error("La nomina leida trae muy pocos estudiantes.");
+
+      const current = storeRef.current;
+      const firstCycleCurrent = current.students.filter((student) => isFirstCycleCourse(student.course || ""));
+      const otherStudents = current.students.filter((student) => !isFirstCycleCourse(student.course || ""));
+      const byRut = new Map<string, DataRecord>();
+      const byNameCourse = new Map<string, DataRecord>();
+      const byName = new Map<string, DataRecord | null>();
+
+      firstCycleCurrent.forEach((student) => {
+        const rut = cleanRutValue(student.rut || "");
+        if (rut && !byRut.has(rut)) byRut.set(rut, student);
+        const nameKey = normalize(student.fullName || "");
+        const courseKey = normalize(student.course || "");
+        if (nameKey && courseKey && !byNameCourse.has(`${nameKey}|${courseKey}`)) byNameCourse.set(`${nameKey}|${courseKey}`, student);
+        if (nameKey) {
+          byName.set(nameKey, byName.has(nameKey) ? null : student);
+        }
+      });
+
+      const reused = new Set<string>();
+      const nextFirstCycle = officialStudents.map((entry: Record<string, string>) => {
+        const fullName = String(entry.fullName || "").trim();
+        const course = String(entry.course || "").trim();
+        const rut = cleanRutValue(entry.rut || "");
+        const nameKey = normalize(fullName);
+        const courseKey = normalize(course);
+        const existing =
+          (rut && byRut.get(rut)) ||
+          byNameCourse.get(`${nameKey}|${courseKey}`) ||
+          byName.get(nameKey) ||
+          undefined;
+        if (existing?.id) reused.add(existing.id);
+        return {
+          ...(existing || {}),
+          id: existing?.id || `first-cycle-${rut || `${nameKey}-${courseKey}`.replace(/\s+/g, "-") || uid()}`,
+          createdAt: existing?.createdAt || nowIso(),
+          updatedAt: nowIso(),
+          fullName,
+          course,
+          rut,
+          guardian: String(entry.guardianName || existing?.guardian || ""),
+          email: String(entry.guardianEmail || existing?.email || ""),
+          phone: String(entry.guardianPhone || existing?.phone || ""),
+          observations: String(existing?.observations || ""),
+          source: "Nomina oficial Primer Ciclo",
+        } as DataRecord;
+      });
+
+      const nextStore = {
+        ...current,
+        students: [...otherStudents, ...nextFirstCycle],
+      };
+      storeRef.current = nextStore;
+      setStore(nextStore);
+      await saveStoreSnapshot(nextStore);
+      const removed = Math.max(0, firstCycleCurrent.length - reused.size);
+      setToast(`Primer Ciclo corregido: ${nextFirstCycle.length} estudiantes oficiales en ${FIRST_CYCLE_COURSES.length} cursos. ${removed} duplicados/no vigentes fuera.`);
+    } catch (error) {
+      console.error(error);
+      setToast(error instanceof Error ? error.message : "No se pudo corregir Primer Ciclo.");
+    } finally {
+      setReplacingFirstCycleRoster(false);
+    }
   };
 
   const signIn = async (email: string, password: string) => {
@@ -9860,7 +9979,15 @@ export default function TizaEducationApp() {
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "games") return <GamesView />;
     if (activeView === "students") {
-      return <StudentsWorkspaceView store={store} onAdd={() => setDialogEntity("students")} onOpenStudent={openStudent} />;
+      return (
+        <StudentsWorkspaceView
+          store={store}
+          onAdd={() => setDialogEntity("students")}
+          onOpenStudent={openStudent}
+          onReplaceFirstCycleRoster={replaceFirstCycleRoster}
+          replacingFirstCycleRoster={replacingFirstCycleRoster}
+        />
+      );
     }
     if (activeView === "pie") {
       return <PieWorkspaceView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} onSeedPie={seedPieRoster} onUpdateStudent={updateStudentRecord} />;

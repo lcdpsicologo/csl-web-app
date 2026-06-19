@@ -253,8 +253,29 @@ export async function PUT(request: Request) {
       }
     }
 
-    // The app must prefer successful persistence over failing the whole sync
-    // because of cleanup. Deletions are handled by explicit delete calls.
+    for (const entity of ENTITY_IDS) {
+      const nextIds = new Set((incomingStore[entity] || []).map((record, index) => stableRecordId(entity, record, index)));
+      const { data: existingRows, error: existingError } = await supabase
+        .from("app_records")
+        .select("record_id")
+        .eq("institution_id", institutionId)
+        .eq("entity", entity);
+      if (existingError) throw existingError;
+
+      const staleIds = ((existingRows || []) as Array<{ record_id: string }>)
+        .map((row) => row.record_id)
+        .filter((recordId) => !nextIds.has(recordId));
+      for (let i = 0; i < staleIds.length; i += chunkSize) {
+        const staleChunk = staleIds.slice(i, i + chunkSize);
+        const { error: deleteError } = await supabase
+          .from("app_records")
+          .delete()
+          .eq("institution_id", institutionId)
+          .eq("entity", entity)
+          .in("record_id", staleChunk);
+        if (deleteError) throw deleteError;
+      }
+    }
 
     const { error: auditError } = await supabase.from("audit_logs").insert({
       institution_id: institutionId,
