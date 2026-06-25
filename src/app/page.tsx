@@ -649,10 +649,16 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "orientationOwner", label: "Orientador/a", aliases: ["orientador", "orientadora", "responsable"] },
       { key: "orientationEmail", label: "Correo orientador/a", aliases: ["correo orientador", "email orientador", "correo responsable"] },
       { key: "topic", label: "Tema / clase", required: true, aliases: ["tema", "clase", "sesion", "actividad"] },
+      { key: "classType", label: "Tipo de intervención", aliases: ["tipo", "intervencion", "formato"] },
       { key: "axis", label: "Eje", aliases: ["eje", "unidad", "area"] },
       { key: "week", label: "Semana", aliases: ["semana", "sem", "periodo"] },
+      { key: "weekNumber", label: "N° de semana", aliases: ["numero semana", "semana numero"] },
+      { key: "characterStrength", label: "Fortaleza del carácter", aliases: ["fortaleza", "fortaleza caracter", "character strength"] },
       { key: "status", label: "Estado", type: "select", options: ["Planificada", "Realizada", "Pendiente", "Reprogramada"], aliases: ["estado", "status"] },
       { key: "canvaLink", label: "Enlace Canva", aliases: ["canva", "link canva", "presentacion", "diapositivas"] },
+      { key: "teacherLink", label: "Link para profesores", aliases: ["link profesor", "link profesores", "enlace docente", "enlace profesores"] },
+      { key: "teacherSentStatus", label: "Envío a profesores", type: "select", options: ["No enviado", "Listo para enviar", "Enviado"], aliases: ["envio profesores", "enviado", "profesores"] },
+      { key: "teacherSentAt", label: "Fecha de envío", type: "date", aliases: ["fecha envio", "enviado el"] },
       { key: "evidence", label: "Evidencia / enlace", aliases: ["evidencia", "link", "enlace", "url"] },
       { key: "planificacion", label: "Planificación", type: "textarea", aliases: ["planificacion", "plan", "objetivos", "actividades"] },
       { key: "folderLink", label: "Carpeta", aliases: ["carpeta", "drive", "folder"] },
@@ -2661,6 +2667,8 @@ function OrientationCycleView({
 
   const owner = orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0];
   const today = new Date().toISOString().slice(0, 10);
+  const characterStrengthOptions = ["Sin fortaleza especifica", "Amabilidad", "Gratitud", "Perseverancia", "Autorregulacion", "Trabajo en equipo", "Perspectiva", "Valentia", "Esperanza", "Honestidad", "Curiosidad", "Liderazgo", "Prudencia"];
+  const classTypeOptions = ["Clase de orientacion", "Intervencion formativa", "Taller curso", "Actividad con profesores", "Actividad con apoderados"];
 
   const ownerStoredClasses = store.orientation.filter((record) =>
     normalize(record.orientationOwner || "") === normalize(owner.name) ||
@@ -2699,6 +2707,15 @@ function OrientationCycleView({
     (cal) => !ownerStoredClasses.some((s) => (s.date || "") === cal.date && normalize(s.course || "") === normalize(cal.course)),
   );
   const ownerClasses: DataRecord[] = [...ownerStoredClasses, ...calendarClassesFiltered];
+  const getShareLink = (record: DataRecord) => record.teacherLink || record.canvaLink || record.folderLink || record.evidence || "";
+  const isTeacherSent = (record: DataRecord) => /enviado/i.test(record.teacherSentStatus || "");
+  const classesWithoutShareLink = ownerClasses.filter((record) => !getShareLink(record));
+  const classesReadyToSend = ownerClasses.filter((record) => getShareLink(record) && !isTeacherSent(record));
+  const classesSentToTeachers = ownerClasses.filter(isTeacherSent);
+  const upcomingWeekClasses = ownerClasses
+    .filter((record) => record.date && record.date >= today)
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+    .slice(0, 8);
 
   const filteredClasses = ownerClasses.filter((record) => {
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
@@ -2765,10 +2782,18 @@ function OrientationCycleView({
       date: today,
       course: owner.courses[0] || "",
       orientationOwner: owner.name,
+      orientationEmail: owner.email,
       topic: "",
+      classType: "Clase de orientacion",
       axis: "",
+      weekNumber: "",
+      characterStrength: "",
       status: "Planificada",
       canvaLink: "",
+      teacherLink: "",
+      teacherSentStatus: "No enviado",
+      teacherSentAt: "",
+      folderLink: "",
       planificacion: "",
       notes: "",
     });
@@ -2885,6 +2910,56 @@ function OrientationCycleView({
         })}
       </div>
 
+      <section className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Preparacion semanal</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Clases listas para compartir con profesores</h2>
+              <p className="mt-1 max-w-2xl text-sm text-slate-600">Registra semana, fecha exacta, curso, fortaleza, nombre de clase y el link que enviaras al profesor jefe.</p>
+            </div>
+            <button onClick={openNewClass} className="tz-press inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700">
+              <Plus className="h-4 w-4" /> Preparar clase
+            </button>
+          </div>
+          <div className="mt-4 grid gap-2 sm:grid-cols-4">
+            {[
+              ["Sin link", classesWithoutShareLink.length, "text-rose-700 bg-rose-50 ring-rose-100"],
+              ["Listas para enviar", classesReadyToSend.length, "text-amber-700 bg-amber-50 ring-amber-100"],
+              ["Enviadas", classesSentToTeachers.length, "text-emerald-700 bg-emerald-50 ring-emerald-100"],
+              ["Proximas", upcomingWeekClasses.length, "text-blue-700 bg-blue-50 ring-blue-100"],
+            ].map(([label, value, tone]) => (
+              <div key={String(label)} className={`rounded-xl px-3 py-3 text-sm font-semibold ring-1 ${tone}`}>
+                <strong className="block text-2xl leading-none">{value}</strong>
+                <span className="mt-1 block">{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white shadow-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-200">Siguiente a resolver</p>
+              <h3 className="mt-1 text-lg font-semibold">Agenda de orientacion</h3>
+            </div>
+            <CalendarDays className="h-5 w-5 text-blue-200" />
+          </div>
+          <div className="mt-3 space-y-2">
+            {upcomingWeekClasses.length === 0 ? (
+              <p className="rounded-xl bg-white/10 p-3 text-sm text-slate-200">No hay clases futuras registradas para este orientador.</p>
+            ) : upcomingWeekClasses.slice(0, 4).map((record) => {
+              const shareLink = getShareLink(record);
+              return (
+                <button key={record.id} onClick={() => { setInnerTab("clases"); setExpandedClassId(record.id); setFilterDate(record.date || "all"); }} className="w-full rounded-xl bg-white/10 px-3 py-2 text-left transition hover:bg-white/15">
+                  <strong className="block truncate text-sm">{record.topic || "Clase sin nombre"}</strong>
+                  <span className="mt-0.5 block truncate text-xs text-slate-300">{record.date || "Sin fecha"} - {record.course || "Sin curso"}{shareLink ? " - link listo" : " - falta link"}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 bg-white px-4 py-3 sm:px-5">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2911,7 +2986,7 @@ function OrientationCycleView({
 
         <nav className="flex gap-1 border-b border-slate-200 bg-white px-2 sm:px-6 tz-contained-x">
           {([
-            ["clases", "Clases", ClipboardList],
+            ["clases", "Preparar y enviar clases", ClipboardList],
             ["nomina", "Nómina", UsersRound],
             ["cursos", "Cursos a cargo", BookOpen],
           ] as Array<[typeof innerTab, string, LucideIcon]>).map(([id, label, Icon]) => (
@@ -3050,6 +3125,12 @@ function OrientationCycleView({
                         {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
                       </select>
                     </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Tipo de registro</span>
+                      <select value={newClassForm.classType || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, classType: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                        {classTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+                      </select>
+                    </label>
                     <label className="block sm:col-span-2">
                       <span className="text-xs font-semibold text-slate-700">Tema / nombre de la clase *</span>
                       <input value={newClassForm.topic || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, topic: event.target.value }))} placeholder="Ej.: Autoconcepto y autoestima" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
@@ -3062,9 +3143,33 @@ function OrientationCycleView({
                       <span className="text-xs font-semibold text-slate-700">Semana</span>
                       <input value={newClassForm.week || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, week: event.target.value }))} placeholder="02/03 al 06/03 (Semana 1)" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                     </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">N de semana</span>
+                      <input value={newClassForm.weekNumber || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, weekNumber: event.target.value }))} placeholder="Ej.: 12" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block sm:col-span-2">
+                      <span className="text-xs font-semibold text-slate-700">Fortaleza del caracter</span>
+                      <select value={newClassForm.characterStrength || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, characterStrength: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                        {characterStrengthOptions.map((strength) => <option key={strength} value={strength === "Sin fortaleza especifica" ? "" : strength}>{strength}</option>)}
+                      </select>
+                    </label>
                     <label className="block sm:col-span-2 lg:col-span-3">
                       <span className="text-xs font-semibold text-slate-700">Enlace Canva</span>
                       <input value={newClassForm.canvaLink || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, canvaLink: event.target.value }))} placeholder="https://www.canva.com/design/..." className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block sm:col-span-2 lg:col-span-3">
+                      <span className="text-xs font-semibold text-slate-700">Link para enviar a profesores</span>
+                      <input value={newClassForm.teacherLink || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, teacherLink: event.target.value }))} placeholder="Pega aqui el link exacto que compartiras con profesores" className="mt-1 w-full rounded-md border border-blue-200 bg-blue-50/40 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Envio a profesores</span>
+                      <select value={newClassForm.teacherSentStatus || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, teacherSentStatus: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                        {["No enviado", "Listo para enviar", "Enviado"].map((status) => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                    </label>
+                    <label className="block">
+                      <span className="text-xs font-semibold text-slate-700">Fecha de envio</span>
+                      <input type="date" value={newClassForm.teacherSentAt || ""} onChange={(event) => setNewClassForm((form) => ({ ...form, teacherSentAt: event.target.value }))} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                     </label>
                     <label className="block sm:col-span-2 lg:col-span-3">
                       <span className="text-xs font-semibold text-slate-700">Carpeta / Drive</span>
@@ -3097,6 +3202,8 @@ function OrientationCycleView({
                   {filteredClasses.map((record) => {
                     const expanded = expandedClassId === record.id;
                     const canvaUrl = record.canvaLink || record.evidence || "";
+                    const shareLink = getShareLink(record);
+                    const teacherSent = isTeacherSent(record);
                     return (
                       <article key={record.id} className={`rounded-xl border bg-white transition ${expanded ? "border-blue-300 shadow-md" : "border-slate-200 shadow-sm"}`}>
                         <div className="grid gap-3 px-3 py-3 sm:grid-cols-[92px_minmax(0,1fr)_auto] sm:items-center">
@@ -3112,6 +3219,9 @@ function OrientationCycleView({
                             <div className="flex min-w-0 flex-wrap items-center gap-2">
                               <p className="min-w-0 max-w-full truncate text-sm font-semibold text-slate-950">{record.topic || "Clase sin tema"}</p>
                               {record.source === "calendar" ? <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700 ring-1 ring-blue-100">Calendario</span> : null}
+                              {record.characterStrength ? <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[9px] font-bold text-amber-700 ring-1 ring-amber-100">{record.characterStrength}</span> : null}
+                              <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ring-1 ${shareLink ? "bg-emerald-50 text-emerald-700 ring-emerald-100" : "bg-rose-50 text-rose-700 ring-rose-100"}`}>{shareLink ? "Link listo" : "Falta link"}</span>
+                              <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ring-1 ${teacherSent ? "bg-blue-50 text-blue-700 ring-blue-100" : "bg-slate-50 text-slate-600 ring-slate-200"}`}>{teacherSent ? "Enviado" : "No enviado"}</span>
                             </div>
                             <p className="mt-0.5 truncate text-xs text-slate-500">{record.course || "Sin curso"} · {record.axis || "Sin eje"}{record.week ? ` · ${record.week}` : ""}</p>
                             {record.notes ? <p className="mt-1 line-clamp-1 text-xs text-slate-600">{record.notes}</p> : null}
@@ -3135,6 +3245,14 @@ function OrientationCycleView({
                             ) : null}
                           </div>
                           <div className="flex flex-wrap justify-end gap-1.5">
+                            {shareLink ? (
+                              <a href={shareLink} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">Link profes</a>
+                            ) : null}
+                            {shareLink && record.source !== "calendar" ? (
+                              <button onClick={() => onUpdateOrientationRecord(record.id, { teacherSentStatus: "Enviado", teacherSentAt: today, teacherLink: record.teacherLink || shareLink })} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">
+                                Marcar enviado
+                              </button>
+                            ) : null}
                             {canvaUrl ? (
                               <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[11px] font-bold text-violet-700 hover:bg-violet-100">Canva</a>
                             ) : null}
@@ -3179,6 +3297,12 @@ function OrientationCycleView({
                                   {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
                                 </select>
                               </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Tipo de registro</span>
+                                <select value={record.classType || "Clase de orientacion"} onChange={(event) => onUpdateOrientationRecord(record.id, { classType: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                                  {classTypeOptions.map((type) => <option key={type} value={type}>{type}</option>)}
+                                </select>
+                              </label>
                               <label className="block sm:col-span-2">
                                 <span className="text-xs font-semibold text-slate-700">Tema / nombre de la clase</span>
                                 <input value={record.topic || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
@@ -3191,6 +3315,16 @@ function OrientationCycleView({
                                 <span className="text-xs font-semibold text-slate-700">Semana</span>
                                 <input value={record.week || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { week: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                               </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">N de semana</span>
+                                <input value={record.weekNumber || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { weekNumber: event.target.value })} placeholder="Ej.: 12" className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                              </label>
+                              <label className="block sm:col-span-2">
+                                <span className="text-xs font-semibold text-slate-700">Fortaleza del caracter</span>
+                                <select value={record.characterStrength || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { characterStrength: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                                  {characterStrengthOptions.map((strength) => <option key={strength} value={strength === "Sin fortaleza especifica" ? "" : strength}>{strength}</option>)}
+                                </select>
+                              </label>
                               <label className="block sm:col-span-2 lg:col-span-3">
                                 <span className="flex items-center gap-2 text-xs font-semibold text-violet-700">
                                   Enlace Canva
@@ -3199,6 +3333,25 @@ function OrientationCycleView({
                                   ) : null}
                                 </span>
                                 <input value={record.canvaLink || record.evidence || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { canvaLink: event.target.value })} placeholder="https://www.canva.com/design/..." className="mt-1 w-full rounded-md border border-violet-200 bg-violet-50/40 px-2.5 py-2 text-sm outline-none focus:border-violet-500" />
+                              </label>
+                              <label className="block sm:col-span-2 lg:col-span-3">
+                                <span className="flex items-center gap-2 text-xs font-semibold text-blue-700">
+                                  Link para profesores
+                                  {shareLink ? (
+                                    <a href={shareLink} target="_blank" rel="noopener noreferrer" className="ml-auto text-[10px] font-semibold text-blue-600 hover:underline">Abrir link</a>
+                                  ) : null}
+                                </span>
+                                <input value={record.teacherLink || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { teacherLink: event.target.value })} placeholder="Pega aqui el link exacto que enviaras al profesor jefe" className="mt-1 w-full rounded-md border border-blue-200 bg-blue-50/40 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Envio a profesores</span>
+                                <select value={record.teacherSentStatus || "No enviado"} onChange={(event) => onUpdateOrientationRecord(record.id, { teacherSentStatus: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                                  {["No enviado", "Listo para enviar", "Enviado"].map((status) => <option key={status} value={status}>{status}</option>)}
+                                </select>
+                              </label>
+                              <label className="block">
+                                <span className="text-xs font-semibold text-slate-700">Fecha de envio</span>
+                                <input type="date" value={record.teacherSentAt || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { teacherSentAt: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                               </label>
                               <label className="block sm:col-span-2 lg:col-span-3">
                                 <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
