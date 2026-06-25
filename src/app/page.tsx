@@ -670,8 +670,14 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "title", label: "Nombre del taller", required: true, aliases: ["taller", "nombre", "titulo", "actividad"] },
       { key: "targetCourses", label: "Cursos orientados", aliases: ["cursos", "curso", "audiencia", "grupo"] },
       { key: "audience", label: "Participantes", aliases: ["participantes", "audiencia", "grupo", "curso"] },
+      { key: "audienceType", label: "Tipo de destinatarios", aliases: ["destinatarios", "tipo audiencia", "participantes"] },
       { key: "responsible", label: "Responsable", aliases: ["responsable", "profesional"] },
+      { key: "duration", label: "Duracion", aliases: ["duracion", "bloques", "tiempo"] },
       { key: "status", label: "Estado", type: "select", options: ["Planificado", "Realizado", "Pendiente"], aliases: ["estado"] },
+      { key: "objective", label: "Objetivo", type: "textarea", aliases: ["objetivo", "proposito", "meta"] },
+      { key: "materials", label: "Materiales", type: "textarea", aliases: ["materiales", "recursos", "insumos"] },
+      { key: "followUp", label: "Seguimiento", type: "textarea", aliases: ["seguimiento", "acuerdos", "pendientes"] },
+      { key: "evidenceLink", label: "Enlace de evidencia", aliases: ["evidencia", "link", "enlace", "url", "drive"] },
       { key: "presentStudentIds", label: "Presentes", aliases: ["presentes", "asistentes"] },
       { key: "absentStudentIds", label: "Ausentes", aliases: ["ausentes", "inasistentes"] },
       { key: "attachments", label: "Adjuntos", aliases: ["adjuntos", "archivos", "evidencias"] },
@@ -1336,12 +1342,21 @@ function WorkshopsView({
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
-  const [draftWorkshop, setDraftWorkshop] = useState({
+  const emptyWorkshopDraft = () => ({
     date: new Date().toISOString().slice(0, 10),
     title: "",
     responsible: "",
     status: "Planificado",
+    audienceType: "",
+    duration: "",
+    objective: "",
+    materials: "",
+    evidenceLink: "",
+    followUp: "",
     notes: "",
+  });
+  const [draftWorkshop, setDraftWorkshop] = useState({
+    ...emptyWorkshopDraft(),
   });
   const [draftCourses, setDraftCourses] = useState<string[]>([]);
   const [draftPresentIds, setDraftPresentIds] = useState<string[]>([]);
@@ -1352,7 +1367,7 @@ function WorkshopsView({
   const [attendanceQuery, setAttendanceQuery] = useState("");
   const [fileNotice, setFileNotice] = useState("");
   const [editingWorkshopId, setEditingWorkshopId] = useState("");
-  const [editWorkshop, setEditWorkshop] = useState({ date: "", title: "", responsible: "", status: "Planificado", notes: "" });
+  const [editWorkshop, setEditWorkshop] = useState({ ...emptyWorkshopDraft(), date: "" });
   const [editCourses, setEditCourses] = useState<string[]>([]);
   const [editPresentIds, setEditPresentIds] = useState<string[]>([]);
   const [editAbsentIds, setEditAbsentIds] = useState<string[]>([]);
@@ -1403,7 +1418,7 @@ function WorkshopsView({
     };
     onAddWorkshop(record);
     setSelectedId("");
-    setDraftWorkshop({ date: new Date().toISOString().slice(0, 10), title: "", responsible: "", status: "Planificado", notes: "" });
+    setDraftWorkshop(emptyWorkshopDraft());
     setDraftCourses([]);
     setDraftPresentIds([]);
     setDraftAbsentIds([]);
@@ -1460,6 +1475,12 @@ function WorkshopsView({
       title: selected.title || "",
       responsible: selected.responsible || "",
       status: selected.status || "Planificado",
+      audienceType: selected.audienceType || "",
+      duration: selected.duration || "",
+      objective: selected.objective || "",
+      materials: selected.materials || "",
+      evidenceLink: selected.evidenceLink || "",
+      followUp: selected.followUp || "",
       notes: selected.notes || "",
     });
     setEditCourses(selectedCourses);
@@ -1472,7 +1493,7 @@ function WorkshopsView({
 
   const cancelEditSelected = () => {
     setEditingWorkshopId("");
-    setEditWorkshop({ date: "", title: "", responsible: "", status: "Planificado", notes: "" });
+    setEditWorkshop({ ...emptyWorkshopDraft(), date: "" });
     setEditCourses([]);
     setEditPresentIds([]);
     setEditAbsentIds([]);
@@ -1505,7 +1526,7 @@ function WorkshopsView({
   };
 
   const clearDraft = () => {
-    setDraftWorkshop({ date: new Date().toISOString().slice(0, 10), title: "", responsible: "", status: "Planificado", notes: "" });
+    setDraftWorkshop(emptyWorkshopDraft());
     setDraftCourses([]);
     setDraftPresentIds([]);
     setDraftAbsentIds([]);
@@ -1656,6 +1677,8 @@ function WorkshopsView({
                             {["Planificado", "Realizado", "Pendiente"].map((status) => <option key={status}>{status}</option>)}
                           </select>
                           <input value={editWorkshop.responsible} onChange={(event) => setEditWorkshop((current) => ({ ...current, responsible: event.target.value }))} placeholder="Responsable" className="rounded-md border border-slate-200 px-2 py-1" />
+                          <input value={editWorkshop.duration} onChange={(event) => setEditWorkshop((current) => ({ ...current, duration: event.target.value }))} placeholder="Duracion" className="rounded-md border border-slate-200 px-2 py-1" />
+                          <input value={editWorkshop.audienceType} onChange={(event) => setEditWorkshop((current) => ({ ...current, audienceType: event.target.value }))} placeholder="Destinatarios" className="rounded-md border border-slate-200 px-2 py-1" />
                         </div>
                       </>
                     ) : (
@@ -1665,6 +1688,8 @@ function WorkshopsView({
                           <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">{selected.date || "Sin fecha"}</span>
                           <span className="rounded-full bg-cyan-50 px-2.5 py-1 font-semibold text-cyan-800">{selected.status || "Sin estado"}</span>
                           {selected.responsible ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">{selected.responsible}</span> : null}
+                          {selected.duration ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">{selected.duration}</span> : null}
+                          {selected.audienceType ? <span className="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-700">{selected.audienceType}</span> : null}
                         </div>
                       </>
                     )}
@@ -1685,9 +1710,48 @@ function WorkshopsView({
                   </div>
                 </div>
                 {isEditingSelected ? (
-                  <textarea value={editWorkshop.notes} onChange={(event) => setEditWorkshop((current) => ({ ...current, notes: event.target.value }))} rows={3} placeholder="Observaciones del taller" className="mt-3 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Objetivo
+                      <textarea value={editWorkshop.objective} onChange={(event) => setEditWorkshop((current) => ({ ...current, objective: event.target.value }))} rows={3} placeholder="Objetivo pedagogico o socioemocional" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Materiales
+                      <textarea value={editWorkshop.materials} onChange={(event) => setEditWorkshop((current) => ({ ...current, materials: event.target.value }))} rows={3} placeholder="Materiales, recursos o enlaces" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Seguimiento
+                      <textarea value={editWorkshop.followUp} onChange={(event) => setEditWorkshop((current) => ({ ...current, followUp: event.target.value }))} rows={3} placeholder="Acuerdos, pendientes o proxima accion" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-600">
+                      Observaciones
+                      <textarea value={editWorkshop.notes} onChange={(event) => setEditWorkshop((current) => ({ ...current, notes: event.target.value }))} rows={3} placeholder="Observaciones del taller" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500" />
+                    </label>
+                    <label className="block text-xs font-semibold text-slate-600 lg:col-span-2">
+                      Enlace de evidencia
+                      <input value={editWorkshop.evidenceLink} onChange={(event) => setEditWorkshop((current) => ({ ...current, evidenceLink: event.target.value }))} placeholder="URL de carpeta, documento o respaldo" className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-normal text-slate-900 outline-none focus:border-blue-500" />
+                    </label>
+                  </div>
                 ) : (
-                  <p className="mt-3 whitespace-pre-wrap rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm text-slate-700">{selected.notes || "Sin observaciones registradas."}</p>
+                  <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    {[
+                      ["Objetivo", selected.objective || "Sin objetivo registrado."],
+                      ["Materiales", selected.materials || "Sin materiales registrados."],
+                      ["Seguimiento", selected.followUp || "Sin seguimiento registrado."],
+                      ["Observaciones", selected.notes || "Sin observaciones registradas."],
+                    ].map(([label, value]) => (
+                      <article key={label} className="min-w-0 rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+                        <p className="mt-2 whitespace-pre-wrap break-words text-sm leading-6 text-slate-700">{value}</p>
+                      </article>
+                    ))}
+                    {selected.evidenceLink ? (
+                      <article className="min-w-0 rounded-xl border border-blue-100 bg-blue-50 p-3 lg:col-span-2">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Enlace de evidencia</p>
+                        <a href={selected.evidenceLink} target="_blank" rel="noreferrer" className="mt-2 block break-all text-sm font-semibold text-blue-800 hover:text-blue-950">{selected.evidenceLink}</a>
+                      </article>
+                    ) : null}
+                  </div>
                 )}
               </div>
 
@@ -1833,6 +1897,14 @@ function WorkshopsView({
                   </select>
                 </div>
                 <input value={draftWorkshop.responsible} onChange={(event) => setDraftWorkshop((current) => ({ ...current, responsible: event.target.value }))} placeholder="Responsable" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
+                  <input value={draftWorkshop.audienceType} onChange={(event) => setDraftWorkshop((current) => ({ ...current, audienceType: event.target.value }))} placeholder="Destinatarios (apoderados, estudiantes, curso...)" className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                  <input value={draftWorkshop.duration} onChange={(event) => setDraftWorkshop((current) => ({ ...current, duration: event.target.value }))} placeholder="Duracion (45 min, 90 min...)" className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                </div>
+                <textarea value={draftWorkshop.objective} onChange={(event) => setDraftWorkshop((current) => ({ ...current, objective: event.target.value }))} placeholder="Objetivo del taller" rows={3} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <textarea value={draftWorkshop.materials} onChange={(event) => setDraftWorkshop((current) => ({ ...current, materials: event.target.value }))} placeholder="Materiales o recursos" rows={3} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <textarea value={draftWorkshop.followUp} onChange={(event) => setDraftWorkshop((current) => ({ ...current, followUp: event.target.value }))} placeholder="Seguimiento, acuerdos o pendientes" rows={3} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                <input value={draftWorkshop.evidenceLink} onChange={(event) => setDraftWorkshop((current) => ({ ...current, evidenceLink: event.target.value }))} placeholder="Enlace de evidencia o carpeta" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
                 <textarea value={draftWorkshop.notes} onChange={(event) => setDraftWorkshop((current) => ({ ...current, notes: event.target.value }))} placeholder="Observaciones" rows={4} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
               </div>
 
@@ -6646,7 +6718,117 @@ function DashboardAgenda({
   );
 }
 
-function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEvents, calendarLoading, calendarIcalUrl, onReloadCalendar }: { store: DataStore; onNavigate: (view: ViewId) => void; schoolName: string; userEmail: string; team: TeamMember[]; calendarEvents: CalendarEvent[]; calendarLoading: boolean; calendarIcalUrl?: string; onReloadCalendar: () => void }) {
+function OperationsPanel({
+  store,
+  onNavigate,
+  onQuickAdd,
+}: {
+  store: DataStore;
+  onNavigate: (view: ViewId) => void;
+  onQuickAdd: (entity: EntityId) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const todayClasses = store.orientation.filter((record) => (record.date || "").slice(0, 10) === today);
+  const upcomingClasses = store.orientation
+    .filter((record) => record.date && record.date >= today && record.date <= weekEnd)
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+    .slice(0, 5);
+  const workshopsWeek = store.workshops
+    .filter((record) => record.date && record.date >= today && record.date <= weekEnd)
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+    .slice(0, 5);
+  const unplannedClasses = store.orientation
+    .filter((record) => record.date && record.date >= today && record.date <= weekEnd && !(record.planificacion || record.objective || "").trim())
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+    .slice(0, 5);
+  const openCases = store.cases.filter((record) => !/cerrad/i.test(record.status || ""));
+  const pendingInterviews = store.interviews
+    .filter((record) => !/realizada|cerrada/i.test(record.status || "") && (!record.date || record.date >= today))
+    .sort((a, b) => String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt)))
+    .slice(0, 5);
+
+  const quickActions: Array<{ label: string; detail: string; icon: LucideIcon; action: () => void; tone: string }> = [
+    { label: "Registrar clase", detail: "Orientacion semanal", icon: ClipboardList, action: () => onNavigate("orientation"), tone: "bg-blue-600" },
+    { label: "Nuevo taller", detail: "Planificar y pasar lista", icon: GraduationCap, action: () => onNavigate("workshops"), tone: "bg-emerald-600" },
+    { label: "Bitacora", detail: "Seguimiento breve", icon: FileText, action: () => onQuickAdd("logs"), tone: "bg-violet-600" },
+    { label: "Entrevista", detail: "Acta y acuerdos", icon: MessageSquareText, action: () => onQuickAdd("interviews"), tone: "bg-sky-600" },
+    { label: "Caso", detail: "Abrir seguimiento", icon: AlertTriangle, action: () => onQuickAdd("cases"), tone: "bg-amber-600" },
+    { label: "Importar", detail: "Planillas y datos", icon: FileSpreadsheet, action: () => onNavigate("import"), tone: "bg-slate-900" },
+  ];
+
+  const workLists: Array<{ title: string; count: number; view: ViewId; empty: string; records: DataRecord[]; icon: LucideIcon }> = [
+    { title: "Clases proximas", count: upcomingClasses.length, view: "orientation", empty: "No hay clases registradas para los proximos 7 dias.", records: upcomingClasses, icon: ClipboardList },
+    { title: "Talleres proximos", count: workshopsWeek.length, view: "workshops", empty: "No hay talleres programados para esta semana.", records: workshopsWeek, icon: GraduationCap },
+    { title: "Falta planificacion", count: unplannedClasses.length, view: "orientation", empty: "Las clases de la semana tienen planificacion.", records: unplannedClasses, icon: Bell },
+    { title: "Entrevistas pendientes", count: pendingInterviews.length, view: "interviews", empty: "No hay entrevistas pendientes visibles.", records: pendingInterviews, icon: MessageSquareText },
+  ];
+
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Centro operativo</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">Registrar, revisar y cerrar la semana</h2>
+          <p className="mt-1 max-w-2xl text-sm text-slate-600">
+            Accesos directos para el trabajo real: clases de orientacion, talleres, bitacoras, entrevistas y casos.
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+          <div className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700 ring-1 ring-blue-100"><strong className="block text-lg">{todayClasses.length}</strong> hoy</div>
+          <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700 ring-1 ring-amber-100"><strong className="block text-lg">{openCases.length}</strong> casos</div>
+          <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700 ring-1 ring-rose-100"><strong className="block text-lg">{unplannedClasses.length}</strong> sin plan</div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {quickActions.map((item) => {
+          const Icon = item.icon;
+          return (
+            <button key={item.label} onClick={item.action} className="group rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
+              <div className={`mb-3 grid h-9 w-9 place-items-center rounded-lg ${item.tone} text-white shadow-sm`}>
+                <Icon className="h-4 w-4" />
+              </div>
+              <strong className="block text-sm text-slate-950">{item.label}</strong>
+              <span className="mt-1 block text-xs text-slate-500">{item.detail}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 grid gap-3 xl:grid-cols-4">
+        {workLists.map((list) => {
+          const Icon = list.icon;
+          return (
+            <article key={list.title} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <Icon className="h-3.5 w-3.5" />
+                  <span className="truncate">{list.title}</span>
+                </h3>
+                <button onClick={() => onNavigate(list.view)} className="text-[11px] font-bold text-blue-700 hover:underline">{list.count}</button>
+              </div>
+              {list.records.length === 0 ? (
+                <p className="rounded-lg bg-white p-2 text-xs text-slate-500 ring-1 ring-slate-100">{list.empty}</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {list.records.map((record) => (
+                    <li key={record.id} className="rounded-lg bg-white px-2.5 py-2 text-xs ring-1 ring-slate-100">
+                      <strong className="block truncate text-slate-900">{record.topic || record.title || record.reason || "Registro"}</strong>
+                      <span className="mt-0.5 block truncate text-slate-500">{record.date || record.dueDate || "Sin fecha"}{record.course ? ` - ${record.course}` : ""}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team, calendarEvents, calendarLoading, calendarIcalUrl, onReloadCalendar }: { store: DataStore; onNavigate: (view: ViewId) => void; onQuickAdd: (entity: EntityId) => void; schoolName: string; userEmail: string; team: TeamMember[]; calendarEvents: CalendarEvent[]; calendarLoading: boolean; calendarIcalUrl?: string; onReloadCalendar: () => void }) {
   const total = Object.values(store).reduce((sum, records) => sum + records.length, 0);
   const latest = Object.entries(store)
     .flatMap(([entity, records]) => records.map((record) => ({ entity: entity as EntityId, record })))
@@ -6752,6 +6934,8 @@ function Dashboard({ store, onNavigate, schoolName, userEmail, team, calendarEve
           </div>
         </div>
       </section>
+
+      <OperationsPanel store={store} onNavigate={onNavigate} onQuickAdd={onQuickAdd} />
 
       <DashboardAgenda
         store={store}
@@ -9984,7 +10168,7 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
-    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} />;
+    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={(entity) => setDialogEntity(entity)} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} />;
     if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
