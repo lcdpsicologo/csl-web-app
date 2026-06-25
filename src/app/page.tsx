@@ -8951,6 +8951,7 @@ export default function TizaEducationApp() {
         const payload = await response.json();
         if (cancelled) return;
         setStore({ ...emptyStore(), ...(payload.store || {}) });
+        lastSavedSerializedRef.current = JSON.stringify({ ...emptyStore(), ...(payload.store || {}) });
         setRemoteLoaded(true);
         setRemoteStatus("synced");
       } catch (error) {
@@ -9009,8 +9010,17 @@ export default function TizaEducationApp() {
     window.localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(navOrder));
   }, [navOrder]);
 
+  const lastSavedSerializedRef = React.useRef<string>("");
   const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
     if (!authUser || !accessToken || !remoteLoaded) return;
+    // Evita reenviar el store completo si su contenido no cambió respecto al
+    // último guardado exitoso. Un re-render que regeneraba el store sin cambios
+    // disparaba PUTs repetidos de ~1MB (consumo enorme de Fast Origin Transfer).
+    const serialized = JSON.stringify(nextStore);
+    if (serialized === lastSavedSerializedRef.current) {
+      setRemoteStatus(successStatus);
+      return;
+    }
     setRemoteStatus("saving");
     setRemoteError("");
     try {
@@ -9026,6 +9036,7 @@ export default function TizaEducationApp() {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
       }
+      lastSavedSerializedRef.current = serialized;
       setRemoteStatus(successStatus);
     } catch (error) {
       console.warn("Remote records save failed; local backup remains active", error);
@@ -9039,7 +9050,7 @@ export default function TizaEducationApp() {
 
     const timer = window.setTimeout(async () => {
       await saveStoreSnapshot(store);
-    }, 700);
+    }, 1500);
 
     return () => window.clearTimeout(timer);
   }, [store, authUser, accessToken, remoteLoaded, saveStoreSnapshot]);
@@ -9492,7 +9503,7 @@ export default function TizaEducationApp() {
     if (!remoteLoaded || autoSeededOrientationRef.current) return;
     autoSeededOrientationRef.current = true;
     syncOrientationFirstCycle(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [remoteLoaded]);
 
   const autoSeededOrientationPlanRef = React.useRef(false);
@@ -9510,7 +9521,7 @@ export default function TizaEducationApp() {
     } catch {
       // ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [remoteLoaded]);
 
 
@@ -9770,7 +9781,7 @@ export default function TizaEducationApp() {
 
     pieImportData.forEach((excelStudent) => {
       // Find matching student
-      let existingIndex = currentStudents.findIndex((s) => {
+      const existingIndex = currentStudents.findIndex((s) => {
         const eRut = cleanRut(s.rut);
         const xRut = cleanRut(excelStudent.rut);
         if (eRut && xRut && eRut === xRut) return true;
