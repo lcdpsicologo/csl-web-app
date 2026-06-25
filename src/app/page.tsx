@@ -68,6 +68,7 @@ type EntityId =
   | "documents";
 
 type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "games" | "settings" | "pie" | EntityId;
+type SidebarMode = "fixed" | "auto" | "collapsed";
 
 type DataRecord = {
   id: string;
@@ -746,6 +747,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
 type ViewNavItem = (typeof viewNav)[number];
 
 const NAV_ORDER_KEY = "tiza-view-nav-order-v1";
+const SIDEBAR_MODE_KEY = "tiza-sidebar-mode-v1";
 const defaultNavOrder = viewNav.map((item) => item.id);
 
 const orderViewNav = (order: ViewId[]): ViewNavItem[] => {
@@ -764,6 +766,12 @@ const loadNavOrder = (): ViewId[] => {
   } catch {
     return defaultNavOrder;
   }
+};
+
+const loadSidebarMode = (): SidebarMode => {
+  if (typeof window === "undefined") return "fixed";
+  const value = window.localStorage.getItem(SIDEBAR_MODE_KEY);
+  return value === "auto" || value === "collapsed" || value === "fixed" ? value : "fixed";
 };
 
 const emptyStore = (): DataStore => ({
@@ -942,6 +950,8 @@ function Sidebar({
   onNavigate,
   schoolName,
   navItems,
+  mode,
+  onModeChange,
   onReorderNavItem,
   onResetNavOrder,
 }: {
@@ -949,24 +959,62 @@ function Sidebar({
   onNavigate: (view: ViewId) => void;
   schoolName: string;
   navItems: ViewNavItem[];
-  onReorderNavItem: (source: ViewId, target: ViewId) => void;
+  mode: SidebarMode;
+  onModeChange: (mode: SidebarMode) => void;
+  onReorderNavItem: (source: ViewId, target: ViewId, placement: "before" | "after") => void;
   onResetNavOrder: () => void;
 }) {
   const [draggedView, setDraggedView] = useState<ViewId | null>(null);
   const [dragOverView, setDragOverView] = useState<ViewId | null>(null);
+  const [dragPlacement, setDragPlacement] = useState<"before" | "after">("before");
+  const [hovered, setHovered] = useState(false);
+  const compact = mode === "collapsed" || (mode === "auto" && !hovered);
+  const sidebarWidth = compact ? "w-[76px]" : "w-[272px]";
+  const modeButtonLabel = mode === "fixed" ? "Fijo" : mode === "auto" ? "Auto" : "Contraido";
+  const modeIconClass = mode === "fixed" ? "rotate-90" : mode === "auto" ? "rotate-0" : "-rotate-90";
+  const nextSidebarMode: SidebarMode = mode === "fixed" ? "auto" : mode === "auto" ? "collapsed" : "fixed";
 
   const finishDrag = () => {
     setDraggedView(null);
     setDragOverView(null);
+    setDragPlacement("before");
   };
 
   return (
-    <aside className="tz-glass fixed inset-y-0 left-0 hidden w-[272px] flex-col border-r border-slate-200/80 text-slate-700 lg:flex">
+    <aside
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={`tz-glass fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-slate-200/80 text-slate-700 transition-[width] duration-200 lg:flex ${sidebarWidth}`}
+    >
       <div className="flex h-full flex-col">
-        <div className="border-b border-slate-200/80 px-6 pb-4 pt-5">
-          <div className="flex h-12 items-center">
-            <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={200} height={48} priority />
+        <div className={`${compact ? "px-3" : "px-6"} border-b border-slate-200/80 pb-4 pt-5 transition-[padding] duration-200`}>
+          <div className={`flex h-12 items-center ${compact ? "justify-center" : "justify-between gap-2"}`}>
+            {compact ? (
+              <Image src="/icon.svg" alt="Tiza Education" width={42} height={42} priority />
+            ) : (
+              <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={172} height={42} priority />
+            )}
+            {!compact ? (
+              <button
+                type="button"
+                onClick={() => onModeChange(nextSidebarMode)}
+                title={`Modo de barra lateral: ${modeButtonLabel}`}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white/80 text-slate-500 shadow-sm transition hover:bg-white hover:text-slate-900"
+              >
+                <ChevronDown className={`h-4 w-4 transition ${modeIconClass}`} />
+              </button>
+            ) : null}
           </div>
+          {compact ? (
+            <button
+              type="button"
+              onClick={() => onModeChange(nextSidebarMode)}
+              title={`Barra lateral: ${modeButtonLabel}`}
+              className="mx-auto mt-3 grid h-8 w-8 place-items-center rounded-lg border border-slate-200 bg-white/80 text-slate-500 shadow-sm hover:text-slate-900"
+            >
+              <ChevronDown className={`h-4 w-4 transition ${modeIconClass}`} />
+            </button>
+          ) : (
           <div className="mt-4 flex items-center gap-3 rounded-xl border border-slate-200 bg-white/80 p-2.5">
             <div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
               <Image src="/logo-san-lucas.png" alt={schoolName} width={36} height={36} />
@@ -976,8 +1024,9 @@ function Sidebar({
               <p className="truncate text-sm font-semibold text-slate-900">{schoolName}</p>
             </div>
           </div>
+          )}
         </div>
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4">
+        <nav className={`${compact ? "px-2" : "px-3"} flex-1 space-y-1 overflow-y-auto py-4 transition-[padding] duration-200`}>
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = activeView === item.id;
@@ -986,77 +1035,91 @@ function Sidebar({
             return (
               <div
                 key={item.id}
-                draggable
-                onDragStart={(event) => {
-                  setDraggedView(item.id);
-                  event.dataTransfer.effectAllowed = "move";
-                  event.dataTransfer.setData("text/plain", item.id);
-                }}
                 onDragOver={(event) => {
                   event.preventDefault();
                   event.dataTransfer.dropEffect = "move";
+                  const rect = event.currentTarget.getBoundingClientRect();
+                  setDragPlacement(event.clientY < rect.top + rect.height / 2 ? "before" : "after");
                   setDragOverView(item.id);
                 }}
                 onDragLeave={() => setDragOverView((current) => (current === item.id ? null : current))}
                 onDrop={(event) => {
                   event.preventDefault();
                   const source = (event.dataTransfer.getData("text/plain") || draggedView) as ViewId | null;
-                  if (source && source !== item.id) onReorderNavItem(source, item.id);
+                  if (source && source !== item.id) onReorderNavItem(source, item.id, dragPlacement);
                   finishDrag();
                 }}
                 onDragEnd={finishDrag}
-                className={`group relative flex h-10 w-full items-center overflow-hidden rounded-lg transition ${
+                className={`group relative flex h-10 w-full items-center overflow-visible rounded-lg transition ${
                   active ? "bg-slate-900 text-white shadow-md" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
-                } ${dragTarget ? "ring-2 ring-cyan-300 ring-offset-1" : ""} ${dragging ? "opacity-55" : ""}`}
+                } ${dragging ? "opacity-55" : ""}`}
               >
+                {dragTarget ? (
+                  <span className={`pointer-events-none absolute left-2 right-2 z-10 flex items-center ${dragPlacement === "before" ? "-top-2" : "-bottom-2"}`}>
+                    <span className="grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-white shadow-md">
+                      <ChevronDown className={`h-3.5 w-3.5 ${dragPlacement === "before" ? "rotate-180" : ""}`} />
+                    </span>
+                    <span className="h-0.5 flex-1 rounded-full bg-blue-500 shadow-sm" />
+                  </span>
+                ) : null}
                 {active ? <span className="absolute inset-y-2 left-0 w-1 rounded-full bg-blue-500" /> : null}
-                <span
-                  title="Arrastrar para reordenar"
-                  aria-label={`Arrastrar ${item.label}`}
-                  className={`ml-1 grid h-8 w-7 shrink-0 cursor-grab place-items-center rounded-md active:cursor-grabbing ${
-                    active ? "text-white/65 hover:bg-white/10" : "text-slate-400 hover:bg-white hover:text-slate-600"
-                  }`}
-                >
-                  <GripVertical className="h-4 w-4" />
-                </span>
                 <button
                   onClick={() => onNavigate(item.id)}
-                  className="tz-nav-item flex h-full min-w-0 flex-1 items-center gap-3 px-2 pr-3 text-left text-sm font-medium"
+                  title={compact ? item.label : undefined}
+                  className={`tz-nav-item flex h-full min-w-0 flex-1 items-center gap-3 text-left text-sm font-medium ${compact ? "justify-center px-2" : "px-3 pr-2"}`}
                 >
                   <Icon className={`h-4 w-4 shrink-0 ${active ? "text-white" : "text-slate-500"}`} />
-                  <span className="truncate">{item.label}</span>
+                  {!compact ? <span className="truncate">{item.label}</span> : null}
                 </button>
+                {!compact ? (
+                  <span
+                    draggable
+                    onDragStart={(event) => {
+                      setDraggedView(item.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", item.id);
+                    }}
+                    title="Arrastrar para reordenar"
+                    aria-label={`Arrastrar ${item.label}`}
+                    className={`mr-1 grid h-8 w-7 shrink-0 cursor-grab place-items-center rounded-md opacity-0 transition active:cursor-grabbing group-hover:opacity-70 ${
+                      active ? "text-white/60 hover:bg-white/10 hover:opacity-100" : "text-slate-400 hover:bg-white hover:text-slate-600 hover:opacity-100"
+                    }`}
+                  >
+                    <GripVertical className="h-4 w-4" />
+                  </span>
+                ) : null}
               </div>
             );
           })}
-          <button
+          {!compact ? <button
             type="button"
             onClick={onResetNavOrder}
             className="mt-3 w-full rounded-lg border border-dashed border-slate-200 px-3 py-2 text-left text-xs font-semibold text-slate-500 transition hover:border-slate-300 hover:bg-white hover:text-slate-700"
           >
             Restablecer orden
-          </button>
+          </button> : null}
         </nav>
         <button
           onClick={() => onNavigate("settings")}
-          className={`tz-press group relative m-3 overflow-hidden rounded-2xl border p-3 text-left transition ${
+          title={compact ? "Configuracion" : undefined}
+          className={`tz-press group relative m-3 overflow-hidden rounded-2xl border text-left transition ${compact ? "p-2" : "p-3"} ${
             activeView === "settings"
               ? "border-slate-900 bg-slate-900 text-white shadow-lg"
               : "border-slate-200 bg-gradient-to-br from-white to-slate-50 hover:border-slate-300 hover:shadow-md"
           }`}
         >
-          <div className="flex items-center gap-3">
+          <div className={`flex items-center ${compact ? "justify-center" : "gap-3"}`}>
             <div className={`relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl shadow-sm ${
               activeView === "settings" ? "bg-white/15 ring-1 ring-white/30" : "bg-gradient-to-br from-slate-800 to-slate-600 ring-1 ring-slate-900/10"
             }`}>
               <Settings className={`h-5 w-5 ${activeView === "settings" ? "text-white" : "text-white"} transition group-hover:rotate-90`} />
               <span className="absolute -right-2 -top-2 h-3 w-3 rounded-full bg-emerald-400 opacity-80 ring-2 ring-white" />
             </div>
-            <div className="min-w-0 flex-1">
+            {!compact ? <div className="min-w-0 flex-1">
               <p className={`text-[10px] font-semibold uppercase tracking-wider ${activeView === "settings" ? "text-white/70" : "text-slate-500"}`}>Ajustes</p>
               <p className={`truncate text-sm font-semibold ${activeView === "settings" ? "text-white" : "text-slate-900"}`}>{schoolName}</p>
-            </div>
-            <ChevronDown className={`h-4 w-4 -rotate-90 transition group-hover:translate-x-0.5 ${activeView === "settings" ? "text-white/70" : "text-slate-400"}`} />
+            </div> : null}
+            {!compact ? <ChevronDown className={`h-4 w-4 -rotate-90 transition group-hover:translate-x-0.5 ${activeView === "settings" ? "text-white/70" : "text-slate-400"}`} /> : null}
           </div>
           <span className="pointer-events-none absolute -bottom-8 -right-8 h-20 w-20 rounded-full bg-slate-100/0 group-hover:bg-slate-100/40 transition" />
         </button>
@@ -8968,12 +9031,13 @@ export default function TizaEducationApp() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [floatingAiOpen, setFloatingAiOpen] = useState(false);
   const [navOrder, setNavOrder] = useState<ViewId[]>(loadNavOrder);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(loadSidebarMode);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarFetchedAt, setCalendarFetchedAt] = useState<string>("");
   const orderedNavItems = useMemo(() => orderViewNav(navOrder), [navOrder]);
 
-  const reorderNavItem = (source: ViewId, target: ViewId) => {
+  const reorderNavItem = (source: ViewId, target: ViewId, placement: "before" | "after") => {
     if (source === target) return;
     setNavOrder((current) => {
       const next = orderViewNav(current).map((item) => item.id);
@@ -8981,7 +9045,8 @@ export default function TizaEducationApp() {
       const targetIndex = next.indexOf(target);
       if (fromIndex < 0 || targetIndex < 0) return next;
       const [item] = next.splice(fromIndex, 1);
-      next.splice(targetIndex, 0, item);
+      const adjustedTargetIndex = next.indexOf(target);
+      next.splice(placement === "after" ? adjustedTargetIndex + 1 : adjustedTargetIndex, 0, item);
       return next;
     });
   };
@@ -9193,6 +9258,10 @@ export default function TizaEducationApp() {
   useEffect(() => {
     window.localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(navOrder));
   }, [navOrder]);
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_MODE_KEY, sidebarMode);
+  }, [sidebarMode]);
 
   const lastSavedSerializedRef = React.useRef<string>("");
   const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
@@ -10300,10 +10369,12 @@ export default function TizaEducationApp() {
         onNavigate={setActiveView}
         schoolName={profile.organization || "Colegio San Lucas"}
         navItems={orderedNavItems}
+        mode={sidebarMode}
+        onModeChange={setSidebarMode}
         onReorderNavItem={reorderNavItem}
         onResetNavOrder={resetNavOrder}
       />
-      <main className="tz-app-root min-w-0 lg:pl-[272px]">
+      <main className={`tz-app-root min-w-0 transition-[padding] duration-200 ${sidebarMode === "fixed" ? "lg:pl-[272px]" : "lg:pl-[76px]"}`}>
         <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
           <div className="mx-auto flex w-full max-w-[1440px] min-w-0 items-center gap-2">
             <div className="hidden shrink-0 items-center gap-1 sm:flex">
