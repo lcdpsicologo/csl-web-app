@@ -65,9 +65,10 @@ type EntityId =
   | "protocols"
   | "orientation"
   | "workshops"
+  | "personnel"
   | "documents";
 
-type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "games" | "settings" | "pie" | EntityId;
+type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "games" | "settings" | "pie" | "databases" | EntityId;
 type SidebarMode = "fixed" | "auto" | "collapsed";
 
 type DataRecord = {
@@ -317,10 +318,165 @@ const orientationActionColumns = [
   "Aplicación Pulso Digital",
 ];
 
+const officialPersonnelSource = "https://www.colegiosanlucas.com/colegio/#Equipo";
+const officialPersonnelSeededAt = "2026-06-26T00:00:00.000Z";
+const officialPersonnelEntries: Array<[string, string, string, string]> = [
+  ["María Olga Lagos", "Directora Colegio San Lucas", "Equipo Directivo", "Institucional"],
+  ["Jennifer Guzmán", "Directora Académica", "Equipo Directivo", "Institucional"],
+  ["María Renata Aurra", "Directora de Formación y Convivencia Escolar", "Equipo Directivo", "Institucional"],
+  ["Viviana Concha", "Administración", "Administrativos", "Institucional"],
+  ["Valeska Villasmil", "Subdirectora 1º Ciclo", "Equipo Directivo", "I Ciclo"],
+  ["Valeria Ibañez", "Subdirectora 2º Ciclo", "Equipo Directivo", "II Ciclo"],
+  ["Madelaine Martínez", "Subdirectora 3º Ciclo", "Equipo Directivo", "III Ciclo"],
+  ["Daniela Barra", "Subdirectora PIE", "Equipo Directivo", "PIE"],
+  ["Raul Farias", "Contador", "Administrativos", "Institucional"],
+  ["Yesenia Vera", "Asistente Contable", "Administrativos", "Institucional"],
+  ["Karina Carter", "Secretaria Gestión Escolar", "Administrativos", "Institucional"],
+  ["Diana Madrid", "Secretaria Administrativa y Recepcionista", "Administrativos", "Institucional"],
+  ["Daniela Vega", "Encargada del CRA", "Administrativos", "Institucional"],
+  ["Nicolás Pérez", "Encargado de informática", "Administrativos", "Institucional"],
+  ["Yaritza Carrasco", "Estafeta y encargada de fotocopias", "Administrativos", "Institucional"],
+  ["Bernarda Encina", "Ayudante de Cocina", "Administrativos", "Institucional"],
+  ["Joselyn Cabezas", "Ayudante de Cocina", "Administrativos", "Institucional"],
+  ["Alejandra Morales", "Ayudante de Cocina", "Administrativos", "Institucional"],
+  ["Javier Álvarez", "Portero", "Administrativos", "Institucional"],
+  ["Mauricio Aqueveque", "Portero", "Administrativos", "Institucional"],
+  ["Juan Madariaga", "Mantenciones", "Administrativos", "Institucional"],
+  ["Eduardo Loyola", "TENS", "Administrativos", "Institucional"],
+  ["Manuel Donoso", "Jardinero", "Administrativos", "Institucional"],
+  ["Alejandra Ñancucheo", "Inspectora de Iº Ciclo", "Inspectoría", "I Ciclo"],
+  ["Loreto Carter", "Inspectora de IIº Ciclo", "Inspectoría", "II Ciclo"],
+  ["Gabriela Diaz", "Inspectora de IIIº Ciclo", "Inspectoría", "III Ciclo"],
+  ["Carla Yurguevic", "Inspectora de Educación Parvularia", "Inspectoría", "I Ciclo"],
+  ["Celeste Acevedo", "Inspectora de Apoyo I Ciclo", "Inspectoría", "I Ciclo"],
+  ["Kharen Cerda", "Inspectora de Apoyo IIº y III° Ciclo", "Inspectoría", "II/III Ciclo"],
+  ["Elizabeth Riquelme", "Profesora de Inglés", "Primer Ciclo", "I Ciclo"],
+  ["Pablo Moraga", "Profesor de Educación Física", "Primer Ciclo", "I Ciclo"],
+  ["Alejandra Delgado", "Educadora de Párvulos", "Primer Ciclo", "I Ciclo"],
+  ["Ana Huerta", "Educadora de Párvulos", "Primer Ciclo", "I Ciclo"],
+  ["Ivonne Espinoza", "Educadora de Párvulos", "Primer Ciclo", "I Ciclo"],
+  ["Paulina Rojas", "Educadora de Párvulos", "Primer Ciclo", "I Ciclo"],
+  ["Paulina Aguilera", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Josefa Trujillo", "Educadora de Párvulos", "Primer Ciclo", "I Ciclo"],
+  ["Pamela Mery", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Daniela Guajardo", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Estrella Pérez", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Yaritza Arraño", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Alicia Mella", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Nicole Peredo", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Claudia Silva", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Denisse Lara", "Técnico en Párvulos", "Primer Ciclo", "I Ciclo"],
+  ["Jhom Vega", "Profesor de Religión", "Primer Ciclo", "I Ciclo"],
+  ["Matías Sánchez", "Profesor de Arte", "Primer Ciclo", "I Ciclo"],
+  ["Francisco Cerón", "Profesor de Música", "Primer Ciclo", "I Ciclo"],
+  ["Christian Vega", "Profesor de Inglés", "Primer Ciclo", "I Ciclo"],
+  ["Camila González", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Nicole Vásquez", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["André Vidal", "Profesor Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Viviana Hernández", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Carol Reyes", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Geraldine Parra", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Jaqueline Morales", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Karianny Gómez", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["Ilona Leal", "Profesora Unidocente", "Primer Ciclo", "I Ciclo"],
+  ["María Catalina Jiménez", "Profesora Volante", "Primer Ciclo", "I Ciclo"],
+  ["Matías Coleman", "Profesor Volante", "Primer Ciclo", "I Ciclo"],
+  ["José Sepúlveda", "Profesor de Educación Física", "Primer Ciclo", "I Ciclo"],
+  ["Isabel Fuenzalida", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Ingrid Quezada", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Regina Palma", "Técnico de Aula", "Primer Ciclo", "I Ciclo"],
+  ["Cristina Lazo", "Profesora de Matemática", "Segundo Ciclo", "II Ciclo"],
+  ["Luís Escanilla", "Profesor de Matemática", "Segundo Ciclo", "II Ciclo"],
+  ["Giovanna Muñoz", "Profesora de inglés", "Segundo Ciclo", "II Ciclo"],
+  ["Evelyn Meza", "Profesora de Lenguaje", "Segundo Ciclo", "II Ciclo"],
+  ["Nicolás Escobar", "Profesor de Lenguaje", "Segundo Ciclo", "II Ciclo"],
+  ["Marcelo Vásquez", "Profesor de Religión y Filosofía", "Segundo Ciclo", "II Ciclo"],
+  ["Pía Velastín", "Profesora de Ciencias", "Segundo Ciclo", "II Ciclo"],
+  ["José Marcelo Gutiérrez", "Profesor de Educación Física", "Segundo Ciclo", "II Ciclo"],
+  ["Constanza Añiñir", "Profesor de Historia", "Segundo Ciclo", "II Ciclo"],
+  ["Héctor Acuña", "Profesor de Historia", "Segundo Ciclo", "II Ciclo"],
+  ["Camila Aguilera", "Profesora de Arte", "Segundo Ciclo", "II Ciclo"],
+  ["Mauricio Iturriaga", "Profesor de Música", "Segundo Ciclo", "II Ciclo"],
+  ["Manuel Useche", "Profesor de Religión", "Segundo Ciclo", "II Ciclo"],
+  ["Cristyn Venegas", "Profesora Volante", "Segundo Ciclo", "II Ciclo"],
+  ["Álvaro Astudillo", "Profesor de Matemática", "Tercer Ciclo", "III Ciclo"],
+  ["Joshua Jara", "Profesor de Matemática", "Tercer Ciclo", "III Ciclo"],
+  ["Diego Céspedes", "Profesor de Matemática y Física", "Tercer Ciclo", "III Ciclo"],
+  ["Manuel Pinto", "Profesor de Lenguaje", "Tercer Ciclo", "III Ciclo"],
+  ["Cristopher Díaz", "Profesor de Lenguaje", "Tercer Ciclo", "III Ciclo"],
+  ["Felipe Rojas Carrasco", "Profesor de Educación Física", "Tercer Ciclo", "III Ciclo"],
+  ["Sofía Ramos", "Profesora de Química", "Tercer Ciclo", "III Ciclo"],
+  ["Carla Miranda", "Profesora de Inglés", "Tercer Ciclo", "III Ciclo"],
+  ["Cindy Gulppi", "Profesora de Historia", "Tercer Ciclo", "III Ciclo"],
+  ["Carlos Toro", "Jefe de Especialidad TP", "Tercer Ciclo", "III Ciclo"],
+  ["Nelson Quevedo", "Profesor TP", "Tercer Ciclo", "III Ciclo"],
+  ["Debbie Lara", "Profesora Diferencial", "PIE", "PIE"],
+  ["María Soledad Salinas", "Profesora Diferencial", "PIE", "PIE"],
+  ["Andrea Linco", "Profesora Diferencial", "PIE", "PIE"],
+  ["Natalia Miranda", "Profesora Diferencial", "PIE", "PIE"],
+  ["Diego Lagos", "Profesor Diferencial", "PIE", "PIE"],
+  ["Anais López", "Profesora Diferencial", "PIE", "PIE"],
+  ["Elena Galarce", "Profesora Diferencial", "PIE", "PIE"],
+  ["Danae Bulicic", "Profesora Diferencial", "PIE", "PIE"],
+  ["Daniela Villagra", "Profesora Diferencial", "PIE", "PIE"],
+  ["Kaira Ruz", "Profesora Diferencial", "PIE", "PIE"],
+  ["Andrea Galvez", "Profesora Diferencial", "PIE", "PIE"],
+  ["María José Solari", "Profesora Diferencial", "PIE", "PIE"],
+  ["Daniela Pérez", "Profesora Diferencial", "PIE", "PIE"],
+  ["Yanel Parra", "Profesora Diferencial", "PIE", "PIE"],
+  ["Nicolle Salinas", "Profesora Diferencial", "PIE", "PIE"],
+  ["Carolina Linco", "Profesora Diferencial", "PIE", "PIE"],
+  ["Milton Osses", "Profesor Diferencial", "PIE", "PIE"],
+  ["Ana Zamora", "Profesora Diferencial", "PIE", "PIE"],
+  ["Daniela Carrillo", "Profesora Diferencial", "PIE", "PIE"],
+  ["Michael Vera", "Profesor Diferencial", "PIE", "PIE"],
+  ["Fabiana Acevedo", "Psicóloga", "PIE", "PIE"],
+  ["Juan Esteban Carrasco", "Psicólogo", "PIE", "PIE"],
+  ["Tihare Amaya", "Terapeuta Ocupacional", "PIE", "PIE"],
+  ["Arlette Espina", "Terapeuta Ocupacional", "PIE", "PIE"],
+  ["Valeria Andrades", "Fonoaudióloga", "PIE", "PIE"],
+  ["Yocelyn Pérez", "Fonoaudióloga", "PIE", "PIE"],
+  ["Margarita Alvarado", "Fonoaudióloga", "PIE", "PIE"],
+  ["Regina Palma", "Catequista", "Pastoral", "Institucional"],
+  ["Karianny Gómez", "Catequista", "Pastoral", "Institucional"],
+  ["André Vidal", "Profesor de Coro San Lucas", "Pastoral", "Institucional"],
+  ["Pía Velastín", "Catequista", "Pastoral", "Institucional"],
+  ["Celeste Acevedo", "Catequista", "Pastoral", "Institucional"],
+  ["Renata Aurra", "Directora de Formación y Convivencia Escolar", "Formación y Convivencia", "Institucional"],
+  ["Karen Riquelme", "Coordinadora de Iº Ciclo", "Formación y Convivencia", "I Ciclo"],
+  ["Andrea Acuña", "Coordinadora de II° Ciclo", "Formación y Convivencia", "II Ciclo"],
+  ["Rita Concha", "Coordinadora de III° Ciclo", "Formación y Convivencia", "III Ciclo"],
+  ["Heimy Godoy", "Psicóloga", "Formación y Convivencia", "Institucional"],
+  ["Alejandra Muñoz", "Coordinadora de Convivencia Escolar", "Formación y Convivencia", "Institucional"],
+  ["Gustavo Caro", "Orientador I Ciclo", "Formación y Convivencia", "I Ciclo"],
+  ["Cindy Pulido", "Orientadora de IIº Ciclo", "Formación y Convivencia", "II Ciclo"],
+  ["Marcela Toro", "Orientadora de III° Ciclo", "Formación y Convivencia", "III Ciclo"],
+  ["Geraldine Berrios", "Trabajadora Social", "Formación y Convivencia", "Institucional"],
+  ["Manuel Useche", "Coordinador de Pastoral y Desarrollo Comunitario", "Formación y Convivencia", "Institucional"],
+];
+
+const officialPersonnelRecords = officialPersonnelEntries.map(([fullName, role, area, cycle], index) => ({
+  id: `personnel-${index + 1}-${normalize(fullName).replace(/\s+/g, "-")}-${normalize(area).replace(/\s+/g, "-")}`,
+  createdAt: officialPersonnelSeededAt,
+  updatedAt: officialPersonnelSeededAt,
+  fullName,
+  role,
+  area,
+  cycle,
+  course: "",
+  email: "",
+  phone: "",
+  status: "Activo",
+  source: officialPersonnelSource,
+  notes: "",
+}));
+
 const buildDataContext = (store: DataStore): string => {
   const lines: string[] = [];
   lines.push(`Total estudiantes: ${store.students.length}`);
   lines.push(`Cursos guardados: ${store.courses.length}`);
+  lines.push(`Funcionarios/base institucional: ${store.personnel.length}`);
+  lines.push(`Estudiantes marcados PIE/NEE: ${store.students.filter((student) => /pie|nee|diferencial/i.test(`${student.tags || ""} ${student.supportNeeds || ""} ${student.observations || ""}`)).length}`);
 
   // Casos
   const casesTotal = store.cases.length;
@@ -708,6 +864,25 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas"] },
     ],
   },
+  personnel: {
+    id: "personnel",
+    label: "Funcionarios",
+    singular: "funcionario/a",
+    icon: Building2,
+    description: "Base institucional de docentes, asistentes, inspectores, directivos, PIE y equipos de apoyo.",
+    fields: [
+      { key: "fullName", label: "Nombre completo", required: true, aliases: ["nombre", "funcionario", "funcionaria", "persona", "nombre completo"] },
+      { key: "role", label: "Cargo / rol", required: true, aliases: ["cargo", "rol", "funcion", "puesto"] },
+      { key: "area", label: "Área", aliases: ["area", "departamento", "equipo", "unidad"] },
+      { key: "cycle", label: "Ciclo", type: "select", options: ["Institucional", "I Ciclo", "II Ciclo", "III Ciclo", "II/III Ciclo", "PIE"], aliases: ["ciclo", "nivel"] },
+      { key: "course", label: "Curso asociado", aliases: ["curso", "jefatura", "nivel asociado"] },
+      { key: "email", label: "Correo", aliases: ["correo", "email", "mail"] },
+      { key: "phone", label: "Teléfono", aliases: ["telefono", "celular", "fono"] },
+      { key: "status", label: "Estado", type: "select", options: ["Activo", "Pendiente confirmar", "Inactivo"], aliases: ["estado", "status"] },
+      { key: "source", label: "Fuente", aliases: ["fuente", "origen"] },
+      { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "comentarios"] },
+    ],
+  },
   documents: {
     id: "documents",
     label: "Documentos",
@@ -755,6 +930,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "reports", label: "Reportes", icon: PieChart },
   { id: "games", label: "Juegos Vinculares", icon: Gamepad2 },
   { id: "students", label: "Estudiantes", icon: UserRound },
+  { id: "databases", label: "Bases de datos", icon: Database },
   { id: "pie", label: "PIE", icon: Puzzle },
   { id: "courses", label: "Cursos", icon: BookOpen },
   { id: "cases", label: "Casos", icon: FileText },
@@ -806,6 +982,7 @@ const emptyStore = (): DataStore => ({
   protocols: [],
   orientation: [],
   workshops: [],
+  personnel: officialPersonnelRecords,
   documents: [],
 });
 
@@ -1390,6 +1567,270 @@ function EntityView({
           </div>
         </section>
       )}
+    </div>
+  );
+}
+
+type DatabaseTab = "students" | "personnel" | "courses" | "pie";
+
+function DatabaseHubView({
+  store,
+  onAddRecord,
+  onUpdateRecord,
+  onDeleteRecord,
+  onOpenStudent,
+  onNavigate,
+}: {
+  store: DataStore;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onUpdateRecord: (entity: EntityId, recordId: string, updates: Record<string, string>) => void;
+  onDeleteRecord: (entity: EntityId, recordId: string) => void;
+  onOpenStudent: (studentId: string) => void;
+  onNavigate: (view: ViewId) => void;
+}) {
+  const [tab, setTab] = useState<DatabaseTab>("students");
+  const [cycle, setCycle] = useState("all");
+  const [query, setQuery] = useState("");
+  const [editing, setEditing] = useState<{ entity: EntityId; id: string } | null>(null);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [importSheet, setImportSheet] = useState<ParsedSheet | null>(null);
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+
+  const courseCycle = (courseName: string) =>
+    store.courses.find((course) => normalize(course.name || "") === normalize(courseName))?.cycle ||
+    officialCourses.find((course) => normalize(course.name) === normalize(courseName))?.cycle ||
+    "";
+
+  const tabs: Array<{ id: DatabaseTab; label: string; entity: EntityId; count: number; icon: LucideIcon }> = [
+    { id: "students", label: "Estudiantes", entity: "students", count: store.students.length, icon: UserRound },
+    { id: "personnel", label: "Funcionarios", entity: "personnel", count: store.personnel.length, icon: Building2 },
+    { id: "courses", label: "Cursos", entity: "courses", count: store.courses.length, icon: BookOpen },
+    { id: "pie", label: "PIE", entity: "students", count: store.students.filter((student) => /pie|nee|diferencial/i.test(`${student.tags || ""} ${student.supportNeeds || ""} ${student.observations || ""}`)).length, icon: Puzzle },
+  ];
+
+  const activeEntity: EntityId = tab === "pie" ? "students" : tabs.find((item) => item.id === tab)?.entity || "students";
+  const activeConfig = entityConfigs[activeEntity];
+  const visibleFields: FieldDef[] =
+    tab === "students" ? entityConfigs.students.fields.filter((field) => ["fullName", "course", "rut", "guardian", "phone", "email", "tags", "supportNeeds", "healthAlerts"].includes(field.key))
+      : tab === "pie" ? entityConfigs.students.fields.filter((field) => ["fullName", "course", "rut", "tags", "supportNeeds", "healthAlerts", "observations"].includes(field.key))
+        : tab === "courses" ? entityConfigs.courses.fields
+          : entityConfigs.personnel.fields;
+
+  const baseRecords = tab === "pie"
+    ? store.students.filter((student) => /pie|nee|diferencial/i.test(`${student.tags || ""} ${student.supportNeeds || ""} ${student.observations || ""}`))
+    : store[activeEntity];
+
+  const filteredRecords = baseRecords.filter((record) => {
+    const recordCycle = activeEntity === "students" ? courseCycle(record.course || "") : record.cycle || "";
+    if (cycle !== "all" && normalize(recordCycle) !== normalize(cycle)) return false;
+    if (query && !Object.values(record).some((value) => normalize(String(value)).includes(normalize(query)))) return false;
+    return true;
+  });
+
+  const cycleOptions = ["all", "Institucional", "I Ciclo", "II Ciclo", "III Ciclo", "II/III Ciclo", "PIE"];
+  const startEdit = (entity: EntityId, record: DataRecord) => {
+    setEditing({ entity, id: record.id });
+    setDraft(Object.fromEntries(visibleFields.map((field) => [field.key, record[field.key] || ""])));
+  };
+  const saveEdit = () => {
+    if (!editing) return;
+    onUpdateRecord(editing.entity, editing.id, draft);
+    setEditing(null);
+    setDraft({});
+  };
+  const addBlank = () => {
+    const entity = activeEntity;
+    const fields = entity === "personnel" ? entityConfigs.personnel.fields : entity === "courses" ? entityConfigs.courses.fields : entityConfigs.students.fields;
+    const record = Object.fromEntries(fields.map((field) => [field.key, field.key === "status" ? "Activo" : ""])) as Record<string, string>;
+    if (entity === "personnel") {
+      record.fullName = "Nueva persona";
+      record.role = "Cargo por definir";
+      record.cycle = cycle !== "all" ? cycle : "Institucional";
+      record.source = "Ingreso manual";
+    } else if (entity === "courses") {
+      record.name = "Nuevo curso";
+      record.cycle = cycle !== "all" ? cycle : "";
+    } else {
+      record.fullName = "Nuevo estudiante";
+      record.course = "";
+      if (tab === "pie") record.tags = "PIE";
+    }
+    onAddRecord(entity, { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...record });
+  };
+
+  const parseDatabaseFile = async (file: File) => {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (extension === "xlsx" || extension === "xls") {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "" });
+      const headers = rows.length ? Object.keys(rows[0]) : [];
+      const parsedSheet = {
+        fileName: file.name,
+        headers,
+        rows: rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? "")]))),
+        delimiter: "xlsx",
+      };
+      setImportSheet(parsedSheet);
+      setImportPlan(inferImportPlan(parsedSheet));
+      return;
+    }
+    const csv = parseCsv(await file.text());
+    const parsedSheet = { fileName: file.name, ...csv };
+    setImportSheet(parsedSheet);
+    setImportPlan(inferImportPlan(parsedSheet));
+  };
+
+  const applyImport = () => {
+    if (!importSheet || !importPlan) return;
+    const entity = importPlan.entity;
+    importSheet.rows.forEach((row) => {
+      const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso() };
+      Object.entries(importPlan.mapping).forEach(([source, target]) => {
+        record[target] = row[source] || "";
+      });
+      if (entity === "personnel") record.source = record.source || importSheet.fileName;
+      if (entity === "students" && !isValidImportedStudentName(record.fullName || "")) return;
+      onAddRecord(entity, record);
+    });
+    setImportSheet(null);
+    setImportPlan(null);
+  };
+
+  const exportCurrent = () => {
+    recordsToExcel(`base-${tab}.xlsx`, tabs.find((item) => item.id === tab)?.label || "Base", filteredRecords, visibleFields);
+  };
+
+  return (
+    <div className="tz-fade">
+      <div className="mb-5 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-900 text-white shadow-sm">
+              <Database className="h-5 w-5" />
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Bases de datos</h1>
+          </div>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            Directorio global editable de estudiantes, funcionarios, cursos y PIE, ordenado por ciclos y sincronizado con Supabase.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800 hover:bg-cyan-100">
+            <TizaIaIcon className="h-4 w-4" /> Abrir Tiza-IA
+          </button>
+          <button onClick={exportCurrent} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowDownToLine className="h-4 w-4" /> Exportar vista
+          </button>
+          <button onClick={addBlank} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800">
+            <Plus className="h-4 w-4" /> Agregar registro
+          </button>
+        </div>
+      </div>
+
+      <section className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="grid gap-2 md:grid-cols-4">
+            {tabs.map(({ id, label, count, icon: Icon }) => (
+              <button key={id} onClick={() => { setTab(id); setEditing(null); }} className={`rounded-lg border px-3 py-3 text-left transition ${tab === id ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
+                <Icon className={`h-4 w-4 ${tab === id ? "text-blue-700" : "text-slate-500"}`} />
+                <span className="mt-2 block text-sm font-bold text-slate-950">{label}</span>
+                <span className="text-xs font-semibold text-slate-500">{count} registros</span>
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
+              <Search className="h-4 w-4 text-slate-400" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar en la base actual..." className="w-full bg-transparent text-sm outline-none" />
+            </div>
+            <select value={cycle} onChange={(event) => setCycle(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none">
+              {cycleOptions.map((option) => <option key={option} value={option}>{option === "all" ? "Todos los ciclos" : option}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-950 p-4 text-white shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">Tiza-IA para bases</p>
+          <h2 className="mt-1 text-lg font-semibold">Adjuntar planilla y ordenar columnas</h2>
+          <p className="mt-1 text-sm text-slate-300">Carga CSV o Excel. Tiza-IA detecta si son estudiantes, funcionarios o cursos y propone columnas globales editables.</p>
+          <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/30 bg-white/10 px-3 py-3 text-sm font-semibold hover:bg-white/15">
+            <Upload className="h-4 w-4" />
+            Adjuntar base de datos
+            <input type="file" accept=".csv,.tsv,.xlsx,.xls" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void parseDatabaseFile(file); event.currentTarget.value = ""; }} />
+          </label>
+          {importSheet && importPlan ? (
+            <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
+              <p className="font-bold">{importSheet.fileName}</p>
+              <p className="mt-1 text-slate-300">{importSheet.rows.length} filas detectadas · destino: {entityConfigs[importPlan.entity].label}</p>
+              <button onClick={applyImport} className="mt-3 w-full rounded-md bg-cyan-400 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-300">
+                Aplicar importación organizada
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <span className="text-sm font-semibold text-slate-700">Mostrando {filteredRecords.length} de {baseRecords.length} registros</span>
+          <span className="text-xs text-slate-500">Fuente funcionarios: {officialPersonnelSource}</span>
+        </div>
+        <div className="tz-contained-x">
+          <table className="min-w-[1120px] w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-slate-100 text-slate-600">
+                {visibleFields.map((field) => (
+                  <th key={field.key} className="border-b border-slate-200 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide">{field.label}</th>
+                ))}
+                <th className="border-b border-slate-200 px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wide">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRecords.map((record) => {
+                const isEditing = editing?.entity === activeEntity && editing.id === record.id;
+                return (
+                  <tr key={`${activeEntity}-${record.id}`} className="border-b border-slate-100 align-top hover:bg-blue-50/30">
+                    {visibleFields.map((field) => (
+                      <td key={field.key} className="min-w-36 px-3 py-2 text-xs text-slate-700">
+                        {isEditing ? (
+                          field.type === "textarea" ? (
+                            <textarea value={draft[field.key] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} className="min-h-16 w-full rounded-md border border-slate-200 p-2 outline-none focus:border-blue-500" />
+                          ) : field.type === "select" ? (
+                            <select value={draft[field.key] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} className="w-full rounded-md border border-slate-200 px-2 py-1.5 outline-none focus:border-blue-500">
+                              <option value="">Sin dato</option>
+                              {(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
+                            </select>
+                          ) : (
+                            <input value={draft[field.key] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} className="w-full rounded-md border border-slate-200 px-2 py-1.5 outline-none focus:border-blue-500" />
+                          )
+                        ) : field.key === "fullName" && activeEntity === "students" ? (
+                          <button onClick={() => onOpenStudent(record.id)} className="font-bold text-blue-700 hover:underline">{record[field.key] || "-"}</button>
+                        ) : (
+                          <span>{record[field.key] || (field.key === "cycle" && activeEntity === "students" ? courseCycle(record.course || "") : "-")}</span>
+                        )}
+                      </td>
+                    ))}
+                    <td className="whitespace-nowrap px-3 py-2 text-right">
+                      {isEditing ? (
+                        <div className="flex justify-end gap-1.5">
+                          <button onClick={saveEdit} className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white">Guardar</button>
+                          <button onClick={() => { setEditing(null); setDraft({}); }} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600">Cancelar</button>
+                        </div>
+                      ) : (
+                        <div className="flex justify-end gap-1.5">
+                          <button onClick={() => startEdit(activeEntity, record)} className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700">Editar</button>
+                          <button onClick={() => onDeleteRecord(activeEntity, record.id)} className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-600">Eliminar</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }
@@ -10547,6 +10988,18 @@ export default function TizaEducationApp() {
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "games") return <GamesView />;
+    if (activeView === "databases") {
+      return (
+        <DatabaseHubView
+          store={store}
+          onAddRecord={addRecord}
+          onUpdateRecord={updateRecord}
+          onDeleteRecord={deleteRecord}
+          onOpenStudent={openStudent}
+          onNavigate={setActiveView}
+        />
+      );
+    }
     if (activeView === "students") {
       return (
         <StudentsWorkspaceView
