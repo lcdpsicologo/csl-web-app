@@ -300,6 +300,23 @@ const orientationOwners = [
   },
 ];
 
+const orientationActionColumns = [
+  "Soy amable",
+  "Soy correcto",
+  "Tengo propósito",
+  "Soy responsable",
+  "Tengo afán de superación",
+  "Soy entusiasta",
+  "Soy constructivo",
+  "Hago las cosas bien",
+  "Consejo de Curso",
+  "Intervención Formativa",
+  "Intervención estudiantes",
+  "Intervención apoderados",
+  "Día sin clases",
+  "Aplicación Pulso Digital",
+];
+
 const buildDataContext = (store: DataStore): string => {
   const lines: string[] = [];
   lines.push(`Total estudiantes: ${store.students.length}`);
@@ -2717,6 +2734,40 @@ function OrientationCycleView({
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
     .slice(0, 8);
 
+  const getOrientationAction = (record: DataRecord) => {
+    const value = record.axis || record.characterStrength || record.classType || record.topic || "";
+    const exact = orientationActionColumns.find((action) => normalize(action) === normalize(value));
+    if (exact) return exact;
+    const fuzzy = orientationActionColumns.find((action) => normalize(value).includes(normalize(action)) || normalize(action).includes(normalize(value)));
+    return fuzzy || value || "Sin acción";
+  };
+  const orientationActionTotals = orientationActionColumns.map((action) => ({
+    action,
+    count: ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length,
+  }));
+  const visibleActionColumns = orientationActionTotals.some((item) => item.count > 0)
+    ? orientationActionTotals.filter((item) => item.count > 0).map((item) => item.action)
+    : orientationActionColumns;
+  const maxActionCount = Math.max(
+    1,
+    ...owner.courses.flatMap((course) =>
+      visibleActionColumns.map((action) =>
+        ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length,
+      ),
+    ),
+  );
+  const actionCellTone = (count: number) => {
+    if (count === 0) return "bg-white text-slate-300";
+    if (count >= Math.max(4, Math.ceil(maxActionCount * 0.75))) return "bg-emerald-200 text-emerald-950";
+    if (count >= Math.max(2, Math.ceil(maxActionCount * 0.4))) return "bg-emerald-100 text-emerald-900";
+    return "bg-amber-50 text-amber-800";
+  };
+  const ownerWorkshops = store.workshops.filter((workshop) => {
+    const target = `${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`;
+    return owner.courses.some((course) => normalize(target).includes(normalize(course))) ||
+      normalize(workshop.responsible || "").includes(normalize(owner.name));
+  });
+
   const filteredClasses = ownerClasses.filter((record) => {
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
     if (filterStatus !== "all" && (record.status || "") !== filterStatus) return false;
@@ -2770,10 +2821,14 @@ function OrientationCycleView({
   }));
 
   const classCounts = {
+    total: ownerClasses.length,
     realizadas: ownerClasses.filter((r) => /realizad/i.test(r.status || "")).length,
     planificadas: ownerClasses.filter((r) => /planificad/i.test(r.status || "")).length,
     pendientes: ownerClasses.filter((r) => /pendiente/i.test(r.status || "") || !r.status).length,
     reprogramadas: ownerClasses.filter((r) => /reprogramad/i.test(r.status || "")).length,
+    talleres: ownerWorkshops.length,
+    sinCanva: ownerClasses.filter((r) => !(r.canvaLink || r.evidence)).length,
+    sinPlanificacion: ownerClasses.filter((r) => !(r.planificacion || r.folderLink)).length,
   };
 
   const openNewClass = () => {
@@ -2812,20 +2867,19 @@ function OrientationCycleView({
   };
 
   const exportOwnerClasses = () => {
-    const headers = ["Fecha", "Semana", "Curso", "Orientador/a", "Correo", "Tema", "Eje / Acción", "Estado", "Enlace Canva", "Planificación", "Carpeta", "Observaciones", "Fuente"];
+    const headers = ["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"];
     const rows = filteredClasses.map((record) => [
       record.date || "",
       record.week || "",
       record.course || "",
-      record.orientationOwner || "",
-      record.orientationEmail || "",
+      getOrientationAction(record),
       record.topic || "",
-      record.axis || "",
       record.status || "",
+      record.notes || "",
       record.canvaLink || record.evidence || "",
       record.planificacion || "",
       record.folderLink || "",
-      record.notes || "",
+      record.orientationOwner || "",
       record.source || "",
     ]);
     downloadExcel(`orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xlsx`, "Orientación", headers, rows);
@@ -2914,24 +2968,35 @@ function OrientationCycleView({
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Preparacion semanal</p>
-              <h2 className="mt-1 text-xl font-semibold text-slate-950">Clases listas para compartir con profesores</h2>
-              <p className="mt-1 max-w-2xl text-sm text-slate-600">Registra semana, fecha exacta, curso, fortaleza, nombre de clase y el link que enviaras al profesor jefe.</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Resumen del ciclo</p>
+              <h2 className="mt-1 text-xl font-semibold text-slate-950">Bitácora de registros SOY+ y talleres</h2>
+              <p className="mt-1 max-w-2xl text-sm text-slate-600">Lectura ordenada por curso, semana, acción o fortaleza, estado y recursos asociados.</p>
             </div>
             <button onClick={openNewClass} className="tz-press inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-blue-700">
-              <Plus className="h-4 w-4" /> Preparar clase
+              <Plus className="h-4 w-4" /> Nuevo registro
             </button>
           </div>
           <div className="mt-4 grid gap-2 sm:grid-cols-4">
             {[
-              ["Sin link", classesWithoutShareLink.length, "text-rose-700 bg-rose-50 ring-rose-100"],
-              ["Listas para enviar", classesReadyToSend.length, "text-amber-700 bg-amber-50 ring-amber-100"],
-              ["Enviadas", classesSentToTeachers.length, "text-emerald-700 bg-emerald-50 ring-emerald-100"],
-              ["Proximas", upcomingWeekClasses.length, "text-blue-700 bg-blue-50 ring-blue-100"],
+              ["Registros", classCounts.total, "text-slate-800 bg-slate-50 ring-slate-200"],
+              ["Realizados", classCounts.realizadas, "text-emerald-700 bg-emerald-50 ring-emerald-100"],
+              ["Reprogramados", classCounts.reprogramadas, "text-amber-700 bg-amber-50 ring-amber-100"],
+              ["Talleres", classCounts.talleres, "text-blue-700 bg-blue-50 ring-blue-100"],
             ].map(([label, value, tone]) => (
               <div key={String(label)} className={`rounded-xl px-3 py-3 text-sm font-semibold ring-1 ${tone}`}>
                 <strong className="block text-2xl leading-none">{value}</strong>
                 <span className="mt-1 block">{label}</span>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 grid gap-2 sm:grid-cols-3">
+            {[
+              ["Pendientes / planificados", classCounts.pendientes, "bg-white text-slate-700 ring-slate-200"],
+              ["Sin Canva", classCounts.sinCanva, "bg-rose-50 text-rose-700 ring-rose-100"],
+              ["Sin planificación/carpeta", classCounts.sinPlanificacion, "bg-orange-50 text-orange-700 ring-orange-100"],
+            ].map(([label, value, tone]) => (
+              <div key={String(label)} className={`rounded-lg px-3 py-2 text-xs font-semibold ring-1 ${tone}`}>
+                <strong className="mr-2 text-base tabular-nums">{value}</strong>{label}
               </div>
             ))}
           </div>
@@ -2956,6 +3021,93 @@ function OrientationCycleView({
                 </button>
               );
             })}
+          </div>
+        </div>
+      </section>
+
+      <section className="mb-4 grid gap-4 2xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Mapa del ciclo</p>
+              <h2 className="text-base font-semibold text-slate-950">Cantidad por curso y acción/fortaleza</h2>
+            </div>
+            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{visibleActionColumns.length} columnas activas</span>
+          </header>
+          <div className="tz-contained-x">
+            <table className="min-w-[980px] w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-sky-700 text-white">
+                  <th className="sticky left-0 z-10 min-w-40 border-r border-sky-600 bg-sky-800 px-3 py-3 text-left text-xs font-bold uppercase">Curso</th>
+                  {visibleActionColumns.map((action) => (
+                    <th key={action} className="min-w-28 border-r border-sky-600 px-2 py-3 text-center text-[11px] font-bold leading-tight">
+                      {action}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {owner.courses.map((course) => (
+                  <tr key={course} className="border-b border-slate-100">
+                    <th className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-slate-800">{course}</th>
+                    {visibleActionColumns.map((action) => {
+                      const count = ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length;
+                      return (
+                        <td key={`${course}-${action}`} className={`border-r border-slate-100 px-2 py-2 text-center text-sm font-bold tabular-nums ${actionCellTone(count)}`}>
+                          {count}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Bitácora de registros SOY+</p>
+              <h2 className="text-base font-semibold text-slate-950">{owner.cycle} · {owner.name}</h2>
+            </div>
+            <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">{filteredClasses.length} registros visibles</span>
+          </header>
+          <div className="tz-contained-x">
+            <table className="min-w-[1120px] w-full border-collapse text-sm">
+              <thead>
+                <tr className="bg-slate-100 text-slate-600">
+                  {["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "OBSERVACIONES", "Canva", "Planificación", "Carpeta"].map((header) => (
+                    <th key={header} className="border-b border-slate-200 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide">{header}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filteredClasses.slice(0, 12).map((record) => {
+                  const canvaUrl = record.canvaLink || record.evidence || "";
+                  return (
+                    <tr key={`summary-${record.id}`} className="border-b border-slate-100 align-top hover:bg-blue-50/40">
+                      <td className="whitespace-nowrap px-3 py-2 text-xs font-semibold text-slate-700">{record.date || "Sin fecha"}</td>
+                      <td className="min-w-40 px-3 py-2 text-xs text-slate-600">{record.week || "Sin semana"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs font-semibold text-slate-800">{record.course || "Sin curso"}</td>
+                      <td className="min-w-40 px-3 py-2 text-xs font-semibold text-slate-800">{getOrientationAction(record)}</td>
+                      <td className="min-w-48 px-3 py-2 text-xs text-slate-700">{record.topic || "Sin tema"}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${statusTone(record.status || "")}`}>{record.status || "Pendiente"}</span>
+                      </td>
+                      <td className="min-w-56 px-3 py-2 text-xs text-slate-600">{record.notes || "-"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs font-semibold">
+                        {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">Abrir</a> : <span className="text-slate-300">-</span>}
+                      </td>
+                      <td className="min-w-48 px-3 py-2 text-xs text-slate-600">{record.planificacion || "-"}</td>
+                      <td className="whitespace-nowrap px-3 py-2 text-xs font-semibold">
+                        {record.folderLink ? <a href={record.folderLink} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:underline">Abrir</a> : <span className="text-slate-300">-</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
