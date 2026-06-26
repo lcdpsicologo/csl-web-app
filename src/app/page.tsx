@@ -3271,39 +3271,44 @@ function OrientationCycleView({
     sinCanva: ownerClasses.filter((r) => !(r.canvaLink || r.evidence)).length,
     sinPlanificacion: ownerClasses.filter((r) => !(r.planificacion || r.folderLink)).length,
   };
+  const newClassDefaults: Record<string, string> = {
+    date: today,
+    course: owner.courses[0] || "",
+    orientationOwner: owner.name,
+    orientationEmail: owner.email,
+    topic: "",
+    classType: "Clase de orientacion",
+    axis: "Intervención Formativa",
+    week: "",
+    weekNumber: "",
+    characterStrength: "",
+    status: "Planificada",
+    canvaLink: "",
+    teacherLink: "",
+    teacherSentStatus: "No enviado",
+    teacherSentAt: "",
+    folderLink: "",
+    planificacion: "",
+    notes: "",
+  };
+  const quickClassForm: Record<string, string> = { ...newClassDefaults, ...newClassForm, orientationOwner: owner.name, orientationEmail: owner.email };
+  const updateQuickClassForm = (updates: Record<string, string>) => {
+    setNewClassForm((form) => ({ ...newClassDefaults, ...form, ...updates, orientationOwner: owner.name, orientationEmail: owner.email }));
+  };
 
   const openNewClass = () => {
     setNewClassOpen(true);
-    setNewClassForm({
-      date: today,
-      course: owner.courses[0] || "",
-      orientationOwner: owner.name,
-      orientationEmail: owner.email,
-      topic: "",
-      classType: "Clase de orientacion",
-      axis: "",
-      weekNumber: "",
-      characterStrength: "",
-      status: "Planificada",
-      canvaLink: "",
-      teacherLink: "",
-      teacherSentStatus: "No enviado",
-      teacherSentAt: "",
-      folderLink: "",
-      planificacion: "",
-      notes: "",
-    });
+    setNewClassForm(newClassDefaults);
   };
 
   const saveNewClass = () => {
-    if (!newClassForm.topic?.trim() || !newClassForm.course?.trim()) return;
+    if (!quickClassForm.topic?.trim() || !quickClassForm.course?.trim()) return;
     onAddOrientationRecord({
       id: uid(),
       createdAt: nowIso(),
       updatedAt: nowIso(),
-      ...newClassForm,
+      ...quickClassForm,
     });
-    setNewClassOpen(false);
     setNewClassForm({});
   };
 
@@ -3336,6 +3341,300 @@ function OrientationCycleView({
     if (record.source === "calendar") return;
     onUpdateOrientationRecord(record.id, { status });
   };
+
+  return (
+    <div className="tz-fade space-y-4">
+      <datalist id="orientation-action-options">
+        {orientationActionColumns.map((action) => <option key={action} value={action} />)}
+      </datalist>
+
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Orientación</h1>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">
+            Bitácora SOY+ por ciclo, curso, semana, acción, estado y enlaces. Todo se edita desde una sola tabla.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={exportOwnerClasses} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowDownToLine className="h-4 w-4" /> Exportar Excel
+          </button>
+          <button onClick={onGenerateAnnualPlan} className="tz-press inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+            <CalendarDays className="h-4 w-4" /> Completar año
+          </button>
+        </div>
+      </div>
+
+      <section className="grid gap-3 lg:grid-cols-3">
+        {orientationOwners.map((item) => {
+          const active = item.name === selectedOwner;
+          const itemClasses = store.orientation.filter((record) =>
+            normalize(record.orientationOwner || "") === normalize(item.name) ||
+            item.courses.some((course) => normalize(record.course || "") === normalize(course))
+          );
+          const done = itemClasses.filter((record) => /realizad/i.test(record.status || "")).length;
+          return (
+            <button
+              key={item.email}
+              onClick={() => {
+                setSelectedOwner(item.name);
+                setFilterCourse("all");
+                setFilterStatus("all");
+                setFilterDate("all");
+                setNewClassForm({});
+              }}
+              className={`rounded-xl border p-3 text-left transition ${
+                active ? "border-blue-500 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:bg-slate-50"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`grid h-10 w-10 place-items-center rounded-lg text-sm font-bold text-white ${active ? "bg-blue-600" : `bg-gradient-to-br ${avatarTone(item.name)}`}`}>
+                  {initialsOf(item.name)}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.cycle}</p>
+                  <h2 className="truncate text-sm font-bold text-slate-950">{item.name}</h2>
+                  <p className="truncate text-xs text-slate-500">{item.courses.length} cursos · {store.students.filter((s) => item.courses.includes(s.course || "")).length} estudiantes</p>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
+                <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+                  <strong className="block text-lg text-slate-950">{itemClasses.length}</strong>
+                  <span className="text-slate-500">registros</span>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+                  <strong className="block text-lg text-emerald-700">{done}</strong>
+                  <span className="text-slate-500">realizados</span>
+                </div>
+                <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
+                  <strong className="block text-lg text-amber-700">{itemClasses.length - done}</strong>
+                  <span className="text-slate-500">por revisar</span>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Añadir nueva fila</p>
+                <h2 className="text-lg font-semibold text-slate-950">Registro rápido de clase, link o planificación</h2>
+              </div>
+              <button onClick={() => setNewClassOpen((value) => !value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                {newClassOpen ? "Ocultar detalles" : "Mostrar detalles"}
+              </button>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">SEM</span>
+                <input type="date" value={quickClassForm.date} onChange={(event) => updateQuickClassForm({ date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha / semana</span>
+                <input value={quickClassForm.week} onChange={(event) => updateQuickClassForm({ week: event.target.value })} placeholder="01/06 al 05/06 (Semana 14)" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
+                <select value={quickClassForm.course} onChange={(event) => updateQuickClassForm({ course: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                  {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
+                </select>
+              </label>
+              <label className="block xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Acción / fortaleza</span>
+                <input list="orientation-action-options" value={quickClassForm.axis} onChange={(event) => updateQuickClassForm({ axis: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block xl:col-span-3">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tema / comentario</span>
+                <input value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Mi cuerpo, mi espacio y mis límites" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado</span>
+                <select value={quickClassForm.status} onChange={(event) => updateQuickClassForm({ status: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                  {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+              </label>
+              <label className="block xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva</span>
+                <input value={quickClassForm.canvaLink} onChange={(event) => updateQuickClassForm({ canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://canva..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block xl:col-span-3">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Planificación</span>
+                <input value={quickClassForm.planificacion} onChange={(event) => updateQuickClassForm({ planificacion: event.target.value })} placeholder="Nombre, link o breve descripción" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block xl:col-span-2">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carpeta</span>
+                <input value={quickClassForm.folderLink} onChange={(event) => updateQuickClassForm({ folderLink: event.target.value })} placeholder="Drive / carpeta / semana" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+              <label className="block xl:col-span-4">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Observaciones</span>
+                <input value={quickClassForm.notes} onChange={(event) => updateQuickClassForm({ notes: event.target.value })} placeholder="Notas importantes, reprogramación, material pendiente..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </label>
+            </div>
+            {newClassOpen ? (
+              <div className="mt-2 grid gap-2 md:grid-cols-3">
+                <input value={quickClassForm.teacherLink} onChange={(event) => updateQuickClassForm({ teacherLink: event.target.value })} placeholder="Link para profesores" className="rounded-md border border-blue-200 bg-blue-50/40 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                <select value={quickClassForm.teacherSentStatus} onChange={(event) => updateQuickClassForm({ teacherSentStatus: event.target.value })} className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
+                  {["No enviado", "Listo para enviar", "Enviado"].map((status) => <option key={status} value={status}>{status}</option>)}
+                </select>
+                <input type="date" value={quickClassForm.teacherSentAt} onChange={(event) => updateQuickClassForm({ teacherSentAt: event.target.value })} className="rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+              </div>
+            ) : null}
+          </div>
+          <aside className="border-t border-slate-100 bg-slate-50 p-4 xl:border-l xl:border-t-0">
+            <div className="grid grid-cols-2 gap-2 text-center text-xs font-semibold">
+              {[
+                ["Registros", classCounts.total],
+                ["Realizados", classCounts.realizadas],
+                ["Pendientes", classCounts.pendientes],
+                ["Sin Canva", classCounts.sinCanva],
+              ].map(([label, value]) => (
+                <div key={String(label)} className="rounded-lg bg-white px-2 py-3 ring-1 ring-slate-200">
+                  <strong className="block text-xl text-slate-950">{value}</strong>
+                  <span className="text-slate-500">{label}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={saveNewClass} disabled={!quickClassForm.topic.trim() || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
+              <Save className="h-4 w-4" /> Guardar en la bitácora
+            </button>
+          </aside>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Bitácora de registros SOY+</p>
+            <h2 className="text-lg font-semibold text-slate-950">{owner.cycle} · {owner.name}</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select value={filterCourse} onChange={(event) => setFilterCourse(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
+              <option value="all">Todos los cursos</option>
+              {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
+            </select>
+            <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
+              <option value="all">Todos los estados</option>
+              {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="tz-contained-x">
+          <table className="min-w-[1420px] w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-sky-700 text-white">
+                {["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", ""].map((header) => (
+                  <th key={header || "actions"} className="border-r border-sky-600 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide">{header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredClasses.map((record) => {
+                const isCalendar = record.source === "calendar";
+                const canvaUrl = record.canvaLink || record.evidence || "";
+                return (
+                  <tr key={record.id} className={`border-b border-slate-100 align-top ${isCalendar ? "bg-slate-50/70" : "hover:bg-blue-50/30"}`}>
+                    <td className="w-32 px-2 py-2">
+                      <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { date: event.target.value })} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                    </td>
+                    <td className="w-52 px-2 py-2">
+                      <input disabled={isCalendar} defaultValue={record.week || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { week: event.target.value })} placeholder="Semana" className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                    </td>
+                    <td className="w-40 px-2 py-2">
+                      <select disabled={isCalendar} value={record.course || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { course: event.target.value })} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100">
+                        {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
+                      </select>
+                    </td>
+                    <td className="w-48 px-2 py-2">
+                      <input disabled={isCalendar} list="orientation-action-options" defaultValue={getOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                    </td>
+                    <td className="w-60 px-2 py-2">
+                      <textarea disabled={isCalendar} defaultValue={record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                    </td>
+                    <td className="w-36 px-2 py-2">
+                      <select disabled={isCalendar} value={record.status || "Pendiente"} onChange={(event) => setClassStatus(record, event.target.value)} className={`w-full rounded-md border px-2 py-1.5 text-xs font-bold outline-none disabled:bg-slate-100 ${statusTone(record.status || "")}`}>
+                        {quickStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
+                      </select>
+                    </td>
+                    <td className="w-64 px-2 py-2">
+                      <textarea disabled={isCalendar} defaultValue={record.notes || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { notes: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                    </td>
+                    <td className="w-56 px-2 py-2">
+                      <div className="flex gap-1">
+                        <input disabled={isCalendar} defaultValue={canvaUrl} onBlur={(event) => onUpdateOrientationRecord(record.id, { canvaLink: event.target.value, evidence: event.target.value })} placeholder="Canva" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700">Abrir</a> : null}
+                      </div>
+                    </td>
+                    <td className="w-64 px-2 py-2">
+                      <textarea disabled={isCalendar} defaultValue={record.planificacion || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { planificacion: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                    </td>
+                    <td className="w-56 px-2 py-2">
+                      <div className="flex gap-1">
+                        <input disabled={isCalendar} defaultValue={record.folderLink || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { folderLink: event.target.value })} placeholder="Carpeta" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        {record.folderLink?.startsWith("http") ? <a href={record.folderLink} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700">Abrir</a> : null}
+                      </div>
+                    </td>
+                    <td className="w-40 px-2 py-2 text-right">
+                      {isCalendar ? (
+                        <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600">Calendario</span>
+                      ) : (
+                        <div className="flex justify-end gap-1">
+                          <button onClick={() => onUpdateOrientationRecord(record.id, { status: "Realizada" })} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] font-bold text-emerald-700">OK</button>
+                          <button onClick={() => onAddOrientationRecord({ ...record, id: uid(), createdAt: nowIso(), updatedAt: nowIso(), status: "Planificada", topic: `${record.topic || "Clase"} (copia)` })} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700">Copiar</button>
+                          <button onClick={() => { if (window.confirm("¿Eliminar este registro?")) onDeleteOrientationRecord(record.id); }} className="rounded-md border border-red-200 bg-white px-2 py-1.5 text-[11px] font-bold text-red-600">Eliminar</button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+              {filteredClasses.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="px-4 py-10 text-center text-sm text-slate-500">No hay registros con esos filtros. Agrega una fila arriba para comenzar.</td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Mapa del ciclo</p>
+            <h2 className="text-lg font-semibold text-slate-950">Cantidad por curso y acción / fortaleza</h2>
+          </div>
+          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{visibleActionColumns.length} acciones visibles</span>
+        </header>
+        <div className="tz-contained-x">
+          <table className="min-w-[980px] w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-sky-700 text-white">
+                <th className="sticky left-0 z-10 min-w-40 border-r border-sky-600 bg-sky-800 px-3 py-3 text-left text-xs font-bold uppercase">Curso</th>
+                {visibleActionColumns.map((action) => (
+                  <th key={action} className="min-w-28 border-r border-sky-600 px-2 py-3 text-center text-[11px] font-bold leading-tight">{action}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {owner.courses.map((course) => (
+                <tr key={course} className="border-b border-slate-100">
+                  <th className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-slate-800">{course}</th>
+                  {visibleActionColumns.map((action) => {
+                    const count = ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length;
+                    return <td key={`${course}-${action}`} className={`border-r border-slate-100 px-2 py-2 text-center text-sm font-bold tabular-nums ${actionCellTone(count)}`}>{count}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  );
 
   return (
     <div className="tz-fade">
