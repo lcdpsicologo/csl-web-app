@@ -11,7 +11,6 @@ import { games } from "@/lib/games";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
 import {
   ArrowDownToLine,
-  BarChart3,
   BookOpen,
   Building2,
   AlertTriangle,
@@ -25,7 +24,6 @@ import {
   Puzzle,
   Tag,
   Check,
-  CheckCircle2,
   ChevronDown,
   ClipboardList,
   Database,
@@ -149,6 +147,17 @@ type ImportPlan = {
   confidence: number;
   mapping: Record<string, string>;
   notes: string[];
+};
+
+// Fila de estudiante extraída de la nómina oficial PIE (Excel).
+type PieImportStudent = {
+  name: string;
+  rut: string;
+  course: string;
+  diag: string;
+  situacionTecnica: string;
+  professional: string;
+  sourceSheet: string;
 };
 
 const STORAGE_KEY = "tiza-education-store-v1";
@@ -1067,26 +1076,6 @@ const inferImportPlan = (sheet: ParsedSheet): ImportPlan => {
   return best;
 };
 
-const recordsToCsv = (records: DataRecord[], fields: FieldDef[]) => {
-  const headers = fields.map((field) => field.label);
-  const rows = records.map((record) =>
-    fields.map((field) => {
-      const value = record[field.key] || "";
-      return /[",;\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
-    })
-  );
-  return [headers, ...rows].map((row) => row.join(",")).join("\n");
-};
-
-function downloadText(fileName: string, content: string, type = "text/plain;charset=utf-8") {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = fileName;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 function downloadExcel(fileName: string, sheetName: string, headers: string[], rows: string[][]) {
   const worksheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
@@ -1955,10 +1944,6 @@ function WorkshopsView({
     setCreateOpen(false);
   };
 
-  const updateSelected = (updates: Record<string, string>) => {
-    if (!selected) return;
-    onUpdateWorkshop(selected.id, updates);
-  };
 
   const toggleCourse = (courseName: string) => {
     const next = draftCourses.includes(courseName)
@@ -4427,7 +4412,7 @@ function GenogramChart({
     const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
     const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
 
-    const svg = event.currentTarget.ownerSVGElement || (event.currentTarget as any);
+    const svg = event.currentTarget.ownerSVGElement || (event.currentTarget as SVGSVGElement);
     if (!svg) return;
 
     try {
@@ -5866,23 +5851,6 @@ function StudentsWorkspaceView({
 // ==========================================
 
 // Catálogo MINEDUC de diagnósticos / NEE (Decreto 170).
-const MINEDUC_NEE_PERMANENTE = [
-  "Discapacidad Intelectual",
-  "Discapacidad Intelectual Leve (DIL)",
-  "Discapacidad Visual",
-  "Discapacidad Auditiva",
-  "Discapacidad Múltiple (DM)",
-  "Sordoceguera",
-  "Disfasia Severa",
-  "Trastorno del Espectro Autista (TEA)",
-];
-const MINEDUC_NEE_TRANSITORIA = [
-  "Dificultades Específicas del Aprendizaje (DEA)",
-  "Trastorno Específico del Lenguaje (TEL)",
-  "Trastorno por Déficit Atencional (TDA/TDAH)",
-  "Funcionamiento Intelectual Limítrofe (FIL)",
-];
-
 // Expansión de códigos abreviados usados en la nómina oficial.
 const PIE_DIAG_LABELS: Record<string, string> = {
   TEA: "Trastorno del Espectro Autista (TEA)",
@@ -6549,7 +6517,7 @@ function PieWorkspaceView({
           <Puzzle className="mx-auto h-12 w-12 text-emerald-500 animate-pulse" />
           <h2 className="mt-4 text-lg font-bold text-slate-950">Programa de Integración Escolar (PIE) vacío</h2>
           <p className="mt-2 text-sm text-slate-600 max-w-md mx-auto">
-            Aún no has importado la nómina PIE oficial o etiquetado estudiantes con la etiqueta "PIE".
+            Aún no has importado la nómina PIE oficial o etiquetado estudiantes con la etiqueta &quot;PIE&quot;.
           </p>
           <div className="mt-6 flex justify-center gap-3">
             <button
@@ -7409,7 +7377,7 @@ function PieImportConfirmationView({
   onCancel,
   onConfirm,
 }: {
-  data: any[];
+  data: PieImportStudent[];
   store: DataStore;
   onCancel: () => void;
   onConfirm: () => void;
@@ -8344,9 +8312,9 @@ function SettingsView({
             <summary className="cursor-pointer font-semibold text-slate-700">Cómo obtener la URL iCal de Google Calendar</summary>
             <ol className="mt-2 list-decimal space-y-1 pl-4">
               <li>Abre <a className="text-blue-600 hover:underline" href="https://calendar.google.com/" target="_blank" rel="noopener noreferrer">Google Calendar</a> en una pestaña.</li>
-              <li>En el panel izquierdo, pasa el cursor sobre tu calendario → click en los 3 puntos → <strong>"Configuración y uso compartido"</strong>.</li>
-              <li>Baja hasta <strong>"Integrar el calendario"</strong>.</li>
-              <li>Copia la <strong>"Dirección secreta en formato iCal"</strong> (la URL que termina en <code>.ics</code>).</li>
+              <li>En el panel izquierdo, pasa el cursor sobre tu calendario → click en los 3 puntos → <strong>&quot;Configuración y uso compartido&quot;</strong>.</li>
+              <li>Baja hasta <strong>&quot;Integrar el calendario&quot;</strong>.</li>
+              <li>Copia la <strong>&quot;Dirección secreta en formato iCal&quot;</strong> (la URL que termina en <code>.ics</code>).</li>
               <li>Pégala aquí arriba y guarda.</li>
             </ol>
             <p className="mt-2 text-rose-700"><strong>⚠ Importante</strong>: esta URL da acceso de lectura completo a tu calendario. No la compartas.</p>
@@ -8893,42 +8861,6 @@ function TodayView({
     </div>
   );
 }
-
-type TriageRecord = {
-  entity: "cases" | "interviews" | "logs" | "protocols";
-  studentId?: string;
-  title?: string;
-  category?: string;
-  priority?: string;
-  status?: string;
-  type?: string;
-  date?: string;
-  description?: string;
-};
-
-type TriageResponse = {
-  summary?: string;
-  involved?: Array<{ studentId?: string; studentName?: string; confidence?: number; evidence?: string }>;
-  records?: TriageRecord[];
-  notes?: string;
-};
-
-type CourseAiResponse = {
-  summary?: string;
-  teamAdditions?: Array<{ name?: string; role?: string; email?: string; notes?: string }>;
-  ercAppend?: string;
-  courseCases?: Array<{ title?: string; category?: string; priority?: string; description?: string }>;
-  notes?: string;
-};
-
-type BulkAiResponse = {
-  summary?: string;
-  entity?: string;
-  headersDetected?: string[];
-  records?: Array<{ fields?: Record<string, string>; sourceRow?: number | string; confidence?: number; notes?: string }>;
-  skipped?: Array<{ sourceRow?: number | string; reason?: string }>;
-  warnings?: string;
-};
 
 function TizaIaMark({ size = 40, className = "" }: { size?: number; className?: string }) {
   return (
@@ -10079,7 +10011,7 @@ export default function TizaEducationApp() {
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(loadSidebarMode);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
-  const [calendarFetchedAt, setCalendarFetchedAt] = useState<string>("");
+  const [, setCalendarFetchedAt] = useState<string>("");
   const orderedNavItems = useMemo(() => orderViewNav(navOrder), [navOrder]);
 
   const reorderNavItem = (source: ViewId, target: ViewId, placement: "before" | "after") => {
@@ -10111,7 +10043,7 @@ export default function TizaEducationApp() {
   const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
-  const [pieImportData, setPieImportData] = useState<any[] | null>(null);
+  const [pieImportData, setPieImportData] = useState<PieImportStudent[] | null>(null);
   const [toast, setToast] = useState("");
   const [remoteLoaded, setRemoteLoaded] = useState(!isSupabaseAuthConfigured);
   const [remoteStatus, setRemoteStatus] = useState<"local" | "loading" | "synced" | "saving" | "error">(
@@ -10140,7 +10072,7 @@ export default function TizaEducationApp() {
   });
   const profile = profileState;
   const accessTokenRef = React.useRef("");
-  const [profileSyncStatus, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const storeRef = React.useRef(store);
   // Wrap setProfile so every update is persisted server-side to the user's
   // Supabase metadata (global per user → travels across devices).
@@ -10419,6 +10351,8 @@ export default function TizaEducationApp() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+    // goBack/goForward son estables; se omiten a propósito de las dependencias.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [commandOpen, canGoBack, canGoForward]);
 
   const addRecord = (entity: EntityId, record: DataRecord) => {
@@ -10904,12 +10838,12 @@ export default function TizaEducationApp() {
         { name: "PENDIENTES- SC", label: "Pendientes" }
       ];
 
-      const students: any[] = [];
+      const students: PieImportStudent[] = [];
 
       sheetsToParse.forEach(({ name: sheetName, label }) => {
         const sheet = workbook.Sheets[sheetName];
         if (!sheet) return;
-        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+        const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as unknown[][];
         if (!rows || rows.length === 0) return;
 
         // Normalization map for course codes
