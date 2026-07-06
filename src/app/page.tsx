@@ -3508,11 +3508,24 @@ function OrientationCycleView({
           </div>
         </div>
         <div className="tz-contained-x">
-          <table className="min-w-[1420px] w-full border-collapse text-sm">
+          <table className="min-w-[2040px] w-full table-fixed border-collapse text-sm">
+            <colgroup>
+              <col className="w-36" />
+              <col className="w-40" />
+              <col className="w-44" />
+              <col className="w-48" />
+              <col className="w-64" />
+              <col className="w-40" />
+              <col className="w-64" />
+              <col className="w-56" />
+              <col className="w-64" />
+              <col className="w-56" />
+              <col className="w-28" />
+            </colgroup>
             <thead>
               <tr className="bg-sky-700 text-white">
-                {["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", ""].map((header) => (
-                  <th key={header || "actions"} className="border-r border-sky-600 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide">{header}</th>
+                {["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Acciones"].map((header) => (
+                  <th key={header} className="border-r border-sky-600 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide whitespace-nowrap">{header}</th>
                 ))}
               </tr>
             </thead>
@@ -3562,14 +3575,20 @@ function OrientationCycleView({
                         {record.folderLink?.startsWith("http") ? <a href={record.folderLink} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700">Abrir</a> : null}
                       </div>
                     </td>
-                    <td className="w-40 px-2 py-2 text-right">
+                    <td className="w-28 px-2 py-2">
                       {isCalendar ? (
-                        <span className="rounded-full bg-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600">Calendario</span>
+                        <span className="inline-block whitespace-nowrap rounded-full bg-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600">Calendario</span>
                       ) : (
-                        <div className="flex justify-end gap-1">
-                          <button onClick={() => onUpdateOrientationRecord(record.id, { status: "Realizada" })} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] font-bold text-emerald-700">OK</button>
-                          <button onClick={() => onAddOrientationRecord({ ...record, id: uid(), createdAt: nowIso(), updatedAt: nowIso(), status: "Planificada", topic: `${record.topic || "Clase"} (copia)` })} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700">Copiar</button>
-                          <button onClick={() => { if (window.confirm("¿Eliminar este registro?")) onDeleteOrientationRecord(record.id); }} className="rounded-md border border-red-200 bg-white px-2 py-1.5 text-[11px] font-bold text-red-600">Eliminar</button>
+                        <div className="flex flex-col gap-1">
+                          <button onClick={() => onUpdateOrientationRecord(record.id, { status: "Realizada" })} title="Marcar como realizada" className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">
+                            <Check className="h-3.5 w-3.5" /> Listo
+                          </button>
+                          <button onClick={() => onAddOrientationRecord({ ...record, id: uid(), createdAt: nowIso(), updatedAt: nowIso(), status: "Planificada", topic: `${record.topic || "Clase"} (copia)` })} title="Duplicar registro" className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50">
+                            <Copy className="h-3.5 w-3.5" /> Copiar
+                          </button>
+                          <button onClick={() => { if (window.confirm("¿Eliminar este registro?")) onDeleteOrientationRecord(record.id); }} title="Eliminar registro" className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border border-red-200 bg-white px-2 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50">
+                            <Trash2 className="h-3.5 w-3.5" /> Borrar
+                          </button>
                         </div>
                       )}
                     </td>
