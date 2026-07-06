@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
@@ -180,6 +180,95 @@ const initialsOf = (name: string) =>
     .map((part) => part[0] || "")
     .join("")
     .toUpperCase();
+
+type TizaSelectOption = string | { value: string; label: string };
+
+function TizaSelect({
+  value,
+  options,
+  onChange,
+  placeholder = "Seleccionar",
+  disabled = false,
+  className = "",
+  buttonClassName = "",
+  menuClassName = "",
+}: {
+  value: string;
+  options: TizaSelectOption[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  className?: string;
+  buttonClassName?: string;
+  menuClassName?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const normalizedOptions = options.map((option) =>
+    typeof option === "string" ? { value: option, label: option } : option,
+  );
+  const selected = normalizedOptions.find((option) => option.value === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutside = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className={`relative ${className}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+        className={`inline-flex w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-left text-sm text-slate-800 outline-none transition hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 disabled:bg-slate-100 disabled:text-slate-500 ${buttonClassName}`}
+      >
+        <span className="truncate">{selected?.label || placeholder}</span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div
+          role="listbox"
+          className={`absolute left-0 right-0 top-full z-[120] mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-2xl ring-1 ring-slate-900/5 ${menuClassName}`}
+        >
+          {normalizedOptions.map((option) => {
+            const active = option.value === value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
+                  active ? "bg-blue-50 text-blue-800" : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <span className="truncate">{option.label}</span>
+                {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 const avatarTone = (seed: string) => {
   const palette = [
@@ -3354,26 +3443,22 @@ function OrientationCycleView({
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha / semana</span>
                 <input value={quickClassForm.week} onChange={(event) => updateQuickClassForm({ week: event.target.value })} placeholder="01/06 al 05/06 (Semana 14)" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
-              <label className="block">
+              <div className="block">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
-                <select value={quickClassForm.course} onChange={(event) => updateQuickClassForm({ course: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
-                  {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
-                </select>
-              </label>
+                <TizaSelect value={quickClassForm.course} onChange={(course) => updateQuickClassForm({ course })} options={owner.courses} className="mt-1" />
+              </div>
               <label className="block xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Acción / fortaleza</span>
-                <input list="orientation-action-options" value={quickClassForm.axis} onChange={(event) => updateQuickClassForm({ axis: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                <input value={quickClassForm.axis} onChange={(event) => updateQuickClassForm({ axis: event.target.value })} placeholder="Intervencion Formativa, fortaleza o eje SOY+" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
               <label className="block xl:col-span-3">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tema / comentario</span>
                 <input value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Mi cuerpo, mi espacio y mis límites" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
-              <label className="block">
+              <div className="block">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado</span>
-                <select value={quickClassForm.status} onChange={(event) => updateQuickClassForm({ status: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
-                  {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
-                </select>
-              </label>
+                <TizaSelect value={quickClassForm.status} onChange={(status) => updateQuickClassForm({ status })} options={["Planificada", "Realizada", "Pendiente", "Reprogramada"]} className="mt-1" buttonClassName={`font-semibold ${statusTone(quickClassForm.status)} ring-1`} />
+              </div>
               <label className="block xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva</span>
                 <input value={quickClassForm.canvaLink} onChange={(event) => updateQuickClassForm({ canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://canva..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
@@ -3394,9 +3479,7 @@ function OrientationCycleView({
             {newClassOpen ? (
               <div className="mt-2 grid gap-2 md:grid-cols-3">
                 <input value={quickClassForm.teacherLink} onChange={(event) => updateQuickClassForm({ teacherLink: event.target.value })} placeholder="Link para profesores" className="rounded-md border border-blue-200 bg-blue-50/40 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-                <select value={quickClassForm.teacherSentStatus} onChange={(event) => updateQuickClassForm({ teacherSentStatus: event.target.value })} className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
-                  {["No enviado", "Listo para enviar", "Enviado"].map((status) => <option key={status} value={status}>{status}</option>)}
-                </select>
+                <TizaSelect value={quickClassForm.teacherSentStatus} onChange={(teacherSentStatus) => updateQuickClassForm({ teacherSentStatus })} options={["No enviado", "Listo para enviar", "Enviado"]} />
                 <input type="date" value={quickClassForm.teacherSentAt} onChange={(event) => updateQuickClassForm({ teacherSentAt: event.target.value })} className="rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </div>
             ) : null}
@@ -3428,18 +3511,134 @@ function OrientationCycleView({
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Bitácora de registros SOY+</p>
             <h2 className="text-lg font-semibold text-slate-950">{owner.cycle} · {owner.name}</h2>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <select value={filterCourse} onChange={(event) => setFilterCourse(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
-              <option value="all">Todos los cursos</option>
-              {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
-            </select>
-            <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500">
-              <option value="all">Todos los estados</option>
-              {["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => <option key={status} value={status}>{status}</option>)}
-            </select>
+          <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2">
+            <TizaSelect
+              value={filterCourse}
+              onChange={setFilterCourse}
+              options={[{ value: "all", label: "Todos los cursos" }, ...owner.courses.map((course) => ({ value: course, label: course }))]}
+              className="min-w-48"
+            />
+            <TizaSelect
+              value={filterStatus}
+              onChange={setFilterStatus}
+              options={[
+                { value: "all", label: "Todos los estados" },
+                ...["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => ({ value: status, label: status })),
+              ]}
+              className="min-w-48"
+            />
           </div>
         </div>
-        <div className="tz-contained-x">
+        <div className="space-y-3 bg-slate-50/60 p-4">
+          {filteredClasses.map((record) => {
+            const isCalendar = record.source === "calendar";
+            const canvaUrl = record.canvaLink || record.evidence || "";
+            const folderUrl = record.folderLink || "";
+            return (
+              <article key={record.id} className={`overflow-visible rounded-xl border bg-white shadow-sm ${isCalendar ? "border-slate-200" : "border-slate-200 hover:border-blue-200"}`}>
+                <div className="flex flex-col gap-3 border-b border-slate-100 p-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">{record.date || "Sin fecha"}</span>
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">{record.course || "Sin curso"}</span>
+                      <span className={`rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${statusTone(record.status || "Pendiente")}`}>{record.status || "Pendiente"}</span>
+                      {isCalendar ? <span className="rounded-full bg-slate-200 px-2.5 py-1 text-xs font-bold text-slate-600">Calendario</span> : null}
+                    </div>
+                    <h3 className="text-base font-bold text-slate-950">{record.topic || "Clase sin tema definido"}</h3>
+                    <p className="text-sm text-slate-600">{getOrientationAction(record)}{record.week ? ` - ${record.week}` : ""}</p>
+                  </div>
+                  {isCalendar ? null : (
+                    <div className="flex flex-wrap gap-2 lg:justify-end">
+                      <button onClick={() => onUpdateOrientationRecord(record.id, { status: "Realizada" })} title="Marcar como realizada" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+                        <Check className="h-4 w-4" /> Listo
+                      </button>
+                      <button onClick={() => onAddOrientationRecord({ ...record, id: uid(), createdAt: nowIso(), updatedAt: nowIso(), status: "Planificada", topic: `${record.topic || "Clase"} (copia)` })} title="Duplicar registro" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                        <Copy className="h-4 w-4" /> Copiar
+                      </button>
+                      <button onClick={() => { if (window.confirm("Eliminar este registro?")) onDeleteOrientationRecord(record.id); }} title="Eliminar registro" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
+                        <Trash2 className="h-4 w-4" /> Borrar
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-12">
+                  <label className="block xl:col-span-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha</span>
+                    <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                  </label>
+                  <label className="block xl:col-span-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana / tramo</span>
+                    <input disabled={isCalendar} defaultValue={record.week || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { week: event.target.value })} placeholder="Semana o rango de fechas" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                  </label>
+                  <div className="block xl:col-span-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
+                    <TizaSelect disabled={isCalendar} value={record.course || ""} onChange={(course) => onUpdateOrientationRecord(record.id, { course })} options={owner.courses} className="mt-1" buttonClassName="font-semibold" />
+                  </div>
+                  <div className="block xl:col-span-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado</span>
+                    <TizaSelect disabled={isCalendar} value={record.status || "Pendiente"} onChange={(status) => setClassStatus(record, status)} options={quickStatuses} className="mt-1" buttonClassName={`font-bold ${statusTone(record.status || "Pendiente")} ring-1`} />
+                  </div>
+                  <label className="block xl:col-span-3">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Accion / fortaleza</span>
+                    <input disabled={isCalendar} defaultValue={getOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                  </label>
+
+                  <label className="block xl:col-span-6">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tema / comentario</span>
+                    <textarea disabled={isCalendar} defaultValue={record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={3} className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                  </label>
+                  <label className="block xl:col-span-6">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Observaciones</span>
+                    <textarea disabled={isCalendar} defaultValue={record.notes || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { notes: event.target.value })} rows={3} placeholder="Notas, reprogramacion, materiales pendientes o acuerdos." className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                  </label>
+
+                  <label className="block xl:col-span-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva / evidencia</span>
+                    <div className="mt-1 flex gap-2">
+                      <input disabled={isCalendar} defaultValue={canvaUrl} onBlur={(event) => onUpdateOrientationRecord(record.id, { canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://canva..." className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                      {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Abrir</a> : null}
+                    </div>
+                  </label>
+                  <label className="block xl:col-span-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Planificacion</span>
+                    <textarea disabled={isCalendar} defaultValue={record.planificacion || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { planificacion: event.target.value })} rows={2} placeholder="Nombre, link o breve descripcion" className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                  </label>
+                  <label className="block xl:col-span-4">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carpeta Drive</span>
+                    <div className="mt-1 flex gap-2">
+                      <input disabled={isCalendar} defaultValue={folderUrl} onBlur={(event) => onUpdateOrientationRecord(record.id, { folderLink: event.target.value })} placeholder="Drive / carpeta / semana" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                      {folderUrl.startsWith("http") ? <a href={folderUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Abrir</a> : null}
+                    </div>
+                  </label>
+
+                  {(record.teacherLink || record.teacherSentStatus || record.teacherSentAt) ? (
+                    <div className="grid gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3 md:grid-cols-3 xl:col-span-12">
+                      <label className="block md:col-span-1">
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Link profesores</span>
+                        <input disabled={isCalendar} defaultValue={record.teacherLink || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { teacherLink: event.target.value })} className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                      </label>
+                      <div className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Envio</span>
+                        <TizaSelect disabled={isCalendar} value={record.teacherSentStatus || "No enviado"} onChange={(teacherSentStatus) => onUpdateOrientationRecord(record.id, { teacherSentStatus })} options={["No enviado", "Listo para enviar", "Enviado"]} className="mt-1" />
+                      </div>
+                      <label className="block">
+                        <span className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Fecha de envio</span>
+                        <input disabled={isCalendar} type="date" defaultValue={record.teacherSentAt || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { teacherSentAt: event.target.value })} className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                      </label>
+                    </div>
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+          {filteredClasses.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
+              No hay registros con esos filtros. Agrega una clase arriba para comenzar.
+            </div>
+          ) : null}
+        </div>
+        <div className="hidden">
           <table className="min-w-[2040px] w-full table-fixed border-collapse text-sm">
             <colgroup>
               <col className="w-36" />
