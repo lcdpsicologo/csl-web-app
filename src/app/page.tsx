@@ -731,6 +731,55 @@ const matchOrientationEvent = (summary: string): { isOrientation: boolean; cours
   return { isOrientation: true, course, displayTitle };
 };
 
+const isPlaceholderOrientationText = (value: string | undefined) => {
+  const normalized = normalize(value || "");
+  return !normalized ||
+    normalized === "clase por definir" ||
+    normalized === "por definir" ||
+    normalized === "sin tema definido" ||
+    normalized === "sesion por definir";
+};
+
+const isGenericOrientationTopic = (value: string | undefined) => /^sesion\s+\d+$/i.test(normalize(value || ""));
+
+const meaningfulOrientationNotes = (record: DataRecord) => {
+  const notes = record.notes || "";
+  return normalize(notes).includes("fecha ajustada por feriado") ? "" : notes;
+};
+
+const hasOrientationRecordContent = (record: DataRecord | Record<string, string>) => Boolean(
+  (record.canvaLink || record.evidence || record.planificacion || record.folderLink || record.teacherLink || meaningfulOrientationNotes(record as DataRecord) || "").trim(),
+);
+
+const getOrientationDisplayTitle = (record: DataRecord | Record<string, string>) => {
+  const primary = [record.planificacion, meaningfulOrientationNotes(record as DataRecord)]
+    .map((value) => String(value || "").trim())
+    .find((value) => value && !isPlaceholderOrientationText(value));
+  if (primary) return primary;
+
+  const topic = String(record.topic || "").trim();
+  if (topic && !isPlaceholderOrientationText(topic) && !isGenericOrientationTopic(topic)) return topic;
+  if (topic && !isPlaceholderOrientationText(topic)) return topic;
+
+  const action = String(record.axis || record.characterStrength || record.classType || "").trim();
+  return action && !isPlaceholderOrientationText(action) ? action : "Sin tema definido";
+};
+
+const isGeneratedOrientationPlaceholder = (record: DataRecord) => {
+  const generatedPlan = normalize(record.source || "").includes("plan anual orientacion 2026");
+  if (!generatedPlan) return false;
+  return !hasOrientationRecordContent(record);
+};
+
+const orientationRecordSignature = (record: DataRecord | Record<string, string>) => normalize([
+  record.date,
+  record.week,
+  record.course,
+  record.canvaLink || record.evidence,
+  record.notes || record.planificacion || getOrientationDisplayTitle(record),
+  record.axis || record.characterStrength,
+].filter(Boolean).join("|"));
+
 const parseInterventions = (value: string | undefined): CaseIntervention[] => {
   if (!value) return [];
   try {
@@ -3196,10 +3245,41 @@ function OrientationCycleView({
 
   const owner = useMemo(() => orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0], [selectedOwner]);
   const today = new Date().toISOString().slice(0, 10);
+  const orientationWeekOptions = useMemo(() =>
+    ORIENTATION_FIRST_CYCLE_CONFIG.map((config) => ({ value: config.week, label: config.week })),
+  []);
+  const defaultOrientationWeek = useMemo(() => {
+    const parseWeekRange = (week: string) => {
+      const match = week.match(/(\d{2})\/(\d{2})\s+al\s+(\d{2})\/(\d{2})/);
+      if (!match) return null;
+      const [, startDay, startMonth, endDay, endMonth] = match;
+      return {
+        start: `2026-${startMonth}-${startDay}`,
+        end: `2026-${endMonth}-${endDay}`,
+      };
+    };
+    const current = ORIENTATION_FIRST_CYCLE_CONFIG.find((config) => {
+      const range = parseWeekRange(config.week);
+      return range && today >= range.start && today <= range.end;
+    });
+    if (current) return current.week;
+    return ORIENTATION_FIRST_CYCLE_CONFIG.find((config) => {
+      const range = parseWeekRange(config.week);
+      return range && range.end >= today;
+    })?.week || ORIENTATION_FIRST_CYCLE_CONFIG[0]?.week || "";
+  }, [today]);
+  const weekOptionsFor = (week: string | undefined) => {
+    const current = week || "";
+    return current && !orientationWeekOptions.some((option) => option.value === current)
+      ? [{ value: current, label: current }, ...orientationWeekOptions]
+      : orientationWeekOptions;
+  };
 
   const ownerStoredClasses = useMemo(() => store.orientation.filter((record) =>
-    normalize(record.orientationOwner || "") === normalize(owner.name) ||
-    owner.courses.some((course) => normalize(record.course || "") === normalize(course))
+    !isGeneratedOrientationPlaceholder(record) && (
+      normalize(record.orientationOwner || "") === normalize(owner.name) ||
+      owner.courses.some((course) => normalize(record.course || "") === normalize(course))
+    )
   ), [owner, store.orientation]);
 
   // Calendar events that look like orientation classes for one of this owner's
@@ -3273,7 +3353,7 @@ function OrientationCycleView({
     if (filterStatus !== "all" && (record.status || "") !== filterStatus) return false;
     if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
     return true;
-  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, ownerClasses]);
+  }).sort((a, b) => String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt))), [filterCourse, filterDate, filterStatus, ownerClasses]);
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
 
   const classCounts = useMemo(() => ({
@@ -3294,7 +3374,7 @@ function OrientationCycleView({
     topic: "",
     classType: "Clase de orientacion",
     axis: "Intervención Formativa",
-    week: "",
+    week: defaultOrientationWeek,
     weekNumber: "",
     characterStrength: "",
     status: "Planificada",
@@ -3307,17 +3387,20 @@ function OrientationCycleView({
     notes: "",
   };
   const quickClassForm: Record<string, string> = { ...newClassDefaults, ...newClassForm, orientationOwner: owner.name, orientationEmail: owner.email };
+  const quickClassHasContent = hasOrientationRecordContent(quickClassForm) || Boolean((quickClassForm.topic || "").trim());
   const updateQuickClassForm = (updates: Record<string, string>) => {
     setNewClassForm((form) => ({ ...newClassDefaults, ...form, ...updates, orientationOwner: owner.name, orientationEmail: owner.email }));
   };
 
   const saveNewClass = () => {
-    if (!quickClassForm.topic?.trim() || !quickClassForm.course?.trim()) return;
+    if (!quickClassHasContent || !quickClassForm.course?.trim()) return;
     onAddOrientationRecord({
       id: uid(),
       createdAt: nowIso(),
       updatedAt: nowIso(),
       ...quickClassForm,
+      topic: quickClassForm.topic || getOrientationDisplayTitle(quickClassForm),
+      week: quickClassForm.week || defaultOrientationWeek,
     });
     setNewClassForm({});
   };
@@ -3329,7 +3412,7 @@ function OrientationCycleView({
       record.week || "",
       record.course || "",
       getOrientationAction(record),
-      record.topic || "",
+      getOrientationDisplayTitle(record),
       record.status || "",
       record.notes || "",
       record.canvaLink || record.evidence || "",
@@ -3384,8 +3467,10 @@ function OrientationCycleView({
         {orientationOwners.map((item) => {
           const active = item.name === selectedOwner;
           const itemClasses = store.orientation.filter((record) =>
-            normalize(record.orientationOwner || "") === normalize(item.name) ||
-            item.courses.some((course) => normalize(record.course || "") === normalize(course))
+            !isGeneratedOrientationPlaceholder(record) && (
+              normalize(record.orientationOwner || "") === normalize(item.name) ||
+              item.courses.some((course) => normalize(record.course || "") === normalize(course))
+            )
           );
           const done = itemClasses.filter((record) => /realizad/i.test(record.status || "")).length;
           return (
@@ -3452,7 +3537,7 @@ function OrientationCycleView({
               </label>
               <label className="block xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha / semana</span>
-                <input value={quickClassForm.week} onChange={(event) => updateQuickClassForm({ week: event.target.value })} placeholder="01/06 al 05/06 (Semana 14)" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                <TizaSelect value={quickClassForm.week} onChange={(week) => updateQuickClassForm({ week })} options={weekOptionsFor(quickClassForm.week)} className="mt-1" />
               </label>
               <div className="block">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
@@ -3509,7 +3594,7 @@ function OrientationCycleView({
                 </div>
               ))}
             </div>
-            <button onClick={saveNewClass} disabled={!quickClassForm.topic.trim() || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
+            <button onClick={saveNewClass} disabled={!quickClassHasContent || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
               <Save className="h-4 w-4" /> Guardar en la bitácora
             </button>
           </aside>
@@ -3563,6 +3648,7 @@ function OrientationCycleView({
             const canvaUrl = record.canvaLink || record.evidence || "";
             const folderUrl = record.folderLink || "";
             const expanded = expandedClassIds.includes(record.id);
+            const displayTitle = getOrientationDisplayTitle(record);
             return (
               <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
@@ -3583,7 +3669,7 @@ function OrientationCycleView({
                   </div>
 
                   <div className="min-w-0">
-                    <p className="line-clamp-1 text-sm font-bold text-slate-950">{record.topic || "Clase sin tema definido"}</p>
+                    <p className="line-clamp-1 text-sm font-bold text-slate-950">{displayTitle}</p>
                     <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{record.week || "Sin semana definida"}</p>
                   </div>
 
@@ -3630,10 +3716,10 @@ function OrientationCycleView({
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha</span>
                         <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
-                      <label className="block xl:col-span-3">
+                      <div className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana / tramo</span>
-                        <input disabled={isCalendar} defaultValue={record.week || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { week: event.target.value })} placeholder="Semana o rango de fechas" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                      </label>
+                        <TizaSelect disabled={isCalendar} value={record.week || ""} onChange={(week) => onUpdateOrientationRecord(record.id, { week })} options={weekOptionsFor(record.week)} className="mt-1" />
+                      </div>
                       <div className="block xl:col-span-2">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
                         <TizaSelect disabled={isCalendar} value={record.course || ""} onChange={(course) => onUpdateOrientationRecord(record.id, { course })} options={owner.courses} className="mt-1" buttonClassName="font-semibold" />
@@ -3649,7 +3735,7 @@ function OrientationCycleView({
 
                       <label className="block xl:col-span-6">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tema / comentario</span>
-                        <textarea disabled={isCalendar} defaultValue={record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={3} className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <textarea disabled={isCalendar} defaultValue={isPlaceholderOrientationText(record.topic) ? displayTitle : record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={3} className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
                       <label className="block xl:col-span-6">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Observaciones</span>
@@ -10099,13 +10185,10 @@ export default function TizaEducationApp() {
   const syncOrientationFirstCycle = (silent = false) => {
     let created = 0;
     setStore((current) => {
-      const existing = new Set(current.orientation.map((record) =>
-        normalize([record.date, record.course, record.topic, record.axis, record.source].filter(Boolean).join("|")),
-      ));
+      const existing = new Set(current.orientation.map((record) => orientationRecordSignature(record)));
       const missing = ORIENTATION_FIRST_CYCLE_CLASSES
         .filter((record) => {
-          const key = normalize([record.date, record.course, record.topic, record.axis, record.source].filter(Boolean).join("|"));
-          return !existing.has(key);
+          return !existing.has(orientationRecordSignature(record));
         })
         .map((record) => ({ ...record }));
       created = missing.length;
