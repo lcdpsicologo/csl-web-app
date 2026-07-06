@@ -162,6 +162,7 @@ type PieImportStudent = {
 
 const STORAGE_KEY = "tiza-education-store-v1";
 const PROFILE_KEY = "tiza-education-profile-v1";
+const ORIENTATION_LOG_PAGE_SIZE = 80;
 const SUPABASE_PUBLIC_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_PUBLIC_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 const isSupabaseAuthConfigured = Boolean(SUPABASE_PUBLIC_URL && SUPABASE_PUBLIC_ANON_KEY);
@@ -3191,19 +3192,20 @@ function OrientationCycleView({
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
+  const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
-  const owner = orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0];
+  const owner = useMemo(() => orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0], [selectedOwner]);
   const today = new Date().toISOString().slice(0, 10);
 
-  const ownerStoredClasses = store.orientation.filter((record) =>
+  const ownerStoredClasses = useMemo(() => store.orientation.filter((record) =>
     normalize(record.orientationOwner || "") === normalize(owner.name) ||
     owner.courses.some((course) => normalize(record.course || "") === normalize(course))
-  );
+  ), [owner, store.orientation]);
 
   // Calendar events that look like orientation classes for one of this owner's
   // courses. We treat them as virtual class records (Planificada by default) so
   // they get counted and shown alongside the explicitly created ones.
-  const calendarClasses: DataRecord[] = calendarEvents
+  const calendarClasses: DataRecord[] = useMemo(() => calendarEvents
     .map((ev) => {
       const match = matchOrientationEvent(ev.summary);
       if (!match.isOrientation) return null;
@@ -3224,14 +3226,14 @@ function OrientationCycleView({
         notes: ev.location || "",
       } as DataRecord;
     })
-    .filter((r): r is DataRecord => r !== null);
+    .filter((r): r is DataRecord => r !== null), [calendarEvents, owner, today]);
 
   // Avoid double-counting if the orientador already has a stored class for the
   // same date+course (stored class wins).
-  const calendarClassesFiltered = calendarClasses.filter(
+  const calendarClassesFiltered = useMemo(() => calendarClasses.filter(
     (cal) => !ownerStoredClasses.some((s) => (s.date || "") === cal.date && normalize(s.course || "") === normalize(cal.course)),
-  );
-  const ownerClasses: DataRecord[] = [...ownerStoredClasses, ...calendarClassesFiltered];
+  ), [calendarClasses, ownerStoredClasses]);
+  const ownerClasses: DataRecord[] = useMemo(() => [...ownerStoredClasses, ...calendarClassesFiltered], [calendarClassesFiltered, ownerStoredClasses]);
   const getOrientationAction = (record: DataRecord) => {
     const value = record.axis || record.characterStrength || record.classType || record.topic || "";
     const exact = orientationActionColumns.find((action) => normalize(action) === normalize(value));
@@ -3239,41 +3241,42 @@ function OrientationCycleView({
     const fuzzy = orientationActionColumns.find((action) => normalize(value).includes(normalize(action)) || normalize(action).includes(normalize(value)));
     return fuzzy || value || "Sin acción";
   };
-  const orientationActionTotals = orientationActionColumns.map((action) => ({
+  const orientationActionTotals = useMemo(() => orientationActionColumns.map((action) => ({
     action,
     count: ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length,
-  }));
-  const visibleActionColumns = orientationActionTotals.some((item) => item.count > 0)
+  })), [ownerClasses]);
+  const visibleActionColumns = useMemo(() => orientationActionTotals.some((item) => item.count > 0)
     ? orientationActionTotals.filter((item) => item.count > 0).map((item) => item.action)
-    : orientationActionColumns;
-  const maxActionCount = Math.max(
+    : orientationActionColumns, [orientationActionTotals]);
+  const maxActionCount = useMemo(() => Math.max(
     1,
     ...owner.courses.flatMap((course) =>
       visibleActionColumns.map((action) =>
         ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length,
       ),
     ),
-  );
+  ), [owner.courses, ownerClasses, visibleActionColumns]);
   const actionCellTone = (count: number) => {
     if (count === 0) return "bg-white text-slate-300";
     if (count >= Math.max(4, Math.ceil(maxActionCount * 0.75))) return "bg-emerald-200 text-emerald-950";
     if (count >= Math.max(2, Math.ceil(maxActionCount * 0.4))) return "bg-emerald-100 text-emerald-900";
     return "bg-amber-50 text-amber-800";
   };
-  const ownerWorkshops = store.workshops.filter((workshop) => {
+  const ownerWorkshops = useMemo(() => store.workshops.filter((workshop) => {
     const target = `${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`;
     return owner.courses.some((course) => normalize(target).includes(normalize(course))) ||
       normalize(workshop.responsible || "").includes(normalize(owner.name));
-  });
+  }), [owner, store.workshops]);
 
-  const filteredClasses = ownerClasses.filter((record) => {
+  const filteredClasses = useMemo(() => ownerClasses.filter((record) => {
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
     if (filterStatus !== "all" && (record.status || "") !== filterStatus) return false;
     if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
     return true;
-  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, ownerClasses]);
+  const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
 
-  const classCounts = {
+  const classCounts = useMemo(() => ({
     total: ownerClasses.length,
     realizadas: ownerClasses.filter((r) => /realizad/i.test(r.status || "")).length,
     planificadas: ownerClasses.filter((r) => /planificad/i.test(r.status || "")).length,
@@ -3282,7 +3285,7 @@ function OrientationCycleView({
     talleres: ownerWorkshops.length,
     sinCanva: ownerClasses.filter((r) => !(r.canvaLink || r.evidence)).length,
     sinPlanificacion: ownerClasses.filter((r) => !(r.planificacion || r.folderLink)).length,
-  };
+  }), [ownerClasses, ownerWorkshops.length]);
   const newClassDefaults: Record<string, string> = {
     date: today,
     course: owner.courses[0] || "",
@@ -3394,6 +3397,8 @@ function OrientationCycleView({
                 setFilterStatus("all");
                 setFilterDate("all");
                 setNewClassForm({});
+                setExpandedClassIds([]);
+                setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
               }}
               className={`rounded-xl border p-3 text-left transition ${
                 active ? "border-blue-500 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:bg-slate-50"
@@ -3520,13 +3525,21 @@ function OrientationCycleView({
           <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2">
             <TizaSelect
               value={filterCourse}
-              onChange={setFilterCourse}
+              onChange={(value) => {
+                setFilterCourse(value);
+                setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
+                setExpandedClassIds([]);
+              }}
               options={[{ value: "all", label: "Todos los cursos" }, ...owner.courses.map((course) => ({ value: course, label: course }))]}
               className="min-w-48"
             />
             <TizaSelect
               value={filterStatus}
-              onChange={setFilterStatus}
+              onChange={(value) => {
+                setFilterStatus(value);
+                setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
+                setExpandedClassIds([]);
+              }}
               options={[
                 { value: "all", label: "Todos los estados" },
                 ...["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => ({ value: status, label: status })),
@@ -3545,7 +3558,7 @@ function OrientationCycleView({
             <span>Material</span>
             <span className="text-right">Acciones</span>
           </div>
-          {filteredClasses.map((record) => {
+          {renderedClasses.map((record) => {
             const isCalendar = record.source === "calendar";
             const canvaUrl = record.canvaLink || record.evidence || "";
             const folderUrl = record.folderLink || "";
@@ -3687,6 +3700,27 @@ function OrientationCycleView({
           {filteredClasses.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white px-4 py-10 text-center text-sm text-slate-500">
               No hay registros con esos filtros. Agrega una clase arriba para comenzar.
+            </div>
+          ) : null}
+          {filteredClasses.length > renderedClasses.length ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 text-sm">
+              <span className="font-semibold text-slate-600">
+                Mostrando {renderedClasses.length} de {filteredClasses.length} registros
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setVisibleClassCount((count) => Math.min(count + ORIENTATION_LOG_PAGE_SIZE, filteredClasses.length))}
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                >
+                  Mostrar {Math.min(ORIENTATION_LOG_PAGE_SIZE, filteredClasses.length - renderedClasses.length)} mas
+                </button>
+                <button
+                  onClick={() => setVisibleClassCount(filteredClasses.length)}
+                  className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                >
+                  Mostrar todo
+                </button>
+              </div>
             </div>
           ) : null}
         </div>
