@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpenText, CalendarDays, ExternalLink, FileText, FolderOpen, GraduationCap, RefreshCcw, Search } from "lucide-react";
+import { BookOpenText, CalendarDays, Clock, ExternalLink, FileText, FolderOpen, GraduationCap, RefreshCcw, Search } from "lucide-react";
+import { upcomingOrientationClasses } from "@/lib/orientation-weekly-schedule";
 
 // Vista pública de solo lectura para profesores: muestra las clases de
 // orientación por curso sin permitir ninguna edición.
@@ -97,6 +98,13 @@ export default function TeacherClassesPage() {
 
   const done = filtered.filter((item) => /realizad/i.test(item.status)).length;
 
+  // Próximas clases según el horario semanal fijo, con su material si ya está registrado.
+  const upcoming = useMemo(() => upcomingOrientationClasses(new Date(), 7).map(({ slot, date }) => ({
+    slot,
+    date,
+    record: classes.find((item) => item.date === date && normalize(item.course) === normalize(slot.course)) || null,
+  })), [classes]);
+
   return (
     <main className="min-h-screen bg-slate-50 pb-16">
       <header className="border-b border-slate-200 bg-white">
@@ -120,6 +128,34 @@ export default function TeacherClassesPage() {
       </header>
 
       <div className="mx-auto max-w-6xl px-4 pt-6 sm:px-6">
+        {status === "ready" && upcoming.length > 0 && (
+          <section className="mb-6">
+            <div className="mb-2 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-600" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">Próximas clases (7 días)</h2>
+            </div>
+            <div className="flex gap-2.5 overflow-x-auto pb-2">
+              {upcoming.map(({ slot, date, record }) => (
+                <div key={`${date}-${slot.course}`} className="w-56 shrink-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">{slot.course}</p>
+                  <p className="mt-0.5 text-xs font-bold text-slate-900">{formatDate(date)}</p>
+                  <p className="text-[11px] tabular-nums text-slate-500">{slot.start} – {slot.end} hrs</p>
+                  <p className="mt-1.5 truncate text-xs font-semibold text-slate-700" title={record?.topic || record?.action || ""}>
+                    {record?.topic || record?.action || "Tema por confirmar"}
+                  </p>
+                  {record?.canvaLink ? (
+                    <a href={record.canvaLink} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
+                      <FileText className="h-3.5 w-3.5" /> Material Canva
+                    </a>
+                  ) : (
+                    <p className="mt-2 inline-flex rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500">Material por confirmar</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <section className="flex flex-wrap items-center gap-2">
           <label className="relative min-w-52 flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
