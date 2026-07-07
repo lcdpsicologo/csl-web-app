@@ -7,7 +7,7 @@ import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
-import { ORIENTATION_WEEKLY_SLOTS, mondayOfWeek, slotDateISO } from "@/lib/orientation-weekly-schedule";
+import { ORIENTATION_WEEKLY_SLOTS } from "@/lib/orientation-weekly-schedule";
 import { games } from "@/lib/games";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
 import {
@@ -3382,7 +3382,7 @@ function OrientationCycleView({
     if (filterStatus !== "all" && (record.status || "") !== filterStatus) return false;
     if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
     return true;
-  }).sort((a, b) => String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt))), [filterCourse, filterDate, filterStatus, ownerClasses]);
+  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, ownerClasses]);
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
 
   const classCounts = useMemo(() => ({
@@ -3510,35 +3510,6 @@ function OrientationCycleView({
   const courseTotal = (course: string) => ownerClasses.filter((r) => normalize(r.course || "") === normalize(course)).length;
   const actionGrandTotal = ownerClasses.length;
 
-  // ---- Agenda semanal según el horario fijo de orientación ----
-  const [agendaWeekOffset, setAgendaWeekOffset] = useState(0);
-  const ownerWeeklySlots = useMemo(() => ORIENTATION_WEEKLY_SLOTS.filter((slot) => normalize(slot.owner) === normalize(owner.name)), [owner.name]);
-  const agendaMonday = useMemo(() => {
-    const monday = mondayOfWeek(new Date());
-    monday.setDate(monday.getDate() + agendaWeekOffset * 7);
-    return monday;
-  }, [agendaWeekOffset]);
-  const agendaDays = useMemo(() => ([1, 2, 3, 4, 5] as const).map((day) => {
-    const slots = ownerWeeklySlots
-      .filter((slot) => slot.day === day)
-      .sort((a, b) => a.start.localeCompare(b.start))
-      .map((slot) => {
-        const date = slotDateISO(slot, agendaMonday);
-        const record = ownerStoredClasses.find((item) => (item.date || "") === date && normalize(item.course || "") === normalize(slot.course));
-        return { slot, date, record };
-      });
-    return { day, dayName: slots[0]?.slot.dayName || ["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"][day], slots };
-  }), [agendaMonday, ownerStoredClasses, ownerWeeklySlots]);
-  const agendaLabel = useMemo(() => {
-    const friday = new Date(agendaMonday.getFullYear(), agendaMonday.getMonth(), agendaMonday.getDate() + 4);
-    const fmt = (date: Date) => `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
-    return `${fmt(agendaMonday)} al ${fmt(friday)}`;
-  }, [agendaMonday]);
-  const registerScheduledSlot = (course: string, date: string) => {
-    updateQuickClassForm({ course, ...quickFormPatchForDate(date) });
-    document.getElementById("registro-rapido")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
   return (
     <div className="tz-fade space-y-5">
       <datalist id="orientation-action-options">
@@ -3637,59 +3608,6 @@ function OrientationCycleView({
           </div>
         ))}
       </section>
-
-      {ownerWeeklySlots.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Horario fijo de orientación</p>
-              <h2 className="text-lg font-semibold text-slate-950">Agenda semanal · {agendaLabel}</h2>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button onClick={() => setAgendaWeekOffset((value) => value - 1)} className="tz-press rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-50">←</button>
-              <button onClick={() => setAgendaWeekOffset(0)} className={`tz-press rounded-lg border px-3 py-1.5 text-xs font-bold ${agendaWeekOffset === 0 ? "border-blue-300 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>Esta semana</button>
-              <button onClick={() => setAgendaWeekOffset((value) => value + 1)} className="tz-press rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm font-bold text-slate-600 hover:bg-slate-50">→</button>
-            </div>
-          </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            {agendaDays.map(({ day, dayName, slots }) => {
-              const isToday = slots.some(({ date }) => date === today);
-              return (
-                <div key={day} className={`rounded-xl border p-2.5 ${isToday ? "border-blue-300 bg-blue-50/50 ring-1 ring-blue-200" : "border-slate-200 bg-slate-50/50"}`}>
-                  <p className={`mb-2 text-[11px] font-bold uppercase tracking-wider ${isToday ? "text-blue-700" : "text-slate-500"}`}>
-                    {dayName}{isToday ? " · Hoy" : ""}
-                  </p>
-                  <div className="space-y-1.5">
-                    {slots.length === 0 && <p className="py-2 text-center text-[11px] text-slate-400">Sin clases</p>}
-                    {slots.map(({ slot, date, record }) => {
-                      const done = /realizad/i.test(record?.status || "");
-                      return (
-                        <button
-                          key={`${slot.course}-${slot.start}`}
-                          onClick={() => registerScheduledSlot(slot.course, date)}
-                          title={record ? `${record.status || "Registrada"}: clic para registrar otra fila` : "Clic para registrar esta clase"}
-                          className={`tz-press block w-full rounded-lg border px-2.5 py-2 text-left text-xs transition ${
-                            done ? "border-emerald-200 bg-emerald-50 hover:bg-emerald-100" : record ? "border-blue-200 bg-blue-50 hover:bg-blue-100" : "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/60"
-                          }`}
-                        >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-bold text-slate-900">{slot.course}</span>
-                            {done ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" /> : record ? <ClipboardList className="h-3.5 w-3.5 shrink-0 text-blue-600" /> : <Plus className="h-3.5 w-3.5 shrink-0 text-slate-400" />}
-                          </div>
-                          <p className="mt-0.5 tabular-nums text-slate-500">{slot.start} – {slot.end}</p>
-                          <p className={`mt-0.5 font-semibold ${done ? "text-emerald-700" : record ? "text-blue-700" : "text-slate-400"}`}>
-                            {record ? record.status || "Registrada" : "Sin registrar"}
-                          </p>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       <section id="registro-rapido" className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_300px]">
