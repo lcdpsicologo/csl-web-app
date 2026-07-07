@@ -3500,13 +3500,10 @@ function OrientationCycleView({
   };
 
   // ---- Estadísticas del orientador seleccionado (sin inflar por calendario) ----
-  const storedCount = ownerStoredClasses.length;
-  const doneCount = ownerStoredClasses.filter((r) => /realizad/i.test(r.status || "")).length;
   const reprogCount = ownerStoredClasses.filter((r) => /reprogramad/i.test(r.status || "")).length;
-  const plannedCount = ownerStoredClasses.filter((r) => /planificad|pendiente/i.test(r.status || "") || !r.status).length;
+  const plannedCount = ownerStoredClasses.filter((r) => /planificad/i.test(r.status || "")).length;
   const withCanva = ownerStoredClasses.filter((r) => (r.canvaLink || r.evidence || "").trim()).length;
   const withPlan = ownerStoredClasses.filter((r) => (r.planificacion || r.folderLink || "").trim()).length;
-  const avancePct = storedCount ? Math.round((doneCount / storedCount) * 100) : 0;
   const courseTotal = (course: string) => ownerClasses.filter((r) => normalize(r.course || "") === normalize(course)).length;
   const actionGrandTotal = ownerClasses.length;
 
@@ -3588,11 +3585,9 @@ function OrientationCycleView({
       </section>
 
       {/* ---- Banda de estadísticas del orientador ---- */}
-      <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-8">
+      <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
         {([
-          ["Registros", storedCount, "text-slate-900", "bg-slate-50 ring-slate-200", ClipboardList],
-          ["Realizadas", doneCount, "text-emerald-700", "bg-emerald-50 ring-emerald-100", CheckCircle2],
-          ["Avance", `${avancePct}%`, "text-blue-700", "bg-blue-50 ring-blue-100", BarChart3],
+          ["Pendientes", classCounts.pendientes, "text-slate-700", "bg-slate-50 ring-slate-200", ClipboardList],
           ["Reprogramadas", reprogCount, "text-amber-700", "bg-amber-50 ring-amber-100", CalendarDays],
           ["Planificadas", plannedCount, "text-violet-700", "bg-violet-50 ring-violet-100", ClipboardList],
           ["Con Canva", withCanva, "text-cyan-700", "bg-cyan-50 ring-cyan-100", FileText],
@@ -3672,19 +3667,21 @@ function OrientationCycleView({
             ) : null}
           </div>
           <aside className="border-t border-slate-100 bg-slate-50 p-4 xl:border-l xl:border-t-0">
-            <div className="grid grid-cols-2 gap-2 text-center text-xs font-semibold">
-              {[
-                ["Registros", classCounts.total],
-                ["Realizados", classCounts.realizadas],
-                ["Pendientes", classCounts.pendientes],
-                ["Sin Canva", classCounts.sinCanva],
-              ].map(([label, value]) => (
-                <div key={String(label)} className="rounded-lg bg-white px-2 py-3 ring-1 ring-slate-200">
-                  <strong className="block text-xl text-slate-950">{value}</strong>
-                  <span className="text-slate-500">{label}</span>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Se guardará</p>
+            <dl className="mt-2 space-y-1.5 rounded-lg bg-white p-3 text-xs ring-1 ring-slate-200">
+              {([
+                ["Curso", quickClassForm.course || "—"],
+                ["Fecha", quickClassForm.date || "—"],
+                ["Semana", quickClassForm.week || "—"],
+                ["Fortaleza", quickClassForm.axis || "—"],
+                ["Estado", quickClassForm.status || "—"],
+              ] as Array<[string, string]>).map(([label, value]) => (
+                <div key={label} className="flex items-baseline justify-between gap-2">
+                  <dt className="shrink-0 font-semibold text-slate-500">{label}</dt>
+                  <dd className="truncate text-right font-bold text-slate-900" title={value}>{value}</dd>
                 </div>
               ))}
-            </div>
+            </dl>
             <button onClick={saveNewClass} disabled={!quickClassHasContent || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
               <Save className="h-4 w-4" /> Guardar en la bitácora
             </button>
