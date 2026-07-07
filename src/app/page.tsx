@@ -403,6 +403,32 @@ const orientationOwners = [
   },
 ];
 
+// ---- Sincronización fecha ↔ semana del plan de orientación ----
+const parseOrientationWeekRange = (week: string) => {
+  const match = week.match(/(\d{2})\/(\d{2})\s+al\s+(\d{2})\/(\d{2})/);
+  if (!match) return null;
+  const [, startDay, startMonth, endDay, endMonth] = match;
+  return { start: `2026-${startMonth}-${startDay}`, end: `2026-${endMonth}-${endDay}` };
+};
+
+const orientationConfigForDate = (dateISO: string) =>
+  ORIENTATION_FIRST_CYCLE_CONFIG.find((config) => {
+    const range = parseOrientationWeekRange(config.week);
+    return range && dateISO >= range.start && dateISO <= range.end;
+  });
+
+const orientationWeekNumber = (week: string) => week.match(/Semana\s+(\d+)/i)?.[1] || "";
+
+// Fecha que corresponde a un curso dentro de una semana, según el horario fijo.
+const scheduledDateForCourse = (course: string, weekStartISO: string) => {
+  const slot = ORIENTATION_WEEKLY_SLOTS.find((item) => normalize(item.course) === normalize(course));
+  const [year, month, day] = weekStartISO.split("-").map(Number);
+  if (!year || !month || !day) return weekStartISO;
+  const date = new Date(year, month - 1, day + (slot ? slot.day - 1 : 0));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
 const orientationActionColumns = [
   "Soy amable",
   "Soy correcto",
@@ -3395,6 +3421,36 @@ function OrientationCycleView({
     setNewClassForm((form) => ({ ...newClassDefaults, ...form, ...updates, orientationOwner: owner.name, orientationEmail: owner.email }));
   };
 
+  // Al elegir fecha se selecciona sola la semana del plan (y se sugiere la fortaleza de esa semana).
+  const quickFormPatchForDate = (date: string): Record<string, string> => {
+    const patch: Record<string, string> = { date };
+    const config = orientationConfigForDate(date);
+    if (config) {
+      patch.week = config.week;
+      patch.weekNumber = orientationWeekNumber(config.week);
+      const axisValue = (newClassForm.axis || "").trim();
+      const topicValue = (newClassForm.topic || "").trim();
+      // Solo sugerir si el campo está vacío o todavía tiene la sugerencia de otra semana.
+      if (!axisValue || ORIENTATION_FIRST_CYCLE_CONFIG.some((item) => item.action === axisValue)) patch.axis = config.action;
+      if (!topicValue || ORIENTATION_FIRST_CYCLE_CONFIG.some((item) => item.session === topicValue)) patch.topic = config.session;
+    }
+    return patch;
+  };
+  const syncQuickClassDate = (date: string) => updateQuickClassForm(quickFormPatchForDate(date));
+  // Al elegir semana se calcula la fecha según el día que le toca al curso en el horario.
+  const syncQuickClassWeek = (week: string) => {
+    const range = parseOrientationWeekRange(week);
+    const patch: Record<string, string> = { week, weekNumber: orientationWeekNumber(week) };
+    if (range) Object.assign(patch, quickFormPatchForDate(scheduledDateForCourse(quickClassForm.course || "", range.start)), { week, weekNumber: orientationWeekNumber(week) });
+    updateQuickClassForm(patch);
+  };
+  const syncQuickClassCourse = (course: string) => {
+    const range = parseOrientationWeekRange(quickClassForm.week || "");
+    const patch: Record<string, string> = { course };
+    if (range) patch.date = scheduledDateForCourse(course, range.start);
+    updateQuickClassForm(patch);
+  };
+
   const saveNewClass = () => {
     if (!quickClassHasContent || !quickClassForm.course?.trim()) return;
     onAddOrientationRecord({
@@ -3479,7 +3535,7 @@ function OrientationCycleView({
     return `${fmt(agendaMonday)} al ${fmt(friday)}`;
   }, [agendaMonday]);
   const registerScheduledSlot = (course: string, date: string) => {
-    updateQuickClassForm({ course, date });
+    updateQuickClassForm({ course, ...quickFormPatchForDate(date) });
     document.getElementById("registro-rapido")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
@@ -3650,15 +3706,15 @@ function OrientationCycleView({
             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
               <label className="block">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">SEM</span>
-                <input type="date" value={quickClassForm.date} onChange={(event) => updateQuickClassForm({ date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                <input type="date" value={quickClassForm.date} onChange={(event) => syncQuickClassDate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
               <label className="block xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha / semana</span>
-                <TizaSelect value={quickClassForm.week} onChange={(week) => updateQuickClassForm({ week })} options={weekOptionsFor(quickClassForm.week)} className="mt-1" />
+                <TizaSelect value={quickClassForm.week} onChange={syncQuickClassWeek} options={weekOptionsFor(quickClassForm.week)} className="mt-1" />
               </label>
               <div className="block">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
-                <TizaSelect value={quickClassForm.course} onChange={(course) => updateQuickClassForm({ course })} options={owner.courses} className="mt-1" />
+                <TizaSelect value={quickClassForm.course} onChange={syncQuickClassCourse} options={owner.courses} className="mt-1" />
               </div>
               <label className="block xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Acción / fortaleza</span>
@@ -3673,16 +3729,16 @@ function OrientationCycleView({
                 <TizaSelect value={quickClassForm.status} onChange={(status) => updateQuickClassForm({ status })} options={["Planificada", "Realizada", "Pendiente", "Reprogramada"]} className="mt-1" buttonClassName={`font-semibold ${statusTone(quickClassForm.status)} ring-1`} />
               </div>
               <label className="block xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva</span>
-                <input value={quickClassForm.canvaLink} onChange={(event) => updateQuickClassForm({ canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://canva..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva / presentación</span>
+                <input value={quickClassForm.canvaLink} onChange={(event) => updateQuickClassForm({ canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://www.canva.com/..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
               <label className="block xl:col-span-3">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Planificación</span>
-                <input value={quickClassForm.planificacion} onChange={(event) => updateQuickClassForm({ planificacion: event.target.value })} placeholder="Nombre, link o breve descripción" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Link a planificación</span>
+                <input value={quickClassForm.planificacion} onChange={(event) => updateQuickClassForm({ planificacion: event.target.value })} placeholder="https://docs.google.com/... o breve descripción" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
               <label className="block xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carpeta</span>
-                <input value={quickClassForm.folderLink} onChange={(event) => updateQuickClassForm({ folderLink: event.target.value })} placeholder="Drive / carpeta / semana" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carpeta Drive de la semana</span>
+                <input value={quickClassForm.folderLink} onChange={(event) => updateQuickClassForm({ folderLink: event.target.value })} placeholder="https://drive.google.com/drive/folders/..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
               </label>
               <label className="block xl:col-span-4">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Observaciones</span>
@@ -3713,6 +3769,9 @@ function OrientationCycleView({
             </div>
             <button onClick={saveNewClass} disabled={!quickClassHasContent || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
               <Save className="h-4 w-4" /> Guardar en la bitácora
+            </button>
+            <button onClick={() => setNewClassForm({})} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
+              Despejar formulario
             </button>
           </aside>
         </div>
@@ -3831,11 +3890,22 @@ function OrientationCycleView({
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
                       <label className="block xl:col-span-2">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha</span>
-                        <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => {
+                          const date = event.target.value;
+                          const config = orientationConfigForDate(date);
+                          onUpdateOrientationRecord(record.id, { date, ...(config ? { week: config.week, weekNumber: orientationWeekNumber(config.week) } : {}) });
+                        }} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
                       <div className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana / tramo</span>
-                        <TizaSelect disabled={isCalendar} value={record.week || ""} onChange={(week) => onUpdateOrientationRecord(record.id, { week })} options={weekOptionsFor(record.week)} className="mt-1" />
+                        <TizaSelect disabled={isCalendar} value={record.week || ""} onChange={(week) => {
+                          const range = parseOrientationWeekRange(week);
+                          onUpdateOrientationRecord(record.id, {
+                            week,
+                            weekNumber: orientationWeekNumber(week),
+                            ...(range ? { date: scheduledDateForCourse(record.course || "", range.start) } : {}),
+                          });
+                        }} options={weekOptionsFor(record.week)} className="mt-1" />
                       </div>
                       <div className="block xl:col-span-2">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
@@ -3957,7 +4027,11 @@ function OrientationCycleView({
                 return (
                   <tr key={record.id} className={`border-b border-slate-100 align-top ${isCalendar ? "bg-slate-50/70" : "hover:bg-blue-50/30"}`}>
                     <td className="w-32 px-2 py-2">
-                      <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { date: event.target.value })} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                      <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => {
+                        const date = event.target.value;
+                        const config = orientationConfigForDate(date);
+                        onUpdateOrientationRecord(record.id, { date, ...(config ? { week: config.week, weekNumber: orientationWeekNumber(config.week) } : {}) });
+                      }} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
                     </td>
                     <td className="w-52 px-2 py-2">
                       <input disabled={isCalendar} defaultValue={record.week || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { week: event.target.value })} placeholder="Semana" className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
