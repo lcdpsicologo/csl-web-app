@@ -3467,6 +3467,9 @@ function OrientationCycleView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <a href="/clases" target="_blank" rel="noreferrer" className="tz-press inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
+            <ExternalLink className="h-4 w-4" /> Vista profesores
+          </a>
           <button onClick={exportOwnerClasses} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <ArrowDownToLine className="h-4 w-4" /> Exportar Excel
           </button>
@@ -9822,8 +9825,11 @@ export default function TizaEducationApp() {
         }
         const payload = await response.json();
         if (cancelled) return;
-        setStore({ ...emptyStore(), ...(payload.store || {}) });
-        lastSavedSerializedRef.current = JSON.stringify({ ...emptyStore(), ...(payload.store || {}) });
+        const remoteStore = { ...emptyStore(), ...(payload.store || {}) } as DataStore;
+        // La nómina de funcionarios viene sembrada localmente; no dejar que un remoto vacío la borre.
+        if (!remoteStore.personnel?.length) remoteStore.personnel = officialPersonnelRecords;
+        setStore(remoteStore);
+        lastSavedSerializedRef.current = JSON.stringify(remoteStore);
         setRemoteLoaded(true);
         setRemoteStatus("synced");
       } catch (error) {

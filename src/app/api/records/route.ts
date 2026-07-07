@@ -13,6 +13,7 @@ type EntityId =
   | "protocols"
   | "orientation"
   | "workshops"
+  | "personnel"
   | "documents";
 
 type DataRecord = {
@@ -41,6 +42,7 @@ const ENTITY_IDS: EntityId[] = [
   "protocols",
   "orientation",
   "workshops",
+  "personnel",
   "documents",
 ];
 
@@ -55,6 +57,7 @@ const emptyStore = (): DataStore => ({
   protocols: [],
   orientation: [],
   workshops: [],
+  personnel: [],
   documents: [],
 });
 
