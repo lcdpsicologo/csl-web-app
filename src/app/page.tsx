@@ -4124,12 +4124,21 @@ function GenogramChart({
     if (member.x !== undefined && member.y !== undefined) {
       return { x: member.x, y: member.y };
     }
+    // Distribución por defecto centrada respecto a la tarjeta del estudiante.
+    const anchor = getStudentPos();
+    const centerX = anchor.x + 140;
     if (relationGroup === "primary") {
-      return { x: 40 + index * 250, y: 60 };
+      const count = Math.max(1, Math.min(primary.length, 4));
+      const total = count * 210 + (count - 1) * 40;
+      const startX = Math.max(10, centerX - total / 2);
+      return { x: startX + index * 250, y: Math.max(10, anchor.y - 250) };
     } else if (relationGroup === "sibling") {
-      return { x: 60 + index * 220, y: 450 };
+      const count = Math.max(1, Math.min(siblings.length, 4));
+      const total = count * 190 + (count - 1) * 30;
+      const startX = Math.max(10, centerX - total / 2);
+      return { x: startX + index * 220, y: anchor.y + 170 };
     } else {
-      return { x: 730, y: 140 + index * 110 };
+      return { x: Math.min(anchor.x + 340, 740), y: Math.max(10, anchor.y - 130) + index * 115 };
     }
   };
 
@@ -4184,9 +4193,9 @@ function GenogramChart({
         const targetX = Math.round(svgPoint.x - dragging.offsetX);
         const targetY = Math.round(svgPoint.y - dragging.offsetY);
 
-        // Keep inside reasonable bounds
-        const boundedX = Math.max(-50, Math.min(1000, targetX));
-        const boundedY = Math.max(-50, Math.min(600, targetY));
+        // Mantener las tarjetas dentro del lienzo (960×620)
+        const boundedX = Math.max(0, Math.min(745, targetX));
+        const boundedY = Math.max(0, Math.min(505, targetY));
 
         if (dragging.isStudent) {
           setLocalStudentPos({ x: boundedX, y: boundedY });
@@ -4283,10 +4292,18 @@ function GenogramChart({
   };
 
   const studentPos = getStudentPos();
-  const convergenceY = studentPos.y - 50;
+  const studentCenterX = studentPos.x + 140;
+  const convergenceY = studentPos.y - 40;
 
-  const memberCard = (member: GenogramMember, x: number, y: number, width: number, height: number, relationGroup: string, tone = "white") => {
+  const groupAccent: Record<string, { bar: string; text: string; fill: string; stroke: string }> = {
+    primary: { bar: "fill-blue-500", text: "text-blue-600", fill: "fill-white", stroke: "stroke-slate-300" },
+    sibling: { bar: "fill-amber-400", text: "text-amber-600", fill: "fill-white", stroke: "stroke-slate-300" },
+    support: { bar: "fill-violet-400", text: "text-violet-600", fill: "fill-violet-50/60", stroke: "stroke-violet-200" },
+  };
+
+  const memberCard = (member: GenogramMember, x: number, y: number, width: number, height: number, relationGroup: string) => {
     const isSelected = selectedMemberId === member.id;
+    const accent = groupAccent[relationGroup] || groupAccent.primary;
     return (
       <g
         key={member.id}
@@ -4303,20 +4320,21 @@ function GenogramChart({
           width={width}
           height={height}
           rx="12"
-          className={`${tone === "blue" ? "fill-blue-50 stroke-blue-200" : "fill-white stroke-slate-300"} ${isSelected ? "stroke-blue-500" : ""}`}
-          strokeWidth={isSelected ? 3 : 1}
+          className={`${accent.fill} ${isSelected ? "stroke-blue-500" : accent.stroke}`}
+          strokeWidth={isSelected ? 2.5 : 1}
           filter="url(#genogramShadow)"
         />
-        <foreignObject x={x + 10} y={y + 8} width={width - 20} height={height - 16} className="pointer-events-none">
+        <rect x={x} y={y} width={width} height={5} rx="2.5" className={accent.bar} />
+        <foreignObject x={x + 10} y={y + 10} width={width - 20} height={height - 18} className="pointer-events-none">
           <div className="flex h-full flex-col justify-center text-center leading-tight">
-            <div className="line-clamp-2 text-[16px] font-bold text-slate-950" title={member.name}>
+            <div className="line-clamp-2 text-[14px] font-bold text-slate-950" title={member.name}>
               {member.name}
             </div>
-            <div className="mt-1.5 truncate text-[13px] font-semibold text-slate-500">
-              {member.relation}
+            <div className={`mt-1 truncate text-[12px] font-semibold ${accent.text}`}>
+              {member.relation}{member.age ? ` · ${member.age} años` : ""}
             </div>
             {member.role ? (
-              <div className="mt-1 truncate text-[12px] text-slate-400">
+              <div className="mt-0.5 truncate text-[11px] text-slate-400">
                 {member.role}
               </div>
             ) : null}
@@ -4326,14 +4344,24 @@ function GenogramChart({
     );
   };
 
+  const primaryPlaced = primary.slice(0, 4).map((member, index) => ({ member, pos: getMemberPos(member, index, "primary"), width: 210, height: 110 }));
+  const parentsUnion = primaryPlaced.length >= 2
+    ? {
+        x1: primaryPlaced[0].pos.x + primaryPlaced[0].width / 2,
+        y1: primaryPlaced[0].pos.y + primaryPlaced[0].height / 2,
+        x2: primaryPlaced[1].pos.x + primaryPlaced[1].width / 2,
+        y2: primaryPlaced[1].pos.y + primaryPlaced[1].height / 2,
+      }
+    : null;
+
   const hasCustomPositions = student.genogramStudentX || student.genogramStudentY || members.some((m) => m.x !== undefined || m.y !== undefined);
 
   return (
     <div className="tz-contained-x rounded-lg border border-slate-200 bg-slate-50 p-4">
       <svg
         id="genogram-svg"
-        viewBox="0 0 960 560"
-        className="min-h-[440px] w-full min-w-[820px]"
+        viewBox="0 0 960 620"
+        className="min-h-[460px] w-full min-w-[820px]"
         role="img"
         aria-label={`Genograma de ${student.fullName || "estudiante"}`}
       >
@@ -4343,33 +4371,38 @@ function GenogramChart({
           </filter>
         </defs>
 
-        <line
-          x1={studentPos.x + 130}
-          y1={convergenceY}
-          x2={studentPos.x + 130}
-          y2={studentPos.y}
-          className="stroke-slate-300"
-          strokeWidth="2"
-        />
+        {/* Línea de unión entre los dos primeros adultos (convención de genograma) y bajada al estudiante */}
+        {parentsUnion ? (
+          <g>
+            <line x1={parentsUnion.x1} y1={parentsUnion.y1} x2={parentsUnion.x2} y2={parentsUnion.y2} className="stroke-slate-400" strokeWidth="2.5" />
+            <line
+              x1={(parentsUnion.x1 + parentsUnion.x2) / 2}
+              y1={(parentsUnion.y1 + parentsUnion.y2) / 2}
+              x2={studentCenterX}
+              y2={studentPos.y}
+              className="stroke-slate-400"
+              strokeWidth="2.5"
+            />
+          </g>
+        ) : (
+          <line x1={studentCenterX} y1={convergenceY} x2={studentCenterX} y2={studentPos.y} className="stroke-slate-300" strokeWidth="2" />
+        )}
 
-        {primary.slice(0, 4).map((member, index) => {
-          const mPos = getMemberPos(member, index, "primary");
-          const cardWidth = 210;
-          const cardHeight = 110;
-          return (
-            <g key={member.id}>
+        {primaryPlaced.map(({ member, pos, width, height }, index) => (
+          <g key={member.id}>
+            {(!parentsUnion || index >= 2) && (
               <line
-                x1={mPos.x + cardWidth / 2}
-                y1={mPos.y + cardHeight}
-                x2={studentPos.x + 130}
-                y2={convergenceY}
+                x1={pos.x + width / 2}
+                y1={pos.y + height}
+                x2={studentCenterX}
+                y2={parentsUnion ? studentPos.y : convergenceY}
                 className="stroke-slate-300"
                 strokeWidth="2"
               />
-              {memberCard(member, mPos.x, mPos.y, cardWidth, cardHeight, "primary")}
-            </g>
-          );
-        })}
+            )}
+            {memberCard(member, pos.x, pos.y, width, height, "primary")}
+          </g>
+        ))}
 
         {siblings.slice(0, 4).map((member, index) => {
           const mPos = getMemberPos(member, index, "sibling");
@@ -4378,11 +4411,11 @@ function GenogramChart({
           return (
             <g key={member.id}>
               <line
-                x1={studentPos.x + 130}
-                y1={studentPos.y + 96}
+                x1={studentCenterX}
+                y1={studentPos.y + 110}
                 x2={mPos.x + cardWidth / 2}
                 y2={mPos.y}
-                className="stroke-slate-300"
+                className="stroke-amber-300"
                 strokeWidth="2"
               />
               {memberCard(member, mPos.x, mPos.y, cardWidth, cardHeight, "sibling")}
@@ -4395,9 +4428,9 @@ function GenogramChart({
           const cardWidth = 210;
           const cardHeight = 100;
 
-          const isLeftOfStudent = mPos.x + cardWidth / 2 < studentPos.x + 130;
-          const startX = isLeftOfStudent ? studentPos.x : studentPos.x + 260;
-          const startY = studentPos.y + 48;
+          const isLeftOfStudent = mPos.x + cardWidth / 2 < studentCenterX;
+          const startX = isLeftOfStudent ? studentPos.x : studentPos.x + 280;
+          const startY = studentPos.y + 55;
           const endX = isLeftOfStudent ? mPos.x + cardWidth : mPos.x;
           const endY = mPos.y + cardHeight / 2;
 
@@ -4408,11 +4441,11 @@ function GenogramChart({
                 y1={startY}
                 x2={endX}
                 y2={endY}
-                className="stroke-blue-300"
+                className="stroke-violet-300"
                 strokeDasharray="6 6"
                 strokeWidth="2"
               />
-              {memberCard(member, mPos.x, mPos.y, cardWidth, cardHeight, "support", "blue")}
+              {memberCard(member, mPos.x, mPos.y, cardWidth, cardHeight, "support")}
             </g>
           );
         })}
@@ -4447,15 +4480,24 @@ function GenogramChart({
         </g>
 
         {members.length === 0 ? (
-          <text x="480" y="120" textAnchor="middle" className="fill-slate-500 text-[14px]">
-            Agrega familiares o redes para construir el genograma.
-          </text>
+          <g>
+            <rect x="280" y="60" width="400" height="120" rx="16" className="fill-white stroke-slate-200" strokeDasharray="8 6" strokeWidth="1.5" />
+            <text x="480" y="110" textAnchor="middle" className="fill-slate-600 text-[15px] font-semibold">
+              Genograma vacío
+            </text>
+            <text x="480" y="138" textAnchor="middle" className="fill-slate-400 text-[13px]">
+              Agrega familiares o redes con el formulario de la derecha.
+            </text>
+          </g>
         ) : null}
       </svg>
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">
-          Haz clic en cualquier nombre del genograma para editar sus datos. Arrastra las tarjetas para organizar el genograma.
-        </p>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-slate-500">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full bg-blue-500" /> Familia directa</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full bg-amber-400" /> Hermanos/as</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-4 rounded-full bg-violet-400" /> Red de apoyo</span>
+          <span className="text-slate-400">Arrastra para reorganizar · clic para editar</span>
+        </div>
         {hasCustomPositions ? (
           <button
             onClick={handleReset}
@@ -4469,7 +4511,15 @@ function GenogramChart({
   );
 }
 
-function LinkedRecordList({ title, records, emptyText }: { title: string; records: DataRecord[]; emptyText: string }) {
+const linkedKindTones: Record<string, string> = {
+  Caso: "bg-amber-100 text-amber-800",
+  Entrevista: "bg-violet-100 text-violet-800",
+  Bitácora: "bg-blue-100 text-blue-800",
+  Documento: "bg-slate-200 text-slate-700",
+  Protocolo: "bg-rose-100 text-rose-800",
+};
+
+function LinkedRecordList({ title, records, emptyText, kinds, onSelect }: { title: string; records: DataRecord[]; emptyText: string; kinds?: Record<string, string>; onSelect?: (record: DataRecord) => void }) {
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -4487,11 +4537,16 @@ function LinkedRecordList({ title, records, emptyText }: { title: string; record
               : /cerrad|realizad|complet/i.test(status)
                 ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                 : "bg-slate-100 text-slate-600 ring-slate-200";
-            return (
-              <article key={record.id} className="tz-card group rounded-lg border border-slate-200 bg-white p-3 text-sm">
+            const kind = kinds?.[record.id] || "";
+            const clickable = Boolean(onSelect);
+            const body = (
+              <>
                 <div className="flex items-start justify-between gap-3">
                   <strong className="block flex-1 text-slate-950">{record.title || record.reason || record.topic || record.type || record.student || record.relatedTo || "Registro"}</strong>
-                  {status ? <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${statusTone}`}>{status}</span> : null}
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {kind ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${linkedKindTones[kind] || "bg-slate-100 text-slate-600"}`}>{kind}</span> : null}
+                    {status ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${statusTone}`}>{status}</span> : null}
+                  </span>
                 </div>
                 {(record.description || record.agreements || record.observations || record.notes) ? (
                   <p className="mt-1.5 line-clamp-2 text-slate-600">{record.description || record.agreements || record.observations || record.notes}</p>
@@ -4499,6 +4554,15 @@ function LinkedRecordList({ title, records, emptyText }: { title: string; record
                 <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                   {record.date || record.dueDate || new Date(record.updatedAt).toLocaleDateString("es-CL")}
                 </p>
+              </>
+            );
+            return clickable ? (
+              <button key={record.id} onClick={() => onSelect?.(record)} className="tz-card group block w-full rounded-lg border border-slate-200 bg-white p-3 text-left text-sm transition hover:border-blue-300 hover:bg-blue-50/40">
+                {body}
+              </button>
+            ) : (
+              <article key={record.id} className="tz-card group rounded-lg border border-slate-200 bg-white p-3 text-sm">
+                {body}
               </article>
             );
           })}
@@ -4734,6 +4798,14 @@ function StudentDetailDialog({
   const protocols = store.protocols.filter((record) => studentMatches(record, student));
   const documents = store.documents.filter((record) => studentMatches(record, student) || normalize(record.relatedTo || "").includes(normalize(student.fullName || "")));
   const timeline = [...cases, ...logs, ...interviews, ...protocols, ...documents].sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+  const timelineKinds: Record<string, string> = {};
+  cases.forEach((record) => { timelineKinds[record.id] = "Caso"; });
+  interviews.forEach((record) => { timelineKinds[record.id] = "Entrevista"; });
+  logs.forEach((record) => { timelineKinds[record.id] = "Bitácora"; });
+  protocols.forEach((record) => { timelineKinds[record.id] = "Protocolo"; });
+  documents.forEach((record) => { timelineKinds[record.id] = "Documento"; });
+  const kindToTab: Record<string, typeof activeTab> = { Caso: "casos", Entrevista: "entrevistas", Bitácora: "bitacoras", Protocolo: "documentos", Documento: "documentos" };
+  const openCases = cases.filter((record) => !/cerrad/i.test(record.status || "")).length;
   const editingMember = genogram.find((member) => member.id === editingMemberId);
 
   const updateInfo = (key: string, value: string) => onUpdateStudent(student.id, { [key]: value });
@@ -5112,7 +5184,26 @@ function StudentDetailDialog({
                   </div>
                   {quickAddOpen ? <div className="mt-4">{renderQuickAddForm()}</div> : null}
                 </section>
-                <LinkedRecordList title="Últimos registros vinculados" records={timeline.slice(0, 6)} emptyText="Todavía no hay registros vinculados a este estudiante." />
+                <section className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {([
+                    ["casos", "Casos abiertos", openCases, openCases ? "text-amber-700 bg-amber-50 ring-amber-200" : "text-slate-500 bg-slate-50 ring-slate-200"],
+                    ["entrevistas", "Entrevistas", interviews.length, "text-violet-700 bg-violet-50 ring-violet-200"],
+                    ["bitacoras", "Bitácoras", logs.length, "text-blue-700 bg-blue-50 ring-blue-200"],
+                    ["documentos", "Docs y protocolos", documents.length + protocols.length, "text-slate-700 bg-slate-50 ring-slate-200"],
+                  ] as Array<["casos" | "entrevistas" | "bitacoras" | "documentos", string, number, string]>).map(([tab, label, value, tone]) => (
+                    <button key={tab} onClick={() => setActiveTab(tab)} className={`tz-press rounded-xl px-3 py-2.5 text-left ring-1 transition hover:brightness-95 ${tone}`}>
+                      <span className="block text-xl font-bold tabular-nums">{value}</span>
+                      <span className="block text-[11px] font-semibold opacity-80">{label}</span>
+                    </button>
+                  ))}
+                </section>
+                <LinkedRecordList
+                  title="Últimos registros vinculados"
+                  records={timeline.slice(0, 6)}
+                  emptyText="Todavía no hay registros vinculados a este estudiante."
+                  kinds={timelineKinds}
+                  onSelect={(record) => setActiveTab(kindToTab[timelineKinds[record.id]] || "resumen")}
+                />
               </div>
             </div>
           ) : null}
