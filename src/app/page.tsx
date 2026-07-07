@@ -24,6 +24,8 @@ import {
   Puzzle,
   Tag,
   Check,
+  CheckCircle2,
+  BarChart3,
   ChevronDown,
   ClipboardList,
   Database,
@@ -3440,8 +3442,19 @@ function OrientationCycleView({
     );
   };
 
+  // ---- Estadísticas del orientador seleccionado (sin inflar por calendario) ----
+  const storedCount = ownerStoredClasses.length;
+  const doneCount = ownerStoredClasses.filter((r) => /realizad/i.test(r.status || "")).length;
+  const reprogCount = ownerStoredClasses.filter((r) => /reprogramad/i.test(r.status || "")).length;
+  const plannedCount = ownerStoredClasses.filter((r) => /planificad|pendiente/i.test(r.status || "") || !r.status).length;
+  const withCanva = ownerStoredClasses.filter((r) => (r.canvaLink || r.evidence || "").trim()).length;
+  const withPlan = ownerStoredClasses.filter((r) => (r.planificacion || r.folderLink || "").trim()).length;
+  const avancePct = storedCount ? Math.round((doneCount / storedCount) * 100) : 0;
+  const courseTotal = (course: string) => ownerClasses.filter((r) => normalize(r.course || "") === normalize(course)).length;
+  const actionGrandTotal = ownerClasses.length;
+
   return (
-    <div className="tz-fade space-y-4">
+    <div className="tz-fade space-y-5">
       <datalist id="orientation-action-options">
         {orientationActionColumns.map((action) => <option key={action} value={action} />)}
       </datalist>
@@ -3450,7 +3463,7 @@ function OrientationCycleView({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Orientación</h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Bitácora SOY+ por ciclo, curso, semana, acción, estado y enlaces. Todo se edita desde una sola tabla.
+            Bitácora SOY+ por ciclo: cuántas clases, talleres e intervenciones lleva cada curso, con su cobertura por fortaleza.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -3473,6 +3486,7 @@ function OrientationCycleView({
             )
           );
           const done = itemClasses.filter((record) => /realizad/i.test(record.status || "")).length;
+          const pct = itemClasses.length ? Math.round((done / itemClasses.length) * 100) : 0;
           return (
             <button
               key={item.email}
@@ -3485,37 +3499,54 @@ function OrientationCycleView({
                 setExpandedClassIds([]);
                 setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
               }}
-              className={`rounded-xl border p-3 text-left transition ${
-                active ? "border-blue-500 bg-blue-50 shadow-sm" : "border-slate-200 bg-white hover:bg-slate-50"
+              className={`tz-card rounded-2xl border p-3.5 text-left transition ${
+                active ? "border-blue-500 bg-blue-50/60 shadow-sm ring-1 ring-blue-200" : "border-slate-200 bg-white hover:bg-slate-50"
               }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`grid h-10 w-10 place-items-center rounded-lg text-sm font-bold text-white ${active ? "bg-blue-600" : `bg-gradient-to-br ${avatarTone(item.name)}`}`}>
+                <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-sm font-bold text-white shadow-sm ${active ? "bg-blue-600" : `bg-gradient-to-br ${avatarTone(item.name)}`}`}>
                   {initialsOf(item.name)}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.cycle}</p>
                   <h2 className="truncate text-sm font-bold text-slate-950">{item.name}</h2>
                   <p className="truncate text-xs text-slate-500">{item.courses.length} cursos · {store.students.filter((s) => item.courses.includes(s.course || "")).length} estudiantes</p>
                 </div>
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-                <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
-                  <strong className="block text-lg text-slate-950">{itemClasses.length}</strong>
-                  <span className="text-slate-500">registros</span>
+              <div className="mt-3">
+                <div className="flex items-baseline justify-between text-xs font-semibold">
+                  <span className="text-slate-500">{done}/{itemClasses.length} clases realizadas</span>
+                  <span className={active ? "text-blue-700" : "text-slate-700"}>{pct}%</span>
                 </div>
-                <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
-                  <strong className="block text-lg text-emerald-700">{done}</strong>
-                  <span className="text-slate-500">realizados</span>
-                </div>
-                <div className="rounded-lg bg-white px-2 py-2 ring-1 ring-slate-200">
-                  <strong className="block text-lg text-amber-700">{itemClasses.length - done}</strong>
-                  <span className="text-slate-500">por revisar</span>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200/70">
+                  <div className={`h-full rounded-full transition-all ${active ? "bg-blue-600" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
                 </div>
               </div>
             </button>
           );
         })}
+      </section>
+
+      {/* ---- Banda de estadísticas del orientador ---- */}
+      <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-8">
+        {([
+          ["Registros", storedCount, "text-slate-900", "bg-slate-50 ring-slate-200", ClipboardList],
+          ["Realizadas", doneCount, "text-emerald-700", "bg-emerald-50 ring-emerald-100", CheckCircle2],
+          ["Avance", `${avancePct}%`, "text-blue-700", "bg-blue-50 ring-blue-100", BarChart3],
+          ["Reprogramadas", reprogCount, "text-amber-700", "bg-amber-50 ring-amber-100", CalendarDays],
+          ["Planificadas", plannedCount, "text-violet-700", "bg-violet-50 ring-violet-100", ClipboardList],
+          ["Con Canva", withCanva, "text-cyan-700", "bg-cyan-50 ring-cyan-100", FileText],
+          ["Con planificación", withPlan, "text-indigo-700", "bg-indigo-50 ring-indigo-100", FolderOpen],
+          ["Talleres", classCounts.talleres, "text-rose-700", "bg-rose-50 ring-rose-100", GraduationCap],
+        ] as Array<[string, string | number, string, string, LucideIcon]>).map(([label, value, color, tone, Icon]) => (
+          <div key={label} className={`rounded-2xl px-3 py-3 ring-1 ${tone}`}>
+            <div className="flex items-center justify-between">
+              <span className={`text-2xl font-bold leading-none tabular-nums ${color}`}>{value}</span>
+              <Icon className={`h-4 w-4 ${color} opacity-60`} />
+            </div>
+            <p className="mt-1.5 text-[11px] font-semibold text-slate-500">{label}</p>
+          </div>
+        ))}
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -3910,41 +3941,59 @@ function OrientationCycleView({
         ) : null}
       </section>
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Mapa del ciclo</p>
-            <h2 className="text-lg font-semibold text-slate-950">Cantidad por curso y acción / fortaleza</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Mapa de cobertura del ciclo</p>
+            <h2 className="text-lg font-semibold text-slate-950">Sesiones por curso y acción / fortaleza</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Cuántas veces se trabajó cada fortaleza o intervención en cada curso. Total {actionGrandTotal} sesiones registradas.</p>
           </div>
-          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{visibleActionColumns.length} acciones visibles</span>
+          <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-500">
+            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-white ring-1 ring-slate-200" /> 0</span>
+            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-amber-50 ring-1 ring-amber-100" /> bajo</span>
+            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-emerald-100" /> medio</span>
+            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-emerald-200" /> alto</span>
+          </div>
         </header>
         <div className="tz-contained-x">
-          <table className="min-w-[980px] w-full border-collapse text-sm">
+          <table className="min-w-[1040px] w-full border-collapse text-sm">
             <thead>
               <tr className="bg-sky-700 text-white">
-                <th className="sticky left-0 z-10 min-w-40 border-r border-sky-600 bg-sky-800 px-3 py-3 text-left text-xs font-bold uppercase">Curso</th>
+                <th className="sticky left-0 z-10 min-w-36 border-r border-sky-600 bg-sky-800 px-3 py-3 text-left text-xs font-bold uppercase">Curso</th>
                 {visibleActionColumns.map((action) => (
-                  <th key={action} className="min-w-28 border-r border-sky-600 px-2 py-3 text-center text-[11px] font-bold leading-tight">{action}</th>
+                  <th key={action} className="min-w-24 border-r border-sky-600 px-2 py-3 text-center text-[11px] font-bold leading-tight">{action}</th>
                 ))}
+                <th className="min-w-16 bg-sky-800 px-2 py-3 text-center text-[11px] font-bold uppercase">Total</th>
               </tr>
             </thead>
             <tbody>
-              {owner.courses.map((course) => (
-                <tr key={course} className="border-b border-slate-100">
-                  <th className="sticky left-0 z-10 border-r border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm font-semibold text-slate-800">{course}</th>
-                  {visibleActionColumns.map((action) => {
-                    const count = ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length;
-                    return <td key={`${course}-${action}`} className={`border-r border-slate-100 px-2 py-2 text-center text-sm font-bold tabular-nums ${actionCellTone(count)}`}>{count}</td>;
-                  })}
-                </tr>
-              ))}
+              {owner.courses.map((course) => {
+                const total = courseTotal(course);
+                return (
+                  <tr key={course} className="border-b border-slate-100 hover:bg-blue-50/20">
+                    <th className="sticky left-0 z-10 border-r border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800">{course}</th>
+                    {visibleActionColumns.map((action) => {
+                      const count = ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length;
+                      return <td key={`${course}-${action}`} className={`border-r border-slate-100 px-2 py-2 text-center text-sm font-bold tabular-nums ${actionCellTone(count)}`}>{count || ""}</td>;
+                    })}
+                    <td className={`px-2 py-2 text-center text-sm font-extrabold tabular-nums ${total > 0 ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-300"}`}>{total}</td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
+                <th className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-3 py-2 text-left text-xs font-extrabold uppercase text-slate-700">Total ciclo</th>
+                {visibleActionColumns.map((action) => {
+                  const t = ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length;
+                  return <td key={`total-${action}`} className="border-r border-slate-200 px-2 py-2 text-center text-sm font-extrabold tabular-nums text-slate-800">{t || ""}</td>;
+                })}
+                <td className="bg-blue-700 px-2 py-2 text-center text-sm font-extrabold tabular-nums text-white">{actionGrandTotal}</td>
+              </tr>
             </tbody>
           </table>
         </div>
       </section>
     </div>
   );
-
 }
 
 function GenogramChart({
