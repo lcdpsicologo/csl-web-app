@@ -1293,13 +1293,6 @@ function downloadExcel(fileName: string, sheetName: string, headers: string[], r
   URL.revokeObjectURL(url);
 }
 
-const escapeExcelHtml = (value: string | number | undefined | null) =>
-  String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-
 const assetToDataUri = async (path: string) => {
   const response = await fetch(path);
   if (!response.ok) return "";
@@ -1312,20 +1305,35 @@ const assetToDataUri = async (path: string) => {
   });
 };
 
-const downloadHtmlExcel = (fileName: string, html: string) => {
-  const excelHtml = `<!doctype html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="utf-8" />
-  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Reporte</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
-</head>
-<body>${html}</body>
-</html>`;
-  const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
+const svgDataUriToPngDataUri = async (dataUri: string, width = 300, height = 72) => {
+  if (!dataUri) return "";
+  return await new Promise<string>((resolve) => {
+    const image = new window.Image();
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        resolve("");
+        return;
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL("image/png"));
+    };
+    image.onerror = () => resolve("");
+    image.src = dataUri;
+  });
+};
+
+const downloadArrayBuffer = (fileName: string, buffer: ArrayBuffer) => {
+  const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = fileName.endsWith(".xls") ? fileName : `${fileName}.xls`;
+  a.download = fileName.endsWith(".xlsx") ? fileName : `${fileName}.xlsx`;
   a.click();
   URL.revokeObjectURL(url);
 };
@@ -3604,9 +3612,10 @@ function OrientationCycleView({
   };
 
   const exportOwnerClasses = async () => {
+    const ExcelJS = await import("exceljs");
     const reportDate = new Date().toLocaleString("es-CL");
     const sortedRecords = [...ownerClasses].sort((a, b) => String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt)));
-    const tizaLogo = await assetToDataUri("/tiza-education-logo.svg");
+    const tizaLogo = await svgDataUriToPngDataUri(await assetToDataUri("/tiza-education-logo.svg"));
     const schoolLogo = await assetToDataUri("/logo-san-lucas.png");
     const percent = (value: number, total: number) => total ? `${Math.round((value / total) * 100)}%` : "0%";
     const statusCount = (records: DataRecord[], pattern: RegExp) => records.filter((record) => pattern.test(record.status || "")).length;
@@ -3673,97 +3682,123 @@ function OrientationCycleView({
       record.orientationOwner || owner.name,
       record.source || "Registro Tiza",
     ]);
-    const table = (headers: string[], rows: string[][]) => `
-      <table>
-        <thead><tr>${headers.map((header) => `<th>${escapeExcelHtml(header)}</th>`).join("")}</tr></thead>
-        <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExcelHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
-      </table>`;
-    const metric = (label: string, value: string | number, detail = "") => `
-      <td class="metric">
-        <div class="metric-label">${escapeExcelHtml(label)}</div>
-        <div class="metric-value">${escapeExcelHtml(value)}</div>
-        <div class="metric-detail">${escapeExcelHtml(detail)}</div>
-      </td>`;
-    const html = `
-      <style>
-        body { font-family: Arial, Helvetica, sans-serif; color: #172033; }
-        .report { max-width: 1280px; }
-        .cover { border: 1px solid #d8e1ee; background: #f7fbff; padding: 22px; }
-        .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 22px; }
-        .logo-school { width: 72px; height: 72px; object-fit: contain; }
-        .logo-tiza { width: 210px; height: auto; object-fit: contain; }
-        h1 { margin: 18px 0 6px; font-size: 28px; color: #081226; }
-        h2 { margin: 26px 0 8px; font-size: 18px; color: #0f766e; }
-        .subtitle { color: #53657d; font-size: 13px; }
-        .note { margin-top: 12px; padding: 12px; border-left: 4px solid #0891b2; background: #ecfeff; font-size: 13px; line-height: 1.5; }
-        table { border-collapse: collapse; width: 100%; margin: 8px 0 20px; }
-        th { background: #0f172a; color: white; font-size: 12px; text-align: left; padding: 8px; border: 1px solid #cbd5e1; }
-        td { font-size: 12px; padding: 7px; border: 1px solid #dbe3ee; vertical-align: top; }
-        tbody tr:nth-child(even) td { background: #f8fafc; }
-        .metrics td { border: 0; padding: 0 8px 8px 0; }
-        .metric { min-width: 150px; border: 1px solid #dbeafe !important; background: #eff6ff; padding: 12px !important; }
-        .metric-label { font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; }
-        .metric-value { margin-top: 4px; font-size: 24px; color: #0f172a; font-weight: bold; }
-        .metric-detail { margin-top: 2px; font-size: 11px; color: #64748b; }
-        .section-caption { font-size: 12px; color: #64748b; margin-bottom: 8px; }
-      </style>
-      <div class="report">
-        <section class="cover">
-          <div class="brand-row">
-            <div>${schoolLogo ? `<img class="logo-school" src="${schoolLogo}" alt="Colegio San Lucas" />` : ""}</div>
-            <div>${tizaLogo ? `<img class="logo-tiza" src="${tizaLogo}" alt="Tiza Education" />` : "<strong>Tiza Education</strong>"}</div>
-          </div>
-          <h1>Reporte de Orientación SOY+</h1>
-          <div class="subtitle">
-            Colegio San Lucas de Lo Espejo · ${escapeExcelHtml(owner.cycle)} · ${escapeExcelHtml(owner.name)} · Generado el ${escapeExcelHtml(reportDate)}
-          </div>
-          <div class="note">
-            Este documento consolida la bitácora de orientación del ciclo seleccionado, incluyendo cobertura por curso,
-            estado de ejecución, disponibilidad de materiales, talleres vinculados y detalle de clases reprogramadas.
-            La sección final contiene el registro completo para auditoría y seguimiento.
-          </div>
-        </section>
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Tiza Education";
+    workbook.created = new Date();
+    workbook.modified = new Date();
+    workbook.properties.date1904 = false;
+    const palette = {
+      navy: "0F172A",
+      cyan: "0E7490",
+      cyanSoft: "ECFEFF",
+      blueSoft: "EFF6FF",
+      slate: "475569",
+      border: "CBD5E1",
+      white: "FFFFFF",
+      amber: "F59E0B",
+      green: "059669",
+    };
+    const setTitle = (sheet: any, row: number, text: string, mergeTo = "M") => {
+      sheet.mergeCells(`A${row}:${mergeTo}${row}`);
+      const cell = sheet.getCell(`A${row}`);
+      cell.value = text;
+      cell.font = { name: "Arial", size: 16, bold: true, color: { argb: palette.navy } };
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.cyanSoft } };
+      cell.border = { left: { style: "thin", color: { argb: palette.border } }, right: { style: "thin", color: { argb: palette.border } }, top: { style: "thin", color: { argb: palette.border } }, bottom: { style: "thin", color: { argb: palette.border } } };
+      cell.alignment = { vertical: "middle" };
+      sheet.getRow(row).height = 28;
+    };
+    const styleHeader = (row: any) => {
+      row.eachCell((cell: any) => {
+        cell.font = { name: "Arial", size: 10, bold: true, color: { argb: palette.white } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.navy } };
+        cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        cell.border = { left: { style: "thin", color: { argb: palette.border } }, right: { style: "thin", color: { argb: palette.border } }, top: { style: "thin", color: { argb: palette.border } }, bottom: { style: "thin", color: { argb: palette.border } } };
+      });
+      row.height = 24;
+    };
+    const styleBody = (sheet: any, fromRow: number, toRow: number) => {
+      for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
+        const row = sheet.getRow(rowIndex);
+        row.eachCell((cell: any) => {
+          cell.font = { name: "Arial", size: 10, color: { argb: palette.navy } };
+          cell.alignment = { vertical: "top", wrapText: true };
+          cell.border = { left: { style: "thin", color: { argb: "E2E8F0" } }, right: { style: "thin", color: { argb: "E2E8F0" } }, top: { style: "thin", color: { argb: "E2E8F0" } }, bottom: { style: "thin", color: { argb: "E2E8F0" } } };
+          if (rowIndex % 2 === 0) cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F8FAFC" } };
+        });
+      }
+    };
+    const addTableSheet = (name: string, title: string, headers: string[], rows: string[][], widths: number[]) => {
+      const sheet = workbook.addWorksheet(name, { views: [{ state: "frozen", ySplit: 3 }] });
+      sheet.columns = widths.map((width) => ({ width }));
+      setTitle(sheet, 1, title, String.fromCharCode(64 + Math.min(headers.length, 13)));
+      sheet.addRow([]);
+      const headerRow = sheet.addRow(headers);
+      styleHeader(headerRow);
+      rows.forEach((row) => sheet.addRow(row));
+      styleBody(sheet, 4, sheet.rowCount);
+      sheet.autoFilter = { from: { row: 3, column: 1 }, to: { row: 3, column: headers.length } };
+      return sheet;
+    };
+    const cover = workbook.addWorksheet("Portada");
+    cover.columns = [18, 18, 18, 18, 18, 18, 18, 18];
+    for (let i = 1; i <= 22; i += 1) cover.getRow(i).height = 24;
+    cover.mergeCells("A1:H5");
+    cover.getCell("A1").fill = { type: "pattern", pattern: "solid", fgColor: { argb: "F7FBFF" } };
+    cover.getCell("A1").border = { left: { style: "thin", color: { argb: palette.border } }, right: { style: "thin", color: { argb: palette.border } }, top: { style: "thin", color: { argb: palette.border } }, bottom: { style: "thin", color: { argb: palette.border } } };
+    if (schoolLogo) {
+      const id = workbook.addImage({ base64: schoolLogo, extension: "png" });
+      cover.addImage(id, { tl: { col: 0.2, row: 0.4 }, ext: { width: 78, height: 78 } });
+    }
+    if (tizaLogo) {
+      const id = workbook.addImage({ base64: tizaLogo, extension: "png" });
+      cover.addImage(id, { tl: { col: 5.1, row: 0.7 }, ext: { width: 250, height: 60 } });
+    }
+    cover.mergeCells("A7:H7");
+    cover.getCell("A7").value = "Reporte de Orientación SOY+";
+    cover.getCell("A7").font = { name: "Arial", size: 24, bold: true, color: { argb: palette.navy } };
+    cover.mergeCells("A8:H8");
+    cover.getCell("A8").value = `Colegio San Lucas de Lo Espejo · ${owner.cycle} · ${owner.name}`;
+    cover.getCell("A8").font = { name: "Arial", size: 12, color: { argb: palette.slate } };
+    cover.mergeCells("A10:H12");
+    cover.getCell("A10").value = "Este documento consolida la bitácora de orientación del ciclo seleccionado, incluyendo cobertura por curso, estado de ejecución, disponibilidad de materiales, talleres vinculados y detalle de clases reprogramadas. La sección final contiene el registro completo para auditoría y seguimiento.";
+    cover.getCell("A10").alignment = { wrapText: true, vertical: "top" };
+    cover.getCell("A10").font = { name: "Arial", size: 11, color: { argb: palette.navy } };
+    cover.getCell("A10").fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.cyanSoft } };
+    cover.getCell("A14").value = "Generado";
+    cover.getCell("B14").value = reportDate;
+    cover.getCell("A15").value = "Orientador/a";
+    cover.getCell("B15").value = owner.name;
+    cover.getCell("A16").value = "Cursos";
+    cover.getCell("B16").value = owner.courses.length;
+    cover.getCell("A17").value = "Estudiantes";
+    cover.getCell("B17").value = ownerStudents;
+    cover.getCell("A18").value = "Registros";
+    cover.getCell("B18").value = totalRecords;
+    cover.getCell("D14").value = "Realizadas";
+    cover.getCell("E14").value = done;
+    cover.getCell("D15").value = "Pendientes";
+    cover.getCell("E15").value = pending;
+    cover.getCell("D16").value = "Planificadas";
+    cover.getCell("E16").value = planned;
+    cover.getCell("D17").value = "Reprogramadas";
+    cover.getCell("E17").value = reprogrammed;
+    cover.getCell("D18").value = "Cobertura";
+    cover.getCell("E18").value = percent(done, totalRecords);
+    ["A14", "A15", "A16", "A17", "A18", "D14", "D15", "D16", "D17", "D18"].forEach((ref) => {
+      cover.getCell(ref).font = { name: "Arial", bold: true, color: { argb: palette.slate } };
+    });
+    ["B14", "B15", "B16", "B17", "B18", "E14", "E15", "E16", "E17", "E18"].forEach((ref) => {
+      cover.getCell(ref).font = { name: "Arial", bold: true, color: { argb: palette.navy } };
+    });
 
-        <h2>Resumen Ejecutivo</h2>
-        <table class="metrics"><tr>
-          ${metric("Cursos", owner.courses.length, owner.cycle)}
-          ${metric("Estudiantes", ownerStudents, "en cursos del ciclo")}
-          ${metric("Registros", totalRecords, "clases y eventos")}
-          ${metric("Realizadas", done, percent(done, totalRecords))}
-          ${metric("Pendientes", pending)}
-          ${metric("Reprogramadas", reprogrammed)}
-        </tr><tr>
-          ${metric("Planificadas", planned)}
-          ${metric("Con Canva", canvaCount, percent(canvaCount, totalRecords))}
-          ${metric("Con planificación", planCount, percent(planCount, totalRecords))}
-          ${metric("Talleres vinculados", ownerWorkshops.length)}
-          ${metric("Cobertura general", percent(done, totalRecords))}
-          ${metric("Fecha reporte", reportDate)}
-        </tr></table>
+    addTableSheet("Resumen por curso", "Detalle por curso", ["Curso", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows, [18, 14, 16, 13, 13, 14, 16, 12, 12, 17, 12]);
+    addTableSheet("Acciones", "Cobertura por acción / fortaleza", ["Acción / fortaleza", "Registros", "Realizadas", "Reprogramadas", "% del total"], actionRows, [32, 14, 14, 16, 14]);
+    addTableSheet("Reprogramadas", "Clases reprogramadas", ["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Observaciones"], reprogrammedRows.length ? reprogrammedRows : [["", "", "", "", "No hay clases reprogramadas registradas para este orientador.", "", ""]], [13, 24, 16, 24, 34, 36, 36]);
+    addTableSheet("Bitácora completa", "Bitácora detallada completa", ["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows, [24, 13, 16, 24, 36, 16, 30, 36, 28, 28, 28, 20, 18]);
 
-        <h2>Lectura del Reporte</h2>
-        <div class="note">
-          La cobertura general considera registros marcados como realizados sobre el total de registros asociados al orientador.
-          Las clases reprogramadas se mantienen disponibles para consulta específica en la bitácora y se detallan en este archivo
-          con su motivo, cuando fue registrado.
-        </div>
-
-        <h2>Detalle por Curso</h2>
-        <div class="section-caption">Permite revisar carga, avance, pendientes, reprogramaciones y evidencias por curso.</div>
-        ${table(["Curso", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows)}
-
-        <h2>Cobertura por Acción / Fortaleza</h2>
-        ${table(["Acción / fortaleza", "Registros", "Realizadas", "Reprogramadas", "% del total"], actionRows)}
-
-        <h2>Clases Reprogramadas</h2>
-        ${reprogrammedRows.length
-          ? table(["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Observaciones"], reprogrammedRows)
-          : `<div class="note">No hay clases reprogramadas registradas para este orientador.</div>`}
-
-        <h2>Bitácora Detallada Completa</h2>
-        ${table(["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows)}
-      </div>`;
-    downloadHtmlExcel(`reporte-orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xls`, html);
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadArrayBuffer(`reporte-orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xlsx`, buffer as ArrayBuffer);
   };
 
   const statusTone = (status: string) =>
