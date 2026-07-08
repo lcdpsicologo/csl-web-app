@@ -419,6 +419,27 @@ const orientationConfigForDate = (dateISO: string) =>
 
 const orientationWeekNumber = (week: string) => week.match(/Semana\s+(\d+)/i)?.[1] || "";
 
+// Profesor/a jefe de un curso según la nómina (los horarios usan "PRIMERO BÁSICO A", la app "1° Básico A").
+const canonicalCourseKey = (value: string) =>
+  normalize(value)
+    .replace(/pkekinder/g, "prekinder")
+    .replace(/\bprimero\b/g, "1")
+    .replace(/\bsegundo\b/g, "2")
+    .replace(/\btercero\b/g, "3")
+    .replace(/\bcuarto\b/g, "4")
+    .replace(/\bquinto\b/g, "5")
+    .replace(/\bsexto\b/g, "6")
+    .replace(/\bseptimo\b/g, "7")
+    .replace(/\boctavo\b/g, "8")
+    .replace(/°/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const headTeacherForCourse = (course: string) => {
+  const key = canonicalCourseKey(course);
+  return STAFF_DIRECTORY.find((member) => member.headship && member.email && canonicalCourseKey(member.headship) === key) || null;
+};
+
 // Fecha que corresponde a un curso dentro de una semana, según el horario fijo.
 const scheduledDateForCourse = (course: string, weekStartISO: string) => {
   const slot = ORIENTATION_WEEKLY_SLOTS.find((item) => normalize(item.course) === normalize(course));
@@ -3460,6 +3481,70 @@ function OrientationCycleView({
     updateQuickClassForm(patch);
   };
 
+  // ---- Envío de la planificación semanal a profesores jefes por Gmail ----
+  const [sendOpen, setSendOpen] = useState(false);
+  const [sendWeek, setSendWeek] = useState("");
+  const [sendCourse, setSendCourse] = useState("all");
+  const effectiveSendWeek = sendWeek || defaultOrientationWeek;
+  const sendRange = parseOrientationWeekRange(effectiveSendWeek);
+  const sendGroups = useMemo(() => {
+    const inWeek = ownerStoredClasses.filter((record) => {
+      const matchesWeek = (record.week || "") === effectiveSendWeek ||
+        (sendRange && record.date && record.date >= sendRange.start && record.date <= sendRange.end);
+      if (!matchesWeek) return false;
+      if (sendCourse !== "all" && normalize(record.course || "") !== normalize(sendCourse)) return false;
+      return true;
+    });
+    return owner.courses
+      .map((course) => ({
+        course,
+        teacher: headTeacherForCourse(course),
+        records: inWeek.filter((record) => normalize(record.course || "") === normalize(course)),
+      }))
+      .filter((group) => group.records.length > 0);
+  }, [effectiveSendWeek, owner.courses, ownerStoredClasses, sendCourse, sendRange]);
+  const sendRecipients = Array.from(new Set(sendGroups.map((group) => group.teacher?.email || "").filter(Boolean)));
+
+  const openGmailWithWeekPlan = () => {
+    if (!sendGroups.length) return;
+    const lines: string[] = [];
+    lines.push("Estimados/as:");
+    lines.push("");
+    lines.push(`Comparto la planificación de Orientación (SOY+) para la semana ${effectiveSendWeek}.`);
+    lines.push("");
+    sendGroups.forEach((group) => {
+      lines.push(`■ ${group.course}${group.teacher ? ` — ${group.teacher.name}` : ""}`);
+      group.records.forEach((record) => {
+        const action = record.axis || record.characterStrength || record.classType || "";
+        const topic = (record.topic || "").trim();
+        lines.push(`  • ${record.date || "Fecha por confirmar"}${action ? ` · ${action}` : ""}${topic ? ` · ${topic}` : ""}`);
+        const canva = (record.canvaLink || record.evidence || "").trim();
+        const plan = (record.planificacion || "").trim();
+        const folder = (record.folderLink || "").trim();
+        if (canva) lines.push(`    Presentación: ${canva}`);
+        if (plan) lines.push(`    Planificación: ${plan}`);
+        if (folder) lines.push(`    Carpeta: ${folder}`);
+      });
+      lines.push("");
+    });
+    lines.push("Todas las clases también están disponibles en: https://tiza-education-app.vercel.app/clases");
+    lines.push("");
+    lines.push(`Saludos cordiales,`);
+    lines.push(`${owner.name} · ${owner.role}`);
+    lines.push("Colegio San Lucas de Lo Espejo");
+
+    const subject = `Planificación Orientación SOY+ · ${effectiveSendWeek}`;
+    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(sendRecipients.join(","))}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
+    window.open(url, "_blank", "noopener");
+
+    const sentAt = today;
+    sendGroups.forEach((group) => {
+      group.records.forEach((record) => {
+        onUpdateOrientationRecord(record.id, { teacherSentStatus: "Enviado", teacherSentAt: sentAt });
+      });
+    });
+  };
+
   const saveNewClass = () => {
     if (!quickClassHasContent || !quickClassForm.course?.trim()) return;
     onAddOrientationRecord({
@@ -3530,6 +3615,9 @@ function OrientationCycleView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <button onClick={() => setSendOpen((value) => !value)} className={`tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${sendOpen ? "border-emerald-400 bg-emerald-100 text-emerald-800" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
+            <Mail className="h-4 w-4" /> Enviar semana
+          </button>
           <a href="/clases" target="_blank" rel="noreferrer" className="tz-press inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
             <ExternalLink className="h-4 w-4" /> Vista profesores
           </a>
@@ -3541,6 +3629,65 @@ function OrientationCycleView({
           </button>
         </div>
       </div>
+
+      {sendOpen && (
+        <section className="tz-slide-down rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Enviar por Gmail</p>
+              <h2 className="text-lg font-semibold text-slate-950">Planificación semanal para profesores jefes</h2>
+              <p className="mt-0.5 text-xs text-slate-600">Se abrirá Gmail con el correo ya redactado desde tu cuenta institucional; solo revisas y envías.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <div className="min-w-56">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana</span>
+                <TizaSelect value={effectiveSendWeek} onChange={setSendWeek} options={weekOptionsFor(effectiveSendWeek)} className="mt-1" />
+              </div>
+              <div className="min-w-40">
+                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
+                <TizaSelect value={sendCourse} onChange={setSendCourse} options={[{ value: "all", label: "Todos los cursos" }, ...owner.courses.map((course) => ({ value: course, label: course }))]} className="mt-1" />
+              </div>
+            </div>
+          </div>
+
+          {sendGroups.length === 0 ? (
+            <p className="mt-3 rounded-lg border border-dashed border-emerald-300 bg-white p-4 text-center text-sm text-slate-500">
+              No hay clases registradas para esta semana{sendCourse !== "all" ? " en este curso" : ""}. Regístralas primero en el formulario de abajo.
+            </p>
+          ) : (
+            <>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {sendGroups.map((group) => (
+                  <div key={group.course} className="rounded-lg border border-emerald-200 bg-white p-3 text-xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="text-slate-950">{group.course}</strong>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-700 tabular-nums">{group.records.length} clase{group.records.length === 1 ? "" : "s"}</span>
+                    </div>
+                    <p className={`mt-1 truncate ${group.teacher ? "text-slate-600" : "font-semibold text-amber-600"}`}>
+                      {group.teacher ? `${group.teacher.name} · ${group.teacher.email}` : "Sin correo de profesor/a jefe en la nómina"}
+                    </p>
+                    <p className="mt-1 truncate text-slate-500">
+                      {group.records.map((record) => record.axis || record.characterStrength || record.topic || "Clase").join(" · ")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-xs font-semibold text-slate-600">
+                  {sendRecipients.length} destinatario{sendRecipients.length === 1 ? "" : "s"} · al abrir Gmail las clases quedan marcadas como "Enviado"
+                </p>
+                <button
+                  onClick={openGmailWithWeekPlan}
+                  disabled={sendRecipients.length === 0}
+                  className="tz-press inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 disabled:bg-slate-300"
+                >
+                  <Mail className="h-4 w-4" /> Abrir en Gmail
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
 
       <section className="grid gap-3 lg:grid-cols-3">
         {orientationOwners.map((item) => {
