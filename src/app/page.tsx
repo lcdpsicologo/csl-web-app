@@ -848,13 +848,12 @@ const isGeneratedOrientationPlaceholder = (record: DataRecord) => {
   return !hasOrientationRecordContent(record);
 };
 
-const orientationRecordSignature = (record: DataRecord | Record<string, string>) => normalize([
+const orientationSeedIdentity = (record: DataRecord | Record<string, string>) => normalize([
   record.date,
   record.week,
   record.course,
-  record.canvaLink || record.evidence,
-  record.notes || record.planificacion || getOrientationDisplayTitle(record),
   record.axis || record.characterStrength,
+  record.topic || meaningfulOrientationNotes(record as DataRecord) || record.notes || record.planificacion,
 ].filter(Boolean).join("|"));
 
 const parseInterventions = (value: string | undefined): CaseIntervention[] => {
@@ -10907,18 +10906,42 @@ export default function TizaEducationApp() {
 
   const syncOrientationFirstCycle = (silent = false) => {
     let created = 0;
+    let updated = 0;
+    let removedPlaceholders = 0;
     setStore((current) => {
-      const existing = new Set(current.orientation.map((record) => orientationRecordSignature(record)));
-      const missing = ORIENTATION_FIRST_CYCLE_CLASSES
-        .filter((record) => {
-          return !existing.has(orientationRecordSignature(record));
+      const seedByIdentity = new Map(ORIENTATION_FIRST_CYCLE_CLASSES.map((record) => [orientationSeedIdentity(record), record]));
+      const seedCourseWeeks = new Set(ORIENTATION_FIRST_CYCLE_CLASSES.map((record) =>
+        normalize([record.course, record.week].filter(Boolean).join("|")),
+      ));
+      const syncedOrientation = current.orientation
+        .map((record) => {
+          const seed = seedByIdentity.get(orientationSeedIdentity(record));
+          if (!seed) return record;
+          const merged = {
+            ...record,
+            ...seed,
+            id: record.id,
+            createdAt: record.createdAt || seed.createdAt,
+            updatedAt: nowIso(),
+          };
+          if (JSON.stringify(record) !== JSON.stringify(merged)) updated += 1;
+          return merged;
         })
+        .filter((record) => {
+          const coveredPlaceholder = isGeneratedOrientationPlaceholder(record)
+            && seedCourseWeeks.has(normalize([record.course, record.week].filter(Boolean).join("|")));
+          if (coveredPlaceholder) removedPlaceholders += 1;
+          return !coveredPlaceholder;
+        });
+      const existing = new Set(syncedOrientation.map((record) => orientationSeedIdentity(record)));
+      const missing = ORIENTATION_FIRST_CYCLE_CLASSES
+        .filter((record) => !existing.has(orientationSeedIdentity(record)))
         .map((record) => ({ ...record }));
       created = missing.length;
-      if (missing.length === 0) return current;
-      return { ...current, orientation: [...missing, ...current.orientation] };
+      if (missing.length === 0 && updated === 0 && removedPlaceholders === 0) return current;
+      return { ...current, orientation: [...missing, ...syncedOrientation] };
     });
-    if (!silent) setToast(`Clases de orientación sincronizadas: ${created} nuevas.`);
+    if (!silent) setToast(`Clases de orientación sincronizadas: ${created} nuevas, ${updated} actualizadas, ${removedPlaceholders} planificadas reemplazadas.`);
   };
 
   const syncOrientationAnnualPlan = (silent = false) => {

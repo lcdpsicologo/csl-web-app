@@ -20,7 +20,7 @@ export type OrientationSeedRecord = {
 };
 
 export const ORIENTATION_FIRST_CYCLE_SUMMARY = {
-  "records": 255,
+  "records": 269,
   "configItems": 44,
   "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv"
 } as const;
@@ -250,7 +250,7 @@ export const ORIENTATION_FIRST_CYCLE_CONFIG = [
 
 export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
   {
-    "id": "orientacion-primer-ciclo-6e5b7b8736b0",
+    "id": "orientacion-primer-ciclo-0e6921e30",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -270,7 +270,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-4cf138631dd2",
+    "id": "orientacion-primer-ciclo-493730841",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -290,7 +290,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e3c050e36d97",
+    "id": "orientacion-primer-ciclo-7bfac0db2",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -310,7 +310,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6384a22b5096",
+    "id": "orientacion-primer-ciclo-1231d80a3",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -330,7 +330,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ba5e9ffa9ce9",
+    "id": "orientacion-primer-ciclo-4cffe6ab4",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -350,7 +350,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f79c4c28cff3",
+    "id": "orientacion-primer-ciclo-78320ab45",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -370,7 +370,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-66ef96eac23e",
+    "id": "orientacion-primer-ciclo-42849cdd6",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -390,7 +390,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2efd05a4ceef",
+    "id": "orientacion-primer-ciclo-7d52ab7e7",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -410,7 +410,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-df6f1a5ab8a0",
+    "id": "orientacion-primer-ciclo-069269c28",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -430,7 +430,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2d59abc9a6ef",
+    "id": "orientacion-primer-ciclo-343ba4df9",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -450,7 +450,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-00a890275db5",
+    "id": "orientacion-primer-ciclo-4fa97061a",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -470,7 +470,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5cd8d0521965",
+    "id": "orientacion-primer-ciclo-14db61c0b",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -490,7 +490,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-dad9f24c11e9",
+    "id": "orientacion-primer-ciclo-673f8900c",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -510,7 +510,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-bd1870d81b39",
+    "id": "orientacion-primer-ciclo-5df2685fd",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-04",
@@ -530,7 +530,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c775aceaf7b8",
+    "id": "orientacion-primer-ciclo-304a188de",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -550,7 +550,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-d27f43036073",
+    "id": "orientacion-primer-ciclo-3a90ed0ef",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -570,7 +570,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2e4c15dd9fbb",
+    "id": "orientacion-primer-ciclo-44d7c18fg",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -590,7 +590,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-41c9f2e35032",
+    "id": "orientacion-primer-ciclo-709f67f2h",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -610,7 +610,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-25b4f6c8c199",
+    "id": "orientacion-primer-ciclo-7ae63c73i",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -630,7 +630,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8f491b4fc32c",
+    "id": "orientacion-primer-ciclo-7ad2ef0cj",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -650,7 +650,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c44bd0c9d58c",
+    "id": "orientacion-primer-ciclo-5435cdd0k",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -670,7 +670,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b0719988c069",
+    "id": "orientacion-primer-ciclo-332e0b11l",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -690,7 +690,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e78bbff0040d",
+    "id": "orientacion-primer-ciclo-674125d1m",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -710,7 +710,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5871996ba699",
+    "id": "orientacion-primer-ciclo-115b014en",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -730,7 +730,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ddbd9f9e0654",
+    "id": "orientacion-primer-ciclo-22b81972o",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -750,7 +750,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-336be4a95c5b",
+    "id": "orientacion-primer-ciclo-55e40dadp",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -770,7 +770,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-fb8a846a9701",
+    "id": "orientacion-primer-ciclo-0f215909q",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -790,7 +790,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b50b07416d0b",
+    "id": "orientacion-primer-ciclo-78427fd8r",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-05",
@@ -810,7 +810,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-44097910a947",
+    "id": "orientacion-primer-ciclo-30ff2205s",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -830,7 +830,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-dc4ee93bfeea",
+    "id": "orientacion-primer-ciclo-7a1628a4t",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -850,7 +850,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-fe02ae3761ad",
+    "id": "orientacion-primer-ciclo-3cd2d0bdu",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -870,7 +870,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-588c2586da02",
+    "id": "orientacion-primer-ciclo-7310fbe2v",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -890,7 +890,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-75eaaff184c6",
+    "id": "orientacion-primer-ciclo-43d7fd7fw",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -910,7 +910,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ae381b17303c",
+    "id": "orientacion-primer-ciclo-053f0920x",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -930,7 +930,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6444b67ddcba",
+    "id": "orientacion-primer-ciclo-79a090f6y",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -950,7 +950,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-afab9a921074",
+    "id": "orientacion-primer-ciclo-30898a57z",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -970,7 +970,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-4ca9ba161afb",
+    "id": "orientacion-primer-ciclo-74f1fae910",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -990,7 +990,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-7939f9b1937c",
+    "id": "orientacion-primer-ciclo-41f6fe7811",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -1010,7 +1010,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-66997e462f0c",
+    "id": "orientacion-primer-ciclo-638486c812",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -1030,7 +1030,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8b52f97b26cf",
+    "id": "orientacion-primer-ciclo-5364729913",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -1050,7 +1050,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-7259f9842879",
+    "id": "orientacion-primer-ciclo-521712a714",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -1070,7 +1070,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-93fa9a461ed1",
+    "id": "orientacion-primer-ciclo-64d1e6ba15",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-06",
@@ -1090,7 +1090,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-48d022c6ce19",
+    "id": "orientacion-primer-ciclo-25bddfbb16",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-13",
@@ -1100,7 +1100,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 1",
     "axis": "Día sin clases",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://www.canva.com/folder/FAHDLgddOnE",
     "evidence": "https://www.canva.com/folder/FAHDLgddOnE",
     "planificacion": "",
@@ -1110,7 +1110,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-fecefed64375",
+    "id": "orientacion-primer-ciclo-11c6540917",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-10",
@@ -1130,7 +1130,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f4dd3364f068",
+    "id": "orientacion-primer-ciclo-3b04dbf518",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-11",
@@ -1150,7 +1150,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-12b18a00aa80",
+    "id": "orientacion-primer-ciclo-6a2eaf7819",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-12",
@@ -1170,7 +1170,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ba6db3f23394",
+    "id": "orientacion-primer-ciclo-4f1d1ff11a",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-09",
@@ -1190,7 +1190,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-682c8ed37d0a",
+    "id": "orientacion-primer-ciclo-729a11171b",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-13",
@@ -1200,7 +1200,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 1",
     "axis": "Día sin clases",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://www.canva.com/folder/FAHDLpnsKp0",
     "evidence": "https://www.canva.com/folder/FAHDLpnsKp0",
     "planificacion": "",
@@ -1210,7 +1210,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-068d9c202832",
+    "id": "orientacion-primer-ciclo-3cf3806c1c",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-09",
@@ -1230,7 +1230,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6fd2179df030",
+    "id": "orientacion-primer-ciclo-3363775d1d",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-10",
@@ -1250,7 +1250,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-564c57060fbd",
+    "id": "orientacion-primer-ciclo-50372dc11e",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-13",
@@ -1260,7 +1260,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 1",
     "axis": "Día sin clases",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://www.canva.com/folder/FAHDMED7bE0",
     "evidence": "https://www.canva.com/folder/FAHDMED7bE0",
     "planificacion": "",
@@ -1270,7 +1270,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-cfa4e43364a2",
+    "id": "orientacion-primer-ciclo-61868c0d1f",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-10",
@@ -1290,7 +1290,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-239b24d0c265",
+    "id": "orientacion-primer-ciclo-46008a601g",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-09",
@@ -1310,7 +1310,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-fc6650992957",
+    "id": "orientacion-primer-ciclo-649011d91h",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-12",
@@ -1330,7 +1330,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c924ff3edf21",
+    "id": "orientacion-primer-ciclo-4efa01341i",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-09",
@@ -1350,7 +1350,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-bbf6979071dd",
+    "id": "orientacion-primer-ciclo-77ddb95c1j",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-11",
@@ -1370,7 +1370,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-aca78a9defe1",
+    "id": "orientacion-primer-ciclo-1d7bc6e21k",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-20",
@@ -1390,7 +1390,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5c0ee37e6784",
+    "id": "orientacion-primer-ciclo-318935d41l",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-17",
@@ -1410,7 +1410,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c6d30bf52968",
+    "id": "orientacion-primer-ciclo-5cdf8c161m",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-18",
@@ -1430,7 +1430,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-96732e1cf492",
+    "id": "orientacion-primer-ciclo-65194bc31n",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-19",
@@ -1450,7 +1450,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0f82b8b34c05",
+    "id": "orientacion-primer-ciclo-2ba6454b1o",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-16",
@@ -1460,7 +1460,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 2",
     "axis": "Soy amable",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "-",
     "evidence": "-",
     "planificacion": "",
@@ -1470,7 +1470,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e14eb6526e8a",
+    "id": "orientacion-primer-ciclo-12e8ca101p",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-20",
@@ -1490,7 +1490,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-633de59a2f97",
+    "id": "orientacion-primer-ciclo-4209ee851q",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-16",
@@ -1510,7 +1510,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-369d5ecdad3f",
+    "id": "orientacion-primer-ciclo-16b398431r",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-17",
@@ -1530,7 +1530,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0f60003c8a01",
+    "id": "orientacion-primer-ciclo-3d01528c1s",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-20",
@@ -1550,7 +1550,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-13a825fc22ba",
+    "id": "orientacion-primer-ciclo-68bd616f1t",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-17",
@@ -1570,7 +1570,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3ae51fd27a4c",
+    "id": "orientacion-primer-ciclo-1e4da3931u",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-16",
@@ -1590,7 +1590,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f758f7e70c84",
+    "id": "orientacion-primer-ciclo-652429d01v",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-19",
@@ -1610,7 +1610,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3da7d957fac3",
+    "id": "orientacion-primer-ciclo-4fc3aaf91w",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-16",
@@ -1630,7 +1630,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e8ea25df4313",
+    "id": "orientacion-primer-ciclo-45af7df61x",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-18",
@@ -1650,7 +1650,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5977d18351a5",
+    "id": "orientacion-primer-ciclo-1653add61y",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-27",
@@ -1670,7 +1670,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8f2ce16b0e8a",
+    "id": "orientacion-primer-ciclo-65f4b2981z",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-24",
@@ -1690,7 +1690,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-1dec3f13bcbd",
+    "id": "orientacion-primer-ciclo-3a9e5c5620",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-25",
@@ -1710,7 +1710,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-aa86cc8d9708",
+    "id": "orientacion-primer-ciclo-1397206b21",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-26",
@@ -1730,7 +1730,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e1200f94b6fa",
+    "id": "orientacion-primer-ciclo-777ffab122",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-23",
@@ -1750,7 +1750,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-957b47fbba30",
+    "id": "orientacion-primer-ciclo-4a02a84c23",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-27",
@@ -1770,7 +1770,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9159d0027b51",
+    "id": "orientacion-primer-ciclo-53874e9e24",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-23",
@@ -1790,7 +1790,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-29459666acec",
+    "id": "orientacion-primer-ciclo-2830f85c25",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-24",
@@ -1810,7 +1810,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e32ddd6cb572",
+    "id": "orientacion-primer-ciclo-071be7a726",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-27",
@@ -1830,7 +1830,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2355076b438f",
+    "id": "orientacion-primer-ciclo-56bcec6927",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-24",
@@ -1850,7 +1850,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b191886b382e",
+    "id": "orientacion-primer-ciclo-01384e0528",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-23",
@@ -1870,7 +1870,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-1e6ab180dad6",
+    "id": "orientacion-primer-ciclo-15f5ae3729",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-26",
@@ -1890,7 +1890,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6abfd4161299",
+    "id": "orientacion-primer-ciclo-120b5d2c2a",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-23",
@@ -1910,7 +1910,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-96a80cac76b1",
+    "id": "orientacion-primer-ciclo-4db663572b",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-25",
@@ -1930,7 +1930,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f748748a748a",
+    "id": "orientacion-primer-ciclo-18bd53912c",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-03",
@@ -1940,7 +1940,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 4",
     "axis": "Soy amable",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://drive.google.com/drive/folders/1J9HGCzXYyZhFMa1qsBsDy3CJbeqGNuzw?hl=es-419",
     "evidence": "https://drive.google.com/drive/folders/1J9HGCzXYyZhFMa1qsBsDy3CJbeqGNuzw?hl=es-419",
     "planificacion": "",
@@ -1950,7 +1950,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b60ca698e0ca",
+    "id": "orientacion-primer-ciclo-61854d2e2d",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-31",
@@ -1970,7 +1970,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c1a9705bcd2c",
+    "id": "orientacion-primer-ciclo-5a47eaef2e",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-01",
@@ -1990,7 +1990,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9969f8a5151c",
+    "id": "orientacion-primer-ciclo-2d69166d2f",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-02",
@@ -2000,7 +2000,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 3",
     "axis": "Soy amable",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://drive.google.com/drive/folders/1c6jwJ-YIC85jVP3MXjFP_8JSh21MY6VU?usp=sharing",
     "evidence": "https://drive.google.com/drive/folders/1c6jwJ-YIC85jVP3MXjFP_8JSh21MY6VU?usp=sharing",
     "planificacion": "",
@@ -2010,7 +2010,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0cbd5b46f691",
+    "id": "orientacion-primer-ciclo-7116a7522g",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-30",
@@ -2030,7 +2030,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9888ccc76516",
+    "id": "orientacion-primer-ciclo-5d5dbc5d2h",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-03",
@@ -2040,7 +2040,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 3",
     "axis": "Soy amable",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "",
     "evidence": "",
     "planificacion": "",
@@ -2050,7 +2050,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-cfd7ee1d9333",
+    "id": "orientacion-primer-ciclo-19ba90be2i",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-30",
@@ -2070,7 +2070,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-01bdde127ad1",
+    "id": "orientacion-primer-ciclo-5dc71a402j",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-31",
@@ -2090,7 +2090,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-d21798912bfc",
+    "id": "orientacion-primer-ciclo-109cbc062k",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-03",
@@ -2100,7 +2100,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 4",
     "axis": "Soy amable",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://drive.google.com/drive/folders/1xETaM5zMa4M7O9SSxpFpwps1J_r72Hr6?hl=es-419",
     "evidence": "https://drive.google.com/drive/folders/1xETaM5zMa4M7O9SSxpFpwps1J_r72Hr6?hl=es-419",
     "planificacion": "",
@@ -2110,7 +2110,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-1d9870fe6821",
+    "id": "orientacion-primer-ciclo-382b3d972l",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-31",
@@ -2130,7 +2130,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e986242c21ca",
+    "id": "orientacion-primer-ciclo-0add1f6a2m",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-30",
@@ -2150,7 +2150,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-d2140282cd2d",
+    "id": "orientacion-primer-ciclo-750670852n",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-02",
@@ -2160,7 +2160,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 5",
     "axis": "Soy amable",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://drive.google.com/drive/folders/1EVdKHAFtXRpjQNf-dnav-o908IFSFwHk",
     "evidence": "https://drive.google.com/drive/folders/1EVdKHAFtXRpjQNf-dnav-o908IFSFwHk",
     "planificacion": "",
@@ -2170,7 +2170,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-63b099093fe2",
+    "id": "orientacion-primer-ciclo-5198f92d2o",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-03-30",
@@ -2190,7 +2190,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ead23855de6c",
+    "id": "orientacion-primer-ciclo-4a2466712p",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-01",
@@ -2210,7 +2210,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ff0696afd9a8",
+    "id": "orientacion-primer-ciclo-6addf4f32q",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-10",
@@ -2230,7 +2230,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b02b554466c8",
+    "id": "orientacion-primer-ciclo-41151d042r",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-07",
@@ -2250,7 +2250,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3f40a3ff9a54",
+    "id": "orientacion-primer-ciclo-259e907e2s",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-08",
@@ -2270,7 +2270,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-290ed7827c44",
+    "id": "orientacion-primer-ciclo-1aa8ea552t",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-09",
@@ -2290,7 +2290,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-79b56f8bf88a",
+    "id": "orientacion-primer-ciclo-516859b92u",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-06",
@@ -2310,7 +2310,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-30d0fef8cce1",
+    "id": "orientacion-primer-ciclo-5c11fc012v",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-10",
@@ -2330,7 +2330,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-44acca6367cf",
+    "id": "orientacion-primer-ciclo-3eea81782w",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-06",
@@ -2350,7 +2350,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e8e0a9d58b9c",
+    "id": "orientacion-primer-ciclo-27c92c0a2x",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-07",
@@ -2370,7 +2370,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3b560a9f4cb7",
+    "id": "orientacion-primer-ciclo-1ea9a74d2y",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-10",
@@ -2390,7 +2390,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-54aa38c542aa",
+    "id": "orientacion-primer-ciclo-709c0f7c2z",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-07",
@@ -2400,7 +2400,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 5",
     "axis": "Soy amable",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://docs.google.com/document/d/1SZ5RhzvbUiXIDRHQBtmhNz7Lq6FIjaTMap-JQix_lnA/edit?tab=t.0",
     "evidence": "https://docs.google.com/document/d/1SZ5RhzvbUiXIDRHQBtmhNz7Lq6FIjaTMap-JQix_lnA/edit?tab=t.0",
     "planificacion": "",
@@ -2410,7 +2410,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5d359c95e74b",
+    "id": "orientacion-primer-ciclo-46e08da530",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-06",
@@ -2430,7 +2430,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f9900e9cbbce",
+    "id": "orientacion-primer-ciclo-3235781731",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-09",
@@ -2450,7 +2450,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e705bd54f66e",
+    "id": "orientacion-primer-ciclo-13e959f532",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-06",
@@ -2470,7 +2470,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-380a5d18443c",
+    "id": "orientacion-primer-ciclo-6a800d2e33",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-08",
@@ -2490,7 +2490,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9b15a66636d5",
+    "id": "orientacion-primer-ciclo-08bb3a3e34",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-17",
@@ -2510,7 +2510,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0992a6d4d038",
+    "id": "orientacion-primer-ciclo-4a87ccc035",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-14",
@@ -2530,7 +2530,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-65f47d06754f",
+    "id": "orientacion-primer-ciclo-1956b8be36",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-15",
@@ -2550,7 +2550,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-82481b6dcda1",
+    "id": "orientacion-primer-ciclo-588780bb37",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-16",
@@ -2570,7 +2570,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e45e6e31f31b",
+    "id": "orientacion-primer-ciclo-70b90fe138",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-13",
@@ -2590,7 +2590,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5e785da03e2f",
+    "id": "orientacion-primer-ciclo-3b00ec3c39",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-17",
@@ -2610,7 +2610,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-98af54af0e59",
+    "id": "orientacion-primer-ciclo-7b0a60b73a",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-13",
@@ -2630,7 +2630,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-03456e9d6562",
+    "id": "orientacion-primer-ciclo-1456b3353b",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-14",
@@ -2650,7 +2650,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a1beca872ab9",
+    "id": "orientacion-primer-ciclo-3c2e7ced3c",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-17",
@@ -2670,7 +2670,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6171e0efd717",
+    "id": "orientacion-primer-ciclo-627590eb3d",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-14",
@@ -2690,7 +2690,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6dcffcad7812",
+    "id": "orientacion-primer-ciclo-2c5150073e",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-13",
@@ -2710,7 +2710,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e5741b6c22cb",
+    "id": "orientacion-primer-ciclo-611ffdcb3f",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-16",
@@ -2730,7 +2730,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-eeff24434015",
+    "id": "orientacion-primer-ciclo-4f6395413g",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-13",
@@ -2750,7 +2750,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-83acd01ffd6f",
+    "id": "orientacion-primer-ciclo-5915b9c43h",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-15",
@@ -2770,7 +2770,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a5524c4e675f",
+    "id": "orientacion-primer-ciclo-5e0cf6ea3i",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-15",
@@ -2790,7 +2790,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-367a940e8892",
+    "id": "orientacion-primer-ciclo-513eee893j",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-15",
@@ -2810,7 +2810,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f14eddf8e734",
+    "id": "orientacion-primer-ciclo-60bee0cf3k",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-24",
@@ -2830,7 +2830,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3dd94dc7707d",
+    "id": "orientacion-primer-ciclo-2e9b6a913l",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-21",
@@ -2850,7 +2850,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-cc71cbbbf9b6",
+    "id": "orientacion-primer-ciclo-5005cf4f3m",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-22",
@@ -2870,7 +2870,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9eeb6fecd663",
+    "id": "orientacion-primer-ciclo-5592df063n",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-23",
@@ -2890,7 +2890,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9fa0e387057b",
+    "id": "orientacion-primer-ciclo-20b53dea3o",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-20",
@@ -2910,7 +2910,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-92ba52c3ffe4",
+    "id": "orientacion-primer-ciclo-4b5e16993p",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-24",
@@ -2930,7 +2930,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f2620f78e216",
+    "id": "orientacion-primer-ciclo-180802fb3q",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-20",
@@ -2950,7 +2950,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c6f26ec59372",
+    "id": "orientacion-primer-ciclo-096261c33r",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-21",
@@ -2970,7 +2970,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a5758c13b114",
+    "id": "orientacion-primer-ciclo-1c94558a3s",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-24",
@@ -2990,7 +2990,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-aa2fa9c72567",
+    "id": "orientacion-primer-ciclo-42db69883t",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-21",
@@ -3010,7 +3010,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6ba3c1487340",
+    "id": "orientacion-primer-ciclo-2cf8fd153u",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-20",
@@ -3030,7 +3030,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-28821c0ee672",
+    "id": "orientacion-primer-ciclo-713894a33v",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-23",
@@ -3050,7 +3050,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ef84004a13d3",
+    "id": "orientacion-primer-ciclo-4cfc2ce63w",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-20",
@@ -3070,7 +3070,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ce8470656f6a",
+    "id": "orientacion-primer-ciclo-434a08633x",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-22",
@@ -3090,7 +3090,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8f4dcd4a49f2",
+    "id": "orientacion-primer-ciclo-6dff0bc33y",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-01",
@@ -3100,7 +3100,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 3",
     "axis": "Hago las cosas bien",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://drive.google.com/drive/folders/1EEixlNKfQC9k9gV4cB3CB6H_jul5vhTX?hl=es-419",
     "evidence": "https://drive.google.com/drive/folders/1EEixlNKfQC9k9gV4cB3CB6H_jul5vhTX?hl=es-419",
     "planificacion": "",
@@ -3110,7 +3110,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c1aa2e911b23",
+    "id": "orientacion-primer-ciclo-099d5e5c3z",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-28",
@@ -3130,7 +3130,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-69af3bf013b8",
+    "id": "orientacion-primer-ciclo-2b07c31a40",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-29",
@@ -3150,7 +3150,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5dc81644878f",
+    "id": "orientacion-primer-ciclo-03bdca1b41",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-30",
@@ -3170,7 +3170,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-74f9ff35af3f",
+    "id": "orientacion-primer-ciclo-6d05aefe42",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-27",
@@ -3190,7 +3190,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-4cc51c8c4888",
+    "id": "orientacion-primer-ciclo-63ee190443",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-01",
@@ -3200,7 +3200,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 2",
     "axis": "Hago las cosas bien",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://drive.google.com/drive/folders/1_wyYbge_BljLKa6c8Bqs1NOz5kmpf4td?hl=es-419",
     "evidence": "https://drive.google.com/drive/folders/1_wyYbge_BljLKa6c8Bqs1NOz5kmpf4td?hl=es-419",
     "planificacion": "",
@@ -3210,7 +3210,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-725cc2ea0292",
+    "id": "orientacion-primer-ciclo-5644076844",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-27",
@@ -3230,7 +3230,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-359a2a5ad6e9",
+    "id": "orientacion-primer-ciclo-77ae6c2645",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-28",
@@ -3250,7 +3250,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-814bb40bf6a1",
+    "id": "orientacion-primer-ciclo-757e01a346",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-01",
@@ -3260,7 +3260,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 1",
     "axis": "Hago las cosas bien",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://drive.google.com/drive/folders/1YUrtxIlw-w0v4TiLotDF7hNTDhyfZhHg?hl=es-419",
     "evidence": "https://drive.google.com/drive/folders/1YUrtxIlw-w0v4TiLotDF7hNTDhyfZhHg?hl=es-419",
     "planificacion": "",
@@ -3270,7 +3270,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-03e21371ff8c",
+    "id": "orientacion-primer-ciclo-262050f647",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-28",
@@ -3290,7 +3290,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a67123ebdb19",
+    "id": "orientacion-primer-ciclo-71c1da8948",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-27",
@@ -3310,7 +3310,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-bbc750c9be74",
+    "id": "orientacion-primer-ciclo-47f240de49",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-30",
@@ -3330,7 +3330,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b338d86bda0e",
+    "id": "orientacion-primer-ciclo-6aa132db4a",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-27",
@@ -3350,7 +3350,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9619ca6aec04",
+    "id": "orientacion-primer-ciclo-7453575e4b",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-04-29",
@@ -3370,7 +3370,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3485f5389c60",
+    "id": "orientacion-primer-ciclo-1f33df6c4c",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-08",
@@ -3390,7 +3390,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2f2b91a6aed0",
+    "id": "orientacion-primer-ciclo-0f574bd04d",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-05",
@@ -3410,7 +3410,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b6fcf78d8934",
+    "id": "orientacion-primer-ciclo-4963bb504e",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-06",
@@ -3430,7 +3430,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-32c8bf2c9438",
+    "id": "orientacion-primer-ciclo-378cbb804f",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-07",
@@ -3450,7 +3450,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b1e8171461e7",
+    "id": "orientacion-primer-ciclo-554aebc24g",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-04",
@@ -3470,7 +3470,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2ead81e4d839",
+    "id": "orientacion-primer-ciclo-7db4f0a34h",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-08",
@@ -3490,7 +3490,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-d23e13a97c38",
+    "id": "orientacion-primer-ciclo-68bd60e24i",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-04",
@@ -3510,7 +3510,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-74eef56a245c",
+    "id": "orientacion-primer-ciclo-7ccfb0024j",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-05",
@@ -3530,7 +3530,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-80a3efad5b36",
+    "id": "orientacion-primer-ciclo-600831c04k",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-08",
@@ -3550,7 +3550,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ebbd1ec9c0aa",
+    "id": "orientacion-primer-ciclo-502b9e244l",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-05",
@@ -3570,7 +3570,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6cfb441c67cd",
+    "id": "orientacion-primer-ciclo-6870669e4m",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-04",
@@ -3590,7 +3590,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-d3ad64c003bf",
+    "id": "orientacion-primer-ciclo-1a6558804n",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-07",
@@ -3610,7 +3610,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a1c8e7fe66f3",
+    "id": "orientacion-primer-ciclo-3501adca4o",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-04",
@@ -3630,7 +3630,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0448bfdd6237",
+    "id": "orientacion-primer-ciclo-35f0f6374p",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-06",
@@ -3650,7 +3650,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-852ca2dde4f2",
+    "id": "orientacion-primer-ciclo-497955ce4q",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-15",
@@ -3670,7 +3670,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3396188b248b",
+    "id": "orientacion-primer-ciclo-399cc2324r",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-12",
@@ -3690,7 +3690,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-95468212d51b",
+    "id": "orientacion-primer-ciclo-1f1e44ee4s",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-13",
@@ -3710,7 +3710,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0251b877c264",
+    "id": "orientacion-primer-ciclo-7038819e4t",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-14",
@@ -3730,7 +3730,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-308da0ccde99",
+    "id": "orientacion-primer-ciclo-527a515c4u",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-11",
@@ -3750,7 +3750,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-69947d096aa9",
+    "id": "orientacion-primer-ciclo-1fff9c694v",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-15",
@@ -3770,7 +3770,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b0c3562219e4",
+    "id": "orientacion-primer-ciclo-163227934w",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-11",
@@ -3790,7 +3790,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c85fb88f46f5",
+    "id": "orientacion-primer-ciclo-578c4ab34x",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-12",
@@ -3810,7 +3810,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ab131bbc666a",
+    "id": "orientacion-primer-ciclo-292d56254y",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-15",
@@ -3830,7 +3830,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6915370cc791",
+    "id": "orientacion-primer-ciclo-011532f74z",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-12",
@@ -3850,7 +3850,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b1025fe4f6bf",
+    "id": "orientacion-primer-ciclo-2001bf5350",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-11",
@@ -3870,7 +3870,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-1caaf9e3528c",
+    "id": "orientacion-primer-ciclo-7812bc8b51",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-14",
@@ -3890,7 +3890,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8f36a285682f",
+    "id": "orientacion-primer-ciclo-4115471952",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-11",
@@ -3910,7 +3910,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b7808896a338",
+    "id": "orientacion-primer-ciclo-6146094653",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-13",
@@ -3930,7 +3930,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-6956da30088f",
+    "id": "orientacion-primer-ciclo-6652f73154",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-22",
@@ -3950,7 +3950,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e494d96bfdb7",
+    "id": "orientacion-primer-ciclo-2da0e5b655",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-19",
@@ -3970,7 +3970,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c267d229659e",
+    "id": "orientacion-primer-ciclo-50fd0a8b56",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-20",
@@ -3990,7 +3990,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9f971539659d",
+    "id": "orientacion-primer-ciclo-711d5acf57",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-21",
@@ -4010,7 +4010,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c606f55c2b2f",
+    "id": "orientacion-primer-ciclo-7c6cf6e658",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-18",
@@ -4030,7 +4030,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f0aa7c4f87e3",
+    "id": "orientacion-primer-ciclo-7c931f4c59",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-22",
@@ -4050,7 +4050,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-036dc89d1622",
+    "id": "orientacion-primer-ciclo-1ddd3f7d5a",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-22",
@@ -4070,7 +4070,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b5dd385dfa02",
+    "id": "orientacion-primer-ciclo-48926ecc5b",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-18",
@@ -4090,7 +4090,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9297761488d3",
+    "id": "orientacion-primer-ciclo-31565ca25c",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-19",
@@ -4110,7 +4110,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a7dfdab2a623",
+    "id": "orientacion-primer-ciclo-2a8003075d",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-22",
@@ -4130,7 +4130,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8341de298489",
+    "id": "orientacion-primer-ciclo-581ba68e5e",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-19",
@@ -4150,7 +4150,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-576b8a2f19a4",
+    "id": "orientacion-primer-ciclo-143e487b5f",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-18",
@@ -4170,7 +4170,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-63df929dcebd",
+    "id": "orientacion-primer-ciclo-783882705g",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-21",
@@ -4190,7 +4190,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b7d4aacf92b5",
+    "id": "orientacion-primer-ciclo-5fb60c0c5h",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-18",
@@ -4210,7 +4210,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-234e1c38e36d",
+    "id": "orientacion-primer-ciclo-4932f0f05i",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-20",
@@ -4230,7 +4230,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-088a066ae6ed",
+    "id": "orientacion-primer-ciclo-7a971ac05j",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-29",
@@ -4250,7 +4250,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3f420361d8d5",
+    "id": "orientacion-primer-ciclo-453fb4385k",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-26",
@@ -4270,7 +4270,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-559429c9db2f",
+    "id": "orientacion-primer-ciclo-31e73ca85l",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-27",
@@ -4290,7 +4290,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-4cb4e400e25a",
+    "id": "orientacion-primer-ciclo-71c426265m",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-28",
@@ -4310,7 +4310,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-aa9a8a668170",
+    "id": "orientacion-primer-ciclo-204a3a245n",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-25",
@@ -4330,7 +4330,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-12f745236907",
+    "id": "orientacion-primer-ciclo-664e61a95o",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-29",
@@ -4350,7 +4350,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-fe8e3ca0103f",
+    "id": "orientacion-primer-ciclo-3e2c34ed5p",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-25",
@@ -4370,7 +4370,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e5393170b155",
+    "id": "orientacion-primer-ciclo-4ed16a335q",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-26",
@@ -4390,7 +4390,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e1482e33f875",
+    "id": "orientacion-primer-ciclo-18629c6c5r",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-29",
@@ -4410,7 +4410,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-d84d217f0211",
+    "id": "orientacion-primer-ciclo-0ca2d4935s",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-26",
@@ -4430,7 +4430,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-badbd9d8aa0a",
+    "id": "orientacion-primer-ciclo-115cf1aa5t",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-25",
@@ -4450,7 +4450,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-f1a6e9c33ae0",
+    "id": "orientacion-primer-ciclo-44e4de1d5u",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-28",
@@ -4470,7 +4470,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-4de3baad1b68",
+    "id": "orientacion-primer-ciclo-3dcd4d265v",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-25",
@@ -4490,7 +4490,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b92b92d75487",
+    "id": "orientacion-primer-ciclo-62c11c995w",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-05-27",
@@ -4510,7 +4510,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-1ffce914850c",
+    "id": "orientacion-primer-ciclo-1ec5cec75x",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-05",
@@ -4520,7 +4520,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 1",
     "axis": "Intervención Formativa",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://canva.link/wxb1z79ryeugzvy",
     "evidence": "https://canva.link/wxb1z79ryeugzvy",
     "planificacion": "PK -K | Mi cuerpo, mi espacio y mis límites",
@@ -4530,7 +4530,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-710afd6b2e99",
+    "id": "orientacion-primer-ciclo-42d886ab5y",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-02",
@@ -4550,7 +4550,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-586979f7fb71",
+    "id": "orientacion-primer-ciclo-663fa38b5z",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-03",
@@ -4570,7 +4570,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-80f7f68f6f88",
+    "id": "orientacion-primer-ciclo-480dfae960",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-04",
@@ -4590,7 +4590,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a4b96061b059",
+    "id": "orientacion-primer-ciclo-27d6692761",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-01",
@@ -4610,7 +4610,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b571e879017c",
+    "id": "orientacion-primer-ciclo-1a3576b462",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-05",
@@ -4620,7 +4620,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 1",
     "axis": "Intervención Formativa",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://canva.link/wxb1z79ryeugzvy",
     "evidence": "https://canva.link/wxb1z79ryeugzvy",
     "planificacion": "PK -K | Mi cuerpo, mi espacio y mis límites",
@@ -4630,7 +4630,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5ebc4fc49d98",
+    "id": "orientacion-primer-ciclo-5a49a32963",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-01",
@@ -4650,7 +4650,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e2801e8c0bd2",
+    "id": "orientacion-primer-ciclo-18b8bdb764",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-02",
@@ -4670,7 +4670,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2151f686fa47",
+    "id": "orientacion-primer-ciclo-250a868f65",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-05",
@@ -4680,7 +4680,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "orientationEmail": "g.caro.m@colegiosanlucas.com",
     "topic": "Sesión 1",
     "axis": "Hago las cosas bien",
-    "status": "Reprogramado",
+    "status": "Realizado",
     "canvaLink": "https://canva.link/0vbihutjgvp4qda",
     "evidence": "https://canva.link/0vbihutjgvp4qda",
     "planificacion": "2° Básico | Hago las cosas bien | Contemplando lo que hay a mi alrededor.",
@@ -4690,7 +4690,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0ea06e8f3576",
+    "id": "orientacion-primer-ciclo-4c91706266",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-02",
@@ -4710,7 +4710,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-089077e7d076",
+    "id": "orientacion-primer-ciclo-521ef8b867",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-01",
@@ -4730,7 +4730,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c4a711e836b0",
+    "id": "orientacion-primer-ciclo-5874a33668",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-04",
@@ -4750,7 +4750,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a4455dcbbe22",
+    "id": "orientacion-primer-ciclo-7e4bce4d69",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-01",
@@ -4770,7 +4770,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ee38c8fbe5cf",
+    "id": "orientacion-primer-ciclo-1d895cce6a",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-03",
@@ -4790,7 +4790,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-eafe3df25def",
+    "id": "orientacion-primer-ciclo-4fe8198b6b",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-12",
@@ -4810,7 +4810,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-80deedac0b73",
+    "id": "orientacion-primer-ciclo-79c939e36c",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-09",
@@ -4830,7 +4830,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-0a5540862ca7",
+    "id": "orientacion-primer-ciclo-1cc4eec86d",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-10",
@@ -4850,7 +4850,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-94ad9bf8eee0",
+    "id": "orientacion-primer-ciclo-7dbcd46c6e",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-11",
@@ -4870,7 +4870,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-e47c54f259ac",
+    "id": "orientacion-primer-ciclo-3c7414036f",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-08",
@@ -4890,7 +4890,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-ac10ce2a0d69",
+    "id": "orientacion-primer-ciclo-120ebfa26g",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-12",
@@ -4910,7 +4910,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-601c8b205a6a",
+    "id": "orientacion-primer-ciclo-6be3412e6h",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-08",
@@ -4930,7 +4930,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-3fa310801268",
+    "id": "orientacion-primer-ciclo-071f1fb26i",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-09",
@@ -4950,7 +4950,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-9c7453e4f405",
+    "id": "orientacion-primer-ciclo-3e148e7d6j",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-12",
@@ -4970,7 +4970,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-c0761894bba6",
+    "id": "orientacion-primer-ciclo-2f2f091c6k",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-09",
@@ -4990,7 +4990,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-13fb694ae918",
+    "id": "orientacion-primer-ciclo-559632036l",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-08",
@@ -5010,7 +5010,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-cef58b6dcee0",
+    "id": "orientacion-primer-ciclo-5d3ddb6c6m",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-11",
@@ -5030,7 +5030,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b0b9b18f1770",
+    "id": "orientacion-primer-ciclo-0d3f63626n",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-08",
@@ -5050,7 +5050,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-a604138bb4a3",
+    "id": "orientacion-primer-ciclo-41db85a86o",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-10",
@@ -5070,7 +5070,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-773f189a8eb3",
+    "id": "orientacion-primer-ciclo-38e8a7336p",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-19",
@@ -5090,7 +5090,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2be6933d66df",
+    "id": "orientacion-primer-ciclo-14d5ef4f6q",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-16",
@@ -5110,7 +5110,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8bef27a475dc",
+    "id": "orientacion-primer-ciclo-0e912d916r",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-17",
@@ -5130,7 +5130,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-af8859e321a1",
+    "id": "orientacion-primer-ciclo-480909a76s",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-18",
@@ -5150,7 +5150,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-8270f3349374",
+    "id": "orientacion-primer-ciclo-68409b696t",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-15",
@@ -5170,7 +5170,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-5a2ede809084",
+    "id": "orientacion-primer-ciclo-55b384bc6u",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-19",
@@ -5190,7 +5190,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-2af27d83fee6",
+    "id": "orientacion-primer-ciclo-25d57b646v",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-15",
@@ -5210,7 +5210,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-389bcdfef385",
+    "id": "orientacion-primer-ciclo-493c98446w",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-16",
@@ -5230,7 +5230,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b3b4689f25bc",
+    "id": "orientacion-primer-ciclo-0c288ec16x",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-19",
@@ -5250,7 +5250,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-b135f521656e",
+    "id": "orientacion-primer-ciclo-303b46a56y",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-16",
@@ -5270,7 +5270,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-27cee990738d",
+    "id": "orientacion-primer-ciclo-6faa1db36z",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-15",
@@ -5290,7 +5290,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-09ecb7a3346b",
+    "id": "orientacion-primer-ciclo-12bb6d1170",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-18",
@@ -5310,7 +5310,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-53847e82431c",
+    "id": "orientacion-primer-ciclo-56a8cc1471",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-15",
@@ -5330,7 +5330,7 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   },
   {
-    "id": "orientacion-primer-ciclo-58d0b6cd0f5e",
+    "id": "orientacion-primer-ciclo-39e5023372",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "updatedAt": "2026-06-12T00:00:00.000Z",
     "date": "2026-06-17",
@@ -5346,6 +5346,286 @@ export const ORIENTATION_FIRST_CYCLE_CLASSES: OrientationSeedRecord[] = [
     "planificacion": "",
     "folderLink": "",
     "notes": "Taller fin de trimestre",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-5eb2e5e373",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-10",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "Prekínder A",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Planificado",
+    "canvaLink": "https://canva.link/uuxvq59wgh87o19",
+    "evidence": "https://canva.link/uuxvq59wgh87o19",
+    "planificacion": "Prekinder - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-0e90b1b674",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-07",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "Prekínder B",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/uuxvq59wgh87o19",
+    "evidence": "https://canva.link/uuxvq59wgh87o19",
+    "planificacion": "Prekinder - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-7e6ced6a75",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-08",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "Prekínder C",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/uuxvq59wgh87o19",
+    "evidence": "https://canva.link/uuxvq59wgh87o19",
+    "planificacion": "Prekinder - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-7fedb19076",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-09",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "Kínder A",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Planificado",
+    "canvaLink": "https://canva.link/uuxvq59wgh87o19",
+    "evidence": "https://canva.link/uuxvq59wgh87o19",
+    "planificacion": "Kinder - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-549dad1277",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-06",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "Kínder B",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/uuxvq59wgh87o19",
+    "evidence": "https://canva.link/uuxvq59wgh87o19",
+    "planificacion": "Kinder - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-0ebc078878",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-10",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "Kínder C",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Planificado",
+    "canvaLink": "https://canva.link/uuxvq59wgh87o19",
+    "evidence": "https://canva.link/uuxvq59wgh87o19",
+    "planificacion": "Kinder - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-3b828bfa79",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-06",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "1° Básico A",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/3krtqyoj0xyv2b3",
+    "evidence": "https://canva.link/3krtqyoj0xyv2b3",
+    "planificacion": "1° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-517b13267a",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-07",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "1° Básico B",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/3krtqyoj0xyv2b3",
+    "evidence": "https://canva.link/3krtqyoj0xyv2b3",
+    "planificacion": "1° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-246d08827b",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-10",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "2° Básico A",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Planificado",
+    "canvaLink": "https://canva.link/3krtqyoj0xyv2b3",
+    "evidence": "https://canva.link/3krtqyoj0xyv2b3",
+    "planificacion": "2° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-6e4f5fe57c",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-07",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "2° Básico B",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/3krtqyoj0xyv2b3",
+    "evidence": "https://canva.link/3krtqyoj0xyv2b3",
+    "planificacion": "2° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-4feed4f27d",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-06",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "3° Básico A",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/c310rdi8nfrcehs",
+    "evidence": "https://canva.link/c310rdi8nfrcehs",
+    "planificacion": "3° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-340ab6907e",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-09",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "3° Básico B",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Planificado",
+    "canvaLink": "https://canva.link/c310rdi8nfrcehs",
+    "evidence": "https://canva.link/c310rdi8nfrcehs",
+    "planificacion": "3° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-331a88337f",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-06",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "4° Básico A",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/c310rdi8nfrcehs",
+    "evidence": "https://canva.link/c310rdi8nfrcehs",
+    "planificacion": "4° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
+    "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    "sourceSheet": "1° Ciclo (PreK-4°B)"
+  },
+  {
+    "id": "orientacion-primer-ciclo-5ea9a9727g",
+    "createdAt": "2026-06-12T00:00:00.000Z",
+    "updatedAt": "2026-06-12T00:00:00.000Z",
+    "date": "2026-07-08",
+    "week": "06/07 al 10/07 (Semana 19)",
+    "course": "4° Básico B",
+    "orientationOwner": "Gustavo Caro",
+    "orientationEmail": "g.caro.m@colegiosanlucas.com",
+    "topic": "Sesión 1",
+    "axis": "Tengo propósito",
+    "status": "Realizado",
+    "canvaLink": "https://canva.link/c310rdi8nfrcehs",
+    "evidence": "https://canva.link/c310rdi8nfrcehs",
+    "planificacion": "4° Básico - 06/07 al 10/07 Semana 19",
+    "folderLink": "06/07 al 10/07 Semana 19",
+    "notes": "Clase vuelta vac de invierno",
     "source": "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
     "sourceSheet": "1° Ciclo (PreK-4°B)"
   }
