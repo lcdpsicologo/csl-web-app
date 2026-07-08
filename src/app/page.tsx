@@ -435,8 +435,26 @@ const canonicalCourseKey = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+const firstCycleHeadTeachers: Record<string, { name: string; email: string }> = {
+  [canonicalCourseKey("Prekínder A")]: { name: "Ivonne Espinoza", email: "i.espinoza@colegiosanlucas.com" },
+  [canonicalCourseKey("Prekínder B")]: { name: "Ana Huerta", email: "a.huerta@colegiosanlucas.com" },
+  [canonicalCourseKey("Prekínder C")]: { name: "Fancy Aros", email: "f.aros@colegiosanlucas.com" },
+  [canonicalCourseKey("Kínder A")]: { name: "Alejandra Delgado", email: "a.delgado@colegiosanlucas.com" },
+  [canonicalCourseKey("Kínder B")]: { name: "Josefa Trujillo", email: "j.trujillo@colegiosanlucas.com" },
+  [canonicalCourseKey("Kínder C")]: { name: "Paulina Rojas", email: "paulina.rojas@colegiosanlucas.com" },
+  [canonicalCourseKey("1° Básico A")]: { name: "Paulina Aguilera", email: "p.aguilera@colegiosanlucas.com" },
+  [canonicalCourseKey("1° Básico B")]: { name: "Ilona Leal", email: "i.leal@colegiosanlucas.com" },
+  [canonicalCourseKey("2° Básico A")]: { name: "Viviana Hernández", email: "v.hernandez@colegiosanlucas.com" },
+  [canonicalCourseKey("2° Básico B")]: { name: "Geraldine Parra", email: "g.parra@colegiosanlucas.com" },
+  [canonicalCourseKey("3° Básico A")]: { name: "Camila González", email: "c.gonzalez@colegiosanlucas.com" },
+  [canonicalCourseKey("3° Básico B")]: { name: "Nicole Vásquez", email: "n.vasquez@colegiosanlucas.com" },
+  [canonicalCourseKey("4° Básico A")]: { name: "André Vidal", email: "andre.vidal@colegiosanlucas.com" },
+  [canonicalCourseKey("4° Básico B")]: { name: "Karianny Gómez", email: "k.gomez@colegiosanlucas.com" },
+};
+
 const headTeacherForCourse = (course: string) => {
   const key = canonicalCourseKey(course);
+  if (firstCycleHeadTeachers[key]) return firstCycleHeadTeachers[key];
   return STAFF_DIRECTORY.find((member) => member.headship && member.email && canonicalCourseKey(member.headship) === key) || null;
 };
 
@@ -3632,8 +3650,11 @@ function OrientationCycleView({
     const courseRows = owner.courses.map((course) => {
       const records = sortedRecords.filter((record) => normalize(record.course || "") === normalize(course));
       const workshops = ownerWorkshops.filter((workshop) => normalize(`${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`).includes(normalize(course)));
+      const headTeacher = headTeacherForCourse(course);
       return [
         course,
+        headTeacher?.name || "",
+        headTeacher?.email || "",
         String(store.students.filter((student) => student.course === course).length),
         String(records.length),
         String(statusCount(records, /realizad/i)),
@@ -3667,21 +3688,26 @@ function OrientationCycleView({
         record.reprogramReason || "Sin motivo registrado",
         record.notes || "",
       ]);
-    const detailRows = sortedRecords.map((record) => [
-      record.week || "",
-      record.date || "",
-      record.course || "",
-      getOrientationAction(record),
-      getOrientationDisplayTitle(record),
-      record.status || "",
-      record.reprogramReason || "",
-      record.notes || "",
-      record.canvaLink || record.evidence || "",
-      record.planificacion || "",
-      record.folderLink || "",
-      record.orientationOwner || owner.name,
-      record.source || "Registro Tiza",
-    ]);
+    const detailRows = sortedRecords.map((record) => {
+      const headTeacher = headTeacherForCourse(record.course || "");
+      return [
+        record.week || "",
+        record.date || "",
+        record.course || "",
+        headTeacher?.name || "",
+        headTeacher?.email || "",
+        getOrientationAction(record),
+        getOrientationDisplayTitle(record),
+        record.status || "",
+        record.reprogramReason || "",
+        record.notes || "",
+        record.canvaLink || record.evidence || "",
+        record.planificacion || "",
+        record.folderLink || "",
+        record.orientationOwner || owner.name,
+        record.source || "Registro Tiza",
+      ];
+    });
     const workbook = new ExcelJS.Workbook();
     workbook.creator = "Tiza Education";
     workbook.created = new Date();
@@ -3792,10 +3818,10 @@ function OrientationCycleView({
       cover.getCell(ref).font = { name: "Arial", bold: true, color: { argb: palette.navy } };
     });
 
-    addTableSheet("Resumen por curso", "Detalle por curso", ["Curso", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows, [18, 14, 16, 13, 13, 14, 16, 12, 12, 17, 12]);
+    addTableSheet("Resumen por curso", "Detalle por curso", ["Curso", "Profesor/a jefe", "Correo PJ", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows, [18, 22, 30, 14, 16, 13, 13, 14, 16, 12, 12, 17, 12]);
     addTableSheet("Acciones", "Cobertura por acción / fortaleza", ["Acción / fortaleza", "Registros", "Realizadas", "Reprogramadas", "% del total"], actionRows, [32, 14, 14, 16, 14]);
     addTableSheet("Reprogramadas", "Clases reprogramadas", ["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Observaciones"], reprogrammedRows.length ? reprogrammedRows : [["", "", "", "", "No hay clases reprogramadas registradas para este orientador.", "", ""]], [13, 24, 16, 24, 34, 36, 36]);
-    addTableSheet("Bitácora completa", "Bitácora detallada completa", ["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows, [24, 13, 16, 24, 36, 16, 30, 36, 28, 28, 28, 20, 18]);
+    addTableSheet("Bitácora completa", "Bitácora detallada completa", ["SEM", "FECHA", "CURSO", "PROFESOR/A JEFE", "CORREO PJ", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows, [24, 13, 16, 22, 30, 24, 36, 16, 30, 36, 28, 28, 28, 20, 18]);
 
     const buffer = await workbook.xlsx.writeBuffer();
     downloadArrayBuffer(`reporte-orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xlsx`, buffer as ArrayBuffer);
@@ -4163,6 +4189,7 @@ function OrientationCycleView({
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
             const pendingStatus = pendingStatuses[record.id];
             const shownStatus = pendingStatus || record.status || "Pendiente";
+            const headTeacher = headTeacherForCourse(record.course || "");
             return (
               <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
@@ -4175,6 +4202,20 @@ function OrientationCycleView({
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Curso</p>
                     <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{record.course || "Sin curso"}</span>
+                    {headTeacher ? (
+                      <div className="mt-1.5 max-w-[130px] leading-tight">
+                        <a
+                          href={`mailto:${headTeacher.email}`}
+                          title={`Enviar correo a ${headTeacher.name}: ${headTeacher.email}`}
+                          className="block truncate text-[11px] font-bold text-cyan-700 hover:text-cyan-900 hover:underline"
+                        >
+                          PJ: {headTeacher.name}
+                        </a>
+                        <span className="block truncate text-[10px] font-medium text-slate-500" title={headTeacher.email}>
+                          {headTeacher.email}
+                        </span>
+                      </div>
+                    ) : null}
                   </div>
 
                   <div>
