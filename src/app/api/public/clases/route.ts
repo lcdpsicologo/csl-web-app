@@ -21,6 +21,8 @@ type PublicClassRecord = {
   canvaLink: string;
   teacherLink: string;
   planificacionLink: string;
+  driveLink: string;
+  notes: string;
   updatedAt: string;
 };
 
@@ -82,11 +84,12 @@ export async function GET() {
         const record = row.data || {};
         const canvaLink = [str(record.canvaLink), str(record.evidence)].find(isLink) || "";
         const teacherLink = str(record.teacherLink);
-        const planificacionLink = [str(record.planificacion), str(record.folderLink)].find(isLink) || "";
+        const planificacionLink = isLink(str(record.planificacion)) ? str(record.planificacion) : "";
+        const driveLink = isLink(str(record.folderLink)) ? str(record.folderLink) : "";
         const topic = str(record.topic);
         // Omitir filas generadas por el plan anual que aún no tienen contenido real.
         const generated = normalize(str(record.source)).includes("plan anual orientacion 2026");
-        const hasContent = Boolean(canvaLink || teacherLink || planificacionLink || (topic && !isPlaceholderText(topic)));
+        const hasContent = Boolean(canvaLink || teacherLink || planificacionLink || driveLink || (topic && !isPlaceholderText(topic)));
         if (generated && !hasContent) return;
 
         classes.push({
@@ -102,6 +105,8 @@ export async function GET() {
           canvaLink,
           teacherLink: isLink(teacherLink) ? teacherLink : "",
           planificacionLink,
+          driveLink,
+          notes: str(record.notes),
           updatedAt: row.updated_at,
         });
       });

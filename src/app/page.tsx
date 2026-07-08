@@ -3762,6 +3762,11 @@ function OrientationCycleView({
                   <div className="min-w-0">
                     <p className="line-clamp-1 text-sm font-bold text-slate-950">{displayTitle}</p>
                     <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{record.week || "Sin semana definida"}</p>
+                    {record.notes ? (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={record.notes}>
+                        <span className="font-bold uppercase tracking-wide text-amber-500">Obs</span> {record.notes}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="min-w-0">
@@ -3771,7 +3776,8 @@ function OrientationCycleView({
 
                   <div className="flex flex-wrap gap-1.5">
                     {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">Canva</a> : <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Sin Canva</span>}
-                    {folderUrl.startsWith("http") ? <a href={folderUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-700 hover:bg-slate-50">Drive</a> : null}
+                    {(record.planificacion || "").startsWith("http") ? <a href={record.planificacion} target="_blank" rel="noopener noreferrer" className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">Planificación</a> : null}
+                    {folderUrl.startsWith("http") ? <a href={folderUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">Drive</a> : null}
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2 lg:justify-end">

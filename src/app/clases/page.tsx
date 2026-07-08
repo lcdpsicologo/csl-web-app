@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { BookOpenText, CalendarDays, Clock, ExternalLink, FileText, FolderOpen, GraduationCap, RefreshCcw, Search } from "lucide-react";
-import { upcomingOrientationClasses } from "@/lib/orientation-weekly-schedule";
+import { BookOpenText, CalendarDays, Clock, ExternalLink, FileText, FolderOpen, GraduationCap, History, RefreshCcw, Search, StickyNote } from "lucide-react";
+import { mondayOfWeek, toISODate, upcomingOrientationClasses } from "@/lib/orientation-weekly-schedule";
 
 // Vista pública de solo lectura para profesores: muestra las clases de
 // orientación por curso sin permitir ninguna edición.
@@ -20,6 +20,8 @@ type PublicClassRecord = {
   canvaLink: string;
   teacherLink: string;
   planificacionLink: string;
+  driveLink: string;
+  notes: string;
   updatedAt: string;
 };
 
@@ -56,6 +58,76 @@ const courseSortKey = (course: string) => {
   return `${String(index < 0 ? 99 : index).padStart(2, "0")}-${value}`;
 };
 
+// Botones de material compartidos por las tarjetas de clase y las próximas clases.
+function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "teacherLink" | "planificacionLink" | "driveLink"> }) {
+  if (!item.canvaLink && !item.teacherLink && !item.planificacionLink && !item.driveLink) return null;
+  return (
+    <div className="flex flex-wrap gap-2">
+      {item.canvaLink && (
+        <a href={item.canvaLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
+          <FileText className="h-3.5 w-3.5" /> Canva <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+      {item.planificacionLink && (
+        <a href={item.planificacionLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
+          <BookOpenText className="h-3.5 w-3.5" /> Planificación <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+      {item.driveLink && (
+        <a href={item.driveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">
+          <FolderOpen className="h-3.5 w-3.5" /> Drive <ExternalLink className="h-3 w-3" />
+        </a>
+      )}
+      {item.teacherLink && item.teacherLink !== item.canvaLink && (
+        <a href={item.teacherLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100">
+          <ExternalLink className="h-3.5 w-3.5" /> Link para la clase
+        </a>
+      )}
+    </div>
+  );
+}
+
+function ClassCard({ item }: { item: PublicClassRecord }) {
+  const hasLinks = Boolean(item.canvaLink || item.teacherLink || item.planificacionLink || item.driveLink);
+  return (
+    <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">{item.course || "Sin curso"}</p>
+          <h2 className="mt-0.5 text-sm font-bold leading-snug text-slate-900">{item.topic || item.action || "Sin tema definido"}</h2>
+        </div>
+        {item.status && (
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${statusTone(item.status)}`}>
+            {item.status}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-2 space-y-1 text-xs text-slate-500">
+        <p className="flex items-center gap-1.5">
+          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+          <span>{formatDate(item.date)}{item.week ? ` · ${item.week}` : item.weekNumber ? ` · Semana ${item.weekNumber}` : ""}</span>
+        </p>
+        {item.action && item.topic && <p className="font-semibold text-slate-600">{item.action}</p>}
+        {item.owner && <p>Orientación: {item.owner}</p>}
+      </div>
+
+      {item.notes && (
+        <div className="mt-2 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2.5 py-2 text-xs leading-relaxed text-amber-900 ring-1 ring-amber-100">
+          <StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+          <p>{item.notes}</p>
+        </div>
+      )}
+
+      {hasLinks && (
+        <div className="mt-3 border-t border-slate-100 pt-3">
+          <MaterialLinks item={item} />
+        </div>
+      )}
+    </article>
+  );
+}
+
 export default function TeacherClassesPage() {
   const [classes, setClasses] = useState<PublicClassRecord[]>([]);
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
@@ -90,13 +162,31 @@ export default function TeacherClassesPage() {
     if (filterCourse !== "all" && item.course !== filterCourse) return false;
     if (filterStatus !== "all" && item.status !== filterStatus) return false;
     if (search.trim()) {
-      const haystack = normalize(`${item.course} ${item.action} ${item.topic} ${item.week} ${item.owner}`);
+      const haystack = normalize(`${item.course} ${item.action} ${item.topic} ${item.week} ${item.owner} ${item.notes}`);
       if (!haystack.includes(normalize(search))) return false;
     }
     return true;
   }), [classes, filterCourse, filterStatus, search]);
 
   const done = filtered.filter((item) => /realizad/i.test(item.status)).length;
+
+  // Agrupa las clases filtradas: las de la semana en curso, las futuras y el historial.
+  const grouped = useMemo(() => {
+    const monday = mondayOfWeek(new Date());
+    const weekStart = toISODate(monday);
+    const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6);
+    const weekEnd = toISODate(sunday);
+    const thisWeek: PublicClassRecord[] = [];
+    const future: PublicClassRecord[] = [];
+    const past: PublicClassRecord[] = [];
+    filtered.forEach((item) => {
+      const date = item.date.slice(0, 10);
+      if (date >= weekStart && date <= weekEnd) thisWeek.push(item);
+      else if (date > weekEnd) future.push(item);
+      else past.push(item);
+    });
+    return { thisWeek, future, past };
+  }, [filtered]);
 
   // Próximas clases según el horario semanal fijo, con su material si ya está registrado.
   const upcoming = useMemo(() => upcomingOrientationClasses(new Date(), 7).map(({ slot, date }) => ({
@@ -136,17 +226,23 @@ export default function TeacherClassesPage() {
             </div>
             <div className="flex gap-2.5 overflow-x-auto pb-2">
               {upcoming.map(({ slot, date, record }) => (
-                <div key={`${date}-${slot.course}`} className="w-56 shrink-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                <div key={`${date}-${slot.course}`} className="w-64 shrink-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                   <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">{slot.course}</p>
                   <p className="mt-0.5 text-xs font-bold text-slate-900">{formatDate(date)}</p>
                   <p className="text-[11px] tabular-nums text-slate-500">{slot.start} – {slot.end} hrs</p>
                   <p className="mt-1.5 truncate text-xs font-semibold text-slate-700" title={record?.topic || record?.action || ""}>
                     {record?.topic || record?.action || "Tema por confirmar"}
                   </p>
-                  {record?.canvaLink ? (
-                    <a href={record.canvaLink} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
-                      <FileText className="h-3.5 w-3.5" /> Material Canva
-                    </a>
+                  {record?.notes && (
+                    <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-snug text-amber-800" title={record.notes}>
+                      <StickyNote className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
+                      <span className="line-clamp-2">{record.notes}</span>
+                    </p>
+                  )}
+                  {record && (record.canvaLink || record.teacherLink || record.planificacionLink || record.driveLink) ? (
+                    <div className="mt-2">
+                      <MaterialLinks item={record} />
+                    </div>
                   ) : (
                     <p className="mt-2 inline-flex rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-500">Material por confirmar</p>
                   )}
@@ -201,52 +297,44 @@ export default function TeacherClassesPage() {
           </div>
         )}
 
-        <section className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filtered.map((item) => (
-            <article key={item.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-blue-600">{item.course || "Sin curso"}</p>
-                  <h2 className="mt-0.5 text-sm font-bold leading-snug text-slate-900">{item.topic || item.action || "Sin tema definido"}</h2>
-                </div>
-                {item.status && (
-                  <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${statusTone(item.status)}`}>
-                    {item.status}
-                  </span>
-                )}
-              </div>
+        {status === "ready" && grouped.thisWeek.length > 0 && (
+          <section className="mt-6">
+            <div className="mb-2 flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-emerald-600" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">Clases de esta semana</h2>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">{grouped.thisWeek.length}</span>
+            </div>
+            <div className="grid gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/40 p-3 sm:grid-cols-2 lg:grid-cols-3">
+              {grouped.thisWeek.map((item) => <ClassCard key={item.id} item={item} />)}
+            </div>
+          </section>
+        )}
 
-              <div className="mt-2 space-y-1 text-xs text-slate-500">
-                <p className="flex items-center gap-1.5">
-                  <CalendarDays className="h-3.5 w-3.5 shrink-0 text-slate-400" />
-                  <span>{formatDate(item.date)}{item.week ? ` · ${item.week}` : item.weekNumber ? ` · Semana ${item.weekNumber}` : ""}</span>
-                </p>
-                {item.action && item.topic && <p className="font-semibold text-slate-600">{item.action}</p>}
-                {item.owner && <p>Orientación: {item.owner}</p>}
-              </div>
+        {status === "ready" && grouped.future.length > 0 && (
+          <section className="mt-6">
+            <div className="mb-2 flex items-center gap-2">
+              <Clock className="h-4 w-4 text-blue-600" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">Próximas semanas</h2>
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700">{grouped.future.length}</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {grouped.future.map((item) => <ClassCard key={item.id} item={item} />)}
+            </div>
+          </section>
+        )}
 
-              {(item.canvaLink || item.teacherLink || item.planificacionLink) && (
-                <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                  {item.canvaLink && (
-                    <a href={item.canvaLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
-                      <FileText className="h-3.5 w-3.5" /> Material Canva <ExternalLink className="h-3 w-3" />
-                    </a>
-                  )}
-                  {item.teacherLink && item.teacherLink !== item.canvaLink && (
-                    <a href={item.teacherLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100">
-                      <ExternalLink className="h-3.5 w-3.5" /> Link para la clase
-                    </a>
-                  )}
-                  {item.planificacionLink && (
-                    <a href={item.planificacionLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
-                      <FolderOpen className="h-3.5 w-3.5" /> Planificación
-                    </a>
-                  )}
-                </div>
-              )}
-            </article>
-          ))}
-        </section>
+        {status === "ready" && grouped.past.length > 0 && (
+          <section className="mt-6">
+            <div className="mb-2 flex items-center gap-2">
+              <History className="h-4 w-4 text-slate-500" />
+              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">Historial de clases</h2>
+              <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-bold text-slate-600">{grouped.past.length}</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {grouped.past.map((item) => <ClassCard key={item.id} item={item} />)}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   );
