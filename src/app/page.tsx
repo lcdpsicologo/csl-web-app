@@ -3300,6 +3300,8 @@ function OrientationCycleView({
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
+  // Estados modificados desde la lista que aún no se guardan (id → estado nuevo).
+  const [pendingStatuses, setPendingStatuses] = useState<Record<string, string>>({});
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
   const owner = useMemo(() => orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0], [selectedOwner]);
@@ -3586,6 +3588,12 @@ function OrientationCycleView({
   const setClassStatus = (record: DataRecord, status: string) => {
     if (record.source === "calendar") return;
     onUpdateOrientationRecord(record.id, { status });
+    setPendingStatuses((current) => {
+      if (!(record.id in current)) return current;
+      const next = { ...current };
+      delete next[record.id];
+      return next;
+    });
   };
   const toggleClassDetails = (recordId: string) => {
     setExpandedClassIds((current) =>
@@ -3902,6 +3910,8 @@ function OrientationCycleView({
             const planTitle = /^https?:\/\//i.test((record.planificacion || "").trim()) ? record.planificacion : `Buscar en Drive: ${record.planificacion}`;
             const driveTitle = /^https?:\/\//i.test(folderUrl.trim()) ? folderUrl : `Buscar en Drive: ${folderUrl}`;
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
+            const pendingStatus = pendingStatuses[record.id];
+            const shownStatus = pendingStatus || record.status || "Pendiente";
             return (
               <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
@@ -3918,7 +3928,21 @@ function OrientationCycleView({
 
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Estado</p>
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${statusTone(record.status || "Pendiente")}`}>{record.status || "Pendiente"}</span>
+                    {isCalendar ? (
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ring-1 ${statusTone(shownStatus)}`}>{shownStatus}</span>
+                    ) : (
+                      <TizaSelect
+                        value={shownStatus}
+                        onChange={(status) => setPendingStatuses((current) => {
+                          const next = { ...current };
+                          if (status === (record.status || "Pendiente")) delete next[record.id];
+                          else next[record.id] = status;
+                          return next;
+                        })}
+                        options={quickStatuses}
+                        buttonClassName={`font-bold ${statusTone(shownStatus)} ring-1`}
+                      />
+                    )}
                   </div>
 
                   <div className="min-w-0">
@@ -3943,11 +3967,20 @@ function OrientationCycleView({
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
+                    {pendingStatus ? (
+                      <button
+                        onClick={() => setClassStatus(record, pendingStatus)}
+                        title={`Guardar estado "${pendingStatus}"`}
+                        className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700"
+                      >
+                        <Check className="h-4 w-4" /> Guardar
+                      </button>
+                    ) : null}
                     <button onClick={() => toggleClassDetails(record.id)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                       {expanded ? "Ocultar" : "Detalles"}
                       <ChevronDown className={`h-3.5 w-3.5 transition ${expanded ? "rotate-180" : ""}`} />
                     </button>
-                    {!isCalendar ? (
+                    {!isCalendar && !pendingStatus ? (
                       <button onClick={() => onUpdateOrientationRecord(record.id, { status: "Realizada" })} title="Marcar como realizada" className="inline-flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-emerald-700 hover:bg-emerald-100">
                         <Check className="h-4 w-4" />
                       </button>
