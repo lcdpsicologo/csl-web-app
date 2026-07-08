@@ -3896,13 +3896,11 @@ function OrientationCycleView({
             const folderUrl = record.folderLink || "";
             const expanded = expandedClassIds.includes(record.id);
             const displayTitle = getOrientationDisplayTitle(record);
-            // Sin link ni nombre guardado, el botón busca en Drive por el taller o la semana.
-            const weekQuery = (record.week || "").replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
-            const planQuery = record.planificacion || (displayTitle !== "Sin tema definido" ? displayTitle : "");
-            const planUrl = orientationDocUrl(planQuery);
-            const driveUrl = orientationDocUrl(folderUrl || weekQuery);
-            const planTitle = /^https?:\/\//i.test((record.planificacion || "").trim()) ? record.planificacion : `Buscar en Drive: ${planQuery}`;
-            const driveTitle = /^https?:\/\//i.test(folderUrl.trim()) ? folderUrl : `Buscar en Drive: ${folderUrl || weekQuery}`;
+            // Con URL abre directo; con nombre busca en Drive; vacío queda desactivado.
+            const planUrl = orientationDocUrl(record.planificacion);
+            const driveUrl = orientationDocUrl(folderUrl);
+            const planTitle = /^https?:\/\//i.test((record.planificacion || "").trim()) ? record.planificacion : `Buscar en Drive: ${record.planificacion}`;
+            const driveTitle = /^https?:\/\//i.test(folderUrl.trim()) ? folderUrl : `Buscar en Drive: ${folderUrl}`;
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
             return (
               <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>

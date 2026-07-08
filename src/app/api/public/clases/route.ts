@@ -97,11 +97,9 @@ export async function GET() {
         // Omitir filas generadas por el plan anual que aún no tienen contenido real.
         const generated = normalize(str(record.source)).includes("plan anual orientacion 2026");
         const hasContent = Boolean(canvaLink || teacherLink || str(record.planificacion) || str(record.folderLink) || (topic && !isPlaceholderText(topic)));
-        // Sin link ni nombre guardado, el botón busca en Drive por el taller o la semana.
-        const title = [str(record.planificacion), notes, topic].find((value) => value && !isPlaceholderText(value)) || "";
-        const weekQuery = str(record.week).replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
-        const planificacionLink = docUrl(str(record.planificacion) || title);
-        const driveLink = docUrl(str(record.folderLink) || weekQuery);
+        // Con URL abre directo; con nombre busca en Drive; vacío queda desactivado.
+        const planificacionLink = docUrl(str(record.planificacion));
+        const driveLink = docUrl(str(record.folderLink));
         if (generated && !hasContent) return;
 
         classes.push({
