@@ -3674,7 +3674,7 @@ function OrientationCycleView({
               </div>
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
                 <p className="text-xs font-semibold text-slate-600">
-                  {sendRecipients.length} destinatario{sendRecipients.length === 1 ? "" : "s"} · al abrir Gmail las clases quedan marcadas como "Enviado"
+                  {sendRecipients.length} destinatario{sendRecipients.length === 1 ? "" : "s"} · al abrir Gmail las clases quedan marcadas como &quot;Enviado&quot;
                 </p>
                 <button
                   onClick={openGmailWithWeekPlan}
@@ -3901,6 +3901,8 @@ function OrientationCycleView({
             const planQuery = record.planificacion || (displayTitle !== "Sin tema definido" ? displayTitle : "");
             const planUrl = orientationDocUrl(planQuery);
             const driveUrl = orientationDocUrl(folderUrl || weekQuery);
+            const planTitle = /^https?:\/\//i.test((record.planificacion || "").trim()) ? record.planificacion : `Buscar en Drive: ${planQuery}`;
+            const driveTitle = /^https?:\/\//i.test(folderUrl.trim()) ? folderUrl : `Buscar en Drive: ${folderUrl || weekQuery}`;
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
             return (
               <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>
@@ -3937,9 +3939,9 @@ function OrientationCycleView({
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
-                    {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">Canva</a> : <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Sin Canva</span>}
-                    {planUrl ? <a href={planUrl} target="_blank" rel="noopener noreferrer" title={planQuery} className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">Planificación</a> : null}
-                    {driveUrl ? <a href={driveUrl} target="_blank" rel="noopener noreferrer" title={folderUrl || weekQuery} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">Carpeta</a> : null}
+                    {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" title={canvaUrl} className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">Canva</a> : <span title="Sin link de Canva guardado" className="cursor-help rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Canva</span>}
+                    {planUrl ? <a href={planUrl} target="_blank" rel="noopener noreferrer" title={planTitle} className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">Planificación</a> : <span title="Sin link de planificación guardado" className="cursor-help rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Planificación</span>}
+                    {driveUrl ? <a href={driveUrl} target="_blank" rel="noopener noreferrer" title={driveTitle} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">Carpeta</a> : <span title="Sin link de carpeta guardado" className="cursor-help rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Carpeta</span>}
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
@@ -3960,8 +3962,8 @@ function OrientationCycleView({
                     <div className="mb-3 flex flex-wrap justify-end gap-2">
                       {!isCalendar ? (
                         <>
-                          <button onClick={() => onAddOrientationRecord({ ...record, id: uid(), createdAt: nowIso(), updatedAt: nowIso(), status: "Planificada", topic: `${record.topic || "Clase"} (copia)` })} title="Duplicar registro" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                            <Copy className="h-4 w-4" /> Copiar
+                          <button onClick={() => toggleClassDetails(record.id)} title="Los cambios se guardan al salir de cada campo; esto cierra el detalle" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
+                            <Check className="h-4 w-4" /> Guardar
                           </button>
                           <button onClick={() => { if (window.confirm("Eliminar este registro?")) onDeleteOrientationRecord(record.id); }} title="Eliminar registro" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
                             <Trash2 className="h-4 w-4" /> Borrar

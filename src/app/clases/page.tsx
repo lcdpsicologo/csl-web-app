@@ -59,24 +59,31 @@ const courseSortKey = (course: string) => {
 };
 
 // Botones de material compartidos por las tarjetas de clase y las próximas clases.
+// Siempre se muestran los tres; sin link quedan en gris con el aviso en el tooltip.
 function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "teacherLink" | "planificacionLink" | "driveLink"> }) {
-  if (!item.canvaLink && !item.teacherLink && !item.planificacionLink && !item.driveLink) return null;
+  const disabledStyle = "inline-flex cursor-help items-center gap-1.5 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-400";
   return (
     <div className="flex flex-wrap gap-2">
-      {item.canvaLink && (
-        <a href={item.canvaLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
+      {item.canvaLink ? (
+        <a href={item.canvaLink} target="_blank" rel="noreferrer" title={item.canvaLink} className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
           <FileText className="h-3.5 w-3.5" /> Canva <ExternalLink className="h-3 w-3" />
         </a>
+      ) : (
+        <span title="Sin link de Canva guardado" className={disabledStyle}><FileText className="h-3.5 w-3.5" /> Canva</span>
       )}
-      {item.planificacionLink && (
-        <a href={item.planificacionLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
+      {item.planificacionLink ? (
+        <a href={item.planificacionLink} target="_blank" rel="noreferrer" title={item.planificacionLink} className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
           <BookOpenText className="h-3.5 w-3.5" /> Planificación <ExternalLink className="h-3 w-3" />
         </a>
+      ) : (
+        <span title="Sin link de planificación guardado" className={disabledStyle}><BookOpenText className="h-3.5 w-3.5" /> Planificación</span>
       )}
-      {item.driveLink && (
-        <a href={item.driveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">
+      {item.driveLink ? (
+        <a href={item.driveLink} target="_blank" rel="noreferrer" title={item.driveLink} className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">
           <FolderOpen className="h-3.5 w-3.5" /> Carpeta <ExternalLink className="h-3 w-3" />
         </a>
+      ) : (
+        <span title="Sin link de carpeta guardado" className={disabledStyle}><FolderOpen className="h-3.5 w-3.5" /> Carpeta</span>
       )}
       {item.teacherLink && item.teacherLink !== item.canvaLink && (
         <a href={item.teacherLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1.5 text-[11px] font-bold text-blue-700 ring-1 ring-blue-200 hover:bg-blue-100">
@@ -88,7 +95,6 @@ function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "
 }
 
 function ClassCard({ item }: { item: PublicClassRecord }) {
-  const hasLinks = Boolean(item.canvaLink || item.teacherLink || item.planificacionLink || item.driveLink);
   return (
     <article className="flex flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
@@ -119,11 +125,9 @@ function ClassCard({ item }: { item: PublicClassRecord }) {
         </div>
       )}
 
-      {hasLinks && (
-        <div className="mt-3 border-t border-slate-100 pt-3">
-          <MaterialLinks item={item} />
-        </div>
-      )}
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <MaterialLinks item={item} />
+      </div>
     </article>
   );
 }
@@ -239,7 +243,7 @@ export default function TeacherClassesPage() {
                       <span className="line-clamp-2">{record.notes}</span>
                     </p>
                   )}
-                  {record && (record.canvaLink || record.teacherLink || record.planificacionLink || record.driveLink) ? (
+                  {record ? (
                     <div className="mt-2">
                       <MaterialLinks item={record} />
                     </div>
