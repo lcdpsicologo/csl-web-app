@@ -3298,6 +3298,10 @@ function OrientationCycleView({
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterDate, setFilterDate] = useState<string>("all");
   const [newClassOpen, setNewClassOpen] = useState(false);
+  // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
+  const [quickFormExpanded, setQuickFormExpanded] = useState(false);
+  // Panel del dashboard con el detalle de las clases reprogramadas.
+  const [reprogOpen, setReprogOpen] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
   // Estados modificados desde la lista que aún no se guardan (id → estado nuevo).
@@ -3587,7 +3591,14 @@ function OrientationCycleView({
   const quickStatuses = ["Realizada", "Pendiente", "Reprogramada", "Planificada"];
   const setClassStatus = (record: DataRecord, status: string) => {
     if (record.source === "calendar") return;
-    onUpdateOrientationRecord(record.id, { status });
+    const changes: Record<string, string> = { status };
+    // Al reprogramar se pide el motivo; queda guardado junto al registro.
+    if (/reprogramad/i.test(status) && !/reprogramad/i.test(record.status || "")) {
+      const reason = window.prompt("Motivo de la reprogramación:", record.reprogramReason || "");
+      if (reason === null) return; // canceló: no se cambia el estado
+      changes.reprogramReason = reason.trim();
+    }
+    onUpdateOrientationRecord(record.id, changes);
     setPendingStatuses((current) => {
       if (!(record.id in current)) return current;
       const next = { ...current };
@@ -3602,7 +3613,10 @@ function OrientationCycleView({
   };
 
   // ---- Estadísticas del orientador seleccionado (sin inflar por calendario) ----
-  const reprogCount = ownerStoredClasses.filter((r) => /reprogramad/i.test(r.status || "")).length;
+  const reprogClasses = ownerStoredClasses
+    .filter((r) => /reprogramad/i.test(r.status || ""))
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const reprogCount = reprogClasses.length;
   const plannedCount = ownerStoredClasses.filter((r) => /planificad/i.test(r.status || "")).length;
   const withCanva = ownerStoredClasses.filter((r) => (r.canvaLink || r.evidence || "").trim()).length;
   const withPlan = ownerStoredClasses.filter((r) => (r.planificacion || r.folderLink || "").trim()).length;
@@ -3768,14 +3782,56 @@ function OrientationCycleView({
         ))}
       </section>
 
-      <section id="registro-rapido" className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="p-4">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Añadir nueva fila</p>
-                <h2 className="text-lg font-semibold text-slate-950">Registro rápido de clase, link o planificación</h2>
+      {reprogCount > 0 && (
+        <section className="overflow-hidden rounded-xl border border-amber-200 bg-white shadow-sm">
+          <button onClick={() => setReprogOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 bg-amber-50/60 px-4 py-3 text-left hover:bg-amber-50">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-amber-600" />
+              <span className="text-sm font-bold text-amber-900">Clases reprogramadas</span>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700 tabular-nums">{reprogCount}</span>
+            </div>
+            <ChevronDown className={`h-4 w-4 text-amber-600 transition ${reprogOpen ? "rotate-180" : ""}`} />
+          </button>
+          {reprogOpen ? (
+            <div>
+              <div className="hidden border-b border-amber-100 bg-amber-50/40 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-amber-800/70 lg:grid lg:grid-cols-[112px_130px_200px_minmax(180px,1fr)_minmax(220px,1.2fr)] lg:gap-3">
+                <span>Fecha</span>
+                <span>Curso</span>
+                <span>Intervención / fortaleza</span>
+                <span>Tema</span>
+                <span>Motivo de la reprogramación</span>
               </div>
+              {reprogClasses.map((record) => (
+                <div key={record.id} className="grid gap-2 border-b border-slate-100 px-4 py-2.5 text-sm lg:grid-cols-[112px_130px_200px_minmax(180px,1fr)_minmax(220px,1.2fr)] lg:items-center lg:gap-3">
+                  <p className="font-mono text-xs font-semibold text-slate-700">{record.date || "Sin fecha"}</p>
+                  <p><span className="inline-flex rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{record.course || "Sin curso"}</span></p>
+                  <p className="text-xs font-bold text-slate-800">{getOrientationAction(record) || "Sin tipo definido"}</p>
+                  <p className="line-clamp-2 text-xs text-slate-600">{getOrientationDisplayTitle(record)}</p>
+                  <p className={`line-clamp-2 text-xs ${record.reprogramReason ? "font-semibold text-amber-800" : "italic text-slate-400"}`}>
+                    {record.reprogramReason || "Sin motivo registrado"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
+      )}
+
+      <section id="registro-rapido" className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <button onClick={() => setQuickFormExpanded((value) => !value)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/60">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Añadir nueva fila</p>
+            <h2 className="text-lg font-semibold text-slate-950">Registro rápido de clase, link o planificación</h2>
+          </div>
+          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
+            {quickFormExpanded ? "Minimizar" : "Añadir clase"}
+            <ChevronDown className={`h-3.5 w-3.5 transition ${quickFormExpanded ? "rotate-180" : ""}`} />
+          </span>
+        </button>
+        {quickFormExpanded ? (
+        <div className="grid gap-0 border-t border-slate-100 xl:grid-cols-[minmax(0,1fr)_300px]">
+          <div className="p-4">
+            <div className="mb-3 flex justify-end">
               <button onClick={() => setNewClassOpen((value) => !value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                 {newClassOpen ? "Ocultar detalles" : "Mostrar detalles"}
               </button>
@@ -3854,6 +3910,7 @@ function OrientationCycleView({
             </button>
           </aside>
         </div>
+        ) : null}
       </section>
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -3953,6 +4010,11 @@ function OrientationCycleView({
                         <span className="font-bold uppercase tracking-wide text-amber-500">Obs</span> {notesPreview}
                       </p>
                     ) : null}
+                    {/reprogramad/i.test(shownStatus) && record.reprogramReason ? (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={record.reprogramReason}>
+                        <span className="font-bold uppercase tracking-wide text-amber-500">Motivo</span> {record.reprogramReason}
+                      </p>
+                    ) : null}
                   </div>
 
                   <div className="min-w-0">
@@ -4044,6 +4106,13 @@ function OrientationCycleView({
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Observaciones</span>
                         <textarea disabled={isCalendar} defaultValue={record.notes || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { notes: event.target.value })} rows={3} placeholder="Notas, reprogramacion, materiales pendientes o acuerdos." className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
+
+                      {(/reprogramad/i.test(record.status || "") || record.reprogramReason) ? (
+                        <label className="block xl:col-span-12">
+                          <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Motivo de la reprogramación</span>
+                          <textarea disabled={isCalendar} defaultValue={record.reprogramReason || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { reprogramReason: event.target.value })} rows={2} placeholder="Por qué se reprogramó la clase" className="mt-1 w-full resize-y rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-amber-500 disabled:bg-slate-100" />
+                        </label>
+                      ) : null}
 
                       <label className="block xl:col-span-4">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva / evidencia</span>
