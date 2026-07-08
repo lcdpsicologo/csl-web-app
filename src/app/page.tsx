@@ -1293,6 +1293,43 @@ function downloadExcel(fileName: string, sheetName: string, headers: string[], r
   URL.revokeObjectURL(url);
 }
 
+const escapeExcelHtml = (value: string | number | undefined | null) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+const assetToDataUri = async (path: string) => {
+  const response = await fetch(path);
+  if (!response.ok) return "";
+  const blob = await response.blob();
+  return await new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(blob);
+  });
+};
+
+const downloadHtmlExcel = (fileName: string, html: string) => {
+  const excelHtml = `<!doctype html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8" />
+  <!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Reporte</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head>
+<body>${html}</body>
+</html>`;
+  const blob = new Blob([excelHtml], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName.endsWith(".xls") ? fileName : `${fileName}.xls`;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 const recordsToExcel = (fileName: string, sheetName: string, records: DataRecord[], fields: FieldDef[]) => {
   const headers = fields.map((field) => field.label);
   const rows = records.map((record) => fields.map((field) => record[field.key] || ""));
@@ -3566,9 +3603,62 @@ function OrientationCycleView({
     setNewClassForm({});
   };
 
-  const exportOwnerClasses = () => {
-    const headers = ["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"];
-    const rows = filteredClasses.map((record) => [
+  const exportOwnerClasses = async () => {
+    const reportDate = new Date().toLocaleString("es-CL");
+    const sortedRecords = [...ownerClasses].sort((a, b) => String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt)));
+    const tizaLogo = await assetToDataUri("/tiza-education-logo.svg");
+    const schoolLogo = await assetToDataUri("/logo-san-lucas.png");
+    const percent = (value: number, total: number) => total ? `${Math.round((value / total) * 100)}%` : "0%";
+    const statusCount = (records: DataRecord[], pattern: RegExp) => records.filter((record) => pattern.test(record.status || "")).length;
+    const linkedCount = (records: DataRecord[], keys: string[]) => records.filter((record) => keys.some((key) => String(record[key] || "").trim())).length;
+    const totalRecords = sortedRecords.length;
+    const done = statusCount(sortedRecords, /realizad/i);
+    const pending = sortedRecords.filter((record) => /pendiente/i.test(record.status || "") || !record.status).length;
+    const planned = statusCount(sortedRecords, /planificad/i);
+    const reprogrammed = statusCount(sortedRecords, /reprogramad/i);
+    const canvaCount = linkedCount(sortedRecords, ["canvaLink", "evidence"]);
+    const planCount = linkedCount(sortedRecords, ["planificacion", "folderLink"]);
+    const ownerStudents = store.students.filter((student) => owner.courses.includes(student.course || "")).length;
+
+    const courseRows = owner.courses.map((course) => {
+      const records = sortedRecords.filter((record) => normalize(record.course || "") === normalize(course));
+      const workshops = ownerWorkshops.filter((workshop) => normalize(`${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`).includes(normalize(course)));
+      return [
+        course,
+        String(store.students.filter((student) => student.course === course).length),
+        String(records.length),
+        String(statusCount(records, /realizad/i)),
+        String(records.filter((record) => /pendiente/i.test(record.status || "") || !record.status).length),
+        String(statusCount(records, /planificad/i)),
+        String(statusCount(records, /reprogramad/i)),
+        percent(statusCount(records, /realizad/i), records.length),
+        String(linkedCount(records, ["canvaLink", "evidence"])),
+        String(linkedCount(records, ["planificacion", "folderLink"])),
+        String(workshops.length),
+      ];
+    });
+    const actionRows = visibleActionColumns.map((action) => {
+      const records = sortedRecords.filter((record) => normalize(getOrientationAction(record)) === normalize(action));
+      return [
+        action,
+        String(records.length),
+        String(statusCount(records, /realizad/i)),
+        String(statusCount(records, /reprogramad/i)),
+        percent(records.length, totalRecords),
+      ];
+    });
+    const reprogrammedRows = sortedRecords
+      .filter((record) => /reprogramad/i.test(record.status || ""))
+      .map((record) => [
+        record.date || "",
+        record.week || "",
+        record.course || "",
+        getOrientationAction(record),
+        getOrientationDisplayTitle(record),
+        record.reprogramReason || "Sin motivo registrado",
+        record.notes || "",
+      ]);
+    const detailRows = sortedRecords.map((record) => [
       record.week || "",
       record.date || "",
       record.course || "",
@@ -3580,10 +3670,100 @@ function OrientationCycleView({
       record.canvaLink || record.evidence || "",
       record.planificacion || "",
       record.folderLink || "",
-      record.orientationOwner || "",
-      record.source || "",
+      record.orientationOwner || owner.name,
+      record.source || "Registro Tiza",
     ]);
-    downloadExcel(`orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xlsx`, "Orientación", headers, rows);
+    const table = (headers: string[], rows: string[][]) => `
+      <table>
+        <thead><tr>${headers.map((header) => `<th>${escapeExcelHtml(header)}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((row) => `<tr>${row.map((cell) => `<td>${escapeExcelHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>`;
+    const metric = (label: string, value: string | number, detail = "") => `
+      <td class="metric">
+        <div class="metric-label">${escapeExcelHtml(label)}</div>
+        <div class="metric-value">${escapeExcelHtml(value)}</div>
+        <div class="metric-detail">${escapeExcelHtml(detail)}</div>
+      </td>`;
+    const html = `
+      <style>
+        body { font-family: Arial, Helvetica, sans-serif; color: #172033; }
+        .report { max-width: 1280px; }
+        .cover { border: 1px solid #d8e1ee; background: #f7fbff; padding: 22px; }
+        .brand-row { display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+        .logo-school { width: 72px; height: 72px; object-fit: contain; }
+        .logo-tiza { width: 210px; height: auto; object-fit: contain; }
+        h1 { margin: 18px 0 6px; font-size: 28px; color: #081226; }
+        h2 { margin: 26px 0 8px; font-size: 18px; color: #0f766e; }
+        .subtitle { color: #53657d; font-size: 13px; }
+        .note { margin-top: 12px; padding: 12px; border-left: 4px solid #0891b2; background: #ecfeff; font-size: 13px; line-height: 1.5; }
+        table { border-collapse: collapse; width: 100%; margin: 8px 0 20px; }
+        th { background: #0f172a; color: white; font-size: 12px; text-align: left; padding: 8px; border: 1px solid #cbd5e1; }
+        td { font-size: 12px; padding: 7px; border: 1px solid #dbe3ee; vertical-align: top; }
+        tbody tr:nth-child(even) td { background: #f8fafc; }
+        .metrics td { border: 0; padding: 0 8px 8px 0; }
+        .metric { min-width: 150px; border: 1px solid #dbeafe !important; background: #eff6ff; padding: 12px !important; }
+        .metric-label { font-size: 11px; color: #64748b; font-weight: bold; text-transform: uppercase; }
+        .metric-value { margin-top: 4px; font-size: 24px; color: #0f172a; font-weight: bold; }
+        .metric-detail { margin-top: 2px; font-size: 11px; color: #64748b; }
+        .section-caption { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+      </style>
+      <div class="report">
+        <section class="cover">
+          <div class="brand-row">
+            <div>${schoolLogo ? `<img class="logo-school" src="${schoolLogo}" alt="Colegio San Lucas" />` : ""}</div>
+            <div>${tizaLogo ? `<img class="logo-tiza" src="${tizaLogo}" alt="Tiza Education" />` : "<strong>Tiza Education</strong>"}</div>
+          </div>
+          <h1>Reporte de Orientación SOY+</h1>
+          <div class="subtitle">
+            Colegio San Lucas de Lo Espejo · ${escapeExcelHtml(owner.cycle)} · ${escapeExcelHtml(owner.name)} · Generado el ${escapeExcelHtml(reportDate)}
+          </div>
+          <div class="note">
+            Este documento consolida la bitácora de orientación del ciclo seleccionado, incluyendo cobertura por curso,
+            estado de ejecución, disponibilidad de materiales, talleres vinculados y detalle de clases reprogramadas.
+            La sección final contiene el registro completo para auditoría y seguimiento.
+          </div>
+        </section>
+
+        <h2>Resumen Ejecutivo</h2>
+        <table class="metrics"><tr>
+          ${metric("Cursos", owner.courses.length, owner.cycle)}
+          ${metric("Estudiantes", ownerStudents, "en cursos del ciclo")}
+          ${metric("Registros", totalRecords, "clases y eventos")}
+          ${metric("Realizadas", done, percent(done, totalRecords))}
+          ${metric("Pendientes", pending)}
+          ${metric("Reprogramadas", reprogrammed)}
+        </tr><tr>
+          ${metric("Planificadas", planned)}
+          ${metric("Con Canva", canvaCount, percent(canvaCount, totalRecords))}
+          ${metric("Con planificación", planCount, percent(planCount, totalRecords))}
+          ${metric("Talleres vinculados", ownerWorkshops.length)}
+          ${metric("Cobertura general", percent(done, totalRecords))}
+          ${metric("Fecha reporte", reportDate)}
+        </tr></table>
+
+        <h2>Lectura del Reporte</h2>
+        <div class="note">
+          La cobertura general considera registros marcados como realizados sobre el total de registros asociados al orientador.
+          Las clases reprogramadas se mantienen disponibles para consulta específica en la bitácora y se detallan en este archivo
+          con su motivo, cuando fue registrado.
+        </div>
+
+        <h2>Detalle por Curso</h2>
+        <div class="section-caption">Permite revisar carga, avance, pendientes, reprogramaciones y evidencias por curso.</div>
+        ${table(["Curso", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows)}
+
+        <h2>Cobertura por Acción / Fortaleza</h2>
+        ${table(["Acción / fortaleza", "Registros", "Realizadas", "Reprogramadas", "% del total"], actionRows)}
+
+        <h2>Clases Reprogramadas</h2>
+        ${reprogrammedRows.length
+          ? table(["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Observaciones"], reprogrammedRows)
+          : `<div class="note">No hay clases reprogramadas registradas para este orientador.</div>`}
+
+        <h2>Bitácora Detallada Completa</h2>
+        ${table(["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows)}
+      </div>`;
+    downloadHtmlExcel(`reporte-orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xls`, html);
   };
 
   const statusTone = (status: string) =>
