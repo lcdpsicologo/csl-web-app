@@ -3894,10 +3894,13 @@ function OrientationCycleView({
             const isCalendar = record.source === "calendar";
             const canvaUrl = record.canvaLink || record.evidence || "";
             const folderUrl = record.folderLink || "";
-            const planUrl = orientationDocUrl(record.planificacion);
-            const driveUrl = orientationDocUrl(folderUrl);
             const expanded = expandedClassIds.includes(record.id);
             const displayTitle = getOrientationDisplayTitle(record);
+            // Sin link ni nombre guardado, el botón busca en Drive por el taller o la semana.
+            const weekQuery = (record.week || "").replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
+            const planQuery = record.planificacion || (displayTitle !== "Sin tema definido" ? displayTitle : "");
+            const planUrl = orientationDocUrl(planQuery);
+            const driveUrl = orientationDocUrl(folderUrl || weekQuery);
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
             return (
               <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>
@@ -3935,8 +3938,8 @@ function OrientationCycleView({
 
                   <div className="flex flex-wrap gap-1.5">
                     {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">Canva</a> : <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Sin Canva</span>}
-                    {planUrl ? <a href={planUrl} target="_blank" rel="noopener noreferrer" title={record.planificacion} className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">Planificación</a> : null}
-                    {driveUrl ? <a href={driveUrl} target="_blank" rel="noopener noreferrer" title={folderUrl} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">Drive</a> : null}
+                    {planUrl ? <a href={planUrl} target="_blank" rel="noopener noreferrer" title={planQuery} className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">Planificación</a> : null}
+                    {driveUrl ? <a href={driveUrl} target="_blank" rel="noopener noreferrer" title={folderUrl || weekQuery} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">Carpeta</a> : null}
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2 lg:justify-end">

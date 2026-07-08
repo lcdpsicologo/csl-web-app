@@ -92,12 +92,16 @@ export async function GET() {
         const record = row.data || {};
         const canvaLink = [str(record.canvaLink), str(record.evidence)].find(isLink) || "";
         const teacherLink = str(record.teacherLink);
-        const planificacionLink = docUrl(str(record.planificacion));
-        const driveLink = docUrl(str(record.folderLink));
         const topic = str(record.topic);
+        const notes = str(record.notes);
         // Omitir filas generadas por el plan anual que aún no tienen contenido real.
         const generated = normalize(str(record.source)).includes("plan anual orientacion 2026");
-        const hasContent = Boolean(canvaLink || teacherLink || planificacionLink || driveLink || (topic && !isPlaceholderText(topic)));
+        const hasContent = Boolean(canvaLink || teacherLink || str(record.planificacion) || str(record.folderLink) || (topic && !isPlaceholderText(topic)));
+        // Sin link ni nombre guardado, el botón busca en Drive por el taller o la semana.
+        const title = [str(record.planificacion), notes, topic].find((value) => value && !isPlaceholderText(value)) || "";
+        const weekQuery = str(record.week).replace(/[()]/g, " ").replace(/\s+/g, " ").trim();
+        const planificacionLink = docUrl(str(record.planificacion) || title);
+        const driveLink = docUrl(str(record.folderLink) || weekQuery);
         if (generated && !hasContent) return;
 
         classes.push({
@@ -114,7 +118,7 @@ export async function GET() {
           teacherLink: isLink(teacherLink) ? teacherLink : "",
           planificacionLink,
           driveLink,
-          notes: normalize(str(record.notes)) === normalize(topic) ? "" : str(record.notes),
+          notes: normalize(notes) === normalize(topic) ? "" : notes,
           updatedAt: row.updated_at,
         });
       });

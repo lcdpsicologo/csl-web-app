@@ -75,7 +75,7 @@ function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "
       )}
       {item.driveLink && (
         <a href={item.driveLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">
-          <FolderOpen className="h-3.5 w-3.5" /> Drive <ExternalLink className="h-3 w-3" />
+          <FolderOpen className="h-3.5 w-3.5" /> Carpeta <ExternalLink className="h-3 w-3" />
         </a>
       )}
       {item.teacherLink && item.teacherLink !== item.canvaLink && (
