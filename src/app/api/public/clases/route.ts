@@ -39,6 +39,14 @@ const str = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 const isLink = (value: string) => /^https?:\/\//i.test(value);
 
+// La planificación y la carpeta suelen venir como nombre del documento o de la
+// semana, no como URL: en ese caso el botón abre la búsqueda de Drive.
+const docUrl = (value: string) => {
+  if (!value) return "";
+  if (isLink(value)) return value;
+  return `https://drive.google.com/drive/search?q=${encodeURIComponent(value)}`;
+};
+
 const isPlaceholderText = (value: string) => {
   const normalized = normalize(value);
   return !normalized ||
@@ -84,8 +92,8 @@ export async function GET() {
         const record = row.data || {};
         const canvaLink = [str(record.canvaLink), str(record.evidence)].find(isLink) || "";
         const teacherLink = str(record.teacherLink);
-        const planificacionLink = isLink(str(record.planificacion)) ? str(record.planificacion) : "";
-        const driveLink = isLink(str(record.folderLink)) ? str(record.folderLink) : "";
+        const planificacionLink = docUrl(str(record.planificacion));
+        const driveLink = docUrl(str(record.folderLink));
         const topic = str(record.topic);
         // Omitir filas generadas por el plan anual que aún no tienen contenido real.
         const generated = normalize(str(record.source)).includes("plan anual orientacion 2026");
@@ -106,7 +114,7 @@ export async function GET() {
           teacherLink: isLink(teacherLink) ? teacherLink : "",
           planificacionLink,
           driveLink,
-          notes: str(record.notes),
+          notes: normalize(str(record.notes)) === normalize(topic) ? "" : str(record.notes),
           updatedAt: row.updated_at,
         });
       });
