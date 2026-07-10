@@ -3446,6 +3446,9 @@ function OrientationCycleView({
     const fuzzy = orientationActionColumns.find((action) => normalize(value).includes(normalize(action)) || normalize(action).includes(normalize(value)));
     return fuzzy || value || "Sin acción";
   };
+  // Valor tal como está guardado, sin normalizar: es lo que se muestra y edita
+  // en la bitácora (getOrientationAction solo agrupa para matriz y estadísticas).
+  const rawOrientationAction = (record: DataRecord) => record.axis || record.characterStrength || record.classType || "";
   const orientationActionTotals = useMemo(() => orientationActionColumns.map((action) => ({
     action,
     count: ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length,
@@ -4256,7 +4259,7 @@ function OrientationCycleView({
 
                   <div className="min-w-0">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Accion</p>
-                    <p className="line-clamp-2 text-xs font-semibold text-slate-700">{getOrientationAction(record)}</p>
+                    <p className="line-clamp-2 text-xs font-semibold text-slate-700">{rawOrientationAction(record) || getOrientationAction(record)}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
@@ -4332,7 +4335,7 @@ function OrientationCycleView({
                       </div>
                       <label className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Accion / fortaleza</span>
-                        <input disabled={isCalendar} defaultValue={getOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <input disabled={isCalendar} defaultValue={rawOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
 
                       <label className="block xl:col-span-6">
@@ -4464,7 +4467,7 @@ function OrientationCycleView({
                       </select>
                     </td>
                     <td className="w-48 px-2 py-2">
-                      <input disabled={isCalendar} list="orientation-action-options" defaultValue={getOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                      <input disabled={isCalendar} list="orientation-action-options" defaultValue={rawOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
                     </td>
                     <td className="w-60 px-2 py-2">
                       <textarea disabled={isCalendar} defaultValue={record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
