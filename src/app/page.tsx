@@ -815,6 +815,16 @@ const meaningfulOrientationNotes = (record: DataRecord) => {
   return normalize(notes).includes("fecha ajustada por feriado") ? "" : notes;
 };
 
+// Los datos importados usan variantes en masculino ("Realizado", "Reprogramado");
+// esta forma canónica es la que entienden los selectores y filtros de la bitácora.
+const canonicalOrientationStatus = (status: string | undefined) => {
+  const value = status || "";
+  if (/realizad/i.test(value)) return "Realizada";
+  if (/reprogramad/i.test(value)) return "Reprogramada";
+  if (/planificad/i.test(value)) return "Planificada";
+  return "Pendiente";
+};
+
 // Los registros importados guardan la planificación y la carpeta como nombre del
 // documento o de la semana, no como URL: en ese caso el botón abre la búsqueda de Drive.
 const orientationDocUrl = (value: string | undefined) => {
@@ -3478,11 +3488,7 @@ function OrientationCycleView({
 
   const filteredClasses = useMemo(() => ownerClasses.filter((record) => {
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
-    if (filterStatus !== "all") {
-      if (filterStatus === "Reprogramada") {
-        if (!/reprogramad/i.test(record.status || "")) return false;
-      } else if ((record.status || "") !== filterStatus) return false;
-    }
+    if (filterStatus !== "all" && canonicalOrientationStatus(record.status) !== filterStatus) return false;
     if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
     return true;
   }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, ownerClasses]);
@@ -4193,7 +4199,7 @@ function OrientationCycleView({
             const driveTitle = /^https?:\/\//i.test(folderUrl.trim()) ? folderUrl : `Buscar en Drive: ${folderUrl}`;
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
             const pendingStatus = pendingStatuses[record.id];
-            const shownStatus = pendingStatus || record.status || "Pendiente";
+            const shownStatus = pendingStatus || canonicalOrientationStatus(record.status);
             const headTeacher = headTeacherForCourse(record.course || "");
             return (
               <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>
@@ -4232,7 +4238,7 @@ function OrientationCycleView({
                         value={shownStatus}
                         onChange={(status) => setPendingStatuses((current) => {
                           const next = { ...current };
-                          if (status === (record.status || "Pendiente")) delete next[record.id];
+                          if (status === canonicalOrientationStatus(record.status)) delete next[record.id];
                           else next[record.id] = status;
                           return next;
                         })}
@@ -4331,7 +4337,7 @@ function OrientationCycleView({
                       </div>
                       <div className="block xl:col-span-2">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado</span>
-                        <TizaSelect disabled={isCalendar} value={record.status || "Pendiente"} onChange={(status) => setClassStatus(record, status)} options={quickStatuses} className="mt-1" buttonClassName={`font-bold ${statusTone(record.status || "Pendiente")} ring-1`} />
+                        <TizaSelect disabled={isCalendar} value={canonicalOrientationStatus(record.status)} onChange={(status) => setClassStatus(record, status)} options={quickStatuses} className="mt-1" buttonClassName={`font-bold ${statusTone(record.status || "Pendiente")} ring-1`} />
                       </div>
                       <label className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Accion / fortaleza</span>
@@ -4473,7 +4479,7 @@ function OrientationCycleView({
                       <textarea disabled={isCalendar} defaultValue={record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
                     </td>
                     <td className="w-36 px-2 py-2">
-                      <select disabled={isCalendar} value={record.status || "Pendiente"} onChange={(event) => setClassStatus(record, event.target.value)} className={`w-full rounded-md border px-2 py-1.5 text-xs font-bold outline-none disabled:bg-slate-100 ${statusTone(record.status || "")}`}>
+                      <select disabled={isCalendar} value={canonicalOrientationStatus(record.status)} onChange={(event) => setClassStatus(record, event.target.value)} className={`w-full rounded-md border px-2 py-1.5 text-xs font-bold outline-none disabled:bg-slate-100 ${statusTone(record.status || "")}`}>
                         {quickStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
                       </select>
                     </td>
@@ -10508,9 +10514,13 @@ export default function TizaEducationApp() {
       } catch (error) {
         console.error(error);
         if (!cancelled) {
-          setRemoteLoaded(true);
+          // No habilita el guardado remoto: subir el respaldo local con una carga
+          // fallida pisaría datos más nuevos en Supabase. Se reintenta la carga.
           setRemoteStatus("error");
           setRemoteError(error instanceof Error ? error.message : "No se pudo sincronizar con Supabase.");
+          window.setTimeout(() => {
+            if (!cancelled) loadRemoteStore();
+          }, 8000);
         }
       }
     };
@@ -10579,7 +10589,7 @@ export default function TizaEducationApp() {
     setRemoteStatus("saving");
     setRemoteError("");
     try {
-      const response = await fetch("/api/records", {
+      let response = await fetch("/api/records", {
         method: "PUT",
         headers: {
           authorization: `Bearer ${accessToken}`,
@@ -10587,6 +10597,21 @@ export default function TizaEducationApp() {
         },
         body: JSON.stringify({ store: nextStore }),
       });
+      // Sesión vencida: pide el token vigente a Supabase y reintenta una vez.
+      if (response.status === 401 && supabaseAuth) {
+        const { data } = await supabaseAuth.auth.getSession();
+        const freshToken = data.session?.access_token;
+        if (freshToken && freshToken !== accessToken) {
+          response = await fetch("/api/records", {
+            method: "PUT",
+            headers: {
+              authorization: `Bearer ${freshToken}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ store: nextStore }),
+          });
+        }
+      }
       if (!response.ok) {
         const payload = await response.json().catch(() => null);
         throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
@@ -11745,15 +11770,21 @@ export default function TizaEducationApp() {
             </button>
             <div className="hidden flex-col items-end text-right md:flex">
               <p className="text-xs font-semibold text-slate-900">{authUser.email}</p>
-              <span className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                remoteStatus === "synced"
-                  ? "bg-green-50 text-green-700"
-                  : remoteStatus === "error"
-                    ? "bg-orange-50 text-orange-700"
-                    : "bg-slate-100 text-slate-600"
-              }`} title={remoteError || syncLabel}>
+              <button
+                type="button"
+                onClick={remoteStatus === "error" ? () => window.location.reload() : undefined}
+                disabled={remoteStatus !== "error"}
+                className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                  remoteStatus === "synced"
+                    ? "bg-green-50 text-green-700"
+                    : remoteStatus === "error"
+                      ? "cursor-pointer bg-orange-50 text-orange-700 hover:bg-orange-100"
+                      : "bg-slate-100 text-slate-600"
+                }`}
+                title={remoteStatus === "error" ? `${remoteError || syncLabel} · Clic para recargar y reintentar` : remoteError || syncLabel}
+              >
                 {syncLabel}
-              </span>
+              </button>
             </div>
             <button
               onClick={signOut}
