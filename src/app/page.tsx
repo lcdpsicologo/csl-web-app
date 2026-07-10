@@ -3373,6 +3373,7 @@ function OrientationCycleView({
   const [filterCourse, setFilterCourse] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterDate, setFilterDate] = useState<string>("all");
+  const [orientationSearch, setOrientationSearch] = useState("");
   const [newClassOpen, setNewClassOpen] = useState(false);
   // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
   const [quickFormExpanded, setQuickFormExpanded] = useState(false);
@@ -3494,8 +3495,35 @@ function OrientationCycleView({
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
     if (filterStatus !== "all" && canonicalOrientationStatus(record.status) !== filterStatus) return false;
     if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
+    const query = normalize(orientationSearch);
+    if (query) {
+      const headTeacher = headTeacherForCourse(record.course || "");
+      const searchable = [
+        record.date,
+        record.week,
+        record.course,
+        canonicalOrientationStatus(record.status),
+        getOrientationDisplayTitle(record),
+        record.topic,
+        record.axis,
+        record.characterStrength,
+        record.classType,
+        record.notes,
+        record.reprogramReason,
+        record.reprogramDate,
+        record.canvaLink,
+        record.evidence,
+        record.planificacion,
+        record.folderLink,
+        record.teacherLink,
+        record.teacherSentStatus,
+        headTeacher?.name,
+        headTeacher?.email,
+      ].filter(Boolean).join(" ");
+      if (!normalize(searchable).includes(query)) return false;
+    }
     return true;
-  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, ownerClasses]);
+  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, orientationSearch, ownerClasses]);
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
 
   const classCounts = useMemo(() => ({
@@ -3888,6 +3916,7 @@ function OrientationCycleView({
     setFilterCourse("all");
     setFilterStatus("Reprogramada");
     setFilterDate("all");
+    setOrientationSearch("");
     setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
   };
 
@@ -4006,6 +4035,7 @@ function OrientationCycleView({
                 setFilterCourse("all");
                 setFilterStatus("all");
                 setFilterDate("all");
+                setOrientationSearch("");
                 setNewClassForm({});
                 setExpandedClassIds([]);
                 setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
@@ -4168,7 +4198,34 @@ function OrientationCycleView({
             <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Bitácora de registros SOY+</p>
             <h2 className="text-lg font-semibold text-slate-950">{owner.cycle} · {owner.name}</h2>
           </div>
-          <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-2">
+          <div className="grid w-full gap-2 lg:w-auto lg:grid-cols-[minmax(260px,360px)_minmax(190px,1fr)_minmax(190px,1fr)]">
+            <label className="relative block">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={orientationSearch}
+                onChange={(event) => {
+                  setOrientationSearch(event.target.value);
+                  setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
+                  setExpandedClassIds([]);
+                }}
+                placeholder="Buscar por curso, tema, PJ, estado..."
+                className="h-full min-h-10 w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-9 text-sm font-medium text-slate-800 outline-none transition placeholder:text-slate-400 hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15"
+              />
+              {orientationSearch ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrientationSearch("");
+                    setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
+                    setExpandedClassIds([]);
+                  }}
+                  title="Limpiar busqueda"
+                  className="absolute right-2 top-1/2 grid h-6 w-6 -translate-y-1/2 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </label>
             <TizaSelect
               value={filterCourse}
               onChange={(value) => {
@@ -4193,6 +4250,9 @@ function OrientationCycleView({
               className="min-w-48"
             />
           </div>
+          <p className="w-full text-right text-[11px] font-semibold text-slate-500">
+            {filteredClasses.length} de {ownerClasses.length} registros visibles
+          </p>
         </div>
         <div className="bg-slate-50/60">
           <div className="hidden border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
