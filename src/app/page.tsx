@@ -4099,11 +4099,12 @@ function OrientationCycleView({
       <section id="registro-rapido" className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <button onClick={() => setQuickFormExpanded((value) => !value)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/60">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Añadir nueva fila</p>
-            <h2 className="text-lg font-semibold text-slate-950">Registro rápido de clase, link o planificación</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Nuevo registro de orientación</p>
+            <h2 className="text-lg font-semibold text-slate-950">Registrar clase, material o planificación</h2>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">Agrega una actividad al historial del curso con estado, enlaces y observaciones.</p>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
-            {quickFormExpanded ? "Minimizar" : "Añadir clase"}
+            {quickFormExpanded ? "Cerrar registro" : "Nuevo registro"}
             <ChevronDown className={`h-3.5 w-3.5 transition ${quickFormExpanded ? "rotate-180" : ""}`} />
           </span>
         </button>
@@ -4112,7 +4113,7 @@ function OrientationCycleView({
           <div className="p-4">
             <div className="mb-3 flex justify-end">
               <button onClick={() => setNewClassOpen((value) => !value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                {newClassOpen ? "Ocultar detalles" : "Mostrar detalles"}
+                {newClassOpen ? "Ocultar campos avanzados" : "Campos avanzados"}
               </button>
             </div>
             <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
@@ -4166,7 +4167,7 @@ function OrientationCycleView({
             ) : null}
           </div>
           <aside className="border-t border-slate-100 bg-slate-50 p-4 xl:border-l xl:border-t-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Se guardará</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Resumen del registro</p>
             <dl className="mt-2 space-y-1.5 rounded-lg bg-white p-3 text-xs ring-1 ring-slate-200">
               {([
                 ["Curso", quickClassForm.course || "—"],
@@ -4185,7 +4186,7 @@ function OrientationCycleView({
               <Save className="h-4 w-4" /> Guardar en la bitácora
             </button>
             <button onClick={() => setNewClassForm({})} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-              Despejar formulario
+              Limpiar formulario
             </button>
           </aside>
         </div>
@@ -4195,8 +4196,9 @@ function OrientationCycleView({
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Bitácora de registros SOY+</p>
-            <h2 className="text-lg font-semibold text-slate-950">{owner.cycle} · {owner.name}</h2>
+            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Seguimiento de clases SOY+</p>
+            <h2 className="text-lg font-semibold text-slate-950">Bitácora de orientación · {owner.cycle}</h2>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">{owner.name} · clases, estados, materiales y acuerdos por curso.</p>
           </div>
           <div className="grid w-full gap-2 lg:w-auto lg:grid-cols-[minmax(260px,360px)_minmax(190px,1fr)_minmax(190px,1fr)]">
             <label className="relative block">
@@ -4260,7 +4262,7 @@ function OrientationCycleView({
             <span>Curso</span>
             <span>Estado</span>
             <span>Tema / semana</span>
-            <span>Accion</span>
+            <span>Acción</span>
             <span>Material</span>
             <span className="text-right">Acciones</span>
           </div>
@@ -4343,7 +4345,7 @@ function OrientationCycleView({
                   </div>
 
                   <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Accion</p>
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Acción</p>
                     <p className="line-clamp-2 text-xs font-semibold text-slate-700">{rawOrientationAction(record) || getOrientationAction(record)}</p>
                   </div>
 
