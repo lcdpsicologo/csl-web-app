@@ -212,6 +212,9 @@ function TizaSelect({
     typeof option === "string" ? { value: option, label: option } : option,
   );
   const selected = normalizedOptions.find((option) => option.value === value);
+  // Si buttonClassName trae su propio fondo (p. ej. el tono del estado), no se
+  // aplican los colores por defecto para que el tinte personalizado se vea.
+  const hasCustomTone = /(^|\s)bg-/.test(buttonClassName);
 
   useEffect(() => {
     if (!open) return;
@@ -237,7 +240,7 @@ function TizaSelect({
         aria-haspopup="listbox"
         aria-expanded={open}
         onClick={() => setOpen((current) => !current)}
-        className={`inline-flex w-full items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-left text-sm text-slate-800 outline-none transition hover:border-blue-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 disabled:bg-slate-100 disabled:text-slate-500 ${buttonClassName}`}
+        className={`inline-flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 disabled:bg-slate-100 disabled:text-slate-500 ${hasCustomTone ? "border-transparent" : "border-slate-200 bg-white text-slate-800 hover:border-blue-300"} ${buttonClassName}`}
       >
         <span className="truncate">{selected?.label || placeholder}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
