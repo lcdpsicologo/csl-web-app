@@ -3723,7 +3723,10 @@ function OrientationCycleView({
       amber: "F59E0B",
       green: "059669",
     };
-    const setTitle = (sheet: any, row: number, text: string, mergeTo = "M") => {
+    type XlsxSheet = import("exceljs").Worksheet;
+    type XlsxRow = import("exceljs").Row;
+    type XlsxCell = import("exceljs").Cell;
+    const setTitle = (sheet: XlsxSheet, row: number, text: string, mergeTo = "M") => {
       sheet.mergeCells(`A${row}:${mergeTo}${row}`);
       const cell = sheet.getCell(`A${row}`);
       cell.value = text;
@@ -3733,8 +3736,8 @@ function OrientationCycleView({
       cell.alignment = { vertical: "middle" };
       sheet.getRow(row).height = 28;
     };
-    const styleHeader = (row: any) => {
-      row.eachCell((cell: any) => {
+    const styleHeader = (row: XlsxRow) => {
+      row.eachCell((cell: XlsxCell) => {
         cell.font = { name: "Arial", size: 10, bold: true, color: { argb: palette.white } };
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: palette.navy } };
         cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
@@ -3742,10 +3745,10 @@ function OrientationCycleView({
       });
       row.height = 24;
     };
-    const styleBody = (sheet: any, fromRow: number, toRow: number) => {
+    const styleBody = (sheet: XlsxSheet, fromRow: number, toRow: number) => {
       for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
         const row = sheet.getRow(rowIndex);
-        row.eachCell((cell: any) => {
+        row.eachCell((cell: XlsxCell) => {
           cell.font = { name: "Arial", size: 10, color: { argb: palette.navy } };
           cell.alignment = { vertical: "top", wrapText: true };
           cell.border = { left: { style: "thin", color: { argb: "E2E8F0" } }, right: { style: "thin", color: { argb: "E2E8F0" } }, top: { style: "thin", color: { argb: "E2E8F0" } }, bottom: { style: "thin", color: { argb: "E2E8F0" } } };

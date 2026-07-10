@@ -85,10 +85,12 @@ const hash = (value) => {
 
 const isCourseValue = (value) => /^(pre\s*kinder|prekínder|kinder|kínder|\d°\s*básico)/i.test(clean(value));
 
+const TODAY = new Date().toISOString().slice(0, 10);
+
 const statusForRow = (row) => {
-  const status = clean(row.ESTADO);
+  const status = clean(row.status);
   if (status && !isCourseValue(status)) return status;
-  return row.date && row.date > "2026-07-08" ? "Planificado" : "Realizado";
+  return row.date && row.date >= TODAY ? "Planificado" : "Realizado";
 };
 
 const readRows = () => {
@@ -119,6 +121,7 @@ const readRows = () => {
 const records = readRows().map((row, index) => {
   const key = [row.date, row.week, row.course, row.axis, row.topic || row.notes, row.canvaLink].join("|");
   const id = `orientacion-primer-ciclo-${hash(key)}${index.toString(36)}`;
+  const status = statusForRow(row);
   return {
     id,
     createdAt: CREATED_AT,
@@ -130,12 +133,15 @@ const records = readRows().map((row, index) => {
     orientationEmail: OWNER_EMAIL,
     topic: row.topic || row.notes || row.axis || "Clase de orientación",
     axis: row.axis || "Intervención Formativa",
-    status: statusForRow(row),
+    status,
     canvaLink: row.canvaLink,
     evidence: row.canvaLink,
     planificacion: row.planificacion,
     folderLink: row.folderLink,
     notes: row.notes,
+    // Las reprogramadas traen el motivo en OBSERVACIONES; solo se incluye la
+    // clave en ese caso para no pisar motivos escritos desde la app.
+    ...(/reprogramad/i.test(status) && row.notes ? { reprogramReason: row.notes } : {}),
     source: SOURCE_NAME,
     sourceSheet: SOURCE_SHEET,
   };
@@ -229,6 +235,7 @@ const file = `export type OrientationSeedRecord = {
   planificacion: string;
   folderLink: string;
   notes: string;
+  reprogramReason?: string;
   source: string;
   sourceSheet: string;
 };
