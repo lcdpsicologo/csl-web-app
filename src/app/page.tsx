@@ -822,6 +822,7 @@ const canonicalOrientationStatus = (status: string | undefined) => {
   if (/realizad/i.test(value)) return "Realizada";
   if (/reprogramad/i.test(value)) return "Reprogramada";
   if (/planificad/i.test(value)) return "Planificada";
+  if (/cancelad|suspendid/i.test(value)) return "Cancelada";
   return "Pendiente";
 };
 
@@ -3694,6 +3695,7 @@ function OrientationCycleView({
         getOrientationAction(record),
         getOrientationDisplayTitle(record),
         record.reprogramReason || "Sin motivo registrado",
+        record.reprogramDate || "",
         record.notes || "",
       ]);
     const detailRows = sortedRecords.map((record) => {
@@ -3708,6 +3710,7 @@ function OrientationCycleView({
         getOrientationDisplayTitle(record),
         record.status || "",
         record.reprogramReason || "",
+        record.reprogramDate || "",
         record.notes || "",
         record.canvaLink || record.evidence || "",
         record.planificacion || "",
@@ -3831,8 +3834,8 @@ function OrientationCycleView({
 
     addTableSheet("Resumen por curso", "Detalle por curso", ["Curso", "Profesor/a jefe", "Correo PJ", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows, [18, 22, 30, 14, 16, 13, 13, 14, 16, 12, 12, 17, 12]);
     addTableSheet("Acciones", "Cobertura por acción / fortaleza", ["Acción / fortaleza", "Registros", "Realizadas", "Reprogramadas", "% del total"], actionRows, [32, 14, 14, 16, 14]);
-    addTableSheet("Reprogramadas", "Clases reprogramadas", ["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Observaciones"], reprogrammedRows.length ? reprogrammedRows : [["", "", "", "", "No hay clases reprogramadas registradas para este orientador.", "", ""]], [13, 24, 16, 24, 34, 36, 36]);
-    addTableSheet("Bitácora completa", "Bitácora detallada completa", ["SEM", "FECHA", "CURSO", "PROFESOR/A JEFE", "CORREO PJ", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows, [24, 13, 16, 22, 30, 24, 36, 16, 30, 36, 28, 28, 28, 20, 18]);
+    addTableSheet("Reprogramadas", "Clases reprogramadas", ["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Nueva fecha", "Observaciones"], reprogrammedRows.length ? reprogrammedRows : [["", "", "", "", "No hay clases reprogramadas registradas para este orientador.", "", "", ""]], [13, 24, 16, 24, 34, 36, 14, 36]);
+    addTableSheet("Bitácora completa", "Bitácora detallada completa", ["SEM", "FECHA", "CURSO", "PROFESOR/A JEFE", "CORREO PJ", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "NUEVA FECHA", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows, [24, 13, 16, 22, 30, 24, 36, 16, 30, 14, 36, 28, 28, 28, 20, 18]);
 
     const buffer = await workbook.xlsx.writeBuffer();
     downloadArrayBuffer(`reporte-orientacion-${normalize(owner.name).replace(/\s+/g, "-")}.xlsx`, buffer as ArrayBuffer);
@@ -3842,16 +3845,28 @@ function OrientationCycleView({
     /realizad/i.test(status) ? "bg-emerald-100 text-emerald-700 ring-emerald-200"
       : /planificad/i.test(status) ? "bg-blue-100 text-blue-700 ring-blue-200"
       : /reprogramad/i.test(status) ? "bg-amber-100 text-amber-700 ring-amber-200"
+      : /cancelad|suspendid/i.test(status) ? "bg-rose-100 text-rose-700 ring-rose-200"
       : "bg-slate-100 text-slate-600 ring-slate-200";
-  const quickStatuses = ["Realizada", "Pendiente", "Reprogramada", "Planificada"];
+  // Tinte de la fila completa según estado, para lectura visual rápida de la bitácora.
+  const rowTone = (status: string) =>
+    /realizad/i.test(status) ? "border-l-4 border-l-emerald-500 bg-emerald-50/50 hover:bg-emerald-50"
+      : /reprogramad/i.test(status) ? "border-l-4 border-l-amber-500 bg-amber-50/50 hover:bg-amber-50"
+      : /cancelad|suspendid/i.test(status) ? "border-l-4 border-l-rose-500 bg-rose-50/50 hover:bg-rose-50"
+      : /planificad/i.test(status) ? "border-l-4 border-l-blue-500 bg-blue-50/40 hover:bg-blue-50"
+      : "border-l-4 border-l-slate-300 bg-white hover:bg-slate-50";
+  const quickStatuses = ["Realizada", "Planificada", "Pendiente", "Reprogramada", "Cancelada"];
   const setClassStatus = (record: DataRecord, status: string) => {
     if (record.source === "calendar") return;
     const changes: Record<string, string> = { status };
-    // Al reprogramar se pide el motivo; queda guardado junto al registro.
+    // Al reprogramar se piden el motivo y la nueva fecha; quedan guardados en el registro.
     if (/reprogramad/i.test(status) && !/reprogramad/i.test(record.status || "")) {
       const reason = window.prompt("Motivo de la reprogramación:", record.reprogramReason || "");
       if (reason === null) return; // canceló: no se cambia el estado
       changes.reprogramReason = reason.trim();
+      const newDate = window.prompt("¿Para qué fecha queda reprogramada? (AAAA-MM-DD, deja vacío si aún no se sabe)", record.reprogramDate || "");
+      if (newDate !== null && (/^\d{4}-\d{2}-\d{2}$/.test(newDate.trim()) || newDate.trim() === "")) {
+        changes.reprogramDate = newDate.trim();
+      }
     }
     onUpdateOrientationRecord(record.id, changes);
     setPendingStatuses((current) => {
@@ -4090,7 +4105,7 @@ function OrientationCycleView({
               </label>
               <div className="block">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado</span>
-                <TizaSelect value={quickClassForm.status} onChange={(status) => updateQuickClassForm({ status })} options={["Planificada", "Realizada", "Pendiente", "Reprogramada"]} className="mt-1" buttonClassName={`font-semibold ${statusTone(quickClassForm.status)} ring-1`} />
+                <TizaSelect value={quickClassForm.status} onChange={(status) => updateQuickClassForm({ status })} options={quickStatuses} className="mt-1" buttonClassName={`font-semibold ${statusTone(quickClassForm.status)} ring-1`} />
               </div>
               <label className="block xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva / presentación</span>
@@ -4170,7 +4185,7 @@ function OrientationCycleView({
               }}
               options={[
                 { value: "all", label: "Todos los estados" },
-                ...["Planificada", "Realizada", "Pendiente", "Reprogramada"].map((status) => ({ value: status, label: status })),
+                ...quickStatuses.map((status) => ({ value: status, label: status })),
               ]}
               className="min-w-48"
             />
@@ -4202,7 +4217,7 @@ function OrientationCycleView({
             const shownStatus = pendingStatus || canonicalOrientationStatus(record.status);
             const headTeacher = headTeacherForCourse(record.course || "");
             return (
-              <article key={record.id} className={`border-b border-slate-100 bg-white transition ${expanded ? "shadow-sm ring-1 ring-blue-100" : "hover:bg-blue-50/30"}`}>
+              <article key={record.id} className={`border-b border-slate-100 transition ${rowTone(shownStatus)} ${expanded ? "shadow-sm ring-1 ring-blue-100" : ""}`}>
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Fecha</p>
@@ -4256,9 +4271,10 @@ function OrientationCycleView({
                         <span className="font-bold uppercase tracking-wide text-amber-500">Obs</span> {notesPreview}
                       </p>
                     ) : null}
-                    {/reprogramad/i.test(shownStatus) && record.reprogramReason ? (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={record.reprogramReason}>
-                        <span className="font-bold uppercase tracking-wide text-amber-500">Motivo</span> {record.reprogramReason}
+                    {/reprogramad/i.test(shownStatus) && (record.reprogramReason || record.reprogramDate) ? (
+                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={`${record.reprogramReason || ""}${record.reprogramDate ? ` · Nueva fecha: ${record.reprogramDate}` : ""}`}>
+                        <span className="font-bold uppercase tracking-wide text-amber-500">Motivo</span> {record.reprogramReason || "Sin motivo registrado"}
+                        {record.reprogramDate ? <span className="font-semibold"> · Nueva fecha: {record.reprogramDate}</span> : null}
                       </p>
                     ) : null}
                   </div>
@@ -4354,10 +4370,16 @@ function OrientationCycleView({
                       </label>
 
                       {(/reprogramad/i.test(record.status || "") || record.reprogramReason) ? (
-                        <label className="block xl:col-span-12">
-                          <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Motivo de la reprogramación</span>
-                          <textarea disabled={isCalendar} defaultValue={record.reprogramReason || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { reprogramReason: event.target.value })} rows={2} placeholder="Por qué se reprogramó la clase" className="mt-1 w-full resize-y rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-amber-500 disabled:bg-slate-100" />
-                        </label>
+                        <>
+                          <label className="block xl:col-span-9">
+                            <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Motivo de la reprogramación</span>
+                            <textarea disabled={isCalendar} defaultValue={record.reprogramReason || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { reprogramReason: event.target.value })} rows={2} placeholder="Por qué se reprogramó la clase" className="mt-1 w-full resize-y rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-amber-500 disabled:bg-slate-100" />
+                          </label>
+                          <label className="block xl:col-span-3">
+                            <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Nueva fecha</span>
+                            <input disabled={isCalendar} type="date" defaultValue={record.reprogramDate || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { reprogramDate: event.target.value })} className="mt-1 w-full rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm outline-none focus:border-amber-500 disabled:bg-slate-100" />
+                          </label>
+                        </>
                       ) : null}
 
                       <label className="block xl:col-span-4">
