@@ -4096,6 +4096,7 @@ function OrientationIntegralReportModal({
 function OrientationCycleView({
   store,
   accessToken,
+  dataReady,
   onAddOrientationRecord,
   onAddOrientationWeekRecords,
   onUpdateOrientationRecord,
@@ -4105,6 +4106,7 @@ function OrientationCycleView({
 }: {
   store: DataStore;
   accessToken: string;
+  dataReady: boolean;
   onAddOrientationRecord: (record: DataRecord) => void;
   onAddOrientationWeekRecords: (records: DataRecord[]) => void;
   onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
@@ -4426,7 +4428,7 @@ function OrientationCycleView({
   };
 
   const saveNewClass = () => {
-    if (!quickClassHasContent || !quickClassForm.course?.trim()) return;
+    if (!dataReady || !quickClassHasContent || !quickClassForm.course?.trim()) return;
     onAddOrientationRecord({
       id: uid(),
       createdAt: nowIso(),
@@ -4439,7 +4441,7 @@ function OrientationCycleView({
   };
 
   const createWeekFromSchedule = () => {
-    if (!creatorRange || !missingCreatorSlots.length) return;
+    if (!dataReady || !creatorRange || !missingCreatorSlots.length) return;
     const config = ORIENTATION_FIRST_CYCLE_CONFIG.find((item) => item.week === effectiveCreatorWeek);
     const records = missingCreatorSlots.map(({ slot, date }) => ({
       id: `orientation-week-${date}-${normalize(slot.course).replace(/\s+/g, "-")}`,
@@ -4818,6 +4820,7 @@ function OrientationCycleView({
     }));
   };
   const saveClassEditDraft = (record: DataRecord) => {
+    if (!dataReady) return;
     const draft = classEditDrafts[record.id];
     if (!draft) return;
     const config = orientationConfigForDate(draft.date || "");
@@ -4855,7 +4858,7 @@ function OrientationCycleView({
         </div>
         <div className="flex flex-wrap gap-2">
           {creatorSlots.length ? (
-            <button onClick={() => setWeekCreatorOpen((value) => !value)} className={`tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${weekCreatorOpen ? "border-cyan-400 bg-cyan-100 text-cyan-800" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}>
+            <button disabled={!dataReady} title={dataReady ? "Crear las clases del horario semanal" : "Espera a que termine la sincronización inicial"} onClick={() => setWeekCreatorOpen((value) => !value)} className={`tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${weekCreatorOpen ? "border-cyan-400 bg-cyan-100 text-cyan-800" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}>
               <Plus className="h-4 w-4" /> Preparar semana
             </button>
           ) : null}
@@ -4920,7 +4923,7 @@ function OrientationCycleView({
             </p>
             <div className="flex gap-2">
               <button onClick={() => setWeekCreatorOpen(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
-              <button onClick={createWeekFromSchedule} disabled={!creatorRange || !missingCreatorSlots.length} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300">
+              <button onClick={createWeekFromSchedule} disabled={!dataReady || !creatorRange || !missingCreatorSlots.length} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300">
                 <CalendarDays className="h-4 w-4" /> {missingCreatorSlots.length ? `Crear ${missingCreatorSlots.length} clases` : "Semana preparada"}
               </button>
             </div>
@@ -5173,7 +5176,7 @@ function OrientationCycleView({
                 </div>
               ))}
             </dl>
-            <button onClick={saveNewClass} disabled={!quickClassHasContent || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
+            <button onClick={saveNewClass} disabled={!dataReady || !quickClassHasContent || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
               <Save className="h-4 w-4" /> Guardar en la bitácora
             </button>
             <button onClick={() => setNewClassForm({})} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
@@ -5401,7 +5404,7 @@ function OrientationCycleView({
                     <div className="mb-3 flex flex-wrap justify-end gap-2">
                       {!isCalendar ? (
                         <>
-                          <button onClick={() => saveClassEditDraft(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">
+                          <button disabled={!dataReady} onClick={() => saveClassEditDraft(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-300">
                             <Save className="h-4 w-4" /> {savedClassId === record.id ? "Cambios guardados" : "Guardar cambios"}
                           </button>
                           <button onClick={() => toggleClassDetails(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
@@ -11566,6 +11569,7 @@ export default function TizaEducationApp() {
   });
   const profile = profileState;
   const accessTokenRef = React.useRef("");
+  const remoteLoadedUserRef = React.useRef("");
   const [, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const storeRef = React.useRef(store);
   // Wrap setProfile so every update is persisted server-side to the user's
@@ -11609,10 +11613,17 @@ export default function TizaEducationApp() {
     });
 
     const { data: listener } = supabaseAuth.auth.onAuthStateChange((_event, session) => {
-      setAuthUser(session?.user ?? null);
-      setAccessToken(session?.access_token ?? "");
+      const nextUser = session?.user ?? null;
+      const nextUserId = nextUser?.id || "";
+      setAuthUser((current) => current?.id === nextUserId ? current : nextUser);
+      setAccessToken((current) => current === (session?.access_token ?? "") ? current : (session?.access_token ?? ""));
       setAuthLoading(false);
-      setRemoteLoaded(false);
+      // TOKEN_REFRESHED entrega un token nuevo para el mismo usuario. No se debe
+      // volver a cargar todo el store: eso reemplazaría cambios recién creados.
+      if (!nextUserId || (remoteLoadedUserRef.current && remoteLoadedUserRef.current !== nextUserId)) {
+        remoteLoadedUserRef.current = "";
+        setRemoteLoaded(false);
+      }
     });
 
     return () => {
@@ -11653,6 +11664,7 @@ export default function TizaEducationApp() {
     if (!authUser || !accessToken) {
       return;
     }
+    if (remoteLoaded && remoteLoadedUserRef.current === authUser.id) return;
 
     let cancelled = false;
     const loadRemoteStore = async () => {
@@ -11675,6 +11687,7 @@ export default function TizaEducationApp() {
         if (!remoteStore.personnel?.length) remoteStore.personnel = officialPersonnelRecords;
         setStore(remoteStore);
         lastSavedSerializedRef.current = JSON.stringify(remoteStore);
+        remoteLoadedUserRef.current = authUser.id;
         setRemoteLoaded(true);
         setRemoteStatus("synced");
       } catch (error) {
@@ -11695,7 +11708,7 @@ export default function TizaEducationApp() {
     return () => {
       cancelled = true;
     };
-  }, [authUser, accessToken]);
+  }, [authUser, accessToken, remoteLoaded]);
 
   useEffect(() => {
     if (!authUser || !accessToken) {
@@ -11742,53 +11755,58 @@ export default function TizaEducationApp() {
   }, [sidebarMode]);
 
   const lastSavedSerializedRef = React.useRef<string>("");
+  const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
   const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
     if (!authUser || !accessToken || !remoteLoaded) return;
-    // Evita reenviar el store completo si su contenido no cambió respecto al
-    // último guardado exitoso. Un re-render que regeneraba el store sin cambios
-    // disparaba PUTs repetidos de ~1MB (consumo enorme de Fast Origin Transfer).
     const serialized = JSON.stringify(nextStore);
-    if (serialized === lastSavedSerializedRef.current) {
-      setRemoteStatus(successStatus);
-      return;
-    }
-    setRemoteStatus("saving");
-    setRemoteError("");
-    try {
-      let response = await fetch("/api/records", {
-        method: "PUT",
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ store: nextStore }),
-      });
-      // Sesión vencida: pide el token vigente a Supabase y reintenta una vez.
-      if (response.status === 401 && supabaseAuth) {
-        const { data } = await supabaseAuth.auth.getSession();
-        const freshToken = data.session?.access_token;
-        if (freshToken && freshToken !== accessToken) {
-          response = await fetch("/api/records", {
-            method: "PUT",
-            headers: {
-              authorization: `Bearer ${freshToken}`,
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({ store: nextStore }),
-          });
+    const saveOperation = async () => {
+      // La comparación ocurre dentro de la cola porque una escritura anterior
+      // puede haber guardado exactamente esta misma versión mientras esperaba.
+      if (serialized === lastSavedSerializedRef.current) {
+        setRemoteStatus(successStatus);
+        return;
+      }
+      setRemoteStatus("saving");
+      setRemoteError("");
+      try {
+        let response = await fetch("/api/records", {
+          method: "PUT",
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ store: nextStore }),
+        });
+        // Sesión vencida: pide el token vigente a Supabase y reintenta una vez.
+        if (response.status === 401 && supabaseAuth) {
+          const { data } = await supabaseAuth.auth.getSession();
+          const freshToken = data.session?.access_token;
+          if (freshToken && freshToken !== accessToken) {
+            response = await fetch("/api/records", {
+              method: "PUT",
+              headers: {
+                authorization: `Bearer ${freshToken}`,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ store: nextStore }),
+            });
+          }
         }
+        if (!response.ok) {
+          const payload = await response.json().catch(() => null);
+          throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
+        }
+        lastSavedSerializedRef.current = serialized;
+        setRemoteStatus(successStatus);
+      } catch (error) {
+        console.warn("Remote records save failed; local backup remains active", error);
+        setRemoteStatus("error");
+        setRemoteError(error instanceof Error ? error.message : "No se pudieron guardar los datos remotos.");
       }
-      if (!response.ok) {
-        const payload = await response.json().catch(() => null);
-        throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
-      }
-      lastSavedSerializedRef.current = serialized;
-      setRemoteStatus(successStatus);
-    } catch (error) {
-      console.warn("Remote records save failed; local backup remains active", error);
-      setRemoteStatus("error");
-      setRemoteError(error instanceof Error ? error.message : "No se pudieron guardar los datos remotos.");
-    }
+    };
+    const queuedSave = saveQueueRef.current.then(saveOperation, saveOperation);
+    saveQueueRef.current = queuedSave;
+    await queuedSave;
   }, [authUser, accessToken, remoteLoaded]);
 
   useEffect(() => {
@@ -12336,40 +12354,52 @@ export default function TizaEducationApp() {
   };
 
   const updateOrientationRecord = (recordId: string, updates: Record<string, string>) => {
-    setStore((current) => ({
-      ...current,
-      orientation: current.orientation.map((record) =>
+    const nextStore = {
+      ...storeRef.current,
+      orientation: storeRef.current.orientation.map((record) =>
         record.id === recordId ? { ...record, ...updates, updatedAt: nowIso() } : record
       ),
-    }));
+    };
+    storeRef.current = nextStore;
+    setStore(nextStore);
+    void saveStoreSnapshot(nextStore);
   };
 
   const addOrientationRecord = (record: DataRecord) => {
-    setStore((current) => ({ ...current, orientation: [record, ...current.orientation] }));
+    const nextStore = { ...storeRef.current, orientation: [record, ...storeRef.current.orientation] };
+    storeRef.current = nextStore;
+    setStore(nextStore);
+    void saveStoreSnapshot(nextStore);
     setToast("Clase de orientación guardada");
   };
 
   const addOrientationWeekRecords = (records: DataRecord[]) => {
     if (!records.length) return;
     const scheduledKeys = new Set(records.map((record) => normalize([record.date, record.course].join("|"))));
-    setStore((current) => ({
-      ...current,
+    const nextStore = {
+      ...storeRef.current,
       orientation: [
         ...records,
-        ...current.orientation.filter((record) => {
+        ...storeRef.current.orientation.filter((record) => {
           const sameScheduledClass = scheduledKeys.has(normalize([record.date, record.course].join("|")));
           return !sameScheduledClass || !isGeneratedOrientationPlaceholder(record);
         }),
       ],
-    }));
+    };
+    storeRef.current = nextStore;
+    setStore(nextStore);
+    void saveStoreSnapshot(nextStore);
     setToast(`${records.length} clases de la semana creadas y listas para editar`);
   };
 
   const deleteOrientationRecord = (recordId: string) => {
-    setStore((current) => ({
-      ...current,
-      orientation: current.orientation.filter((record) => record.id !== recordId),
-    }));
+    const nextStore = {
+      ...storeRef.current,
+      orientation: storeRef.current.orientation.filter((record) => record.id !== recordId),
+    };
+    storeRef.current = nextStore;
+    setStore(nextStore);
+    void saveStoreSnapshot(nextStore);
     setToast("Clase eliminada");
   };
 
@@ -12816,6 +12846,7 @@ export default function TizaEducationApp() {
         <OrientationCycleView
           store={store}
           accessToken={accessToken}
+          dataReady={remoteLoaded}
           onAddOrientationRecord={addOrientationRecord}
           onAddOrientationWeekRecords={addOrientationWeekRecords}
           onUpdateOrientationRecord={updateOrientationRecord}
