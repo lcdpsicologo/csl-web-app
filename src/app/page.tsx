@@ -4136,7 +4136,6 @@ function OrientationCycleView({
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
   const [classEditDrafts, setClassEditDrafts] = useState<Record<string, Record<string, string>>>({});
-  const [savedClassId, setSavedClassId] = useState("");
   // Estados modificados desde la lista que aún no se guardan (id → estado nuevo).
   const [pendingStatuses, setPendingStatuses] = useState<Record<string, string>>({});
   // Registro cuyo feedback de clase (pauta de acompañamiento) está abierto.
@@ -4816,13 +4815,11 @@ function OrientationCycleView({
     if (opening) {
       setClassEditDrafts((current) => current[record.id] ? current : { ...current, [record.id]: classEditDraft(record) });
     }
-    setSavedClassId("");
     setExpandedClassIds((current) =>
       current.includes(record.id) ? current.filter((id) => id !== record.id) : [...current, record.id],
     );
   };
   const updateClassEditDraft = (record: DataRecord, updates: Record<string, string>) => {
-    setSavedClassId("");
     setClassEditDrafts((current) => ({
       ...current,
       [record.id]: { ...(current[record.id] || classEditDraft(record)), ...updates },
@@ -4837,7 +4834,12 @@ function OrientationCycleView({
       ...draft,
       ...(config ? { week: config.week, weekNumber: orientationWeekNumber(config.week) } : {}),
     });
-    setSavedClassId(record.id);
+    setExpandedClassIds((current) => current.filter((id) => id !== record.id));
+    setClassEditDrafts((current) => {
+      const next = { ...current };
+      delete next[record.id];
+      return next;
+    });
   };
   const showReprogrammedClasses = () => {
     setFilterCourse("all");
@@ -5413,8 +5415,8 @@ function OrientationCycleView({
                     <div className="mb-3 flex flex-wrap justify-end gap-2">
                       {!isCalendar ? (
                         <>
-                          <button disabled={!dataReady} onClick={() => saveClassEditDraft(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-300">
-                            <Save className="h-4 w-4" /> {savedClassId === record.id ? "Cambios guardados" : "Guardar cambios"}
+                          <button disabled={!dataReady} onClick={() => saveClassEditDraft(record)} title="Guardar los cambios y minimizar la clase" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-300">
+                            <Save className="h-4 w-4" /> Guardar cambios
                           </button>
                           <button onClick={() => toggleClassDetails(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
                             <X className="h-4 w-4" /> Cerrar
