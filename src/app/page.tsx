@@ -196,7 +196,66 @@ const initialsOf = (name: string) =>
     .join("")
     .toUpperCase();
 
-type TizaSelectOption = string | { value: string; label: string };
+type TizaSelectOption = string | { value: string; label: string; keywords?: string[] };
+
+const normalize = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+const textDistance = (left: string, right: string) => {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        current[rightIndex - 1] + 1,
+        previous[rightIndex] + 1,
+        previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous.splice(0, previous.length, ...current);
+  }
+  return previous[right.length];
+};
+
+const fuzzySearchScore = (query: string, candidate: string) => {
+  const normalizedQuery = normalize(query);
+  const normalizedCandidate = normalize(candidate);
+  if (!normalizedQuery || !normalizedCandidate) return 0;
+  if (normalizedQuery === normalizedCandidate) return 1000;
+  if (normalizedCandidate.startsWith(normalizedQuery)) return 920 - Math.min(80, normalizedCandidate.length - normalizedQuery.length);
+  if (normalizedCandidate.includes(normalizedQuery)) return 860 - Math.min(80, normalizedCandidate.length - normalizedQuery.length);
+
+  const queryTokens = normalizedQuery.split(" ");
+  const candidateTokens = normalizedCandidate.split(" ");
+  const matchingTokens = queryTokens.filter((queryToken) =>
+    candidateTokens.some((candidateToken) => candidateToken.startsWith(queryToken) || candidateToken.includes(queryToken)),
+  );
+  if (matchingTokens.length === queryTokens.length) return 800 + matchingTokens.length * 5;
+
+  const queryCompact = normalizedQuery.replace(/\s/g, "");
+  const candidateCompact = normalizedCandidate.replace(/\s/g, "");
+  if (candidateCompact.startsWith(queryCompact)) return 780;
+  if (candidateCompact.includes(queryCompact)) return 740;
+
+  let queryIndex = 0;
+  for (const character of candidateCompact) {
+    if (character === queryCompact[queryIndex]) queryIndex += 1;
+    if (queryIndex === queryCompact.length) break;
+  }
+  if (queryIndex === queryCompact.length) return 520 + Math.round((queryCompact.length / candidateCompact.length) * 100);
+
+  const similarities = queryTokens.flatMap((queryToken) => candidateTokens.map((candidateToken) => {
+    const longest = Math.max(queryToken.length, candidateToken.length);
+    return longest ? 1 - textDistance(queryToken, candidateToken) / longest : 0;
+  }));
+  const bestSimilarity = Math.max(0, ...similarities);
+  return bestSimilarity >= 0.58 ? 400 + Math.round(bestSimilarity * 100) : 0;
+};
 
 function TizaSelect({
   value,
@@ -207,6 +266,8 @@ function TizaSelect({
   className = "",
   buttonClassName = "",
   menuClassName = "",
+  searchable = false,
+  searchPlaceholder = "Escribe para buscar...",
 }: {
   value: string;
   options: TizaSelectOption[];
@@ -216,13 +277,31 @@ function TizaSelect({
   className?: string;
   buttonClassName?: string;
   menuClassName?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const normalizedOptions = options.map((option) =>
-    typeof option === "string" ? { value: option, label: option } : option,
+    typeof option === "string" ? { value: option, label: option, keywords: [] } : { ...option, keywords: option.keywords || [] },
   );
   const selected = normalizedOptions.find((option) => option.value === value);
+  const normalizedQuery = normalize(searchQuery);
+  const visibleOptions = searchable && normalizedQuery
+    ? normalizedOptions
+        .map((option) => ({
+          ...option,
+          searchScore: Math.max(
+            fuzzySearchScore(searchQuery, option.label),
+            fuzzySearchScore(searchQuery, option.value),
+            ...option.keywords.map((keyword) => fuzzySearchScore(searchQuery, keyword)),
+          ),
+        }))
+        .filter((option) => option.searchScore > 0)
+        .sort((left, right) => right.searchScore - left.searchScore || left.label.localeCompare(right.label, "es"))
+    : normalizedOptions.map((option) => ({ ...option, searchScore: 0 }));
   // Si buttonClassName trae su propio fondo (p. ej. el tono del estado), no se
   // aplican los colores por defecto para que el tinte personalizado se vea.
   const hasCustomTone = /(^|\s)bg-/.test(buttonClassName);
@@ -230,10 +309,16 @@ function TizaSelect({
   useEffect(() => {
     if (!open) return;
     const closeOnOutside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+        setSearchQuery("");
+      }
     };
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key === "Escape") {
+        setOpen(false);
+        setSearchQuery("");
+      }
     };
     document.addEventListener("pointerdown", closeOnOutside);
     document.addEventListener("keydown", closeOnEscape);
@@ -243,6 +328,12 @@ function TizaSelect({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open || !searchable) return;
+    const frame = requestAnimationFrame(() => searchInputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [open, searchable]);
+
   return (
     <div ref={rootRef} className={`relative ${className}`}>
       <button
@@ -250,7 +341,10 @@ function TizaSelect({
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        onClick={() => {
+          setSearchQuery("");
+          setOpen((current) => !current);
+        }}
         className={`inline-flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 disabled:bg-slate-100 disabled:text-slate-500 ${hasCustomTone ? "border-transparent" : "border-slate-200 bg-white text-slate-800 hover:border-blue-300"} ${buttonClassName}`}
       >
         <span className="truncate">{selected?.label || placeholder}</span>
@@ -261,7 +355,35 @@ function TizaSelect({
           role="listbox"
           className={`absolute left-0 right-0 top-full z-[120] mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-2xl ring-1 ring-slate-900/5 ${menuClassName}`}
         >
-          {normalizedOptions.map((option) => {
+          {searchable ? (
+            <div className="sticky top-0 z-10 bg-white p-1 pb-2">
+              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100">
+                <Search className="h-4 w-4 shrink-0 text-cyan-700" />
+                <input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter" || !visibleOptions[0]) return;
+                    event.preventDefault();
+                    onChange(visibleOptions[0].value);
+                    setOpen(false);
+                    setSearchQuery("");
+                  }}
+                  aria-label={searchPlaceholder}
+                  placeholder={searchPlaceholder}
+                  className="min-w-0 flex-1 bg-transparent py-2 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+                />
+                {searchQuery ? (
+                  <button type="button" onClick={() => setSearchQuery("")} title="Limpiar búsqueda" className="grid h-6 w-6 shrink-0 place-items-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                ) : null}
+              </div>
+              <p className="px-1 pt-1.5 text-[10px] font-medium text-slate-400">Escribe y presiona Enter para elegir la primera coincidencia.</p>
+            </div>
+          ) : null}
+          {visibleOptions.map((option, index) => {
             const active = option.value === value;
             return (
               <button
@@ -272,16 +394,23 @@ function TizaSelect({
                 onClick={() => {
                   onChange(option.value);
                   setOpen(false);
+                  setSearchQuery("");
                 }}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
                   active ? "bg-blue-50 text-blue-800" : "text-slate-700 hover:bg-slate-50"
                 }`}
               >
                 <span className="truncate">{option.label}</span>
-                {active ? <Check className="h-4 w-4 shrink-0" /> : null}
+                {active ? <Check className="h-4 w-4 shrink-0" /> : searchable && normalizedQuery && index === 0 ? <span className="shrink-0 rounded bg-cyan-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-cyan-700">Más similar</span> : null}
               </button>
             );
           })}
+          {visibleOptions.length === 0 ? (
+            <div className="px-3 py-5 text-center">
+              <p className="text-sm font-semibold text-slate-700">Sin coincidencias</p>
+              <p className="mt-1 text-xs text-slate-400">Prueba con otra palabra o abreviación.</p>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -303,14 +432,6 @@ const avatarTone = (seed: string) => {
   for (let i = 0; i < seed.length; i += 1) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
   return palette[hash % palette.length];
 };
-
-const normalize = (value: string) =>
-  value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
 
 const isValidImportedStudentName = (value: string) => {
   const text = String(value || "").trim();
@@ -510,6 +631,55 @@ const orientationActionColumns = [
   "Aplicación Pulso Digital",
   "Soy Respetuoso",
 ];
+
+const courseSearchKeywords = (course: string) => {
+  const normalizedCourse = normalize(course);
+  const letter = normalizedCourse.match(/\b([a-z])$/)?.[1] || "";
+  if (normalizedCourse.startsWith("prekinder")) {
+    return [`pk${letter}`, `pk ${letter}`, `pre k ${letter}`, `pre kinder ${letter}`, `preka ${letter}`];
+  }
+  if (normalizedCourse.startsWith("kinder")) {
+    return [`k${letter}`, `k ${letter}`, `kinder ${letter}`];
+  }
+  const basicCourse = normalizedCourse.match(/^(\d+)\s+basico\s+([a-z])$/);
+  if (!basicCourse) return [];
+  const [, level, section] = basicCourse;
+  const levelNames: Record<string, string> = {
+    "1": "primero",
+    "2": "segundo",
+    "3": "tercero",
+    "4": "cuarto",
+    "5": "quinto",
+    "6": "sexto",
+    "7": "septimo",
+    "8": "octavo",
+  };
+  return [`${level}${section}`, `${level} ${section}`, `${level} basico ${section}`, `${levelNames[level] || level} ${section}`];
+};
+
+const orientationActionSearchAliases: Record<string, string[]> = {
+  [normalize("Soy amable")]: ["amabilidad", "buen trato", "gentileza"],
+  [normalize("Soy correcto")]: ["corrección", "hacer lo correcto", "conducta correcta"],
+  [normalize("Tengo propósito")]: ["propósito", "sentido", "metas"],
+  [normalize("Soy responsable")]: ["responsabilidad", "responsable", "compromiso"],
+  [normalize("Tengo afán de superación")]: ["afán", "superación", "esfuerzo", "perseverancia"],
+  [normalize("Soy entusiasta")]: ["entusiasmo", "motivación", "energía"],
+  [normalize("Soy constructivo")]: ["constructivo", "aportar", "soluciones"],
+  [normalize("Hago las cosas bien")]: ["hacer las cosas bien", "trabajo bien hecho", "calidad"],
+  [normalize("Consejo de Curso")]: ["consejo", "curso", "asamblea de curso"],
+  [normalize("Intervención Formativa")]: ["intervención", "formativa", "orientación formativa"],
+  [normalize("Intervención estudiantes")]: ["intervención estudiante", "estudiantes", "alumnos"],
+  [normalize("Intervención apoderados")]: ["intervención apoderado", "apoderados", "familias"],
+  [normalize("Día sin clases")]: ["sin clases", "suspensión", "feriado"],
+  [normalize("Aplicación Pulso Digital")]: ["pulso", "pulso digital", "encuesta digital"],
+  [normalize("Soy Respetuoso")]: ["respeto", "respetuoso", "buen trato"],
+};
+
+const orientationActionOptions: TizaSelectOption[] = orientationActionColumns.map((action) => ({
+  value: action,
+  label: action,
+  keywords: orientationActionSearchAliases[normalize(action)] || [],
+}));
 
 const officialPersonnelSource = "https://www.colegiosanlucas.com/colegio/#Equipo";
 const officialPersonnelSeededAt = "2026-06-26T00:00:00.000Z";
@@ -5168,7 +5338,15 @@ function OrientationCycleView({
               <section className="grid gap-4 px-5 py-5 sm:grid-cols-2 lg:grid-cols-6 sm:px-6">
                 <div className="lg:col-span-2">
                   <span className="flex items-center justify-between text-sm font-semibold text-slate-800"><span>Curso</span><span className="text-[10px] font-bold uppercase text-cyan-700">Obligatorio</span></span>
-                  <TizaSelect value={quickClassForm.course} onChange={syncQuickClassCourse} options={owner.courses} className="mt-1.5" buttonClassName="py-2.5 font-semibold" />
+                  <TizaSelect
+                    value={quickClassForm.course}
+                    onChange={syncQuickClassCourse}
+                    options={owner.courses.map((course) => ({ value: course, label: course, keywords: courseSearchKeywords(course) }))}
+                    searchable
+                    searchPlaceholder="Buscar curso, ej. PKA o 2A"
+                    className="mt-1.5"
+                    buttonClassName="py-2.5 font-semibold"
+                  />
                 </div>
                 <label className="block lg:col-span-2">
                   <span className="text-sm font-semibold text-slate-800">Fecha</span>
@@ -5184,7 +5362,17 @@ function OrientationCycleView({
                 </label>
                 <div className="sm:col-span-2 lg:col-span-2">
                   <span className="text-sm font-semibold text-slate-800">Acción o fortaleza</span>
-                  <TizaSelect value={quickClassForm.axis} onChange={(axis) => updateQuickClassForm({ axis, characterStrength: axis })} options={orientationActionColumns} placeholder="Seleccionar" className="mt-1.5" buttonClassName="py-2.5" menuClassName="max-h-80" />
+                  <TizaSelect
+                    value={quickClassForm.axis}
+                    onChange={(axis) => updateQuickClassForm({ axis, characterStrength: axis })}
+                    options={orientationActionOptions}
+                    placeholder="Seleccionar"
+                    searchable
+                    searchPlaceholder="Buscar acción o fortaleza"
+                    className="mt-1.5"
+                    buttonClassName="py-2.5"
+                    menuClassName="max-h-80"
+                  />
                 </div>
                 <div className="sm:col-span-2 lg:col-span-6">
                   <span className="text-sm font-semibold text-slate-800">Semana del plan</span>
