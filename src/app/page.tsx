@@ -82,6 +82,15 @@ type DataRecord = {
 
 type DataStore = Record<EntityId, DataRecord[]>;
 
+type RecordDeltaChange = {
+  method: "PATCH" | "DELETE";
+  entity: EntityId;
+  records?: DataRecord[];
+  recordIds?: string[];
+  previousStore: DataStore;
+  nextStore: DataStore;
+};
+
 type TeamMember = {
   id: string;
   name: string;
@@ -11756,6 +11765,7 @@ export default function TizaEducationApp() {
 
   const lastSavedSerializedRef = React.useRef<string>("");
   const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
+  const failedDeltaRef = React.useRef<RecordDeltaChange | null>(null);
   const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
     if (!authUser || !accessToken || !remoteLoaded) return;
     const serialized = JSON.stringify(nextStore);
@@ -11816,14 +11826,7 @@ export default function TizaEducationApp() {
     recordIds = [],
     previousStore,
     nextStore,
-  }: {
-    method: "PATCH" | "DELETE";
-    entity: EntityId;
-    records?: DataRecord[];
-    recordIds?: string[];
-    previousStore: DataStore;
-    nextStore: DataStore;
-  }) => {
+  }: RecordDeltaChange) => {
     if (!authUser || !accessToken || !remoteLoaded) return;
     const previousSerialized = JSON.stringify(previousStore);
     const nextSerialized = JSON.stringify(nextStore);
@@ -11844,7 +11847,7 @@ export default function TizaEducationApp() {
             body: JSON.stringify({ entity, records, recordIds }),
           });
           if (response.status === 401 && supabaseAuth) {
-            const { data } = await supabaseAuth.auth.getSession();
+            const { data } = await supabaseAuth.auth.refreshSession();
             token = data.session?.access_token || token;
             response = await fetch("/api/records", {
               method,
@@ -11856,6 +11859,7 @@ export default function TizaEducationApp() {
             });
           }
           if (response.ok) {
+            failedDeltaRef.current = null;
             if (lastSavedSerializedRef.current === previousSerialized) {
               lastSavedSerializedRef.current = nextSerialized;
             }
@@ -11873,6 +11877,7 @@ export default function TizaEducationApp() {
 
       setRemoteStatus("error");
       setRemoteError(lastError);
+      failedDeltaRef.current = { method, entity, records, recordIds, previousStore, nextStore };
     };
     const queuedSave = saveQueueRef.current.then(operation, operation);
     saveQueueRef.current = queuedSave;
@@ -11892,10 +11897,12 @@ export default function TizaEducationApp() {
   useEffect(() => {
     if (remoteStatus !== "error" || !authUser || !accessToken || !remoteLoaded) return;
     const timer = window.setTimeout(async () => {
-      await saveStoreSnapshot(storeRef.current);
+      const failedDelta = failedDeltaRef.current;
+      if (failedDelta) await saveRecordDelta(failedDelta);
+      else await saveStoreSnapshot(storeRef.current);
     }, 6000);
     return () => window.clearTimeout(timer);
-  }, [remoteStatus, authUser, accessToken, remoteLoaded, saveStoreSnapshot]);
+  }, [remoteStatus, authUser, accessToken, remoteLoaded, saveRecordDelta, saveStoreSnapshot]);
 
   useEffect(() => {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
@@ -12995,12 +13002,18 @@ export default function TizaEducationApp() {
     );
   };
 
+  const retrySynchronization = () => {
+    const failedDelta = failedDeltaRef.current;
+    if (failedDelta) void saveRecordDelta(failedDelta);
+    else void saveStoreSnapshot(storeRef.current);
+  };
+
   const syncLabel = {
     local: "Modo local",
     loading: "Cargando Supabase",
     synced: "Sincronizado",
     saving: "Guardando",
-    error: "Reintentar sincronización",
+    error: "Error al sincronizar",
   }[remoteStatus];
 
   if (authLoading) {
@@ -13066,7 +13079,7 @@ export default function TizaEducationApp() {
               <p className="text-xs font-semibold text-slate-900">{authUser.email}</p>
               <button
                 type="button"
-                onClick={remoteStatus === "error" ? () => void saveStoreSnapshot(storeRef.current) : undefined}
+                onClick={remoteStatus === "error" ? retrySynchronization : undefined}
                 disabled={remoteStatus !== "error"}
                 className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                   remoteStatus === "synced"
