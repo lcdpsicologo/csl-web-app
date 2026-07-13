@@ -2152,19 +2152,30 @@ function Sidebar({
       className={`tz-glass fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-slate-200/80 text-slate-700 transition-[width] duration-200 lg:flex ${sidebarWidth}`}
     >
       <div className="flex h-full flex-col">
-        <div className={`${compact ? "px-3" : "px-6"} border-b border-slate-200/80 pb-4 pt-5 transition-[padding] duration-200`}>
-          <div className={`flex h-12 items-center ${compact ? "justify-center" : "justify-between gap-2"}`}>
-            {compact ? (
-              <Image src="/icon.svg" alt="Tiza Education" width={42} height={42} priority />
-            ) : (
-              <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={172} height={42} priority />
-            )}
+        <div className={`${compact ? "px-3" : "px-6"} overflow-hidden border-b border-slate-200/80 pb-4 pt-5 transition-[padding] duration-200`}>
+          <div className="relative h-12 overflow-hidden">
+            <div
+              aria-hidden={!compact}
+              className={`absolute inset-y-0 flex items-center transition-[left,transform,opacity] duration-100 ${
+                compact ? "left-1/2 -translate-x-1/2 opacity-100 delay-75" : "left-0 translate-x-0 opacity-0"
+              }`}
+            >
+              <Image src="/icon.svg" alt="Tiza Education" width={42} height={42} priority className="h-[42px] w-[42px] max-w-none shrink-0" />
+            </div>
+            <div
+              aria-hidden={compact}
+              className={`absolute inset-y-0 left-0 flex items-center transition-opacity duration-150 ${
+                compact ? "opacity-0" : "opacity-100 delay-75"
+              }`}
+            >
+              <Image src="/tiza-education-logo.svg" alt="Tiza Education" width={172} height={42} priority className="h-[42px] w-[172px] max-w-none shrink-0 object-contain object-left" />
+            </div>
             {!compact ? (
               <button
                 type="button"
                 onClick={() => onModeChange(nextSidebarMode)}
                 title={`Modo de barra lateral: ${modeButtonLabel}`}
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white/80 text-slate-500 shadow-sm transition hover:bg-white hover:text-slate-900"
+                className="absolute right-0 top-1/2 grid h-9 w-9 -translate-y-1/2 place-items-center rounded-lg border border-slate-200 bg-white/90 text-slate-500 shadow-sm transition hover:bg-white hover:text-slate-900"
               >
                 <ChevronDown className={`h-4 w-4 transition ${modeIconClass}`} />
               </button>
