@@ -494,6 +494,7 @@ const orientationActionColumns = [
   "Intervención apoderados",
   "Día sin clases",
   "Aplicación Pulso Digital",
+  "Soy Respetuoso",
 ];
 
 const officialPersonnelSource = "https://www.colegiosanlucas.com/colegio/#Equipo";
@@ -4492,10 +4493,6 @@ function OrientationCycleView({
 
   return (
     <div className="tz-fade space-y-5">
-      <datalist id="orientation-action-options">
-        {orientationActionColumns.map((action) => <option key={action} value={action} />)}
-      </datalist>
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Orientación</h1>
@@ -4708,10 +4705,17 @@ function OrientationCycleView({
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
                 <TizaSelect value={quickClassForm.course} onChange={syncQuickClassCourse} options={owner.courses} className="mt-1" />
               </div>
-              <label className="block xl:col-span-2">
+              <div className="xl:col-span-2">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Acción / fortaleza</span>
-                <input value={quickClassForm.axis} onChange={(event) => updateQuickClassForm({ axis: event.target.value })} placeholder="Intervencion Formativa, fortaleza o eje SOY+" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </label>
+                <TizaSelect
+                  value={quickClassForm.axis}
+                  onChange={(axis) => updateQuickClassForm({ axis, characterStrength: axis })}
+                  options={orientationActionColumns}
+                  placeholder="Seleccionar acción o fortaleza"
+                  className="mt-1"
+                  menuClassName="max-h-80"
+                />
+              </div>
               <label className="block xl:col-span-3">
                 <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tema / comentario</span>
                 <input value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Mi cuerpo, mi espacio y mis límites" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
@@ -5148,7 +5152,15 @@ function OrientationCycleView({
                       </select>
                     </td>
                     <td className="w-48 px-2 py-2">
-                      <input disabled={isCalendar} list="orientation-action-options" defaultValue={rawOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                      <TizaSelect
+                        disabled={isCalendar}
+                        value={rawOrientationAction(record)}
+                        onChange={(axis) => onUpdateOrientationRecord(record.id, { axis, characterStrength: axis })}
+                        options={rawOrientationAction(record) && !orientationActionColumns.includes(rawOrientationAction(record)) ? [rawOrientationAction(record), ...orientationActionColumns] : orientationActionColumns}
+                        placeholder="Seleccionar"
+                        buttonClassName="py-1.5 text-xs font-semibold"
+                        menuClassName="min-w-64"
+                      />
                     </td>
                     <td className="w-60 px-2 py-2">
                       <textarea disabled={isCalendar} defaultValue={record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
