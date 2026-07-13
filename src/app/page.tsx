@@ -43,6 +43,7 @@ import {
   LogOut,
   Mail,
   MessageSquareText,
+  Pencil,
   Plus,
   QrCode,
   Save,
@@ -2264,6 +2265,7 @@ function EntityView({
   query,
   setQuery,
   onAdd,
+  onEdit,
   onDelete,
   onExport,
   onImport,
@@ -2273,6 +2275,7 @@ function EntityView({
   query: string;
   setQuery: (value: string) => void;
   onAdd: () => void;
+  onEdit: (record: DataRecord) => void;
   onDelete: (id: string) => void;
   onExport: () => void;
   onImport: () => void;
@@ -2350,7 +2353,10 @@ function EntityView({
                       </p>
                     ))}
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <button onClick={() => onEdit(record)} title={`Ver o editar ${entity.singular}`} className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800">
+                      <Pencil className="h-3.5 w-3.5" /> Ver / editar
+                    </button>
                     <button onClick={() => onDelete(record.id)} title="Eliminar" className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-600 hover:bg-red-50">
                       <Trash2 className="h-3.5 w-3.5" /> Eliminar
                     </button>
@@ -2650,18 +2656,20 @@ const parseJsonArray = <T,>(value: unknown): T[] => {
 
 function WorkshopsView({
   store,
+  createRequest,
   onAddWorkshop,
   onUpdateWorkshop,
   onDeleteWorkshop,
 }: {
   store: DataStore;
+  createRequest?: number;
   onAddWorkshop: (record: DataRecord) => void;
   onUpdateWorkshop: (id: string, updates: Record<string, string>) => void;
   onDeleteWorkshop: (id: string) => void;
 }) {
   const [selectedId, setSelectedId] = useState("");
   const [query, setQuery] = useState("");
-  const [createOpen, setCreateOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(Boolean(createRequest));
   const emptyWorkshopDraft = () => ({
     date: new Date().toISOString().slice(0, 10),
     title: "",
@@ -4110,6 +4118,7 @@ function OrientationCycleView({
   store,
   accessToken,
   dataReady,
+  createRequest,
   onAddOrientationRecord,
   onAddOrientationWeekRecords,
   onUpdateOrientationRecord,
@@ -4120,6 +4129,7 @@ function OrientationCycleView({
   store: DataStore;
   accessToken: string;
   dataReady: boolean;
+  createRequest?: number;
   onAddOrientationRecord: (record: DataRecord) => void;
   onAddOrientationWeekRecords: (records: DataRecord[]) => void;
   onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
@@ -4136,7 +4146,7 @@ function OrientationCycleView({
   const [weekCreatorOpen, setWeekCreatorOpen] = useState(false);
   const [weekCreatorWeek, setWeekCreatorWeek] = useState("");
   // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
-  const [quickFormExpanded, setQuickFormExpanded] = useState(false);
+  const [quickFormExpanded, setQuickFormExpanded] = useState(Boolean(createRequest));
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
   const [classEditDrafts, setClassEditDrafts] = useState<Record<string, Record<string, string>>>({});
@@ -8632,27 +8642,23 @@ function CommandPalette({
   );
 }
 
-function RecordDialog({
-  entity,
+function RecordLauncher({
   onClose,
-  onSave,
+  onCreate,
+  onNavigate,
 }: {
-  entity: EntityConfig;
   onClose: () => void;
-  onSave: (record: DataRecord) => void;
+  onCreate: (entity: EntityId) => void;
+  onNavigate: (view: ViewId) => void;
 }) {
-  const [form, setForm] = useState<Record<string, string>>(() =>
-    entity.fields.reduce<Record<string, string>>((acc, field) => {
-      acc[field.key] = "";
-      return acc;
-    }, {})
-  );
-
-  const save = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const missing = entity.fields.filter((field) => field.required && !form[field.key]?.trim());
-    if (missing.length) return;
-    onSave({ id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...form });
+  const commonEntities: EntityId[] = ["students", "cases", "logs", "interviews", "documents", "protocols"];
+  const chooseEntity = (entity: EntityId) => {
+    onCreate(entity);
+    onClose();
+  };
+  const chooseView = (view: ViewId) => {
+    onNavigate(view);
+    onClose();
   };
 
   useEffect(() => {
@@ -8664,63 +8670,238 @@ function RecordDialog({
   }, [onClose]);
 
   return (
-    <div className="tz-backdrop fixed inset-0 z-50 grid bg-slate-950/45 p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-slate-950/25" onClick={onClose}>
+      <section role="dialog" aria-modal="true" aria-labelledby="record-launcher-title" className="tz-pop-fast absolute inset-x-3 top-16 mx-auto w-auto max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-8 sm:top-16 sm:w-[440px]" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3.5">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-700">Acción rápida</p>
+            <h2 id="record-launcher-title" className="text-lg font-semibold text-slate-950">¿Qué necesitas registrar?</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Elige el tipo y completa solo la información disponible.</p>
+          </div>
+          <button onClick={onClose} title="Cerrar" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+        </header>
+        <div className="max-h-[70vh] overflow-y-auto p-2">
+          <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-2 pb-4">
+            <button onClick={() => chooseView("orientation")} className="flex min-h-20 flex-col items-start justify-between rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-left transition hover:border-cyan-400 hover:bg-cyan-100">
+              <UsersRound className="h-5 w-5 text-cyan-700" />
+              <span><strong className="block text-sm text-slate-950">Clase de orientación</strong><span className="text-[11px] text-slate-600">Tema, curso y materiales</span></span>
+            </button>
+            <button onClick={() => chooseView("workshops")} className="flex min-h-20 flex-col items-start justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left transition hover:border-emerald-400 hover:bg-emerald-100">
+              <GraduationCap className="h-5 w-5 text-emerald-700" />
+              <span><strong className="block text-sm text-slate-950">Taller</strong><span className="text-[11px] text-slate-600">Detalles, asistencia y adjuntos</span></span>
+            </button>
+          </div>
+          <div className="p-2">
+            <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Otros registros</p>
+            <div className="grid gap-1 sm:grid-cols-2">
+              {commonEntities.map((entityId) => {
+                const config = entityConfigs[entityId];
+                const Icon = config.icon;
+                return (
+                  <button key={entityId} onClick={() => chooseEntity(entityId)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-slate-100">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600"><Icon className="h-4 w-4" /></span>
+                    <span className="min-w-0"><strong className="block truncate text-sm text-slate-900">{config.singular.charAt(0).toUpperCase() + config.singular.slice(1)}</strong><span className="block truncate text-[11px] text-slate-500">Nuevo registro</span></span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+const recordFieldPlaceholder = (field: FieldDef) => {
+  const examples: Record<string, string> = {
+    fullName: "Ej.: Valentina Soto Pérez",
+    student: "Nombre del estudiante, curso o grupo",
+    participant: "Nombre de la persona entrevistada",
+    title: "Describe el registro en una frase breve",
+    reason: "¿Cuál es el motivo principal?",
+    description: "Registra hechos observables y antecedentes relevantes",
+    agreements: "Acuerdos, responsables y próximos pasos",
+    responsible: "Nombre de quien realizará el seguimiento",
+    professional: "Nombre del profesional que registra",
+    course: "Ej.: 2° Básico A",
+    url: "https://...",
+    notes: "Información complementaria (opcional)",
+  };
+  return examples[field.key] || `Ingresa ${field.label.toLowerCase()}`;
+};
+
+function RecordDialog({
+  entity,
+  initialRecord,
+  onClose,
+  onSave,
+}: {
+  entity: EntityConfig;
+  initialRecord?: DataRecord;
+  onClose: () => void;
+  onSave: (record: DataRecord) => void;
+}) {
+  const today = new Date().toISOString().slice(0, 10);
+  const initialForm = useMemo(() => entity.fields.reduce<Record<string, string>>((acc, field) => {
+    acc[field.key] = initialRecord?.[field.key] || (field.type === "date" ? today : "");
+    return acc;
+  }, {}), [entity.fields, initialRecord, today]);
+  const [form, setForm] = useState<Record<string, string>>(initialForm);
+  const [attempted, setAttempted] = useState(false);
+  const [confirmClose, setConfirmClose] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const isEditing = Boolean(initialRecord);
+  const requiredFields = entity.fields.filter((field) => field.required);
+  const completedRequired = requiredFields.filter((field) => form[field.key]?.trim()).length;
+  const missingKeys = new Set(requiredFields.filter((field) => !form[field.key]?.trim()).map((field) => field.key));
+  const dirty = entity.fields.some((field) => (form[field.key] || "") !== (initialForm[field.key] || ""));
+
+  const requestClose = () => {
+    if (dirty) setConfirmClose(true);
+    else onClose();
+  };
+
+  const updateField = (key: string, value: string) => {
+    setForm((current) => ({ ...current, [key]: value }));
+    setConfirmClose(false);
+  };
+
+  const save = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAttempted(true);
+    const firstMissing = requiredFields.find((field) => !form[field.key]?.trim());
+    if (firstMissing) {
+      window.setTimeout(() => document.getElementById(`record-field-${firstMissing.key}`)?.focus(), 0);
+      return;
+    }
+    onSave({
+      id: initialRecord?.id || uid(),
+      createdAt: initialRecord?.createdAt || nowIso(),
+      updatedAt: nowIso(),
+      ...form,
+    });
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") requestClose();
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+        event.preventDefault();
+        formRef.current?.requestSubmit();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
+  return (
+    <div className="tz-backdrop fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 p-0 sm:items-center sm:p-4" onClick={requestClose}>
       <form
+        ref={formRef}
         onSubmit={save}
         onClick={(event) => event.stopPropagation()}
-        className="tz-pop-fast m-auto max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white tz-ring"
+        className="tz-pop-fast flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl border border-slate-200 bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-xl"
+        aria-label={`${isEditing ? "Editar" : "Agregar"} ${entity.singular}`}
+        noValidate
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-100 p-6">
-          <div>
-            <h2 className="text-xl font-semibold text-slate-950">Agregar {entity.singular}</h2>
-            <p className="mt-1 text-sm text-slate-600">{entity.description}</p>
+        <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-900 text-white"><entity.icon className="h-5 w-5" /></span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-700">{isEditing ? "Registro guardado" : "Nuevo registro"}</p>
+                <h2 className="truncate text-xl font-semibold text-slate-950">{isEditing ? `Editar ${entity.singular}` : `Agregar ${entity.singular}`}</h2>
+                <p className="mt-1 text-sm text-slate-600">Completa la información disponible; podrás editarla después.</p>
+              </div>
+            </div>
+            <button type="button" onClick={requestClose} title="Cerrar" aria-label="Cerrar formulario" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900">
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button type="button" onClick={onClose} className="rounded-md p-2 text-slate-500 hover:bg-slate-100">
-            <X className="h-5 w-5" />
-          </button>
+          {requiredFields.length ? (
+            <div className="mt-4 flex items-center gap-3">
+              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-cyan-600 transition-all" style={{ width: `${(completedRequired / requiredFields.length) * 100}%` }} /></div>
+              <span className="shrink-0 text-xs font-semibold text-slate-500">{completedRequired} de {requiredFields.length} obligatorios</span>
+            </div>
+          ) : null}
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60 px-5 py-5 sm:px-6">
+          {attempted && missingKeys.size ? (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-800" role="alert">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>Completa {missingKeys.size === 1 ? "el dato obligatorio marcado" : `los ${missingKeys.size} datos obligatorios marcados`} para guardar.</span>
+            </div>
+          ) : null}
+          <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
+            {entity.fields.map((field, index) => {
+              const invalid = attempted && missingKeys.has(field.key);
+              const fieldClass = `mt-1.5 w-full rounded-lg border bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 ${invalid ? "border-rose-400 ring-4 ring-rose-100" : "border-slate-200 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"}`;
+              return (
+                <label key={field.key} className={field.type === "textarea" ? "block md:col-span-2" : "block"}>
+                  <span className="flex items-center justify-between gap-2 text-sm font-semibold text-slate-800">
+                    <span>{field.label}</span>
+                    <span className={`text-[10px] font-bold uppercase tracking-wide ${field.required ? "text-cyan-700" : "text-slate-400"}`}>{field.required ? "Obligatorio" : "Opcional"}</span>
+                  </span>
+                  {field.type === "textarea" ? (
+                    <textarea
+                      id={`record-field-${field.key}`}
+                      autoFocus={index === 0}
+                      value={form[field.key] || ""}
+                      onChange={(event) => updateField(field.key, event.target.value)}
+                      placeholder={recordFieldPlaceholder(field)}
+                      aria-invalid={invalid}
+                      className={`${fieldClass} min-h-24 resize-y leading-6`}
+                    />
+                  ) : field.type === "select" ? (
+                    <select
+                      id={`record-field-${field.key}`}
+                      autoFocus={index === 0}
+                      value={form[field.key] || ""}
+                      onChange={(event) => updateField(field.key, event.target.value)}
+                      aria-invalid={invalid}
+                      className={fieldClass}
+                    >
+                      <option value="">Selecciona una opción</option>
+                      {field.options?.map((option) => <option key={option}>{option}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      id={`record-field-${field.key}`}
+                      autoFocus={index === 0}
+                      type={field.type === "date" ? "date" : "text"}
+                      value={form[field.key] || ""}
+                      onChange={(event) => updateField(field.key, event.target.value)}
+                      placeholder={field.type === "date" ? undefined : recordFieldPlaceholder(field)}
+                      aria-invalid={invalid}
+                      autoComplete="off"
+                      className={fieldClass}
+                    />
+                  )}
+                  {invalid ? <span className="mt-1 block text-xs font-semibold text-rose-600">Este dato es necesario para guardar.</span> : null}
+                </label>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="grid gap-4 p-6 md:grid-cols-2">
-          {entity.fields.map((field) => (
-            <label key={field.key} className={field.type === "textarea" ? "block md:col-span-2" : "block"}>
-              <span className="text-sm font-semibold text-slate-700">
-                {field.label}{field.required ? " *" : ""}
-              </span>
-              {field.type === "textarea" ? (
-                <textarea
-                  value={form[field.key] || ""}
-                  onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
-                  className="mt-2 min-h-32 w-full resize-y rounded-md border border-slate-200 p-3 text-sm leading-6 outline-none focus:border-slate-900"
-                />
-              ) : field.type === "select" ? (
-                <select
-                  value={form[field.key] || ""}
-                  onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
-                  className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
-                >
-                  <option value="">Seleccionar</option>
-                  {field.options?.map((option) => <option key={option}>{option}</option>)}
-                </select>
-              ) : (
-                <input
-                  type={field.type === "date" ? "date" : "text"}
-                  value={form[field.key] || ""}
-                  onChange={(event) => setForm((current) => ({ ...current, [field.key]: event.target.value }))}
-                  className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-slate-900"
-                />
-              )}
-            </label>
-          ))}
-        </div>
-
-        <div className="flex flex-wrap justify-end gap-3 border-t border-slate-100 p-6">
-          <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            Cancelar
-          </button>
-          <button type="submit" className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">
-            <Save className="h-4 w-4" /> Guardar
-          </button>
-        </div>
+        <footer className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
+          {confirmClose ? (
+            <div className="mb-3 flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><p className="text-sm font-bold text-amber-900">Hay cambios sin guardar</p><p className="text-xs text-amber-800">Puedes seguir editando o salir y descartarlos.</p></div>
+              <div className="flex gap-2"><button type="button" onClick={() => setConfirmClose(false)} className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-900">Seguir editando</button><button type="button" onClick={onClose} className="rounded-lg bg-amber-900 px-3 py-2 text-xs font-bold text-white">Descartar y salir</button></div>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="hidden text-xs text-slate-400 sm:block"><span className="font-semibold">Ctrl + Enter</span> para guardar</p>
+            <div className="ml-auto flex gap-2">
+              <button type="button" onClick={requestClose} className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+              <button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+                <Save className="h-4 w-4" /> {isEditing ? "Guardar cambios" : `Guardar ${entity.singular}`}
+              </button>
+            </div>
+          </div>
+        </footer>
       </form>
     </div>
   );
@@ -11553,6 +11734,10 @@ export default function TizaEducationApp() {
   };
   const [query, setQuery] = useState("");
   const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
+  const [dialogRecordId, setDialogRecordId] = useState("");
+  const [recordLauncherOpen, setRecordLauncherOpen] = useState(false);
+  const [orientationCreateRequest, setOrientationCreateRequest] = useState(0);
+  const [workshopCreateRequest, setWorkshopCreateRequest] = useState(0);
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [pieImportData, setPieImportData] = useState<PieImportStudent[] | null>(null);
@@ -11587,6 +11772,23 @@ export default function TizaEducationApp() {
   const remoteLoadedUserRef = React.useRef("");
   const [, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const storeRef = React.useRef(store);
+  const openNewRecord = (entity: EntityId) => {
+    setDialogRecordId("");
+    setDialogEntity(entity);
+  };
+  const openExistingRecord = (entity: EntityId, recordId: string) => {
+    setDialogRecordId(recordId);
+    setDialogEntity(entity);
+  };
+  const closeRecordDialog = () => {
+    setDialogEntity(null);
+    setDialogRecordId("");
+  };
+  const launchSpecialRecord = (view: ViewId) => {
+    setActiveView(view);
+    if (view === "orientation") setOrientationCreateRequest((value) => value + 1);
+    if (view === "workshops") setWorkshopCreateRequest((value) => value + 1);
+  };
   // Wrap setProfile so every update is persisted server-side to the user's
   // Supabase metadata (global per user → travels across devices).
   const setProfile = (next: Record<string, string>) => {
@@ -11981,7 +12183,7 @@ export default function TizaEducationApp() {
     storeRef.current = nextStore;
     setStore(nextStore);
     void saveStoreSnapshot(nextStore);
-    setDialogEntity(null);
+    closeRecordDialog();
     setToast(`${entityConfigs[entity].singular} guardado`);
   };
 
@@ -11995,6 +12197,17 @@ export default function TizaEducationApp() {
     storeRef.current = nextStore;
     setStore(nextStore);
     void saveStoreSnapshot(nextStore);
+  };
+
+  const saveDialogRecord = (entity: EntityId, record: DataRecord) => {
+    if (!dialogRecordId) {
+      addRecord(entity, record);
+      return;
+    }
+    const { id, createdAt: _createdAt, ...updates } = record;
+    updateRecord(entity, id, updates);
+    closeRecordDialog();
+    setToast(`${entityConfigs[entity].singular} actualizado`);
   };
 
   const replaceFirstCycleRoster = async (file: File) => {
@@ -12134,7 +12347,11 @@ export default function TizaEducationApp() {
   };
 
   const deleteRecord = (entity: EntityId, id: string) => {
-    setStore((current) => ({ ...current, [entity]: current[entity].filter((record) => record.id !== id) }));
+    if (!window.confirm(`¿Eliminar este registro de ${entityConfigs[entity].label.toLowerCase()}? Esta acción no se puede deshacer.`)) return;
+    const nextStore = { ...storeRef.current, [entity]: storeRef.current[entity].filter((record) => record.id !== id) };
+    storeRef.current = nextStore;
+    setStore(nextStore);
+    void saveStoreSnapshot(nextStore);
     setToast("Registro eliminado");
   };
 
@@ -12900,7 +13117,7 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
-    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={(entity) => setDialogEntity(entity)} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} />;
+    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={openNewRecord} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} />;
     if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
@@ -12921,7 +13138,7 @@ export default function TizaEducationApp() {
       return (
         <StudentsWorkspaceView
           store={store}
-          onAdd={() => setDialogEntity("students")}
+          onAdd={() => openNewRecord("students")}
           onOpenStudent={openStudent}
           onReplaceFirstCycleRoster={replaceFirstCycleRoster}
           replacingFirstCycleRoster={replacingFirstCycleRoster}
@@ -12945,9 +13162,11 @@ export default function TizaEducationApp() {
     if (activeView === "orientation") {
       return (
         <OrientationCycleView
+          key={`orientation-${orientationCreateRequest}`}
           store={store}
           accessToken={accessToken}
           dataReady={remoteLoaded}
+          createRequest={orientationCreateRequest}
           onAddOrientationRecord={addOrientationRecord}
           onAddOrientationWeekRecords={addOrientationWeekRecords}
           onUpdateOrientationRecord={updateOrientationRecord}
@@ -12960,7 +13179,9 @@ export default function TizaEducationApp() {
     if (activeView === "workshops") {
       return (
         <WorkshopsView
+          key={`workshops-${workshopCreateRequest}`}
           store={store}
+          createRequest={workshopCreateRequest}
           onAddWorkshop={(record) => addRecord("workshops", record)}
           onUpdateWorkshop={(id, updates) => updateRecord("workshops", id, updates)}
           onDeleteWorkshop={(id) => deleteRecord("workshops", id)}
@@ -13009,7 +13230,8 @@ export default function TizaEducationApp() {
         records={store[activeView]}
         query={query}
         setQuery={setQuery}
-        onAdd={() => setDialogEntity(activeView)}
+        onAdd={() => openNewRecord(activeView)}
+        onEdit={(record) => openExistingRecord(activeView, record.id)}
         onDelete={(id) => deleteRecord(activeView, id)}
         onExport={() => exportEntity(activeView)}
         onImport={() => setActiveView("triage")}
@@ -13090,6 +13312,15 @@ export default function TizaEducationApp() {
                 <span className="tz-kbd">⌘</span><span className="tz-kbd">K</span>
               </span>
             </button>
+            <button
+              type="button"
+              onClick={() => setRecordLauncherOpen(true)}
+              className="tz-press inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+              title="Crear un nuevo registro"
+            >
+              <Plus className="h-4 w-4" />
+              <span className="hidden sm:inline">Registrar</span>
+            </button>
             <div className="hidden flex-col items-end text-right md:flex">
               <p className="text-xs font-semibold text-slate-900">{authUser.email}</p>
               <button
@@ -13132,8 +13363,21 @@ export default function TizaEducationApp() {
         onOpenStudent={openStudent}
         onUpdateCourse={updateCourseRecord}
       />
+      {recordLauncherOpen ? (
+        <RecordLauncher
+          onClose={() => setRecordLauncherOpen(false)}
+          onCreate={openNewRecord}
+          onNavigate={launchSpecialRecord}
+        />
+      ) : null}
       {dialogEntity ? (
-        <RecordDialog entity={entityConfigs[dialogEntity]} onClose={() => setDialogEntity(null)} onSave={(record) => addRecord(dialogEntity, record)} />
+        <RecordDialog
+          key={`${dialogEntity}-${dialogRecordId || "new"}`}
+          entity={entityConfigs[dialogEntity]}
+          initialRecord={dialogRecordId ? store[dialogEntity].find((record) => record.id === dialogRecordId) : undefined}
+          onClose={closeRecordDialog}
+          onSave={(record) => saveDialogRecord(dialogEntity, record)}
+        />
       ) : null}
       {detailStudentId ? (() => {
         const detailStudent = store.students.find((s) => s.id === detailStudentId);
