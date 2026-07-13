@@ -4147,6 +4147,7 @@ function OrientationCycleView({
   const [weekCreatorWeek, setWeekCreatorWeek] = useState("");
   // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
   const [quickFormExpanded, setQuickFormExpanded] = useState(Boolean(createRequest));
+  const [quickFormAttempted, setQuickFormAttempted] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
   const [classEditDrafts, setClassEditDrafts] = useState<Record<string, Record<string, string>>>({});
@@ -4450,6 +4451,7 @@ function OrientationCycleView({
   };
 
   const saveNewClass = () => {
+    setQuickFormAttempted(true);
     if (!dataReady || !quickClassHasContent || !quickClassForm.course?.trim()) return;
     onAddOrientationRecord({
       id: uid(),
@@ -4461,6 +4463,7 @@ function OrientationCycleView({
     });
     setNewClassForm({});
     setNewClassOpen(false);
+    setQuickFormAttempted(false);
     setQuickFormExpanded(false);
   };
 
@@ -4468,6 +4471,7 @@ function OrientationCycleView({
     if (Object.keys(newClassForm).length && !window.confirm("¿Cerrar el registro? Los cambios que aún no guardas se perderán.")) return;
     setNewClassForm({});
     setNewClassOpen(false);
+    setQuickFormAttempted(false);
     setQuickFormExpanded(false);
   };
 
@@ -4475,6 +4479,7 @@ function OrientationCycleView({
     if (Object.keys(newClassForm).length && !window.confirm("¿Limpiar todos los campos de este registro?")) return;
     setNewClassForm({});
     setNewClassOpen(false);
+    setQuickFormAttempted(false);
   };
 
   const createWeekFromSchedule = () => {
@@ -5132,20 +5137,20 @@ function OrientationCycleView({
             <p className="mt-0.5 text-xs font-medium text-slate-500">Clase, intervención, material o planificación vinculada a un curso.</p>
           </div>
         </div>
-        <button onClick={() => setQuickFormExpanded(true)} className="tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800">
+        <button onClick={() => { setQuickFormAttempted(false); setQuickFormExpanded(true); }} className="tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800">
           <Plus className="h-4 w-4" /> Nuevo registro
         </button>
       </section>
 
-      {quickFormExpanded ? (
-        <div className="tz-backdrop fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 sm:items-center sm:p-4" onClick={closeQuickClassForm}>
+      {quickFormExpanded && typeof document !== "undefined" ? createPortal(
+        <div className="tz-backdrop fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-[1px] sm:items-center sm:p-6" onClick={closeQuickClassForm}>
           <form
             role="dialog"
             aria-modal="true"
             aria-labelledby="orientation-entry-title"
             onSubmit={(event) => { event.preventDefault(); saveNewClass(); }}
             onClick={(event) => event.stopPropagation()}
-            className="tz-pop-fast flex max-h-[96dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-lg"
+            className="tz-pop-fast flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88dvh] sm:rounded-lg"
           >
             <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
               <div className="flex min-w-0 items-start gap-3">
@@ -5159,7 +5164,7 @@ function OrientationCycleView({
               <button type="button" onClick={closeQuickClassForm} title="Cerrar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50/60">
               <section className="grid gap-4 px-5 py-5 sm:grid-cols-2 lg:grid-cols-6 sm:px-6">
                 <div className="lg:col-span-2">
                   <span className="flex items-center justify-between text-sm font-semibold text-slate-800"><span>Curso</span><span className="text-[10px] font-bold uppercase text-cyan-700">Obligatorio</span></span>
@@ -5221,15 +5226,16 @@ function OrientationCycleView({
                 <div className="flex justify-end gap-2">
                   <button type="button" onClick={clearQuickClassForm} className="hidden rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-100 sm:inline-flex">Limpiar</button>
                   <button type="button" onClick={closeQuickClassForm} className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
-                  <button type="submit" disabled={!dataReady || !quickClassHasContent || !quickClassForm.course.trim()} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
+                  <button type="submit" disabled={!dataReady || !quickClassForm.course.trim()} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
                     <Save className="h-4 w-4" /> Guardar registro
                   </button>
                 </div>
               </div>
-              {!quickClassHasContent ? <p className="mt-2 text-right text-xs font-medium text-amber-700">Agrega un tema, una observación o al menos un enlace para guardar.</p> : null}
+              {quickFormAttempted && !quickClassHasContent ? <p role="alert" className="mt-2 text-right text-xs font-semibold text-rose-700">Agrega un tema, una observación o al menos un enlace para guardar.</p> : null}
             </footer>
           </form>
-        </div>
+        </div>,
+        document.body,
       ) : null}
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
