@@ -4124,6 +4124,8 @@ function OrientationCycleView({
   const [quickFormExpanded, setQuickFormExpanded] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
+  const [classEditDrafts, setClassEditDrafts] = useState<Record<string, Record<string, string>>>({});
+  const [savedClassId, setSavedClassId] = useState("");
   // Estados modificados desde la lista que aún no se guardan (id → estado nuevo).
   const [pendingStatuses, setPendingStatuses] = useState<Record<string, string>>({});
   // Registro cuyo feedback de clase (pauta de acompañamiento) está abierto.
@@ -4783,10 +4785,47 @@ function OrientationCycleView({
       return next;
     });
   };
-  const toggleClassDetails = (recordId: string) => {
+  const classEditDraft = (record: DataRecord): Record<string, string> => ({
+    date: record.date || "",
+    axis: rawOrientationAction(record),
+    characterStrength: rawOrientationAction(record),
+    topic: isPlaceholderOrientationText(record.topic) ? getOrientationDisplayTitle(record) : record.topic || "",
+    notes: record.notes || "",
+    reprogramReason: record.reprogramReason || "",
+    reprogramDate: record.reprogramDate || "",
+    canvaLink: record.canvaLink || record.evidence || "",
+    evidence: record.canvaLink || record.evidence || "",
+    planificacion: record.planificacion || "",
+    folderLink: record.folderLink || "",
+    teacherLink: record.teacherLink || "",
+    teacherSentAt: record.teacherSentAt || "",
+  });
+  const toggleClassDetails = (record: DataRecord) => {
+    const opening = !expandedClassIds.includes(record.id);
+    if (opening) {
+      setClassEditDrafts((current) => current[record.id] ? current : { ...current, [record.id]: classEditDraft(record) });
+    }
+    setSavedClassId("");
     setExpandedClassIds((current) =>
-      current.includes(recordId) ? current.filter((id) => id !== recordId) : [...current, recordId],
+      current.includes(record.id) ? current.filter((id) => id !== record.id) : [...current, record.id],
     );
+  };
+  const updateClassEditDraft = (record: DataRecord, updates: Record<string, string>) => {
+    setSavedClassId("");
+    setClassEditDrafts((current) => ({
+      ...current,
+      [record.id]: { ...(current[record.id] || classEditDraft(record)), ...updates },
+    }));
+  };
+  const saveClassEditDraft = (record: DataRecord) => {
+    const draft = classEditDrafts[record.id];
+    if (!draft) return;
+    const config = orientationConfigForDate(draft.date || "");
+    onUpdateOrientationRecord(record.id, {
+      ...draft,
+      ...(config ? { week: config.week, weekNumber: orientationWeekNumber(config.week) } : {}),
+    });
+    setSavedClassId(record.id);
   };
   const showReprogrammedClasses = () => {
     setFilterCourse("all");
@@ -5232,6 +5271,7 @@ function OrientationCycleView({
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
             const pendingStatus = pendingStatuses[record.id];
             const shownStatus = pendingStatus || canonicalOrientationStatus(record.status);
+            const editDraft = classEditDrafts[record.id] || classEditDraft(record);
             const headTeacher = headTeacherForCourse(record.course || "");
             const dateKey = (record.date || "").slice(0, 10) || "sin-fecha";
             const previousDateKey = index > 0 ? (renderedClasses[index - 1].date || "").slice(0, 10) || "sin-fecha" : "";
@@ -5335,7 +5375,7 @@ function OrientationCycleView({
                         <Check className="h-4 w-4" /> Guardar
                       </button>
                     ) : null}
-                    <button onClick={() => toggleClassDetails(record.id)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                    <button onClick={() => toggleClassDetails(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                       {expanded ? "Ocultar" : "Detalles"}
                       <ChevronDown className={`h-3.5 w-3.5 transition ${expanded ? "rotate-180" : ""}`} />
                     </button>
@@ -5361,8 +5401,11 @@ function OrientationCycleView({
                     <div className="mb-3 flex flex-wrap justify-end gap-2">
                       {!isCalendar ? (
                         <>
-                          <button onClick={() => toggleClassDetails(record.id)} title="Los cambios se guardan al salir de cada campo; esto cierra el detalle" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">
-                            <Check className="h-4 w-4" /> Guardar
+                          <button onClick={() => saveClassEditDraft(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700">
+                            <Save className="h-4 w-4" /> {savedClassId === record.id ? "Cambios guardados" : "Guardar cambios"}
+                          </button>
+                          <button onClick={() => toggleClassDetails(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                            <X className="h-4 w-4" /> Cerrar
                           </button>
                           <button onClick={() => { if (window.confirm("Eliminar este registro?")) onDeleteOrientationRecord(record.id); }} title="Eliminar registro" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50">
                             <Trash2 className="h-4 w-4" /> Borrar
@@ -5374,11 +5417,7 @@ function OrientationCycleView({
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
                       <label className="block xl:col-span-2">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha</span>
-                        <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => {
-                          const date = event.target.value;
-                          const config = orientationConfigForDate(date);
-                          onUpdateOrientationRecord(record.id, { date, ...(config ? { week: config.week, weekNumber: orientationWeekNumber(config.week) } : {}) });
-                        }} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <input disabled={isCalendar} type="date" value={editDraft.date} onChange={(event) => updateClassEditDraft(record, { date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
                       <div className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana / tramo</span>
@@ -5401,27 +5440,27 @@ function OrientationCycleView({
                       </div>
                       <label className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Accion / fortaleza</span>
-                        <input disabled={isCalendar} defaultValue={rawOrientationAction(record)} onBlur={(event) => onUpdateOrientationRecord(record.id, { axis: event.target.value, characterStrength: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <input disabled={isCalendar} value={editDraft.axis} onChange={(event) => updateClassEditDraft(record, { axis: event.target.value, characterStrength: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
 
                       <label className="block xl:col-span-6">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tema / comentario</span>
-                        <textarea disabled={isCalendar} defaultValue={isPlaceholderOrientationText(record.topic) ? displayTitle : record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={3} className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <textarea disabled={isCalendar} value={editDraft.topic} onChange={(event) => updateClassEditDraft(record, { topic: event.target.value })} rows={3} className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
                       <label className="block xl:col-span-6">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Observaciones</span>
-                        <textarea disabled={isCalendar} defaultValue={record.notes || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { notes: event.target.value })} rows={3} placeholder="Notas, reprogramacion, materiales pendientes o acuerdos." className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <textarea disabled={isCalendar} value={editDraft.notes} onChange={(event) => updateClassEditDraft(record, { notes: event.target.value })} rows={3} placeholder="Notas, reprogramacion, materiales pendientes o acuerdos." className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
 
                       {(/reprogramad/i.test(record.status || "") || record.reprogramReason) ? (
                         <>
                           <label className="block xl:col-span-9">
                             <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Motivo de la reprogramación</span>
-                            <textarea disabled={isCalendar} defaultValue={record.reprogramReason || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { reprogramReason: event.target.value })} rows={2} placeholder="Por qué se reprogramó la clase" className="mt-1 w-full resize-y rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-amber-500 disabled:bg-slate-100" />
+                            <textarea disabled={isCalendar} value={editDraft.reprogramReason} onChange={(event) => updateClassEditDraft(record, { reprogramReason: event.target.value })} rows={2} placeholder="Por qué se reprogramó la clase" className="mt-1 w-full resize-y rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-amber-500 disabled:bg-slate-100" />
                           </label>
                           <label className="block xl:col-span-3">
                             <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Nueva fecha</span>
-                            <input disabled={isCalendar} type="date" defaultValue={record.reprogramDate || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { reprogramDate: event.target.value })} className="mt-1 w-full rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm outline-none focus:border-amber-500 disabled:bg-slate-100" />
+                            <input disabled={isCalendar} type="date" value={editDraft.reprogramDate} onChange={(event) => updateClassEditDraft(record, { reprogramDate: event.target.value })} className="mt-1 w-full rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm outline-none focus:border-amber-500 disabled:bg-slate-100" />
                           </label>
                         </>
                       ) : null}
@@ -5429,18 +5468,18 @@ function OrientationCycleView({
                       <label className="block xl:col-span-4">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva / evidencia</span>
                         <div className="mt-1 flex gap-2">
-                          <input disabled={isCalendar} defaultValue={canvaUrl} onBlur={(event) => onUpdateOrientationRecord(record.id, { canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://canva..." className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                          <input disabled={isCalendar} value={editDraft.canvaLink} onChange={(event) => updateClassEditDraft(record, { canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://canva..." className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                           {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Abrir</a> : null}
                         </div>
                       </label>
                       <label className="block xl:col-span-4">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Planificacion</span>
-                        <textarea disabled={isCalendar} defaultValue={record.planificacion || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { planificacion: event.target.value })} rows={2} placeholder="Nombre, link o breve descripcion" className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <textarea disabled={isCalendar} value={editDraft.planificacion} onChange={(event) => updateClassEditDraft(record, { planificacion: event.target.value })} rows={2} placeholder="Nombre, link o breve descripcion" className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                       </label>
                       <label className="block xl:col-span-4">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carpeta Drive</span>
                         <div className="mt-1 flex gap-2">
-                          <input disabled={isCalendar} defaultValue={folderUrl} onBlur={(event) => onUpdateOrientationRecord(record.id, { folderLink: event.target.value })} placeholder="Drive / carpeta / semana" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                          <input disabled={isCalendar} value={editDraft.folderLink} onChange={(event) => updateClassEditDraft(record, { folderLink: event.target.value })} placeholder="Drive / carpeta / semana" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                           {folderUrl.startsWith("http") ? <a href={folderUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Abrir</a> : null}
                         </div>
                       </label>
@@ -5449,7 +5488,7 @@ function OrientationCycleView({
                         <div className="grid gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3 md:grid-cols-3 xl:col-span-12">
                           <label className="block md:col-span-1">
                             <span className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Link profesores</span>
-                            <input disabled={isCalendar} defaultValue={record.teacherLink || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { teacherLink: event.target.value })} className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                            <input disabled={isCalendar} value={editDraft.teacherLink} onChange={(event) => updateClassEditDraft(record, { teacherLink: event.target.value })} className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                           </label>
                           <div className="block">
                             <span className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Envio</span>
@@ -5457,7 +5496,7 @@ function OrientationCycleView({
                           </div>
                           <label className="block">
                             <span className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Fecha de envio</span>
-                            <input disabled={isCalendar} type="date" defaultValue={record.teacherSentAt || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { teacherSentAt: event.target.value })} className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                            <input disabled={isCalendar} type="date" value={editDraft.teacherSentAt} onChange={(event) => updateClassEditDraft(record, { teacherSentAt: event.target.value })} className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
                           </label>
                         </div>
                       ) : null}
