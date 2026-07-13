@@ -485,7 +485,11 @@ const formatOrientationDate = (value: string | undefined) => {
   if (!value) return "Sin fecha";
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (!match) return value;
-  return `${match[3]}-${match[2]}-${match[1].slice(-2)}`;
+  const [, year, month, day] = match;
+  const date = new Date(Number(year), Number(month) - 1, Number(day));
+  const weekdays = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+  const months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+  return `${weekdays[date.getDay()]}, ${day} ${months[Number(month) - 1]} ${year}`;
 };
 
 const orientationActionColumns = [
@@ -5299,7 +5303,7 @@ function OrientationCycleView({
                   <div className={`lg:hidden ${index === 0 ? "pb-2 pt-2" : "pb-2 pt-5"}`}>
                     <div className="flex items-center gap-2 px-3">
                       <CalendarDays className="h-3.5 w-3.5 shrink-0 text-cyan-700" />
-                      <span className="font-mono text-xs font-bold text-slate-700">{formatOrientationDate(record.date)}</span>
+                      <span className="text-xs font-bold text-slate-700">{formatOrientationDate(record.date)}</span>
                       <span className="text-[10px] font-semibold text-slate-400">{dateGroupCount} {dateGroupCount === 1 ? "registro" : "registros"}</span>
                       <span className="h-px min-w-4 flex-1 bg-slate-200" />
                     </div>
@@ -5309,7 +5313,7 @@ function OrientationCycleView({
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
                   <div className="hidden lg:block">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Fecha</p>
-                    <p className="font-mono text-sm font-semibold text-slate-900">{formatOrientationDate(record.date)}</p>
+                    <p className="text-sm font-semibold text-slate-900">{formatOrientationDate(record.date)}</p>
                     {isCalendar ? <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Calendario</span> : null}
                   </div>
 
