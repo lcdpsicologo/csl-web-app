@@ -4097,6 +4097,7 @@ function OrientationCycleView({
   store,
   accessToken,
   onAddOrientationRecord,
+  onAddOrientationWeekRecords,
   onUpdateOrientationRecord,
   onDeleteOrientationRecord,
   onGenerateAnnualPlan,
@@ -4105,6 +4106,7 @@ function OrientationCycleView({
   store: DataStore;
   accessToken: string;
   onAddOrientationRecord: (record: DataRecord) => void;
+  onAddOrientationWeekRecords: (records: DataRecord[]) => void;
   onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
   onDeleteOrientationRecord: (recordId: string) => void;
   onGenerateAnnualPlan: () => void;
@@ -4116,6 +4118,8 @@ function OrientationCycleView({
   const [filterDate, setFilterDate] = useState<string>("all");
   const [orientationSearch, setOrientationSearch] = useState("");
   const [newClassOpen, setNewClassOpen] = useState(false);
+  const [weekCreatorOpen, setWeekCreatorOpen] = useState(false);
+  const [weekCreatorWeek, setWeekCreatorWeek] = useState("");
   // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
   const [quickFormExpanded, setQuickFormExpanded] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
@@ -4161,6 +4165,15 @@ function OrientationCycleView({
       : orientationWeekOptions;
   };
 
+  const effectiveCreatorWeek = weekCreatorWeek || defaultOrientationWeek;
+  const creatorRange = parseOrientationWeekRange(effectiveCreatorWeek);
+  const creatorSlots = useMemo(() => ORIENTATION_WEEKLY_SLOTS
+    .filter((slot) => normalize(slot.owner) === normalize(owner.name))
+    .map((slot) => ({
+      slot,
+      date: creatorRange ? scheduledDateForCourse(slot.course, creatorRange.start) : "",
+    })), [creatorRange, owner.name]);
+
   const ownerStoredClasses = useMemo(() => store.orientation.filter((record) =>
     !isGeneratedOrientationPlaceholder(record) && (
       normalize(record.orientationOwner || "") === normalize(owner.name) ||
@@ -4200,6 +4213,9 @@ function OrientationCycleView({
     (cal) => !ownerStoredClasses.some((s) => (s.date || "") === cal.date && normalize(s.course || "") === normalize(cal.course)),
   ), [calendarClasses, ownerStoredClasses]);
   const ownerClasses: DataRecord[] = useMemo(() => [...ownerStoredClasses, ...calendarClassesFiltered], [calendarClassesFiltered, ownerStoredClasses]);
+  const missingCreatorSlots = useMemo(() => creatorSlots.filter(({ slot, date }) => date && !ownerStoredClasses.some((record) =>
+    (record.date || "").slice(0, 10) === date && normalize(record.course || "") === normalize(slot.course)
+  )), [creatorSlots, ownerStoredClasses]);
   const getOrientationAction = (record: DataRecord) => {
     const value = record.axis || record.characterStrength || record.classType || record.topic || "";
     const exact = orientationActionColumns.find((action) => normalize(action) === normalize(value));
@@ -4418,6 +4434,40 @@ function OrientationCycleView({
       week: quickClassForm.week || defaultOrientationWeek,
     });
     setNewClassForm({});
+  };
+
+  const createWeekFromSchedule = () => {
+    if (!creatorRange || !missingCreatorSlots.length) return;
+    const config = ORIENTATION_FIRST_CYCLE_CONFIG.find((item) => item.week === effectiveCreatorWeek);
+    const records = missingCreatorSlots.map(({ slot, date }) => ({
+      id: `orientation-week-${date}-${normalize(slot.course).replace(/\s+/g, "-")}`,
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      date,
+      week: effectiveCreatorWeek,
+      weekNumber: orientationWeekNumber(effectiveCreatorWeek),
+      course: slot.course,
+      orientationOwner: owner.name,
+      orientationEmail: owner.email,
+      topic: config?.session || "Tema por definir",
+      classType: "Clase de orientación",
+      axis: config?.action || "Intervención Formativa",
+      status: "Planificada",
+      canvaLink: "",
+      teacherLink: "",
+      teacherSentStatus: "No enviado",
+      teacherSentAt: "",
+      evidence: "",
+      planificacion: "",
+      folderLink: "",
+      notes: "",
+      scheduleDay: slot.dayName,
+      scheduleStart: slot.start,
+      scheduleEnd: slot.end,
+      source: "Horario semanal orientación 2026",
+    }));
+    onAddOrientationWeekRecords(records);
+    setWeekCreatorOpen(false);
   };
 
   const exportOwnerClasses = async () => {
@@ -4765,6 +4815,11 @@ function OrientationCycleView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {creatorSlots.length ? (
+            <button onClick={() => setWeekCreatorOpen((value) => !value)} className={`tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${weekCreatorOpen ? "border-cyan-400 bg-cyan-100 text-cyan-800" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}>
+              <Plus className="h-4 w-4" /> Preparar semana
+            </button>
+          ) : null}
           <button onClick={() => setSendOpen((value) => !value)} className={`tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${sendOpen ? "border-emerald-400 bg-emerald-100 text-emerald-800" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
             <Mail className="h-4 w-4" /> Enviar semana
           </button>
@@ -4783,6 +4838,56 @@ function OrientationCycleView({
           </button>
         </div>
       </div>
+
+      {weekCreatorOpen && (
+        <section className="tz-slide-down rounded-xl border border-cyan-200 bg-cyan-50/50 p-4">
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Horario semanal de {owner.name}</p>
+              <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Crear clases desde el horario</h2>
+              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán solo los cursos que todavía no tengan una clase registrada en su fecha correspondiente. Después podrás editar tema, fortaleza y enlaces desde la bitácora.</p>
+            </div>
+            <div className="w-full sm:w-72">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana a preparar</span>
+              <TizaSelect value={effectiveCreatorWeek} onChange={setWeekCreatorWeek} options={weekOptionsFor(effectiveCreatorWeek)} className="mt-1" />
+            </div>
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
+            <div className="hidden grid-cols-[110px_1fr_150px_120px] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:grid">
+              <span>Día</span><span>Curso</span><span>Fecha</span><span>Horario</span>
+            </div>
+            {creatorSlots.map(({ slot, date }) => {
+              const exists = !missingCreatorSlots.some((candidate) => candidate.date === date && normalize(candidate.slot.course) === normalize(slot.course));
+              return (
+                <div key={`${slot.day}-${slot.course}`} className="grid gap-1 border-b border-slate-100 px-3 py-2.5 text-xs last:border-b-0 sm:grid-cols-[110px_1fr_150px_120px] sm:items-center sm:gap-3">
+                  <span className="font-semibold text-slate-600">{slot.dayName}</span>
+                  <span className="font-bold text-slate-950">{slot.course}</span>
+                  <span className="tabular-nums text-slate-600">{formatOrientationDate(date)}</span>
+                  <span className="flex items-center justify-between gap-2 tabular-nums text-slate-600">
+                    {slot.start}–{slot.end}
+                    {exists ? <Check className="h-4 w-4 text-emerald-600" aria-label="Clase ya creada" /> : null}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs font-medium text-slate-600">
+              {missingCreatorSlots.length
+                ? `${missingCreatorSlots.length} clases nuevas · ${creatorSlots.length - missingCreatorSlots.length} ya registradas`
+                : "Esta semana ya tiene todas sus clases registradas."}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setWeekCreatorOpen(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+              <button onClick={createWeekFromSchedule} disabled={!creatorRange || !missingCreatorSlots.length} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300">
+                <CalendarDays className="h-4 w-4" /> {missingCreatorSlots.length ? `Crear ${missingCreatorSlots.length} clases` : "Semana preparada"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {sendOpen && (
         <section className="tz-slide-down rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
@@ -12205,6 +12310,22 @@ export default function TizaEducationApp() {
     setToast("Clase de orientación guardada");
   };
 
+  const addOrientationWeekRecords = (records: DataRecord[]) => {
+    if (!records.length) return;
+    const scheduledKeys = new Set(records.map((record) => normalize([record.date, record.course].join("|"))));
+    setStore((current) => ({
+      ...current,
+      orientation: [
+        ...records,
+        ...current.orientation.filter((record) => {
+          const sameScheduledClass = scheduledKeys.has(normalize([record.date, record.course].join("|")));
+          return !sameScheduledClass || !isGeneratedOrientationPlaceholder(record);
+        }),
+      ],
+    }));
+    setToast(`${records.length} clases de la semana creadas y listas para editar`);
+  };
+
   const deleteOrientationRecord = (recordId: string) => {
     setStore((current) => ({
       ...current,
@@ -12657,6 +12778,7 @@ export default function TizaEducationApp() {
           store={store}
           accessToken={accessToken}
           onAddOrientationRecord={addOrientationRecord}
+          onAddOrientationWeekRecords={addOrientationWeekRecords}
           onUpdateOrientationRecord={updateOrientationRecord}
           onDeleteOrientationRecord={deleteOrientationRecord}
           onGenerateAnnualPlan={() => syncOrientationAnnualPlan(false)}
