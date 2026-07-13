@@ -838,6 +838,325 @@ const orientationDocUrl = (value: string | undefined) => {
   return `https://drive.google.com/drive/search?q=${encodeURIComponent(text)}`;
 };
 
+// ---- Feedback de clase (pauta de acompañamiento Colegio San Lucas) ----
+
+const FEEDBACK_SECTION_CULTURE = [
+  "Describe la conducta esperada previo a comenzar la clase o ante cualquier actividad de esta.",
+  "Nombra la fortaleza del carácter cuando anticipa, felicita o corrige.",
+  "Al nombrar la fortaleza la relaciona con la conducta esperada o no esperada (ejemplifica).",
+  "Felicita conductas positivas, explicitando la conducta reconocida y vinculándola con una fortaleza.",
+  "Corrige formativamente: explicita lo que se espera y menciona la fortaleza vinculada con dicha conducta.",
+  "Mantiene un ambiente ordenado y coherente con las fortalezas y reglamentos.",
+  "Explica el sentido de normas y procedimientos (el porqué de una norma, corrección o felicitación).",
+];
+
+const FEEDBACK_SECTION_STRENGTHS = [
+  "Contextualiza la clase nombrando la fortaleza que se trabajará ese día u hora.",
+  "Recuerda el significado de la fortaleza del carácter.",
+  "Conecta la clase con conductas asociadas a la fortaleza.",
+  "Invita a reflexionar sobre el desarrollo personal.",
+  "Invita a identificar aprendizajes vinculados a la fortaleza.",
+  "Utiliza libros de formación y/o material de orientación con los estudiantes.",
+];
+
+const FEEDBACK_COMPREHENSION_STRATEGIES = ["Localización", "Inferencia", "Reflexión"];
+
+type ClassFeedbackData = {
+  teacher: string;
+  subject: string;
+  startTime: string;
+  endTime: string;
+  observer: string;
+  observationNumber: string;
+  cultureItems: string[];
+  strengthItems: string[];
+  comprehensionUsed: string;
+  comprehensionStrategies: string[];
+  comprehensionEvidence: string;
+  thinkingUsed: string;
+  thinkingDetail: string;
+  climateUsed: string;
+  climateDetail: string;
+  generalEvidence: string;
+  improvements: string;
+  updatedAt?: string;
+};
+
+const emptyClassFeedback = (): ClassFeedbackData => ({
+  teacher: "",
+  subject: "Orientación",
+  startTime: "",
+  endTime: "",
+  observer: "",
+  observationNumber: "",
+  cultureItems: FEEDBACK_SECTION_CULTURE.map(() => ""),
+  strengthItems: FEEDBACK_SECTION_STRENGTHS.map(() => ""),
+  comprehensionUsed: "",
+  comprehensionStrategies: [],
+  comprehensionEvidence: "",
+  thinkingUsed: "",
+  thinkingDetail: "",
+  climateUsed: "",
+  climateDetail: "",
+  generalEvidence: "",
+  improvements: "",
+});
+
+const parseClassFeedback = (raw: string | undefined): ClassFeedbackData => {
+  const base = emptyClassFeedback();
+  if (!raw) return base;
+  try {
+    const parsed = JSON.parse(raw) as Partial<ClassFeedbackData>;
+    return {
+      ...base,
+      ...parsed,
+      cultureItems: FEEDBACK_SECTION_CULTURE.map((_, index) => parsed.cultureItems?.[index] || ""),
+      strengthItems: FEEDBACK_SECTION_STRENGTHS.map((_, index) => parsed.strengthItems?.[index] || ""),
+      comprehensionStrategies: Array.isArray(parsed.comprehensionStrategies) ? parsed.comprehensionStrategies : [],
+    };
+  } catch {
+    return base;
+  }
+};
+
+const classFeedbackSummaryText = (record: DataRecord, data: ClassFeedbackData) => {
+  const mark = (value: string) => (value === "si" ? "Sí" : value === "no" ? "No" : "—");
+  const lines: string[] = [
+    `FEEDBACK DE CLASE · ${record.course || "Sin curso"} · ${record.date || "Sin fecha"}`,
+    `Docente: ${data.teacher || "—"} · Asignatura: ${data.subject || "—"} · Horario: ${data.startTime || "—"} a ${data.endTime || "—"}`,
+    `Observador/a: ${data.observer || "—"} · N° de observación: ${data.observationNumber || "—"}`,
+    `Clase: ${record.topic || "—"} · Fortaleza/acción: ${record.axis || record.characterStrength || "—"}`,
+    "",
+    "1. INTERVENCIÓN FORMATIVA Y CULTURA INSTITUCIONAL",
+    ...FEEDBACK_SECTION_CULTURE.map((item, index) => `  [${mark(data.cultureItems[index])}] ${item}`),
+    "",
+    "2. TRABAJO DE FORTALEZAS DEL CARÁCTER EN LA CLASE",
+    ...FEEDBACK_SECTION_STRENGTHS.map((item, index) => `  [${mark(data.strengthItems[index])}] ${item}`),
+    "",
+    "3. ESTRATEGIAS PEDAGÓGICAS OBSERVADAS",
+    `  a. Habilidad de comprensión: ${mark(data.comprehensionUsed)}${data.comprehensionStrategies.length ? ` (${data.comprehensionStrategies.join(", ")})` : ""}`,
+  ];
+  if (data.comprehensionEvidence.trim()) lines.push(`     Evidencia: ${data.comprehensionEvidence.trim()}`);
+  lines.push(`  b. Estrategias de pensamiento: ${mark(data.thinkingUsed)}${data.thinkingDetail.trim() ? ` · ${data.thinkingDetail.trim()}` : ""}`);
+  lines.push(`  c. Estrategias de clima de aula: ${mark(data.climateUsed)}${data.climateDetail.trim() ? ` · ${data.climateDetail.trim()}` : ""}`);
+  if (data.generalEvidence.trim()) {
+    lines.push("", "4. EVIDENCIA / OBSERVACIONES GENERALES", `  ${data.generalEvidence.trim()}`);
+  }
+  if (data.improvements.trim()) {
+    lines.push("", "5. ELEMENTOS DESTACADOS Y SUGERENCIAS PARA LA MEJORA", `  ${data.improvements.trim()}`);
+  }
+  return lines.join("\n");
+};
+
+function FeedbackYesNo({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  return (
+    <div className="flex shrink-0 gap-1">
+      {(["si", "no"] as const).map((option) => (
+        <button
+          key={option}
+          type="button"
+          onClick={() => onChange(value === option ? "" : option)}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-bold ring-1 transition ${
+            value === option
+              ? option === "si"
+                ? "bg-emerald-100 text-emerald-700 ring-emerald-300"
+                : "bg-rose-100 text-rose-700 ring-rose-300"
+              : "bg-white text-slate-400 ring-slate-200 hover:bg-slate-50"
+          }`}
+        >
+          {option === "si" ? "Sí" : "No"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function OrientationFeedbackModal({
+  record,
+  ownerName,
+  onClose,
+  onSave,
+}: {
+  record: DataRecord;
+  ownerName: string;
+  onClose: () => void;
+  onSave: (data: ClassFeedbackData) => void;
+}) {
+  const [data, setData] = useState<ClassFeedbackData>(() => {
+    const parsed = parseClassFeedback(record.classFeedback);
+    if (!parsed.teacher) parsed.teacher = headTeacherForCourse(record.course || "")?.name || "";
+    if (!parsed.observer) parsed.observer = ownerName;
+    return parsed;
+  });
+  const [copied, setCopied] = useState(false);
+  const update = (changes: Partial<ClassFeedbackData>) => setData((current) => ({ ...current, ...changes }));
+  const updateItem = (key: "cultureItems" | "strengthItems", index: number, value: string) =>
+    setData((current) => ({ ...current, [key]: current[key].map((item, i) => (i === index ? value : item)) }));
+
+  const copySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(classFeedbackSummaryText(record, data));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt("Copia el resumen manualmente:", classFeedbackSummaryText(record, data));
+    }
+  };
+
+  const sectionTitle = "text-xs font-bold uppercase tracking-wider text-blue-700";
+  const fieldLabel = "text-[11px] font-bold uppercase tracking-wide text-slate-500";
+  const inputStyle = "mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500";
+
+  return (
+    <div className="fixed inset-0 z-[200] overflow-y-auto bg-slate-900/50 p-4" onClick={onClose}>
+      <div className="mx-auto my-6 w-full max-w-3xl rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-blue-50 to-white px-5 py-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Pauta de acompañamiento de clase</p>
+            <h2 className="text-lg font-semibold text-slate-950">Feedback · {record.course || "Sin curso"} · {record.date || "Sin fecha"}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{record.topic || "Sin tema definido"}{(record.axis || record.characterStrength) ? ` · ${record.axis || record.characterStrength}` : ""}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Cerrar sin guardar">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="max-h-[70vh] space-y-5 overflow-y-auto px-5 py-4">
+          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <label className="block">
+              <span className={fieldLabel}>Nombre docente</span>
+              <input value={data.teacher} onChange={(event) => update({ teacher: event.target.value })} className={inputStyle} />
+            </label>
+            <label className="block">
+              <span className={fieldLabel}>Asignatura</span>
+              <input value={data.subject} onChange={(event) => update({ subject: event.target.value })} className={inputStyle} />
+            </label>
+            <label className="block">
+              <span className={fieldLabel}>N° de observación</span>
+              <input value={data.observationNumber} onChange={(event) => update({ observationNumber: event.target.value })} className={inputStyle} />
+            </label>
+            <label className="block">
+              <span className={fieldLabel}>Hora de inicio</span>
+              <input type="time" value={data.startTime} onChange={(event) => update({ startTime: event.target.value })} className={inputStyle} />
+            </label>
+            <label className="block">
+              <span className={fieldLabel}>Hora de término</span>
+              <input type="time" value={data.endTime} onChange={(event) => update({ endTime: event.target.value })} className={inputStyle} />
+            </label>
+            <label className="block">
+              <span className={fieldLabel}>Observador/a</span>
+              <input value={data.observer} onChange={(event) => update({ observer: event.target.value })} className={inputStyle} />
+            </label>
+          </section>
+
+          <section>
+            <h3 className={sectionTitle}>1. Intervención formativa y cultura institucional</h3>
+            <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {FEEDBACK_SECTION_CULTURE.map((item, index) => (
+                <div key={item} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <p className="text-sm text-slate-700">{item}</p>
+                  <FeedbackYesNo value={data.cultureItems[index]} onChange={(value) => updateItem("cultureItems", index, value)} />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <h3 className={sectionTitle}>2. Trabajo de fortalezas del carácter en la clase</h3>
+            <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
+              {FEEDBACK_SECTION_STRENGTHS.map((item, index) => (
+                <div key={item} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                  <p className="text-sm text-slate-700">{item}</p>
+                  <FeedbackYesNo value={data.strengthItems[index]} onChange={(value) => updateItem("strengthItems", index, value)} />
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="space-y-3">
+            <h3 className={sectionTitle}>3. Estrategias pedagógicas observadas</h3>
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-800">a. ¿Se observa uso de habilidad de comprensión?</p>
+                <FeedbackYesNo value={data.comprehensionUsed} onChange={(value) => update({ comprehensionUsed: value })} />
+              </div>
+              {data.comprehensionUsed === "si" ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {FEEDBACK_COMPREHENSION_STRATEGIES.map((strategy) => {
+                    const active = data.comprehensionStrategies.includes(strategy);
+                    return (
+                      <button
+                        key={strategy}
+                        type="button"
+                        onClick={() => update({
+                          comprehensionStrategies: active
+                            ? data.comprehensionStrategies.filter((item) => item !== strategy)
+                            : [...data.comprehensionStrategies, strategy],
+                        })}
+                        className={`rounded-lg px-3 py-1.5 text-xs font-bold ring-1 transition ${active ? "bg-blue-100 text-blue-700 ring-blue-300" : "bg-white text-slate-500 ring-slate-200 hover:bg-slate-50"}`}
+                      >
+                        {strategy}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+              <label className="mt-2 block">
+                <span className={fieldLabel}>Evidencia</span>
+                <textarea value={data.comprehensionEvidence} onChange={(event) => update({ comprehensionEvidence: event.target.value })} rows={2} className={`${inputStyle} resize-y`} />
+              </label>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-800">b. ¿Utiliza estrategia de pensamiento?</p>
+                <FeedbackYesNo value={data.thinkingUsed} onChange={(value) => update({ thinkingUsed: value })} />
+              </div>
+              <label className="mt-2 block">
+                <span className={fieldLabel}>¿Cuál(es)?</span>
+                <textarea value={data.thinkingDetail} onChange={(event) => update({ thinkingDetail: event.target.value })} rows={2} className={`${inputStyle} resize-y`} />
+              </label>
+            </div>
+            <div className="rounded-xl border border-slate-200 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-semibold text-slate-800">c. ¿Utiliza estrategia de clima de aula?</p>
+                <FeedbackYesNo value={data.climateUsed} onChange={(value) => update({ climateUsed: value })} />
+              </div>
+              <label className="mt-2 block">
+                <span className={fieldLabel}>¿Cuál(es)?</span>
+                <textarea value={data.climateDetail} onChange={(event) => update({ climateDetail: event.target.value })} rows={2} className={`${inputStyle} resize-y`} />
+              </label>
+            </div>
+          </section>
+
+          <section>
+            <h3 className={sectionTitle}>4. Evidencia / observaciones generales</h3>
+            <textarea value={data.generalEvidence} onChange={(event) => update({ generalEvidence: event.target.value })} rows={4} placeholder="Registro de lo observado durante la clase." className={`${inputStyle} resize-y`} />
+          </section>
+
+          <section>
+            <h3 className={sectionTitle}>5. Elementos destacados y sugerencias para la mejora</h3>
+            <textarea value={data.improvements} onChange={(event) => update({ improvements: event.target.value })} rows={4} placeholder="Lo que se destaca de la clase y las sugerencias concretas para la docente." className={`${inputStyle} resize-y`} />
+          </section>
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-2 rounded-b-2xl border-t border-slate-100 bg-slate-50 px-5 py-3">
+          <button onClick={copySummary} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+            <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar para enviar"}
+          </button>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+              Cancelar
+            </button>
+            <button onClick={() => onSave(data)} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-violet-700">
+              <Save className="h-4 w-4" /> Guardar feedback
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 const hasOrientationRecordContent = (record: DataRecord | Record<string, string>) => Boolean(
   (record.canvaLink || record.evidence || record.planificacion || record.folderLink || record.teacherLink || meaningfulOrientationNotes(record as DataRecord) || "").trim(),
 );
@@ -3381,6 +3700,8 @@ function OrientationCycleView({
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
   // Estados modificados desde la lista que aún no se guardan (id → estado nuevo).
   const [pendingStatuses, setPendingStatuses] = useState<Record<string, string>>({});
+  // Registro cuyo feedback de clase (pauta de acompañamiento) está abierto.
+  const [feedbackRecordId, setFeedbackRecordId] = useState("");
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
   const owner = useMemo(() => orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0], [selectedOwner]);
@@ -4369,9 +4690,18 @@ function OrientationCycleView({
                       {expanded ? "Ocultar" : "Detalles"}
                       <ChevronDown className={`h-3.5 w-3.5 transition ${expanded ? "rotate-180" : ""}`} />
                     </button>
-                    {!isCalendar && !pendingStatus ? (
+                    {!isCalendar && !pendingStatus && canonicalOrientationStatus(record.status) !== "Realizada" ? (
                       <button onClick={() => onUpdateOrientationRecord(record.id, { status: "Realizada" })} title="Marcar como realizada" className="inline-flex items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-emerald-700 hover:bg-emerald-100">
                         <Check className="h-4 w-4" />
+                      </button>
+                    ) : null}
+                    {!isCalendar && canonicalOrientationStatus(record.status) === "Realizada" ? (
+                      <button
+                        onClick={() => setFeedbackRecordId(record.id)}
+                        title={record.classFeedback ? "Ver o editar el feedback de la clase" : "Registrar feedback de la clase para la docente"}
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold ${record.classFeedback ? "border-violet-300 bg-violet-100 text-violet-800 hover:bg-violet-200" : "border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"}`}
+                      >
+                        <ClipboardList className="h-4 w-4" /> Feedback
                       </button>
                     ) : null}
                   </div>
@@ -4670,6 +5000,22 @@ function OrientationCycleView({
           </table>
         </div>
       </section>
+
+      {(() => {
+        const feedbackRecord = feedbackRecordId ? store.orientation.find((record) => record.id === feedbackRecordId) : undefined;
+        return feedbackRecord ? (
+          <OrientationFeedbackModal
+            key={feedbackRecord.id}
+            record={feedbackRecord}
+            ownerName={owner.name}
+            onClose={() => setFeedbackRecordId("")}
+            onSave={(data) => {
+              onUpdateOrientationRecord(feedbackRecord.id, { classFeedback: JSON.stringify({ ...data, updatedAt: nowIso() }) });
+              setFeedbackRecordId("");
+            }}
+          />
+        ) : null;
+      })()}
     </div>
   );
 }
