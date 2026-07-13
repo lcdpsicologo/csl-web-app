@@ -304,3 +304,105 @@ export async function PUT(request: Request) {
     }, { status: 500 });
   }
 }
+
+export async function PATCH(request: Request) {
+  const supabase = getAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase service credentials are not configured" }, { status: 503 });
+  }
+
+  const auth = await authenticate(request, supabase);
+  if (auth.error) return auth.error;
+
+  try {
+    const body = await request.json();
+    const entity = body.entity as EntityId;
+    const records = Array.isArray(body.records) ? body.records as DataRecord[] : [];
+    const recordIds = Array.isArray(body.recordIds)
+      ? body.recordIds.map((value: unknown) => String(value || "").trim()).filter(Boolean)
+      : [];
+    if (!ENTITY_IDS.includes(entity) || (records.length === 0 && recordIds.length === 0)) {
+      return NextResponse.json({ error: "Entity and record changes are required" }, { status: 400 });
+    }
+
+    const institutionId = await ensureInstitution(supabase, auth.user);
+    const rows = records.map((record, index) => ({
+      institution_id: institutionId,
+      entity,
+      record_id: stableRecordId(entity, record, index),
+      data: sanitizeData(record),
+      created_by: auth.user.id,
+      updated_by: auth.user.id,
+    }));
+
+    if (rows.length) {
+      const { error: upsertError } = await supabase
+        .from("app_records")
+        .upsert(rows, { onConflict: "institution_id,entity,record_id" });
+      if (upsertError) {
+        if (shouldRetryWithoutUserColumns(upsertError)) {
+          const { error: fallbackError } = await supabase
+            .from("app_records")
+            .upsert(withoutUserColumns(rows), { onConflict: "institution_id,entity,record_id" });
+          if (fallbackError) throw fallbackError;
+        } else {
+          throw upsertError;
+        }
+      }
+    }
+
+    if (recordIds.length) {
+      const { error: deleteError } = await supabase
+        .from("app_records")
+        .delete()
+        .eq("institution_id", institutionId)
+        .eq("entity", entity)
+        .in("record_id", recordIds);
+      if (deleteError) throw deleteError;
+    }
+
+    return NextResponse.json({ ok: true, persistent: true, saved: rows.length, deleted: recordIds.length });
+  } catch (error) {
+    console.error("Incremental records save failed", error);
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : "Unable to save records",
+    }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  const supabase = getAdminClient();
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase service credentials are not configured" }, { status: 503 });
+  }
+
+  const auth = await authenticate(request, supabase);
+  if (auth.error) return auth.error;
+
+  try {
+    const body = await request.json();
+    const entity = body.entity as EntityId;
+    const recordIds = Array.isArray(body.recordIds)
+      ? body.recordIds.map((value: unknown) => String(value || "").trim()).filter(Boolean)
+      : [];
+    if (!ENTITY_IDS.includes(entity) || recordIds.length === 0) {
+      return NextResponse.json({ error: "Entity and recordIds are required" }, { status: 400 });
+    }
+
+    const institutionId = await ensureInstitution(supabase, auth.user);
+    const { error: deleteError } = await supabase
+      .from("app_records")
+      .delete()
+      .eq("institution_id", institutionId)
+      .eq("entity", entity)
+      .in("record_id", recordIds);
+    if (deleteError) throw deleteError;
+
+    return NextResponse.json({ ok: true, persistent: true, deleted: recordIds.length });
+  } catch (error) {
+    console.error("Incremental records delete failed", error);
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : "Unable to delete records",
+    }, { status: 500 });
+  }
+}

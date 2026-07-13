@@ -11809,6 +11809,76 @@ export default function TizaEducationApp() {
     await queuedSave;
   }, [authUser, accessToken, remoteLoaded]);
 
+  const saveRecordDelta = React.useCallback(async ({
+    method,
+    entity,
+    records = [],
+    recordIds = [],
+    previousStore,
+    nextStore,
+  }: {
+    method: "PATCH" | "DELETE";
+    entity: EntityId;
+    records?: DataRecord[];
+    recordIds?: string[];
+    previousStore: DataStore;
+    nextStore: DataStore;
+  }) => {
+    if (!authUser || !accessToken || !remoteLoaded) return;
+    const previousSerialized = JSON.stringify(previousStore);
+    const nextSerialized = JSON.stringify(nextStore);
+    const operation = async () => {
+      setRemoteStatus("saving");
+      setRemoteError("");
+      let lastError = "No se pudieron guardar los cambios.";
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          let token = accessTokenRef.current || accessToken;
+          let response = await fetch("/api/records", {
+            method,
+            headers: {
+              authorization: `Bearer ${token}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ entity, records, recordIds }),
+          });
+          if (response.status === 401 && supabaseAuth) {
+            const { data } = await supabaseAuth.auth.getSession();
+            token = data.session?.access_token || token;
+            response = await fetch("/api/records", {
+              method,
+              headers: {
+                authorization: `Bearer ${token}`,
+                "content-type": "application/json",
+              },
+              body: JSON.stringify({ entity, records, recordIds }),
+            });
+          }
+          if (response.ok) {
+            if (lastSavedSerializedRef.current === previousSerialized) {
+              lastSavedSerializedRef.current = nextSerialized;
+            }
+            setRemoteStatus("synced");
+            return;
+          }
+          const payload = await response.json().catch(() => null);
+          lastError = payload?.error || `Error ${response.status} al sincronizar.`;
+          if (response.status < 500 && response.status !== 429) break;
+        } catch (error) {
+          lastError = error instanceof Error ? error.message : "No se pudo conectar con Supabase.";
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+      }
+
+      setRemoteStatus("error");
+      setRemoteError(lastError);
+    };
+    const queuedSave = saveQueueRef.current.then(operation, operation);
+    saveQueueRef.current = queuedSave;
+    await queuedSave;
+  }, [authUser, accessToken, remoteLoaded]);
+
   useEffect(() => {
     if (!authUser || !accessToken || !remoteLoaded) return;
 
@@ -12354,33 +12424,41 @@ export default function TizaEducationApp() {
   };
 
   const updateOrientationRecord = (recordId: string, updates: Record<string, string>) => {
+    const previousStore = storeRef.current;
+    const orientation = previousStore.orientation.map((record) =>
+      record.id === recordId ? { ...record, ...updates, updatedAt: nowIso() } : record
+    );
     const nextStore = {
-      ...storeRef.current,
-      orientation: storeRef.current.orientation.map((record) =>
-        record.id === recordId ? { ...record, ...updates, updatedAt: nowIso() } : record
-      ),
+      ...previousStore,
+      orientation,
     };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
+    const changedRecord = orientation.find((record) => record.id === recordId);
+    if (changedRecord) void saveRecordDelta({ method: "PATCH", entity: "orientation", records: [changedRecord], previousStore, nextStore });
   };
 
   const addOrientationRecord = (record: DataRecord) => {
-    const nextStore = { ...storeRef.current, orientation: [record, ...storeRef.current.orientation] };
+    const previousStore = storeRef.current;
+    const nextStore = { ...previousStore, orientation: [record, ...previousStore.orientation] };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
+    void saveRecordDelta({ method: "PATCH", entity: "orientation", records: [record], previousStore, nextStore });
     setToast("Clase de orientación guardada");
   };
 
   const addOrientationWeekRecords = (records: DataRecord[]) => {
     if (!records.length) return;
+    const previousStore = storeRef.current;
     const scheduledKeys = new Set(records.map((record) => normalize([record.date, record.course].join("|"))));
+    const replacedPlaceholderIds = previousStore.orientation
+      .filter((record) => scheduledKeys.has(normalize([record.date, record.course].join("|"))) && isGeneratedOrientationPlaceholder(record))
+      .map((record) => record.id);
     const nextStore = {
-      ...storeRef.current,
+      ...previousStore,
       orientation: [
         ...records,
-        ...storeRef.current.orientation.filter((record) => {
+        ...previousStore.orientation.filter((record) => {
           const sameScheduledClass = scheduledKeys.has(normalize([record.date, record.course].join("|")));
           return !sameScheduledClass || !isGeneratedOrientationPlaceholder(record);
         }),
@@ -12388,18 +12466,19 @@ export default function TizaEducationApp() {
     };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
+    void saveRecordDelta({ method: "PATCH", entity: "orientation", records, recordIds: replacedPlaceholderIds, previousStore, nextStore });
     setToast(`${records.length} clases de la semana creadas y listas para editar`);
   };
 
   const deleteOrientationRecord = (recordId: string) => {
+    const previousStore = storeRef.current;
     const nextStore = {
-      ...storeRef.current,
-      orientation: storeRef.current.orientation.filter((record) => record.id !== recordId),
+      ...previousStore,
+      orientation: previousStore.orientation.filter((record) => record.id !== recordId),
     };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
+    void saveRecordDelta({ method: "DELETE", entity: "orientation", recordIds: [recordId], previousStore, nextStore });
     setToast("Clase eliminada");
   };
 
@@ -12921,7 +13000,7 @@ export default function TizaEducationApp() {
     loading: "Cargando Supabase",
     synced: "Sincronizado",
     saving: "Guardando",
-    error: "Sincronizacion pendiente",
+    error: "Reintentar sincronización",
   }[remoteStatus];
 
   if (authLoading) {
@@ -12987,7 +13066,7 @@ export default function TizaEducationApp() {
               <p className="text-xs font-semibold text-slate-900">{authUser.email}</p>
               <button
                 type="button"
-                onClick={remoteStatus === "error" ? () => window.location.reload() : undefined}
+                onClick={remoteStatus === "error" ? () => void saveStoreSnapshot(storeRef.current) : undefined}
                 disabled={remoteStatus !== "error"}
                 className={`mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                   remoteStatus === "synced"
@@ -12996,7 +13075,7 @@ export default function TizaEducationApp() {
                       ? "cursor-pointer bg-orange-50 text-orange-700 hover:bg-orange-100"
                       : "bg-slate-100 text-slate-600"
                 }`}
-                title={remoteStatus === "error" ? `${remoteError || syncLabel} · Clic para recargar y reintentar` : remoteError || syncLabel}
+                title={remoteStatus === "error" ? `${remoteError || syncLabel} · Clic para reintentar sin recargar la página` : remoteError || syncLabel}
               >
                 {syncLabel}
               </button>
