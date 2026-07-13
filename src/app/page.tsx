@@ -472,6 +472,13 @@ const scheduledDateForCourse = (course: string, weekStartISO: string) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
+const formatOrientationDate = (value: string | undefined) => {
+  if (!value) return "Sin fecha";
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!match) return value;
+  return `${match[3]}-${match[2]}-${match[1].slice(-2)}`;
+};
+
 const orientationActionColumns = [
   "Soy amable",
   "Soy correcto",
@@ -4236,20 +4243,56 @@ function OrientationCycleView({
     const reprogrammedRows = sortedRecords
       .filter((record) => /reprogramad/i.test(record.status || ""))
       .map((record) => [
-        record.date || "",
+        record.date ? formatOrientationDate(record.date) : "",
         record.week || "",
         record.course || "",
         getOrientationAction(record),
         getOrientationDisplayTitle(record),
         record.reprogramReason || "Sin motivo registrado",
-        record.reprogramDate || "",
+        record.reprogramDate ? formatOrientationDate(record.reprogramDate) : "",
         record.notes || "",
       ]);
+    const workshopRows = [...ownerWorkshops]
+      .sort((a, b) => String(a.date || a.createdAt).localeCompare(String(b.date || b.createdAt)))
+      .map((workshop) => [
+        workshop.date ? formatOrientationDate(workshop.date) : "",
+        workshop.title || "",
+        parseJsonArray<string>(workshop.targetCourses).join(", ") || workshop.audience || workshop.course || "",
+        workshop.audienceType || "",
+        workshop.responsible || "",
+        workshop.status || "",
+        workshop.duration || "",
+        workshop.objective || "",
+        String(parseJsonArray<string>(workshop.presentStudentIds).length),
+        String(parseJsonArray<string>(workshop.absentStudentIds).length),
+        workshop.followUp || "",
+        workshop.evidenceLink || "",
+        workshop.notes || "",
+      ]);
+    const feedbackRows = sortedRecords
+      .filter((record) => Boolean(record.classFeedback))
+      .map((record) => {
+        const feedback = parseClassFeedback(record.classFeedback);
+        const evaluated = [...feedback.cultureItems, ...feedback.strengthItems].filter((value) => value === "si" || value === "no");
+        const achieved = evaluated.filter((value) => value === "si").length;
+        return [
+          record.date ? formatOrientationDate(record.date) : "",
+          record.course || "",
+          getOrientationDisplayTitle(record),
+          feedback.teacher || "",
+          feedback.subject || "",
+          feedback.observationNumber || "",
+          `${achieved}/${evaluated.length}`,
+          feedback.generalEvidence || "",
+          feedback.improvements || "",
+          feedback.observer || owner.name,
+        ];
+      });
     const detailRows = sortedRecords.map((record) => {
       const headTeacher = headTeacherForCourse(record.course || "");
       return [
         record.week || "",
-        record.date || "",
+        record.date ? formatOrientationDate(record.date) : "",
         record.course || "",
         headTeacher?.name || "",
         headTeacher?.email || "",
@@ -4257,7 +4300,7 @@ function OrientationCycleView({
         getOrientationDisplayTitle(record),
         record.status || "",
         record.reprogramReason || "",
-        record.reprogramDate || "",
+        record.reprogramDate ? formatOrientationDate(record.reprogramDate) : "",
         record.notes || "",
         record.canvaLink || record.evidence || "",
         record.planificacion || "",
@@ -4381,6 +4424,8 @@ function OrientationCycleView({
 
     addTableSheet("Resumen por curso", "Detalle por curso", ["Curso", "Profesor/a jefe", "Correo PJ", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows, [18, 22, 30, 14, 16, 13, 13, 14, 16, 12, 12, 17, 12]);
     addTableSheet("Acciones", "Cobertura por acción / fortaleza", ["Acción / fortaleza", "Registros", "Realizadas", "Reprogramadas", "% del total"], actionRows, [32, 14, 14, 16, 14]);
+    addTableSheet("Talleres", "Registro completo de talleres", ["Fecha", "Taller", "Cursos", "Destinatarios", "Responsable", "Estado", "Duración", "Objetivo", "Presentes", "Ausentes", "Seguimiento", "Evidencia", "Observaciones"], workshopRows.length ? workshopRows : [["", "No hay talleres asociados a este orientador.", "", "", "", "", "", "", "", "", "", "", ""]], [13, 30, 28, 18, 22, 14, 12, 36, 12, 12, 32, 28, 36]);
+    addTableSheet("Feedbacks", "Historial de feedbacks de clase", ["Fecha", "Curso", "Clase", "Docente", "Asignatura", "N° observación", "Logrados", "Evidencias", "Oportunidades de mejora", "Observador/a"], feedbackRows.length ? feedbackRows : [["", "", "No hay feedbacks registrados para este orientador.", "", "", "", "", "", "", ""]], [13, 16, 34, 24, 18, 16, 12, 40, 40, 22]);
     addTableSheet("Reprogramadas", "Clases reprogramadas", ["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Nueva fecha", "Observaciones"], reprogrammedRows.length ? reprogrammedRows : [["", "", "", "", "No hay clases reprogramadas registradas para este orientador.", "", "", ""]], [13, 24, 16, 24, 34, 36, 14, 36]);
     addTableSheet("Bitácora completa", "Bitácora detallada completa", ["SEM", "FECHA", "CURSO", "PROFESOR/A JEFE", "CORREO PJ", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "NUEVA FECHA", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows, [24, 13, 16, 22, 30, 24, 36, 16, 30, 14, 36, 28, 28, 28, 20, 18]);
 
@@ -4469,8 +4514,8 @@ function OrientationCycleView({
             <ClipboardList className="h-4 w-4" /> Feedbacks
             {ownerFeedbackCount ? <span className="rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-800 tabular-nums">{ownerFeedbackCount}</span> : null}
           </button>
-          <button onClick={exportOwnerClasses} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <ArrowDownToLine className="h-4 w-4" /> Exportar Excel
+          <button onClick={exportOwnerClasses} title={`Descargar el registro integral de ${owner.name}`} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowDownToLine className="h-4 w-4" /> Reporte integral
           </button>
           <button onClick={onGenerateAnnualPlan} className="tz-press inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
             <CalendarDays className="h-4 w-4" /> Completar año
@@ -4546,8 +4591,12 @@ function OrientationCycleView({
               item.courses.some((course) => normalize(record.course || "") === normalize(course))
             )
           );
-          const done = itemClasses.filter((record) => /realizad/i.test(record.status || "")).length;
-          const pct = itemClasses.length ? Math.round((done / itemClasses.length) * 100) : 0;
+          const completedClasses = itemClasses.filter((record) => /realizad/i.test(record.status || ""));
+          const actionCounts = Array.from(completedClasses.reduce((totals, record) => {
+            const action = rawOrientationAction(record) || "Sin tipo definido";
+            totals.set(action, (totals.get(action) || 0) + 1);
+            return totals;
+          }, new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"));
           return (
             <button
               key={item.email}
@@ -4575,14 +4624,23 @@ function OrientationCycleView({
                   <p className="truncate text-xs text-slate-500">{item.courses.length} cursos · {store.students.filter((s) => item.courses.includes(s.course || "")).length} estudiantes</p>
                 </div>
               </div>
-              <div className="mt-3">
-                <div className="flex items-baseline justify-between text-xs font-semibold">
-                  <span className="text-slate-500">{done}/{itemClasses.length} clases realizadas</span>
-                  <span className={active ? "text-blue-700" : "text-slate-700"}>{pct}%</span>
+              <div className="mt-3 border-t border-slate-200/80 pt-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Actividades realizadas</span>
+                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${active ? "bg-blue-100 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{completedClasses.length}</span>
                 </div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-200/70">
-                  <div className={`h-full rounded-full transition-all ${active ? "bg-blue-600" : "bg-emerald-500"}`} style={{ width: `${pct}%` }} />
-                </div>
+                {actionCounts.length ? (
+                  <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    {actionCounts.map(([action, count]) => (
+                      <div key={action} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white/80 px-2 py-1.5">
+                        <span className="truncate text-[11px] font-semibold text-slate-600" title={action}>{action}</span>
+                        <span className="shrink-0 text-xs font-bold tabular-nums text-slate-900">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="rounded-md border border-dashed border-slate-200 bg-white/60 px-2 py-2 text-[11px] font-medium text-slate-500">Aún no hay actividades realizadas registradas.</p>
+                )}
               </div>
             </button>
           );
@@ -4807,7 +4865,7 @@ function OrientationCycleView({
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Fecha</p>
-                    <p className="font-mono text-sm font-semibold text-slate-900">{record.date || "Sin fecha"}</p>
+                    <p className="font-mono text-sm font-semibold text-slate-900">{formatOrientationDate(record.date)}</p>
                     {isCalendar ? <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Calendario</span> : null}
                   </div>
 
@@ -4858,9 +4916,9 @@ function OrientationCycleView({
                       </p>
                     ) : null}
                     {/reprogramad/i.test(shownStatus) && (record.reprogramReason || record.reprogramDate) ? (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={`${record.reprogramReason || ""}${record.reprogramDate ? ` · Nueva fecha: ${record.reprogramDate}` : ""}`}>
+                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={`${record.reprogramReason || ""}${record.reprogramDate ? ` · Nueva fecha: ${formatOrientationDate(record.reprogramDate)}` : ""}`}>
                         <span className="font-bold uppercase tracking-wide text-amber-500">Motivo</span> {record.reprogramReason || "Sin motivo registrado"}
-                        {record.reprogramDate ? <span className="font-semibold"> · Nueva fecha: {record.reprogramDate}</span> : null}
+                        {record.reprogramDate ? <span className="font-semibold"> · Nueva fecha: {formatOrientationDate(record.reprogramDate)}</span> : null}
                       </p>
                     ) : null}
                   </div>
