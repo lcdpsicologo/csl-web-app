@@ -4460,6 +4460,21 @@ function OrientationCycleView({
       week: quickClassForm.week || defaultOrientationWeek,
     });
     setNewClassForm({});
+    setNewClassOpen(false);
+    setQuickFormExpanded(false);
+  };
+
+  const closeQuickClassForm = () => {
+    if (Object.keys(newClassForm).length && !window.confirm("¿Cerrar el registro? Los cambios que aún no guardas se perderán.")) return;
+    setNewClassForm({});
+    setNewClassOpen(false);
+    setQuickFormExpanded(false);
+  };
+
+  const clearQuickClassForm = () => {
+    if (Object.keys(newClassForm).length && !window.confirm("¿Limpiar todos los campos de este registro?")) return;
+    setNewClassForm({});
+    setNewClassOpen(false);
   };
 
   const createWeekFromSchedule = () => {
@@ -5108,109 +5123,114 @@ function OrientationCycleView({
         ))}
       </section>
 
-      <section id="registro-rapido" className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <button onClick={() => setQuickFormExpanded((value) => !value)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/60">
+      <section id="registro-rapido" className="flex flex-col justify-between gap-3 border-y border-slate-200 bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><Plus className="h-5 w-5" /></span>
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Nuevo registro de orientación</p>
-            <h2 className="text-lg font-semibold text-slate-950">Registrar clase, material o planificación</h2>
-            <p className="mt-0.5 text-xs font-medium text-slate-500">Agrega una actividad al historial del curso con estado, enlaces y observaciones.</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Registro de orientación</p>
+            <h2 className="text-lg font-semibold text-slate-950">Añadir una actividad a la bitácora</h2>
+            <p className="mt-0.5 text-xs font-medium text-slate-500">Clase, intervención, material o planificación vinculada a un curso.</p>
           </div>
-          <span className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700">
-            {quickFormExpanded ? "Cerrar registro" : "Nuevo registro"}
-            <ChevronDown className={`h-3.5 w-3.5 transition ${quickFormExpanded ? "rotate-180" : ""}`} />
-          </span>
-        </button>
-        {quickFormExpanded ? (
-        <div className="grid gap-0 border-t border-slate-100 xl:grid-cols-[minmax(0,1fr)_300px]">
-          <div className="p-4">
-            <div className="mb-3 flex justify-end">
-              <button onClick={() => setNewClassOpen((value) => !value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                {newClassOpen ? "Ocultar campos avanzados" : "Campos avanzados"}
-              </button>
-            </div>
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-6">
-              <label className="block">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">SEM</span>
-                <input type="date" value={quickClassForm.date} onChange={(event) => syncQuickClassDate(event.target.value)} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </label>
-              <label className="block xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha / semana</span>
-                <TizaSelect value={quickClassForm.week} onChange={syncQuickClassWeek} options={weekOptionsFor(quickClassForm.week)} className="mt-1" />
-              </label>
-              <div className="block">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
-                <TizaSelect value={quickClassForm.course} onChange={syncQuickClassCourse} options={owner.courses} className="mt-1" />
-              </div>
-              <div className="xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Acción / fortaleza</span>
-                <TizaSelect
-                  value={quickClassForm.axis}
-                  onChange={(axis) => updateQuickClassForm({ axis, characterStrength: axis })}
-                  options={orientationActionColumns}
-                  placeholder="Seleccionar acción o fortaleza"
-                  className="mt-1"
-                  menuClassName="max-h-80"
-                />
-              </div>
-              <label className="block xl:col-span-3">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Tema / comentario</span>
-                <input value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Mi cuerpo, mi espacio y mis límites" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </label>
-              <div className="block">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Estado</span>
-                <TizaSelect value={quickClassForm.status} onChange={(status) => updateQuickClassForm({ status })} options={quickStatuses} className="mt-1" buttonClassName={`font-semibold ${statusTone(quickClassForm.status)} ring-1`} />
-              </div>
-              <label className="block xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva / presentación</span>
-                <input value={quickClassForm.canvaLink} onChange={(event) => updateQuickClassForm({ canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://www.canva.com/..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </label>
-              <label className="block xl:col-span-3">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Link a planificación</span>
-                <input value={quickClassForm.planificacion} onChange={(event) => updateQuickClassForm({ planificacion: event.target.value })} placeholder="https://docs.google.com/... o breve descripción" className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </label>
-              <label className="block xl:col-span-2">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carpeta Drive de la semana</span>
-                <input value={quickClassForm.folderLink} onChange={(event) => updateQuickClassForm({ folderLink: event.target.value })} placeholder="https://drive.google.com/drive/folders/..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </label>
-              <label className="block xl:col-span-4">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Observaciones</span>
-                <input value={quickClassForm.notes} onChange={(event) => updateQuickClassForm({ notes: event.target.value })} placeholder="Notas importantes, reprogramación, material pendiente..." className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </label>
-            </div>
-            {newClassOpen ? (
-              <div className="mt-2 grid gap-2 md:grid-cols-3">
-                <input value={quickClassForm.teacherLink} onChange={(event) => updateQuickClassForm({ teacherLink: event.target.value })} placeholder="Link para profesores" className="rounded-md border border-blue-200 bg-blue-50/40 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-                <TizaSelect value={quickClassForm.teacherSentStatus} onChange={(teacherSentStatus) => updateQuickClassForm({ teacherSentStatus })} options={["No enviado", "Listo para enviar", "Enviado"]} />
-                <input type="date" value={quickClassForm.teacherSentAt} onChange={(event) => updateQuickClassForm({ teacherSentAt: event.target.value })} className="rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
-              </div>
-            ) : null}
-          </div>
-          <aside className="border-t border-slate-100 bg-slate-50 p-4 xl:border-l xl:border-t-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Resumen del registro</p>
-            <dl className="mt-2 space-y-1.5 rounded-lg bg-white p-3 text-xs ring-1 ring-slate-200">
-              {([
-                ["Curso", quickClassForm.course || "—"],
-                ["Fecha", quickClassForm.date || "—"],
-                ["Semana", quickClassForm.week || "—"],
-                ["Fortaleza", quickClassForm.axis || "—"],
-                ["Estado", quickClassForm.status || "—"],
-              ] as Array<[string, string]>).map(([label, value]) => (
-                <div key={label} className="flex items-baseline justify-between gap-2">
-                  <dt className="shrink-0 font-semibold text-slate-500">{label}</dt>
-                  <dd className="truncate text-right font-bold text-slate-900" title={value}>{value}</dd>
-                </div>
-              ))}
-            </dl>
-            <button onClick={saveNewClass} disabled={!dataReady || !quickClassHasContent || !quickClassForm.course.trim()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-3 text-sm font-bold text-white shadow hover:bg-slate-800 disabled:bg-slate-300">
-              <Save className="h-4 w-4" /> Guardar en la bitácora
-            </button>
-            <button onClick={() => setNewClassForm({})} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-500 hover:bg-slate-50">
-              Limpiar formulario
-            </button>
-          </aside>
         </div>
-        ) : null}
+        <button onClick={() => setQuickFormExpanded(true)} className="tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800">
+          <Plus className="h-4 w-4" /> Nuevo registro
+        </button>
       </section>
+
+      {quickFormExpanded ? (
+        <div className="tz-backdrop fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 sm:items-center sm:p-4" onClick={closeQuickClassForm}>
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="orientation-entry-title"
+            onSubmit={(event) => { event.preventDefault(); saveNewClass(); }}
+            onClick={(event) => event.stopPropagation()}
+            className="tz-pop-fast flex max-h-[96dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:max-h-[92vh] sm:rounded-lg"
+          >
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-900 text-white"><ClipboardList className="h-5 w-5" /></span>
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-700">Nuevo registro</p>
+                  <h2 id="orientation-entry-title" className="text-xl font-semibold text-slate-950">Actividad de orientación</h2>
+                  <p className="mt-0.5 text-sm text-slate-500">Primero identifica la actividad; los enlaces y notas pueden completarse después.</p>
+                </div>
+              </div>
+              <button type="button" onClick={closeQuickClassForm} title="Cerrar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
+            </header>
+
+            <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50/60">
+              <section className="grid gap-4 px-5 py-5 sm:grid-cols-2 lg:grid-cols-6 sm:px-6">
+                <div className="lg:col-span-2">
+                  <span className="flex items-center justify-between text-sm font-semibold text-slate-800"><span>Curso</span><span className="text-[10px] font-bold uppercase text-cyan-700">Obligatorio</span></span>
+                  <TizaSelect value={quickClassForm.course} onChange={syncQuickClassCourse} options={owner.courses} className="mt-1.5" buttonClassName="py-2.5 font-semibold" />
+                </div>
+                <label className="block lg:col-span-2">
+                  <span className="text-sm font-semibold text-slate-800">Fecha</span>
+                  <input type="date" value={quickClassForm.date} onChange={(event) => syncQuickClassDate(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" />
+                </label>
+                <div className="lg:col-span-2">
+                  <span className="text-sm font-semibold text-slate-800">Estado</span>
+                  <TizaSelect value={quickClassForm.status} onChange={(status) => updateQuickClassForm({ status })} options={quickStatuses} className="mt-1.5" buttonClassName={`py-2.5 font-bold ${statusTone(quickClassForm.status)} ring-1`} />
+                </div>
+                <label className="block sm:col-span-2 lg:col-span-4">
+                  <span className="flex items-center justify-between text-sm font-semibold text-slate-800"><span>Tema o actividad</span><span className="text-[10px] font-bold uppercase text-slate-400">Tema o enlace requerido</span></span>
+                  <input autoFocus value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Mi cuerpo, mi espacio y mis límites" className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" />
+                </label>
+                <div className="sm:col-span-2 lg:col-span-2">
+                  <span className="text-sm font-semibold text-slate-800">Acción o fortaleza</span>
+                  <TizaSelect value={quickClassForm.axis} onChange={(axis) => updateQuickClassForm({ axis, characterStrength: axis })} options={orientationActionColumns} placeholder="Seleccionar" className="mt-1.5" buttonClassName="py-2.5" menuClassName="max-h-80" />
+                </div>
+                <div className="sm:col-span-2 lg:col-span-6">
+                  <span className="text-sm font-semibold text-slate-800">Semana del plan</span>
+                  <TizaSelect value={quickClassForm.week} onChange={syncQuickClassWeek} options={weekOptionsFor(quickClassForm.week)} className="mt-1.5" buttonClassName="py-2.5" />
+                </div>
+              </section>
+
+              <section className="border-t border-slate-200 bg-white px-5 py-5 sm:px-6">
+                <div className="mb-3"><h3 className="text-sm font-bold text-slate-950">Materiales y planificación</h3><p className="text-xs text-slate-500">Pega los enlaces disponibles. Puedes dejar los demás para después.</p></div>
+                <div className="grid gap-4 md:grid-cols-3">
+                  <label className="block"><span className="text-xs font-semibold text-slate-700">Canva o presentación</span><input value={quickClassForm.canvaLink} onChange={(event) => updateQuickClassForm({ canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://www.canva.com/..." className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" /></label>
+                  <label className="block"><span className="text-xs font-semibold text-slate-700">Planificación</span><input value={quickClassForm.planificacion} onChange={(event) => updateQuickClassForm({ planificacion: event.target.value })} placeholder="Link o nombre del documento" className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" /></label>
+                  <label className="block"><span className="text-xs font-semibold text-slate-700">Carpeta Drive</span><input value={quickClassForm.folderLink} onChange={(event) => updateQuickClassForm({ folderLink: event.target.value })} placeholder="https://drive.google.com/..." className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" /></label>
+                </div>
+              </section>
+
+              <section className="border-t border-slate-200 px-5 py-5 sm:px-6">
+                <label className="block"><span className="text-sm font-semibold text-slate-800">Observaciones</span><textarea value={quickClassForm.notes} onChange={(event) => updateQuickClassForm({ notes: event.target.value })} rows={3} placeholder="Acuerdos, contexto, material pendiente o información relevante" className="mt-1.5 w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 outline-none focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" /></label>
+                <button type="button" onClick={() => setNewClassOpen((value) => !value)} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                  {newClassOpen ? "Ocultar envío a profesores" : "Añadir envío a profesores"}<ChevronDown className={`h-3.5 w-3.5 transition ${newClassOpen ? "rotate-180" : ""}`} />
+                </button>
+                {newClassOpen ? (
+                  <div className="mt-3 grid gap-4 border-t border-slate-200 pt-4 md:grid-cols-3">
+                    <label><span className="text-xs font-semibold text-slate-700">Link para profesores</span><input value={quickClassForm.teacherLink} onChange={(event) => updateQuickClassForm({ teacherLink: event.target.value })} placeholder="https://..." className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600" /></label>
+                    <div><span className="text-xs font-semibold text-slate-700">Estado de envío</span><TizaSelect value={quickClassForm.teacherSentStatus} onChange={(teacherSentStatus) => updateQuickClassForm({ teacherSentStatus })} options={["No enviado", "Listo para enviar", "Enviado"]} className="mt-1.5" buttonClassName="py-2.5" /></div>
+                    <label><span className="text-xs font-semibold text-slate-700">Fecha de envío</span><input type="date" value={quickClassForm.teacherSentAt} onChange={(event) => updateQuickClassForm({ teacherSentAt: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600" /></label>
+                  </div>
+                ) : null}
+              </section>
+            </div>
+
+            <footer className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-semibold text-slate-600">
+                  <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-cyan-800">{quickClassForm.course}</span>
+                  <span>{formatOrientationDate(quickClassForm.date)}</span>
+                  <span className={`rounded-full px-2.5 py-1 ${statusTone(quickClassForm.status)}`}>{quickClassForm.status}</span>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={clearQuickClassForm} className="hidden rounded-lg px-3 py-2.5 text-sm font-semibold text-slate-500 hover:bg-slate-100 sm:inline-flex">Limpiar</button>
+                  <button type="button" onClick={closeQuickClassForm} className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+                  <button type="submit" disabled={!dataReady || !quickClassHasContent || !quickClassForm.course.trim()} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-300">
+                    <Save className="h-4 w-4" /> Guardar registro
+                  </button>
+                </div>
+              </div>
+              {!quickClassHasContent ? <p className="mt-2 text-right text-xs font-medium text-amber-700">Agrega un tema, una observación o al menos un enlace para guardar.</p> : null}
+            </footer>
+          </form>
+        </div>
+      ) : null}
 
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
@@ -5276,8 +5296,7 @@ function OrientationCycleView({
           </p>
         </div>
         <div className="bg-slate-50/60">
-          <div className="hidden border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
-            <span>Fecha</span>
+          <div className="hidden border-b border-slate-200 bg-slate-100/80 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
             <span>Curso</span>
             <span>Estado</span>
             <span>Tema / semana</span>
@@ -5303,30 +5322,22 @@ function OrientationCycleView({
             const headTeacher = headTeacherForCourse(record.course || "");
             const dateKey = (record.date || "").slice(0, 10) || "sin-fecha";
             const previousDateKey = index > 0 ? (renderedClasses[index - 1].date || "").slice(0, 10) || "sin-fecha" : "";
-            const nextDateKey = index < renderedClasses.length - 1 ? (renderedClasses[index + 1].date || "").slice(0, 10) || "sin-fecha" : "";
             const startsDateGroup = index === 0 || dateKey !== previousDateKey;
-            const endsDateGroup = index === renderedClasses.length - 1 || dateKey !== nextDateKey;
             const dateGroupCount = startsDateGroup ? renderedDateCounts.get(dateKey) || 0 : 0;
             return (
               <React.Fragment key={record.id}>
                 {startsDateGroup ? (
-                  <div className={`lg:hidden ${index === 0 ? "pb-2 pt-2" : "pb-2 pt-5"}`}>
-                    <div className="flex items-center gap-2 px-3">
-                      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-cyan-700" />
-                      <span className="text-xs font-bold text-slate-700">{formatOrientationDate(record.date)}</span>
-                      <span className="text-[10px] font-semibold text-slate-400">{dateGroupCount} {dateGroupCount === 1 ? "registro" : "registros"}</span>
+                  <div className={index === 0 ? "pb-2" : "pb-2 pt-5"}>
+                    <div className="flex items-center gap-3 border-y border-slate-200 bg-white px-4 py-2.5 sm:px-5">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><CalendarDays className="h-3.5 w-3.5" /></span>
+                      <span className="text-sm font-bold text-slate-900">{formatOrientationDate(record.date)}</span>
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{dateGroupCount} {dateGroupCount === 1 ? "evento" : "eventos"}</span>
                       <span className="h-px min-w-4 flex-1 bg-slate-200" />
                     </div>
                   </div>
                 ) : null}
-              <article className={`mx-2 border-x border-b border-slate-200/80 transition lg:mx-0 lg:border-x-0 lg:border-b-slate-100 ${startsDateGroup ? "rounded-t-lg border-t border-t-slate-200/80 lg:rounded-none lg:border-t-0" : ""} ${endsDateGroup ? "rounded-b-lg lg:rounded-none" : ""} ${rowTone(shownStatus)} ${expanded ? "shadow-sm ring-1 ring-blue-100" : ""}`}>
-                <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
-                  <div className="hidden lg:block">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Fecha</p>
-                    <p className="text-sm font-semibold text-slate-900">{formatOrientationDate(record.date)}</p>
-                    {isCalendar ? <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Calendario</span> : null}
-                  </div>
-
+              <article className={`mx-2 mb-2 overflow-hidden rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
+                <div className="grid gap-3 px-4 py-3 lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Curso</p>
                     <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{record.course || "Sin curso"}</span>
@@ -5344,6 +5355,7 @@ function OrientationCycleView({
                         </span>
                       </div>
                     ) : null}
+                    {isCalendar ? <span className="mt-1.5 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Calendario</span> : null}
                   </div>
 
                   <div>
