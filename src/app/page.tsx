@@ -3872,6 +3872,227 @@ function CourseWorkspaceView({
   );
 }
 
+function OrientationIntegralReportModal({
+  owner,
+  records,
+  workshops,
+  students,
+  onClose,
+  onDownload,
+}: {
+  owner: (typeof orientationOwners)[number];
+  records: DataRecord[];
+  workshops: DataRecord[];
+  students: DataRecord[];
+  onClose: () => void;
+  onDownload: () => Promise<void>;
+}) {
+  const [downloading, setDownloading] = useState(false);
+  const report = useMemo(() => {
+    const statusCount = (items: DataRecord[], pattern: RegExp) => items.filter((record) => pattern.test(record.status || "")).length;
+    const isDone = (record: DataRecord) => /realizad/i.test(record.status || "");
+    const actionLabel = (record: DataRecord) => (record.axis || record.characterStrength || record.classType || "Sin tipo definido").trim();
+    const themeLabel = (record: DataRecord) => {
+      const topic = (record.topic || "").trim();
+      return topic && !isPlaceholderOrientationText(topic) ? topic : getOrientationDisplayTitle(record);
+    };
+    const aggregate = (items: DataRecord[], labelFor: (record: DataRecord) => string) => {
+      const grouped = new Map<string, { label: string; total: number; realizadas: number }>();
+      items.forEach((record) => {
+        const label = labelFor(record) || "Sin especificar";
+        const key = normalize(label);
+        const current = grouped.get(key) || { label, total: 0, realizadas: 0 };
+        current.total += 1;
+        if (isDone(record)) current.realizadas += 1;
+        grouped.set(key, current);
+      });
+      return [...grouped.values()].sort((a, b) => b.realizadas - a.realizadas || b.total - a.total || a.label.localeCompare(b.label, "es"));
+    };
+    const courses = owner.courses.map((course) => {
+      const courseRecords = records.filter((record) => normalize(record.course || "") === normalize(course));
+      const realizedRecords = courseRecords.filter(isDone);
+      const courseWorkshops = workshops.filter((workshop) => normalize(`${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`).includes(normalize(course)));
+      return {
+        course,
+        headTeacher: headTeacherForCourse(course),
+        students: students.filter((student) => normalize(student.course || "") === normalize(course)).length,
+        total: courseRecords.length,
+        realizadas: realizedRecords.length,
+        planificadas: statusCount(courseRecords, /planificad/i),
+        pendientes: courseRecords.filter((record) => /pendiente/i.test(record.status || "") || !record.status).length,
+        reprogramadas: statusCount(courseRecords, /reprogramad/i),
+        canceladas: statusCount(courseRecords, /cancelad|suspendid/i),
+        canva: courseRecords.filter((record) => (record.canvaLink || record.evidence || "").trim()).length,
+        planificacion: courseRecords.filter((record) => (record.planificacion || record.folderLink || "").trim()).length,
+        talleres: courseWorkshops.length,
+        feedbacks: courseRecords.filter((record) => record.classFeedback).length,
+        themes: aggregate(realizedRecords, themeLabel),
+        actions: aggregate(courseRecords, actionLabel),
+      };
+    });
+    const dates = records.map((record) => (record.date || "").slice(0, 10)).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort();
+    return {
+      courses,
+      actions: aggregate(records, actionLabel),
+      total: records.length,
+      realizadas: statusCount(records, /realizad/i),
+      planificadas: statusCount(records, /planificad/i),
+      pendientes: records.filter((record) => /pendiente/i.test(record.status || "") || !record.status).length,
+      reprogramadas: statusCount(records, /reprogramad/i),
+      canceladas: statusCount(records, /cancelad|suspendid/i),
+      talleres: workshops.length,
+      feedbacks: records.filter((record) => record.classFeedback).length,
+      startDate: dates[0] || "",
+      endDate: dates[dates.length - 1] || "",
+    };
+  }, [owner.courses, records, students, workshops]);
+
+  const download = async () => {
+    setDownloading(true);
+    try {
+      await onDownload();
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[210] flex items-end justify-center bg-slate-950/55 backdrop-blur-[2px] sm:items-center sm:p-4" onClick={onClose}>
+      <div role="dialog" aria-modal="true" aria-labelledby="orientation-report-title" className="flex h-[96dvh] w-full max-w-7xl flex-col overflow-hidden rounded-t-2xl bg-slate-100 shadow-2xl sm:h-[94vh] sm:rounded-xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex shrink-0 items-center justify-between gap-4 border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <Image src="/logo-san-lucas.png" alt="Colegio San Lucas" width={42} height={42} className="h-10 w-10 shrink-0 object-contain" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-700">Colegio San Lucas · Tiza Education</p>
+              <h2 id="orientation-report-title" className="truncate text-lg font-bold text-slate-950">Reporte integral de Orientación SOY+</h2>
+              <p className="truncate text-xs text-slate-500">{owner.name} · {owner.cycle} · generado {new Date().toLocaleDateString("es-CL")}</p>
+            </div>
+          </div>
+          <button onClick={onClose} title="Cerrar reporte" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"><X className="h-4 w-4" /></button>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <div className="mx-auto max-w-6xl bg-white px-4 py-5 sm:px-7 sm:py-7">
+            <section className="border-b border-slate-200 pb-5">
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Período informado</p>
+                  <p className="mt-1 text-base font-bold text-slate-950">{report.startDate ? `${formatOrientationDate(report.startDate)} al ${formatOrientationDate(report.endDate)}` : "Sin fechas registradas"}</p>
+                </div>
+                <p className="text-xs font-medium text-slate-500">{owner.courses.length} cursos · {students.filter((student) => owner.courses.some((course) => normalize(student.course || "") === normalize(course))).length} estudiantes</p>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4 lg:grid-cols-8">
+                {[
+                  ["Registros", report.total, "text-slate-900"],
+                  ["Realizadas", report.realizadas, "text-emerald-700"],
+                  ["Planificadas", report.planificadas, "text-blue-700"],
+                  ["Pendientes", report.pendientes, "text-slate-700"],
+                  ["Reprogramadas", report.reprogramadas, "text-amber-700"],
+                  ["Canceladas", report.canceladas, "text-rose-700"],
+                  ["Talleres", report.talleres, "text-violet-700"],
+                  ["Feedbacks", report.feedbacks, "text-cyan-700"],
+                ].map(([label, value, tone]) => (
+                  <div key={String(label)} className="bg-white px-3 py-3">
+                    <p className={`text-xl font-bold tabular-nums ${tone}`}>{value}</p>
+                    <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="py-5">
+              <div className="mb-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Resumen comparativo</p>
+                <h3 className="text-base font-bold text-slate-950">Actividad registrada por curso</h3>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-slate-200">
+                <table className="min-w-[1050px] w-full text-xs">
+                  <thead className="bg-slate-900 text-white">
+                    <tr>
+                      {["Curso", "Estudiantes", "Registros", "Realizadas", "Planificadas", "Pendientes", "Reprogramadas", "Canceladas", "Temáticas vistas", "Talleres", "Feedbacks"].map((label) => <th key={label} className="px-3 py-2.5 text-left font-bold">{label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {report.courses.map((course) => (
+                      <tr key={course.course} className="bg-white">
+                        <td className="px-3 py-2.5"><p className="font-bold text-slate-950">{course.course}</p><p className="mt-0.5 text-[10px] text-slate-500">{course.headTeacher?.name || "Sin profesor/a jefe"}</p></td>
+                        {[course.students, course.total, course.realizadas, course.planificadas, course.pendientes, course.reprogramadas, course.canceladas, course.themes.length, course.talleres, course.feedbacks].map((value, index) => <td key={index} className="px-3 py-2.5 font-semibold tabular-nums text-slate-700">{value}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section className="border-t border-slate-200 py-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Cobertura institucional</p>
+              <h3 className="text-base font-bold text-slate-950">Acciones y fortalezas trabajadas</h3>
+              <div className="mt-3 grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-2 lg:grid-cols-3">
+                {report.actions.map((action) => (
+                  <div key={action.label} className="flex items-center justify-between gap-3 bg-white px-3 py-2.5">
+                    <span className="text-xs font-semibold text-slate-700">{action.label}</span>
+                    <span className="shrink-0 text-right"><strong className="text-sm tabular-nums text-slate-950">{action.realizadas}</strong><span className="text-[10px] text-slate-400"> / {action.total}</span></span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] font-medium text-slate-500">Cada cifra muestra actividades realizadas / registros totales.</p>
+            </section>
+
+            <section className="border-t border-slate-200 pt-5">
+              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Detalle pedagógico</p>
+              <h3 className="text-base font-bold text-slate-950">Temáticas vistas por curso</h3>
+              <p className="mt-1 text-xs text-slate-500">Se consideran vistas únicamente las clases marcadas como Realizada. Se agrupan títulos iguales y se informa su frecuencia.</p>
+              <div className="mt-4 divide-y divide-slate-200 border-y border-slate-200">
+                {report.courses.map((course) => (
+                  <section key={course.course} className="py-4">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-950">{course.course}</h4>
+                        <p className="text-[11px] text-slate-500">{course.realizadas} clases realizadas · {course.themes.length} temáticas distintas · {course.canva} con Canva · {course.planificacion} con planificación</p>
+                      </div>
+                      <span className="rounded-full bg-cyan-50 px-2.5 py-1 text-xs font-bold text-cyan-700 ring-1 ring-cyan-100">{course.students} estudiantes</span>
+                    </div>
+                    {course.themes.length ? (
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        {course.themes.map((theme) => (
+                          <div key={theme.label} className="flex items-start justify-between gap-3 border-l-2 border-cyan-400 bg-slate-50 px-3 py-2">
+                            <p className="text-xs font-medium leading-relaxed text-slate-700">{theme.label}</p>
+                            <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-bold tabular-nums text-slate-800 ring-1 ring-slate-200">{theme.realizadas}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : <p className="mt-3 text-xs font-medium text-slate-400">No hay temáticas realizadas registradas para este curso.</p>}
+                    {course.actions.length ? (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {course.actions.map((action) => (
+                          <span key={action.label} className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-600 ring-1 ring-slate-200">
+                            {action.label} <strong className="tabular-nums text-slate-900">{action.realizadas}/{action.total}</strong>
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </section>
+                ))}
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <footer className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <p className="text-xs font-medium text-slate-500">El archivo descargable incluye además bitácora completa, talleres, asistencia, feedbacks y reprogramaciones.</p>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cerrar</button>
+            <button onClick={download} disabled={downloading} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-cyan-800 disabled:bg-slate-300">
+              <ArrowDownToLine className="h-4 w-4" /> {downloading ? "Preparando…" : "Descargar Excel"}
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function OrientationCycleView({
   store,
   accessToken,
@@ -3905,6 +4126,7 @@ function OrientationCycleView({
   const [feedbackRecordId, setFeedbackRecordId] = useState("");
   // Historial de feedbacks (listado consultable + reporte con Tiza-IA).
   const [feedbackHistoryOpen, setFeedbackHistoryOpen] = useState(false);
+  const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
   const owner = useMemo(() => orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0], [selectedOwner]);
@@ -4210,9 +4432,14 @@ function OrientationCycleView({
     const canvaCount = linkedCount(sortedRecords, ["canvaLink", "evidence"]);
     const planCount = linkedCount(sortedRecords, ["planificacion", "folderLink"]);
     const ownerStudents = store.students.filter((student) => owner.courses.includes(student.course || "")).length;
+    const reportTheme = (record: DataRecord) => {
+      const topic = (record.topic || "").trim();
+      return topic && !isPlaceholderOrientationText(topic) ? topic : getOrientationDisplayTitle(record);
+    };
 
     const courseRows = owner.courses.map((course) => {
       const records = sortedRecords.filter((record) => normalize(record.course || "") === normalize(course));
+      const realizedRecords = records.filter((record) => /realizad/i.test(record.status || ""));
       const workshops = ownerWorkshops.filter((workshop) => normalize(`${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`).includes(normalize(course)));
       const headTeacher = headTeacherForCourse(course);
       return [
@@ -4225,6 +4452,8 @@ function OrientationCycleView({
         String(records.filter((record) => /pendiente/i.test(record.status || "") || !record.status).length),
         String(statusCount(records, /planificad/i)),
         String(statusCount(records, /reprogramad/i)),
+        String(statusCount(records, /cancelad|suspendid/i)),
+        String(new Set(realizedRecords.map((record) => normalize(reportTheme(record))).filter(Boolean)).size),
         percent(statusCount(records, /realizad/i), records.length),
         String(linkedCount(records, ["canvaLink", "evidence"])),
         String(linkedCount(records, ["planificacion", "folderLink"])),
@@ -4237,9 +4466,38 @@ function OrientationCycleView({
         action,
         String(records.length),
         String(statusCount(records, /realizad/i)),
+        String(statusCount(records, /planificad/i)),
+        String(records.filter((record) => /pendiente/i.test(record.status || "") || !record.status).length),
         String(statusCount(records, /reprogramad/i)),
+        String(statusCount(records, /cancelad|suspendid/i)),
         percent(records.length, totalRecords),
       ];
+    });
+    const thematicRows = owner.courses.flatMap((course) => {
+      const grouped = new Map<string, { label: string; records: DataRecord[] }>();
+      sortedRecords
+        .filter((record) => normalize(record.course || "") === normalize(course) && /realizad/i.test(record.status || ""))
+        .forEach((record) => {
+          const label = reportTheme(record);
+          const key = normalize(label);
+          const current = grouped.get(key) || { label, records: [] };
+          current.records.push(record);
+          grouped.set(key, current);
+        });
+      return [...grouped.values()]
+        .sort((a, b) => b.records.length - a.records.length || a.label.localeCompare(b.label, "es"))
+        .map(({ label, records }) => {
+          const dates = records.map((record) => record.date || "").filter(Boolean).sort();
+          const actions = Array.from(new Set(records.map((record) => getOrientationAction(record)).filter(Boolean)));
+          return [
+            course,
+            label,
+            String(records.length),
+            actions.join(", "),
+            dates[0] ? formatOrientationDate(dates[0]) : "",
+            dates[dates.length - 1] ? formatOrientationDate(dates[dates.length - 1]) : "",
+          ];
+        });
     });
     const reprogrammedRows = sortedRecords
       .filter((record) => /reprogramad/i.test(record.status || ""))
@@ -4423,8 +4681,9 @@ function OrientationCycleView({
       cover.getCell(ref).font = { name: "Arial", bold: true, color: { argb: palette.navy } };
     });
 
-    addTableSheet("Resumen por curso", "Detalle por curso", ["Curso", "Profesor/a jefe", "Correo PJ", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows, [18, 22, 30, 14, 16, 13, 13, 14, 16, 12, 12, 17, 12]);
-    addTableSheet("Acciones", "Cobertura por acción / fortaleza", ["Acción / fortaleza", "Registros", "Realizadas", "Reprogramadas", "% del total"], actionRows, [32, 14, 14, 16, 14]);
+    addTableSheet("Resumen por curso", "Detalle por curso", ["Curso", "Profesor/a jefe", "Correo PJ", "Estudiantes", "Total registros", "Realizadas", "Pendientes", "Planificadas", "Reprogramadas", "Canceladas", "Temáticas vistas", "% avance", "Con Canva", "Con planificación", "Talleres"], courseRows, [18, 22, 30, 14, 16, 13, 13, 14, 16, 13, 17, 12, 12, 17, 12]);
+    addTableSheet("Acciones", "Cobertura por acción / fortaleza", ["Acción / fortaleza", "Registros", "Realizadas", "Planificadas", "Pendientes", "Reprogramadas", "Canceladas", "% del total"], actionRows, [32, 14, 14, 14, 13, 16, 13, 14]);
+    addTableSheet("Temáticas por curso", "Temáticas efectivamente realizadas por curso", ["Curso", "Temática", "Cantidad de clases", "Acción / fortaleza", "Primera fecha", "Última fecha"], thematicRows.length ? thematicRows : [["", "No hay temáticas realizadas registradas.", "", "", "", ""]], [18, 48, 18, 34, 14, 14]);
     addTableSheet("Talleres", "Registro completo de talleres", ["Fecha", "Taller", "Cursos", "Destinatarios", "Responsable", "Estado", "Duración", "Objetivo", "Presentes", "Ausentes", "Seguimiento", "Evidencia", "Observaciones"], workshopRows.length ? workshopRows : [["", "No hay talleres asociados a este orientador.", "", "", "", "", "", "", "", "", "", "", ""]], [13, 30, 28, 18, 22, 14, 12, 36, 12, 12, 32, 28, 36]);
     addTableSheet("Feedbacks", "Historial de feedbacks de clase", ["Fecha", "Curso", "Clase", "Docente", "Asignatura", "N° observación", "Logrados", "Evidencias", "Oportunidades de mejora", "Observador/a"], feedbackRows.length ? feedbackRows : [["", "", "No hay feedbacks registrados para este orientador.", "", "", "", "", "", "", ""]], [13, 16, 34, 24, 18, 16, 12, 40, 40, 22]);
     addTableSheet("Reprogramadas", "Clases reprogramadas", ["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Nueva fecha", "Observaciones"], reprogrammedRows.length ? reprogrammedRows : [["", "", "", "", "No hay clases reprogramadas registradas para este orientador.", "", "", ""]], [13, 24, 16, 24, 34, 36, 14, 36]);
@@ -4511,8 +4770,8 @@ function OrientationCycleView({
             <ClipboardList className="h-4 w-4" /> Feedbacks
             {ownerFeedbackCount ? <span className="rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-800 tabular-nums">{ownerFeedbackCount}</span> : null}
           </button>
-          <button onClick={exportOwnerClasses} title={`Descargar el registro integral de ${owner.name}`} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <ArrowDownToLine className="h-4 w-4" /> Reporte integral
+          <button onClick={() => setReportPreviewOpen(true)} title={`Ver el registro integral de ${owner.name}`} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <FileText className="h-4 w-4" /> Reporte integral
           </button>
           <button onClick={onGenerateAnnualPlan} className="tz-press inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
             <CalendarDays className="h-4 w-4" /> Completar año
@@ -5303,6 +5562,17 @@ function OrientationCycleView({
             setFeedbackHistoryOpen(false);
             setFeedbackRecordId(recordId);
           }}
+        />
+      ) : null}
+
+      {reportPreviewOpen ? (
+        <OrientationIntegralReportModal
+          owner={owner}
+          records={ownerClasses}
+          workshops={ownerWorkshops}
+          students={store.students}
+          onClose={() => setReportPreviewOpen(false)}
+          onDownload={exportOwnerClasses}
         />
       ) : null}
     </div>
