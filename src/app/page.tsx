@@ -11770,6 +11770,10 @@ export default function TizaEducationApp() {
     if (!authUser || !accessToken || !remoteLoaded) return;
     const serialized = JSON.stringify(nextStore);
     const saveOperation = async () => {
+      // Una copia completa antigua no debe ejecutarse después de cambios más
+      // nuevos. Si hay un delta fallido, su reintento tiene prioridad.
+      if (failedDeltaRef.current) return;
+      if (serialized !== JSON.stringify(storeRef.current) && serialized !== lastSavedSerializedRef.current) return;
       // La comparación ocurre dentro de la cola porque una escritura anterior
       // puede haber guardado exactamente esta misma versión mientras esperaba.
       if (serialized === lastSavedSerializedRef.current) {
@@ -12209,15 +12213,17 @@ export default function TizaEducationApp() {
         .map((record) => {
           const seed = seedByIdentity.get(orientationSeedIdentity(record));
           if (!seed) return record;
+          const { id: _seedId, createdAt: _seedCreatedAt, updatedAt: _seedUpdatedAt, ...seedFields } = seed;
           const merged = {
             ...record,
-            ...seed,
+            ...seedFields,
             id: record.id,
             createdAt: record.createdAt || seed.createdAt,
-            updatedAt: nowIso(),
+            updatedAt: record.updatedAt,
           };
-          if (JSON.stringify(record) !== JSON.stringify(merged)) updated += 1;
-          return merged;
+          if (JSON.stringify(record) === JSON.stringify(merged)) return record;
+          updated += 1;
+          return { ...merged, updatedAt: nowIso() };
         })
         .filter((record) => {
           const coveredPlaceholder = isGeneratedOrientationPlaceholder(record)
@@ -12366,7 +12372,9 @@ export default function TizaEducationApp() {
   useEffect(() => {
     if (!remoteLoaded || autoSeededOrientationRef.current) return;
     autoSeededOrientationRef.current = true;
-    syncOrientationFirstCycle(true);
+    const firstCycleCourses = new Set(orientationOwners[0].courses.map(normalize));
+    const hasFirstCycleHistory = store.orientation.some((record) => firstCycleCourses.has(normalize(record.course || "")));
+    if (!hasFirstCycleHistory) syncOrientationFirstCycle(true);
      
   }, [remoteLoaded]);
 
@@ -12379,7 +12387,8 @@ export default function TizaEducationApp() {
     } catch {
       // ignore
     }
-    syncOrientationAnnualPlan(true);
+    const hasAnnualPlan = store.orientation.some((record) => normalize(record.source || "").includes("plan anual orientacion 2026"));
+    if (!hasAnnualPlan) syncOrientationAnnualPlan(true);
     try {
       window.localStorage.setItem("tiza-orientation-annual-plan-v1", "1");
     } catch {
