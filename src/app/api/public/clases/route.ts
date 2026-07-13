@@ -47,15 +47,6 @@ const docUrl = (value: string) => {
   return `https://drive.google.com/drive/search?q=${encodeURIComponent(value)}`;
 };
 
-const isPlaceholderText = (value: string) => {
-  const normalized = normalize(value);
-  return !normalized ||
-    normalized === "clase por definir" ||
-    normalized === "por definir" ||
-    normalized === "sin tema definido" ||
-    normalized === "sesion por definir";
-};
-
 export async function GET() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -72,7 +63,7 @@ export async function GET() {
       .eq("slug", "colegio-san-lucas")
       .maybeSingle();
     if (institutionError) throw institutionError;
-    if (!institution?.id) return NextResponse.json({ classes: [] });
+    if (!institution?.id) return NextResponse.json({ classes: [] }, { headers: { "Cache-Control": "no-store" } });
 
     const classes: PublicClassRecord[] = [];
     const pageSize = 1000;
@@ -96,11 +87,12 @@ export async function GET() {
         const notes = str(record.notes);
         // Omitir filas generadas por el plan anual que aún no tienen contenido real.
         const generated = normalize(str(record.source)).includes("plan anual orientacion 2026");
-        const hasContent = Boolean(canvaLink || teacherLink || str(record.planificacion) || str(record.folderLink) || (topic && !isPlaceholderText(topic)));
+        const notesAreMeaningful = Boolean(notes) && !normalize(notes).includes("fecha ajustada por feriado");
+        const hasPublishedContent = Boolean(canvaLink || teacherLink || str(record.planificacion) || str(record.folderLink) || notesAreMeaningful);
         // Con URL abre directo; con nombre busca en Drive; vacío queda desactivado.
         const planificacionLink = docUrl(str(record.planificacion));
         const driveLink = docUrl(str(record.folderLink));
-        if (generated && !hasContent) return;
+        if (generated && !hasPublishedContent) return;
 
         classes.push({
           id: row.record_id,
@@ -125,7 +117,7 @@ export async function GET() {
     }
 
     classes.sort((a, b) => (b.date || b.updatedAt).localeCompare(a.date || a.updatedAt));
-    return NextResponse.json({ classes });
+    return NextResponse.json({ classes }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("Public clases load failed", error);
     return NextResponse.json({ error: "No se pudieron cargar las clases" }, { status: 500 });

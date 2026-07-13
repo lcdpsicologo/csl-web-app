@@ -162,17 +162,14 @@ function WeekClassRow({
   course,
   start,
   end,
-  owner,
   item,
 }: {
   date: string;
   course: string;
   start: string;
   end: string;
-  owner: string;
-  item: PublicClassRecord | null;
+  item: PublicClassRecord;
 }) {
-  const emptyMaterial = { canvaLink: "", teacherLink: "", planificacionLink: "", driveLink: "" };
   return (
     <article className="border-b border-slate-100 bg-white px-4 py-3 transition-colors last:border-b-0 hover:bg-cyan-50/30">
       <div className="grid gap-3 lg:grid-cols-[140px_150px_105px_minmax(230px,1fr)_minmax(300px,auto)] lg:items-center">
@@ -186,19 +183,19 @@ function WeekClassRow({
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase text-slate-400 lg:hidden">Horario</p>
-          <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-slate-500"><Clock className="h-3.5 w-3.5" /> {start}–{end}</span>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-slate-500"><Clock className="h-3.5 w-3.5" /> {start && end ? `${start}–${end}` : "Por confirmar"}</span>
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-bold leading-snug text-slate-950">{item?.topic || item?.action || "Tema por confirmar"}</p>
-          {item?.action && item.topic ? <p className="mt-0.5 text-xs font-medium text-slate-500">{item.action}</p> : null}
+          <p className="text-sm font-bold leading-snug text-slate-950">{item.topic || item.action || "Sin tema definido"}</p>
+          {item.action && item.topic ? <p className="mt-0.5 text-xs font-medium text-slate-500">{item.action}</p> : null}
           <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">
-            <GraduationCap className="h-3.5 w-3.5" /> Orientador/a: {item?.owner || owner || "Por confirmar"}
+            <GraduationCap className="h-3.5 w-3.5" /> Orientador/a: {item.owner || "Por confirmar"}
           </p>
-          {item?.notes ? <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-800">{item.notes}</p> : null}
+          {item.notes ? <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-800">{item.notes}</p> : null}
         </div>
         <div>
           <p className="mb-1 text-[10px] font-bold uppercase text-slate-400 lg:hidden">Material</p>
-          <MaterialLinks item={item || emptyMaterial} />
+          <MaterialLinks item={item} />
         </div>
       </div>
     </article>
@@ -206,7 +203,7 @@ function WeekClassRow({
 }
 
 const requestPublicClasses = async () => {
-  const response = await fetch("/api/public/clases");
+  const response = await fetch("/api/public/clases", { cache: "no-store" });
   if (!response.ok) throw new Error("load failed");
   const payload = await response.json();
   return Array.isArray(payload.classes) ? payload.classes as PublicClassRecord[] : [];
@@ -259,18 +256,26 @@ export default function TeacherClassesPage() {
     return { monday, start: toISODate(monday), end: toISODate(sunday) };
   }, []);
 
-  const weekSchedule = useMemo(() => ORIENTATION_WEEKLY_SLOTS.map((slot) => {
-    const date = slotDateISO(slot, weekRange.monday);
-    const item = classes.find((record) => record.date.slice(0, 10) === date && normalize(record.course) === normalize(slot.course)) || null;
-    return { slot, date, item };
-  }).sort((a, b) => (
-    courseSortKey(a.slot.course).localeCompare(courseSortKey(b.slot.course))
-    || a.date.localeCompare(b.date)
-    || a.slot.start.localeCompare(b.slot.start)
-  )), [classes, weekRange.monday]);
+  const weekSchedule = useMemo(() => classes
+    .filter((item) => {
+      const date = item.date.slice(0, 10);
+      return date >= weekRange.start && date <= weekRange.end;
+    })
+    .map((item) => {
+      const date = item.date.slice(0, 10);
+      const slot = ORIENTATION_WEEKLY_SLOTS.find((candidate) =>
+        normalize(candidate.course) === normalize(item.course) && slotDateISO(candidate, weekRange.monday) === date
+      );
+      return { item, date, slot };
+    })
+    .sort((a, b) => (
+      courseSortKey(a.item.course).localeCompare(courseSortKey(b.item.course))
+      || a.date.localeCompare(b.date)
+      || (a.slot?.start || "").localeCompare(b.slot?.start || "")
+    )), [classes, weekRange.end, weekRange.monday, weekRange.start]);
 
   const weekOwners = useMemo(() => Array.from(new Set(
-    weekSchedule.map(({ slot, item }) => item?.owner || slot.owner).filter(Boolean),
+    weekSchedule.map(({ item }) => item.owner).filter(Boolean),
   )), [weekSchedule]);
 
   const historicalClasses = useMemo(() => classes.filter((item) => {
@@ -302,7 +307,6 @@ export default function TeacherClassesPage() {
     return pastGroups;
   }, [filteredHistory]);
 
-  const publishedThisWeek = weekSchedule.filter(({ item }) => item).length;
   const historyDone = filteredHistory.filter((item) => /realizad/i.test(item.status)).length;
 
   return (
@@ -348,12 +352,12 @@ export default function TeacherClassesPage() {
                     <p className="text-xs font-bold uppercase tracking-wider">Semana actual</p>
                   </div>
                   <h2 className="mt-1 text-xl font-bold text-slate-950">Clases del {formatDate(weekRange.start)} al {formatDate(weekRange.end)}</h2>
-                  <p className="mt-1 text-sm text-slate-500">{publishedThisWeek} de {weekSchedule.length} clases con contenido publicado</p>
+                  <p className="mt-1 text-sm text-slate-500">{weekSchedule.length} {weekSchedule.length === 1 ? "clase publicada" : "clases publicadas"}</p>
                   <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-700">
                     <GraduationCap className="h-4 w-4" /> Orientador/a responsable: {weekOwners.join(", ") || "Por confirmar"}
                   </p>
                 </div>
-                <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-700 ring-1 ring-cyan-200">{weekSchedule.length} bloques</span>
+                <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-700 ring-1 ring-cyan-200">{weekSchedule.length} {weekSchedule.length === 1 ? "clase" : "clases"}</span>
               </div>
               <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
                 <div className="hidden border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[140px_150px_105px_minmax(230px,1fr)_minmax(300px,auto)] lg:items-center lg:gap-3">
@@ -363,9 +367,14 @@ export default function TeacherClassesPage() {
                   <span>Clase / orientador</span>
                   <span>Material</span>
                 </div>
-                {weekSchedule.map(({ slot, date, item }) => (
-                  <WeekClassRow key={`${date}-${slot.course}`} date={date} course={slot.course} start={slot.start} end={slot.end} owner={slot.owner} item={item} />
-                ))}
+                {weekSchedule.length ? weekSchedule.map(({ slot, date, item }) => (
+                  <WeekClassRow key={item.id} date={date} course={item.course} start={slot?.start || ""} end={slot?.end || ""} item={item} />
+                )) : (
+                  <div className="px-4 py-10 text-center">
+                    <CalendarDays className="mx-auto h-8 w-8 text-slate-300" />
+                    <p className="mt-3 text-sm font-semibold text-slate-600">No hay clases publicadas para esta semana.</p>
+                  </div>
+                )}
               </div>
             </section>
 
