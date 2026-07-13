@@ -125,6 +125,9 @@ function ClassRow({ item, showCourse = true }: { item: PublicClassRecord; showCo
           {item.week || (item.weekNumber ? `Semana ${item.weekNumber}` : "Sin semana definida")}
           {item.action && item.topic ? ` · ${item.action}` : ""}
         </p>
+        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">
+          <GraduationCap className="h-3.5 w-3.5" /> Orientador/a: {item.owner || "Por confirmar"}
+        </p>
         {item.notes && (
           <p className="mt-0.5 flex items-start gap-1 text-xs leading-snug text-amber-800" title={item.notes}>
             <StickyNote className="mt-0.5 h-3 w-3 shrink-0 text-amber-500" />
@@ -154,30 +157,48 @@ function RowListHeader() {
   );
 }
 
-function WeekClassCard({ date, course, start, end, item }: { date: string; course: string; start: string; end: string; item: PublicClassRecord | null }) {
-  const [year, month, day] = date.split("-");
-  const dayLabel = new Date(`${date}T12:00:00`).toLocaleDateString("es-CL", { weekday: "long" });
+function WeekClassRow({
+  date,
+  course,
+  start,
+  end,
+  owner,
+  item,
+}: {
+  date: string;
+  course: string;
+  start: string;
+  end: string;
+  owner: string;
+  item: PublicClassRecord | null;
+}) {
+  const emptyMaterial = { canvaLink: "", teacherLink: "", planificacionLink: "", driveLink: "" };
   return (
-    <article className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-stretch">
-        <div className="flex w-20 shrink-0 flex-col items-center justify-center border-r border-cyan-100 bg-cyan-50 px-2 py-4 text-center">
-          <span className="text-[10px] font-bold uppercase text-cyan-700">{dayLabel}</span>
-          <span className="mt-1 text-2xl font-bold leading-none tabular-nums text-slate-950">{day}</span>
-          <span className="mt-1 text-[10px] font-semibold text-slate-500">{month}/{year}</span>
+    <article className="border-b border-slate-100 bg-white px-4 py-3 transition-colors last:border-b-0 hover:bg-cyan-50/30">
+      <div className="grid gap-3 lg:grid-cols-[140px_150px_105px_minmax(230px,1fr)_minmax(300px,auto)] lg:items-center">
+        <div>
+          <p className="text-[10px] font-bold uppercase text-slate-400 lg:hidden">Curso</p>
+          <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{course}</span>
         </div>
-        <div className="min-w-0 flex-1 p-3.5">
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div>
-              <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{course}</span>
-              <p className="mt-2 text-sm font-bold leading-snug text-slate-950">{item?.topic || item?.action || "Tema por confirmar"}</p>
-            </div>
-            <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-slate-500"><Clock className="h-3.5 w-3.5" /> {start}–{end}</span>
-          </div>
-          {item?.action && item.topic ? <p className="mt-1 text-xs font-medium text-slate-500">{item.action}</p> : null}
-          {item?.notes ? <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-amber-800">{item.notes}</p> : null}
-          <div className="mt-3">
-            {item ? <MaterialLinks item={item} /> : <span className="text-[11px] font-semibold text-slate-400">Material pendiente de publicación</span>}
-          </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase text-slate-400 lg:hidden">Fecha</p>
+          <p className="text-xs font-semibold capitalize text-slate-700">{formatDate(date)}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase text-slate-400 lg:hidden">Horario</p>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold tabular-nums text-slate-500"><Clock className="h-3.5 w-3.5" /> {start}–{end}</span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-sm font-bold leading-snug text-slate-950">{item?.topic || item?.action || "Tema por confirmar"}</p>
+          {item?.action && item.topic ? <p className="mt-0.5 text-xs font-medium text-slate-500">{item.action}</p> : null}
+          <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-cyan-700">
+            <GraduationCap className="h-3.5 w-3.5" /> Orientador/a: {item?.owner || owner || "Por confirmar"}
+          </p>
+          {item?.notes ? <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-amber-800">{item.notes}</p> : null}
+        </div>
+        <div>
+          <p className="mb-1 text-[10px] font-bold uppercase text-slate-400 lg:hidden">Material</p>
+          <MaterialLinks item={item || emptyMaterial} />
         </div>
       </div>
     </article>
@@ -242,7 +263,15 @@ export default function TeacherClassesPage() {
     const date = slotDateISO(slot, weekRange.monday);
     const item = classes.find((record) => record.date.slice(0, 10) === date && normalize(record.course) === normalize(slot.course)) || null;
     return { slot, date, item };
-  }), [classes, weekRange.monday]);
+  }).sort((a, b) => (
+    courseSortKey(a.slot.course).localeCompare(courseSortKey(b.slot.course))
+    || a.date.localeCompare(b.date)
+    || a.slot.start.localeCompare(b.slot.start)
+  )), [classes, weekRange.monday]);
+
+  const weekOwners = useMemo(() => Array.from(new Set(
+    weekSchedule.map(({ slot, item }) => item?.owner || slot.owner).filter(Boolean),
+  )), [weekSchedule]);
 
   const historicalClasses = useMemo(() => classes.filter((item) => {
     const date = item.date.slice(0, 10);
@@ -320,12 +349,22 @@ export default function TeacherClassesPage() {
                   </div>
                   <h2 className="mt-1 text-xl font-bold text-slate-950">Clases del {formatDate(weekRange.start)} al {formatDate(weekRange.end)}</h2>
                   <p className="mt-1 text-sm text-slate-500">{publishedThisWeek} de {weekSchedule.length} clases con contenido publicado</p>
+                  <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-semibold text-cyan-700">
+                    <GraduationCap className="h-4 w-4" /> Orientador/a responsable: {weekOwners.join(", ") || "Por confirmar"}
+                  </p>
                 </div>
                 <span className="rounded-full bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-700 ring-1 ring-cyan-200">{weekSchedule.length} bloques</span>
               </div>
-              <div className="grid gap-3 md:grid-cols-2">
+              <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div className="hidden border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[140px_150px_105px_minmax(230px,1fr)_minmax(300px,auto)] lg:items-center lg:gap-3">
+                  <span>Curso</span>
+                  <span>Fecha</span>
+                  <span>Horario</span>
+                  <span>Clase / orientador</span>
+                  <span>Material</span>
+                </div>
                 {weekSchedule.map(({ slot, date, item }) => (
-                  <WeekClassCard key={`${date}-${slot.course}`} date={date} course={slot.course} start={slot.start} end={slot.end} item={item} />
+                  <WeekClassRow key={`${date}-${slot.course}`} date={date} course={slot.course} start={slot.start} end={slot.end} owner={slot.owner} item={item} />
                 ))}
               </div>
             </section>
