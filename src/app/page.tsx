@@ -345,72 +345,71 @@ function TizaSelect({
           setSearchQuery("");
           setOpen((current) => !current);
         }}
-        className={`inline-flex w-full items-center justify-between gap-2 rounded-md border px-2.5 py-2 text-left text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-500/15 disabled:bg-slate-100 disabled:text-slate-500 ${hasCustomTone ? "border-transparent" : "border-slate-200 bg-white text-slate-800 hover:border-blue-300"} ${buttonClassName}`}
+        className={`inline-flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm outline-none transition focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100 disabled:bg-slate-100 disabled:text-slate-500 ${hasCustomTone ? "border-transparent" : "border-slate-200 bg-white text-slate-800 hover:border-cyan-400"} ${buttonClassName}`}
       >
         <span className="truncate">{selected?.label || placeholder}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
       </button>
       {open ? (
         <div
-          role="listbox"
-          className={`absolute left-0 right-0 top-full z-[120] mt-1 max-h-64 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-2xl ring-1 ring-slate-900/5 ${menuClassName}`}
+          className={`absolute left-0 top-full z-[120] mt-2 min-w-full overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-[0_18px_45px_-12px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5 ${searchable ? "" : "right-0"} ${menuClassName}`}
+          style={searchable ? { width: "min(320px, calc(100vw - 2rem))" } : undefined}
         >
           {searchable ? (
-            <div className="sticky top-0 z-10 bg-white p-1 pb-2">
-              <div className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 focus-within:border-cyan-600 focus-within:ring-4 focus-within:ring-cyan-100">
-                <Search className="h-4 w-4 shrink-0 text-cyan-700" />
-                <input
-                  ref={searchInputRef}
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== "Enter" || !visibleOptions[0]) return;
-                    event.preventDefault();
-                    onChange(visibleOptions[0].value);
-                    setOpen(false);
-                    setSearchQuery("");
-                  }}
-                  aria-label={searchPlaceholder}
-                  placeholder={searchPlaceholder}
-                  className="min-w-0 flex-1 bg-transparent py-2 text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
-                />
-                {searchQuery ? (
-                  <button type="button" onClick={() => setSearchQuery("")} title="Limpiar búsqueda" className="grid h-6 w-6 shrink-0 place-items-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-700">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                ) : null}
-              </div>
-              <p className="px-1 pt-1.5 text-[10px] font-medium text-slate-400">Escribe y presiona Enter para elegir la primera coincidencia.</p>
-            </div>
-          ) : null}
-          {visibleOptions.map((option, index) => {
-            const active = option.value === value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => {
-                  onChange(option.value);
+            <div className="flex h-11 items-center gap-2.5 border-b border-slate-100 bg-slate-50/80 px-3 transition focus-within:bg-white">
+              <Search className="h-4 w-4 shrink-0 text-cyan-700" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key !== "Enter" || !visibleOptions[0]) return;
+                  event.preventDefault();
+                  onChange(visibleOptions[0].value);
                   setOpen(false);
                   setSearchQuery("");
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition ${
-                  active ? "bg-blue-50 text-blue-800" : "text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                <span className="truncate">{option.label}</span>
-                {active ? <Check className="h-4 w-4 shrink-0" /> : searchable && normalizedQuery && index === 0 ? <span className="shrink-0 rounded bg-cyan-50 px-1.5 py-0.5 text-[9px] font-bold uppercase text-cyan-700">Más similar</span> : null}
-              </button>
-            );
-          })}
-          {visibleOptions.length === 0 ? (
-            <div className="px-3 py-5 text-center">
-              <p className="text-sm font-semibold text-slate-700">Sin coincidencias</p>
-              <p className="mt-1 text-xs text-slate-400">Prueba con otra palabra o abreviación.</p>
+                aria-label={searchPlaceholder}
+                placeholder={searchPlaceholder}
+                className="min-w-0 flex-1 bg-transparent text-sm font-medium text-slate-900 outline-none placeholder:text-slate-400"
+              />
+              {searchQuery ? (
+                <button type="button" onClick={() => setSearchQuery("")} title="Limpiar búsqueda" className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-700">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
             </div>
           ) : null}
+          <div role="listbox" className="max-h-60 overflow-y-auto overscroll-contain p-1.5 [scrollbar-gutter:stable]">
+            {visibleOptions.map((option, index) => {
+              const active = option.value === value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                    setSearchQuery("");
+                  }}
+                  className={`flex min-h-9 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition ${
+                    active ? "bg-cyan-50 text-cyan-900" : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
+                  }`}
+                >
+                  <span className="truncate">{option.label}</span>
+                  {active ? <Check className="h-4 w-4 shrink-0 text-cyan-700" /> : searchable && normalizedQuery && index === 0 ? <span className="shrink-0 rounded-md bg-cyan-50 px-1.5 py-0.5 text-[10px] font-semibold text-cyan-700">Sugerida</span> : null}
+                </button>
+              );
+            })}
+            {visibleOptions.length === 0 ? (
+              <div className="px-3 py-6 text-center">
+                <p className="text-sm font-semibold text-slate-700">Sin coincidencias</p>
+                <p className="mt-1 text-xs text-slate-400">Prueba otra palabra o abreviación.</p>
+              </div>
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>
@@ -5354,7 +5353,7 @@ function OrientationCycleView({
                     onChange={syncQuickClassCourse}
                     options={owner.courses.map((course) => ({ value: course, label: course, keywords: courseSearchKeywords(course) }))}
                     searchable
-                    searchPlaceholder="Buscar curso, ej. PKA o 2A"
+                    searchPlaceholder="Curso o sigla (PKA, 2A...)"
                     className="mt-1.5"
                     buttonClassName="py-2.5 font-semibold"
                   />
@@ -5379,10 +5378,9 @@ function OrientationCycleView({
                     options={orientationActionOptions}
                     placeholder="Seleccionar"
                     searchable
-                    searchPlaceholder="Buscar acción o fortaleza"
+                    searchPlaceholder="Acción o fortaleza..."
                     className="mt-1.5"
                     buttonClassName="py-2.5"
-                    menuClassName="max-h-80"
                   />
                 </div>
                 <div className="sm:col-span-2 lg:col-span-6">
