@@ -975,11 +975,13 @@ function FeedbackYesNo({ value, onChange }: { value: string; onChange: (value: s
 function OrientationFeedbackModal({
   record,
   ownerName,
+  autoObservationNumber,
   onClose,
   onSave,
 }: {
   record: DataRecord;
   ownerName: string;
+  autoObservationNumber: string;
   onClose: () => void;
   onSave: (data: ClassFeedbackData) => void;
 }) {
@@ -987,6 +989,8 @@ function OrientationFeedbackModal({
     const parsed = parseClassFeedback(record.classFeedback);
     if (!parsed.teacher) parsed.teacher = headTeacherForCourse(record.course || "")?.name || "";
     if (!parsed.observer) parsed.observer = ownerName;
+    // Correlativo automático por curso: se puede corregir a mano si hace falta.
+    if (!parsed.observationNumber) parsed.observationNumber = autoObservationNumber;
     return parsed;
   });
   const [copied, setCopied] = useState(false);
@@ -1155,6 +1159,189 @@ function OrientationFeedbackModal({
             </button>
           </div>
         </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// Historial de feedbacks de clase: listado consultable y reporte generado por Tiza-IA.
+function FeedbackHistoryModal({
+  records,
+  ownerName,
+  accessToken,
+  onClose,
+  onOpenFeedback,
+}: {
+  records: DataRecord[];
+  ownerName: string;
+  accessToken: string;
+  onClose: () => void;
+  onOpenFeedback: (recordId: string) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [report, setReport] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [copied, setCopied] = useState(false);
+
+  const withFeedback = records
+    .filter((record) => record.classFeedback)
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+
+  const filtered = withFeedback.filter((record) => {
+    if (!search.trim()) return true;
+    const data = parseClassFeedback(record.classFeedback);
+    return normalize(`${record.course} ${record.date} ${record.topic} ${data.teacher} ${data.improvements} ${data.generalEvidence}`).includes(normalize(search));
+  });
+
+  const generateReport = async () => {
+    setReportLoading(true);
+    setReportError("");
+    setReport("");
+    try {
+      const summaries = withFeedback
+        .map((record) => classFeedbackSummaryText(record, parseClassFeedback(record.classFeedback)))
+        .join("\n\n----------------------------------------\n\n");
+      const message = [
+        `Eres asistente del orientador ${ownerName} del Colegio San Lucas. A continuación tienes TODOS los feedbacks de acompañamiento de clase registrados durante el año (pauta institucional con indicadores Sí/No y observaciones).`,
+        "Genera un REPORTE HISTÓRICO PROFESIONAL de estos acompañamientos, en español, con esta estructura:",
+        "1. Resumen general (total de observaciones, período cubierto, cursos y docentes acompañados).",
+        "2. Fortalezas observadas con mayor frecuencia (indicadores marcados Sí de forma consistente).",
+        "3. Oportunidades de mejora recurrentes (indicadores marcados No y patrones en las sugerencias).",
+        "4. Análisis por curso/docente cuando haya más de una observación.",
+        "5. Recomendaciones concretas para el próximo período.",
+        "Usa un tono profesional y constructivo, apto para compartir con el equipo directivo. No inventes datos que no estén en los feedbacks.",
+        "",
+        "FEEDBACKS REGISTRADOS:",
+        summaries,
+      ].join("\n");
+      const fd = new FormData();
+      fd.append("message", message);
+      fd.append("today", new Date().toISOString().slice(0, 10));
+      fd.append("roster", "[]");
+      fd.append("courses", "[]");
+      fd.append("dataContext", "");
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: fd,
+      });
+      const payload = await res.json().catch(() => null) as { ok?: boolean; error?: unknown; result?: { answer?: string; summary?: string } } | null;
+      if (!res.ok || !payload?.ok) {
+        const errField = payload?.error;
+        throw new Error(typeof errField === "string" ? errField : `Tiza-IA no pudo generar el reporte (${res.status}).`);
+      }
+      const text = payload.result?.answer || payload.result?.summary || "";
+      if (!text.trim()) throw new Error("Tiza-IA devolvió una respuesta vacía. Intenta de nuevo.");
+      setReport(text);
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : "No se pudo generar el reporte.");
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const copyReport = async () => {
+    try {
+      await navigator.clipboard.writeText(report);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2500);
+    } catch {
+      window.prompt("Copia el reporte manualmente:", report);
+    }
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={onClose}>
+      <div className="flex h-[94dvh] w-full max-w-3xl flex-col rounded-t-2xl bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-violet-50 to-white px-5 py-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Acompañamiento de clases</p>
+            <h2 className="text-lg font-semibold text-slate-950">Historial de feedbacks</h2>
+            <p className="mt-0.5 text-xs text-slate-500">{withFeedback.length} feedback{withFeedback.length === 1 ? "" : "s"} registrado{withFeedback.length === 1 ? "" : "s"} · {ownerName}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Cerrar">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative min-w-48 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por curso, docente o contenido…"
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm outline-none focus:border-violet-400"
+              />
+            </label>
+            <button
+              onClick={generateReport}
+              disabled={reportLoading || withFeedback.length === 0}
+              className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-bold text-white shadow hover:bg-violet-700 disabled:bg-slate-300"
+            >
+              <TizaIaIcon className="h-4 w-4" /> {reportLoading ? "Generando reporte…" : "Reporte histórico con IA"}
+            </button>
+          </div>
+
+          {reportError ? (
+            <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-700">{reportError}</p>
+          ) : null}
+
+          {report ? (
+            <section className="rounded-xl border border-violet-200 bg-violet-50/40">
+              <div className="flex items-center justify-between gap-2 border-b border-violet-100 px-3 py-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Reporte histórico generado por Tiza-IA</p>
+                <button onClick={copyReport} className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-violet-700 hover:bg-violet-100">
+                  <Copy className="h-3.5 w-3.5" /> {copied ? "¡Copiado!" : "Copiar"}
+                </button>
+              </div>
+              <div className="max-h-80 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-slate-800">{report}</div>
+            </section>
+          ) : null}
+
+          {withFeedback.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+              Aún no hay feedbacks registrados. Marca una clase como realizada y usa el botón Feedback para crear el primero.
+            </p>
+          ) : filtered.length === 0 ? (
+            <p className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+              Ningún feedback coincide con la búsqueda.
+            </p>
+          ) : (
+            <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200">
+              {filtered.map((record) => {
+                const data = parseClassFeedback(record.classFeedback);
+                const yesCount = [...data.cultureItems, ...data.strengthItems].filter((item) => item === "si").length;
+                const totalMarked = [...data.cultureItems, ...data.strengthItems].filter(Boolean).length;
+                return (
+                  <button
+                    key={record.id}
+                    onClick={() => onOpenFeedback(record.id)}
+                    className="flex w-full items-center justify-between gap-3 bg-white px-3 py-2.5 text-left transition hover:bg-violet-50/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-950">
+                        {record.course || "Sin curso"} · {record.date || "Sin fecha"}
+                        {data.observationNumber ? <span className="ml-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">Obs. N° {data.observationNumber}</span> : null}
+                      </p>
+                      <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                        {data.teacher ? `${data.teacher} · ` : ""}{record.topic || "Sin tema"}
+                      </p>
+                      {data.improvements.trim() ? <p className="mt-0.5 line-clamp-1 text-xs text-amber-800">{data.improvements.trim()}</p> : null}
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {totalMarked ? <p className="text-xs font-bold text-emerald-700">{yesCount}/{totalMarked} logrados</p> : null}
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Abrir</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
     </div>,
     document.body,
@@ -3679,6 +3866,7 @@ function CourseWorkspaceView({
 
 function OrientationCycleView({
   store,
+  accessToken,
   onAddOrientationRecord,
   onUpdateOrientationRecord,
   onDeleteOrientationRecord,
@@ -3686,6 +3874,7 @@ function OrientationCycleView({
   calendarEvents,
 }: {
   store: DataStore;
+  accessToken: string;
   onAddOrientationRecord: (record: DataRecord) => void;
   onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
   onDeleteOrientationRecord: (recordId: string) => void;
@@ -3706,6 +3895,8 @@ function OrientationCycleView({
   const [pendingStatuses, setPendingStatuses] = useState<Record<string, string>>({});
   // Registro cuyo feedback de clase (pauta de acompañamiento) está abierto.
   const [feedbackRecordId, setFeedbackRecordId] = useState("");
+  // Historial de feedbacks (listado consultable + reporte con Tiza-IA).
+  const [feedbackHistoryOpen, setFeedbackHistoryOpen] = useState(false);
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
   const owner = useMemo(() => orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0], [selectedOwner]);
@@ -4247,6 +4438,7 @@ function OrientationCycleView({
 
   // ---- Estadísticas del orientador seleccionado (sin inflar por calendario) ----
   const reprogCount = ownerStoredClasses.filter((r) => /reprogramad/i.test(r.status || "")).length;
+  const ownerFeedbackCount = ownerStoredClasses.filter((r) => r.classFeedback).length;
   const plannedCount = ownerStoredClasses.filter((r) => /planificad/i.test(r.status || "")).length;
   const withCanva = ownerStoredClasses.filter((r) => (r.canvaLink || r.evidence || "").trim()).length;
   const withPlan = ownerStoredClasses.filter((r) => (r.planificacion || r.folderLink || "").trim()).length;
@@ -4273,6 +4465,10 @@ function OrientationCycleView({
           <a href="/clases" target="_blank" rel="noreferrer" className="tz-press inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
             <ExternalLink className="h-4 w-4" /> Vista profesores
           </a>
+          <button onClick={() => setFeedbackHistoryOpen(true)} className="tz-press inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100">
+            <ClipboardList className="h-4 w-4" /> Feedbacks
+            {ownerFeedbackCount ? <span className="rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-800 tabular-nums">{ownerFeedbackCount}</span> : null}
+          </button>
           <button onClick={exportOwnerClasses} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <ArrowDownToLine className="h-4 w-4" /> Exportar Excel
           </button>
@@ -5007,19 +5203,38 @@ function OrientationCycleView({
 
       {(() => {
         const feedbackRecord = feedbackRecordId ? store.orientation.find((record) => record.id === feedbackRecordId) : undefined;
-        return feedbackRecord ? (
+        if (!feedbackRecord) return null;
+        // Correlativo por curso: feedbacks ya guardados en otras clases del mismo curso + 1.
+        const priorCount = store.orientation.filter((record) =>
+          record.classFeedback && record.id !== feedbackRecord.id && normalize(record.course || "") === normalize(feedbackRecord.course || ""),
+        ).length;
+        return (
           <OrientationFeedbackModal
             key={feedbackRecord.id}
             record={feedbackRecord}
             ownerName={owner.name}
+            autoObservationNumber={String(priorCount + 1)}
             onClose={() => setFeedbackRecordId("")}
             onSave={(data) => {
               onUpdateOrientationRecord(feedbackRecord.id, { classFeedback: JSON.stringify({ ...data, updatedAt: nowIso() }) });
               setFeedbackRecordId("");
             }}
           />
-        ) : null;
+        );
       })()}
+
+      {feedbackHistoryOpen ? (
+        <FeedbackHistoryModal
+          records={ownerStoredClasses}
+          ownerName={owner.name}
+          accessToken={accessToken}
+          onClose={() => setFeedbackHistoryOpen(false)}
+          onOpenFeedback={(recordId) => {
+            setFeedbackHistoryOpen(false);
+            setFeedbackRecordId(recordId);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -12076,6 +12291,7 @@ export default function TizaEducationApp() {
       return (
         <OrientationCycleView
           store={store}
+          accessToken={accessToken}
           onAddOrientationRecord={addOrientationRecord}
           onUpdateOrientationRecord={updateOrientationRecord}
           onDeleteOrientationRecord={deleteOrientationRecord}
