@@ -4271,6 +4271,11 @@ function OrientationCycleView({
     return true;
   }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, orientationSearch, ownerClasses]);
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
+  const renderedDateCounts = useMemo(() => renderedClasses.reduce((counts, record) => {
+    const key = (record.date || "").slice(0, 10) || "sin-fecha";
+    counts.set(key, (counts.get(key) || 0) + 1);
+    return counts;
+  }, new Map<string, number>()), [renderedClasses]);
 
   const classCounts = useMemo(() => ({
     total: ownerClasses.length,
@@ -5108,7 +5113,7 @@ function OrientationCycleView({
             <span>Material</span>
             <span className="text-right">Acciones</span>
           </div>
-          {renderedClasses.map((record) => {
+          {renderedClasses.map((record, index) => {
             const isCalendar = record.source === "calendar";
             const canvaUrl = record.canvaLink || record.evidence || "";
             const folderUrl = record.folderLink || "";
@@ -5123,10 +5128,27 @@ function OrientationCycleView({
             const pendingStatus = pendingStatuses[record.id];
             const shownStatus = pendingStatus || canonicalOrientationStatus(record.status);
             const headTeacher = headTeacherForCourse(record.course || "");
+            const dateKey = (record.date || "").slice(0, 10) || "sin-fecha";
+            const previousDateKey = index > 0 ? (renderedClasses[index - 1].date || "").slice(0, 10) || "sin-fecha" : "";
+            const nextDateKey = index < renderedClasses.length - 1 ? (renderedClasses[index + 1].date || "").slice(0, 10) || "sin-fecha" : "";
+            const startsDateGroup = index === 0 || dateKey !== previousDateKey;
+            const endsDateGroup = index === renderedClasses.length - 1 || dateKey !== nextDateKey;
+            const dateGroupCount = startsDateGroup ? renderedDateCounts.get(dateKey) || 0 : 0;
             return (
-              <article key={record.id} className={`border-b border-slate-100 transition ${rowTone(shownStatus)} ${expanded ? "shadow-sm ring-1 ring-blue-100" : ""}`}>
+              <React.Fragment key={record.id}>
+                {startsDateGroup ? (
+                  <div className={`lg:hidden ${index === 0 ? "pb-2 pt-2" : "pb-2 pt-5"}`}>
+                    <div className="flex items-center gap-2 px-3">
+                      <CalendarDays className="h-3.5 w-3.5 shrink-0 text-cyan-700" />
+                      <span className="font-mono text-xs font-bold text-slate-700">{formatOrientationDate(record.date)}</span>
+                      <span className="text-[10px] font-semibold text-slate-400">{dateGroupCount} {dateGroupCount === 1 ? "registro" : "registros"}</span>
+                      <span className="h-px min-w-4 flex-1 bg-slate-200" />
+                    </div>
+                  </div>
+                ) : null}
+              <article className={`mx-2 border-x border-b border-slate-200/80 transition lg:mx-0 lg:border-x-0 lg:border-b-slate-100 ${startsDateGroup ? "rounded-t-lg border-t border-t-slate-200/80 lg:rounded-none lg:border-t-0" : ""} ${endsDateGroup ? "rounded-b-lg lg:rounded-none" : ""} ${rowTone(shownStatus)} ${expanded ? "shadow-sm ring-1 ring-blue-100" : ""}`}>
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[116px_130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
-                  <div>
+                  <div className="hidden lg:block">
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Fecha</p>
                     <p className="font-mono text-sm font-semibold text-slate-900">{formatOrientationDate(record.date)}</p>
                     {isCalendar ? <span className="mt-1 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">Calendario</span> : null}
@@ -5168,6 +5190,7 @@ function OrientationCycleView({
                         buttonClassName={`font-bold ${statusTone(shownStatus)} ring-1`}
                       />
                     )}
+                    {isCalendar ? <span className="mt-1.5 inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600 lg:hidden">Calendario</span> : null}
                   </div>
 
                   <div className="min-w-0">
@@ -5337,6 +5360,7 @@ function OrientationCycleView({
                   </div>
                 ) : null}
               </article>
+              </React.Fragment>
             );
           })}
           {filteredClasses.length === 0 ? (
