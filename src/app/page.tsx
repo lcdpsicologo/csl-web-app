@@ -8859,76 +8859,6 @@ function CommandPalette({
   );
 }
 
-function RecordLauncher({
-  onClose,
-  onCreate,
-  onNavigate,
-}: {
-  onClose: () => void;
-  onCreate: (entity: EntityId) => void;
-  onNavigate: (view: ViewId) => void;
-}) {
-  const commonEntities: EntityId[] = ["students", "cases", "logs", "interviews", "documents", "protocols"];
-  const chooseEntity = (entity: EntityId) => {
-    onCreate(entity);
-    onClose();
-  };
-  const chooseView = (view: ViewId) => {
-    onNavigate(view);
-    onClose();
-  };
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-slate-950/25" onClick={onClose}>
-      <section role="dialog" aria-modal="true" aria-labelledby="record-launcher-title" className="tz-pop-fast absolute inset-x-3 top-16 mx-auto w-auto max-w-lg overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl sm:inset-x-auto sm:right-8 sm:top-16 sm:w-[440px]" onClick={(event) => event.stopPropagation()}>
-        <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3.5">
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-700">Acción rápida</p>
-            <h2 id="record-launcher-title" className="text-lg font-semibold text-slate-950">¿Qué necesitas registrar?</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Elige el tipo y completa solo la información disponible.</p>
-          </div>
-          <button onClick={onClose} title="Cerrar" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button>
-        </header>
-        <div className="max-h-[70vh] overflow-y-auto p-2">
-          <div className="grid grid-cols-2 gap-2 border-b border-slate-100 p-2 pb-4">
-            <button onClick={() => chooseView("orientation")} className="flex min-h-20 flex-col items-start justify-between rounded-lg border border-cyan-200 bg-cyan-50 p-3 text-left transition hover:border-cyan-400 hover:bg-cyan-100">
-              <UsersRound className="h-5 w-5 text-cyan-700" />
-              <span><strong className="block text-sm text-slate-950">Clase de orientación</strong><span className="text-[11px] text-slate-600">Tema, curso y materiales</span></span>
-            </button>
-            <button onClick={() => chooseView("workshops")} className="flex min-h-20 flex-col items-start justify-between rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-left transition hover:border-emerald-400 hover:bg-emerald-100">
-              <GraduationCap className="h-5 w-5 text-emerald-700" />
-              <span><strong className="block text-sm text-slate-950">Taller</strong><span className="text-[11px] text-slate-600">Detalles, asistencia y adjuntos</span></span>
-            </button>
-          </div>
-          <div className="p-2">
-            <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">Otros registros</p>
-            <div className="grid gap-1 sm:grid-cols-2">
-              {commonEntities.map((entityId) => {
-                const config = entityConfigs[entityId];
-                const Icon = config.icon;
-                return (
-                  <button key={entityId} onClick={() => chooseEntity(entityId)} className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-left transition hover:bg-slate-100">
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600"><Icon className="h-4 w-4" /></span>
-                    <span className="min-w-0"><strong className="block truncate text-sm text-slate-900">{config.singular.charAt(0).toUpperCase() + config.singular.slice(1)}</strong><span className="block truncate text-[11px] text-slate-500">Nuevo registro</span></span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
 const recordFieldPlaceholder = (field: FieldDef) => {
   const examples: Record<string, string> = {
     fullName: "Ej.: Valentina Soto Pérez",
@@ -11952,9 +11882,6 @@ export default function TizaEducationApp() {
   const [query, setQuery] = useState("");
   const [dialogEntity, setDialogEntity] = useState<EntityId | null>(null);
   const [dialogRecordId, setDialogRecordId] = useState("");
-  const [recordLauncherOpen, setRecordLauncherOpen] = useState(false);
-  const [orientationCreateRequest, setOrientationCreateRequest] = useState(0);
-  const [workshopCreateRequest, setWorkshopCreateRequest] = useState(0);
   const [parsed, setParsed] = useState<ParsedSheet | null>(null);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
   const [pieImportData, setPieImportData] = useState<PieImportStudent[] | null>(null);
@@ -12000,11 +11927,6 @@ export default function TizaEducationApp() {
   const closeRecordDialog = () => {
     setDialogEntity(null);
     setDialogRecordId("");
-  };
-  const launchSpecialRecord = (view: ViewId) => {
-    setActiveView(view);
-    if (view === "orientation") setOrientationCreateRequest((value) => value + 1);
-    if (view === "workshops") setWorkshopCreateRequest((value) => value + 1);
   };
   // Wrap setProfile so every update is persisted server-side to the user's
   // Supabase metadata (global per user → travels across devices).
@@ -13379,11 +13301,9 @@ export default function TizaEducationApp() {
     if (activeView === "orientation") {
       return (
         <OrientationCycleView
-          key={`orientation-${orientationCreateRequest}`}
           store={store}
           accessToken={accessToken}
           dataReady={remoteLoaded}
-          createRequest={orientationCreateRequest}
           onAddOrientationRecord={addOrientationRecord}
           onAddOrientationWeekRecords={addOrientationWeekRecords}
           onUpdateOrientationRecord={updateOrientationRecord}
@@ -13396,9 +13316,7 @@ export default function TizaEducationApp() {
     if (activeView === "workshops") {
       return (
         <WorkshopsView
-          key={`workshops-${workshopCreateRequest}`}
           store={store}
-          createRequest={workshopCreateRequest}
           onAddWorkshop={(record) => addRecord("workshops", record)}
           onUpdateWorkshop={(id, updates) => updateRecord("workshops", id, updates)}
           onDeleteWorkshop={(id) => deleteRecord("workshops", id)}
@@ -13529,15 +13447,6 @@ export default function TizaEducationApp() {
                 <span className="tz-kbd">⌘</span><span className="tz-kbd">K</span>
               </span>
             </button>
-            <button
-              type="button"
-              onClick={() => setRecordLauncherOpen(true)}
-              className="tz-press inline-flex h-10 shrink-0 items-center gap-2 rounded-xl bg-slate-900 px-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
-              title="Crear un nuevo registro"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Registrar</span>
-            </button>
             <div className="hidden flex-col items-end text-right md:flex">
               <p className="text-xs font-semibold text-slate-900">{authUser.email}</p>
               <button
@@ -13580,13 +13489,6 @@ export default function TizaEducationApp() {
         onOpenStudent={openStudent}
         onUpdateCourse={updateCourseRecord}
       />
-      {recordLauncherOpen ? (
-        <RecordLauncher
-          onClose={() => setRecordLauncherOpen(false)}
-          onCreate={openNewRecord}
-          onNavigate={launchSpecialRecord}
-        />
-      ) : null}
       {dialogEntity ? (
         <RecordDialog
           key={`${dialogEntity}-${dialogRecordId || "new"}`}
