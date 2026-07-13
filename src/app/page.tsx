@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import React, { useEffect, useState, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
@@ -1007,9 +1008,11 @@ function OrientationFeedbackModal({
   const fieldLabel = "text-[11px] font-bold uppercase tracking-wide text-slate-500";
   const inputStyle = "mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500";
 
-  return (
-    <div className="fixed inset-0 z-[200] overflow-y-auto bg-slate-900/50 p-4" onClick={onClose}>
-      <div className="mx-auto my-6 w-full max-w-3xl rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+  // Portal a <body>: los contenedores animados de la app crean stacking contexts
+  // que dejaban el modal atrapado bajo la barra superior.
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={onClose}>
+      <div className="flex h-[94dvh] w-full max-w-3xl flex-col rounded-t-2xl bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-3 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-blue-50 to-white px-5 py-4">
           <div>
             <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Pauta de acompañamiento de clase</p>
@@ -1021,7 +1024,7 @@ function OrientationFeedbackModal({
           </button>
         </header>
 
-        <div className="max-h-[70vh] space-y-5 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <label className="block">
               <span className={fieldLabel}>Nombre docente</span>
@@ -1139,7 +1142,7 @@ function OrientationFeedbackModal({
           </section>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-2 rounded-b-2xl border-t border-slate-100 bg-slate-50 px-5 py-3">
+        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2xl sm:px-5">
           <button onClick={copySummary} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
             <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar para enviar"}
           </button>
@@ -1153,7 +1156,8 @@ function OrientationFeedbackModal({
           </div>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -5299,7 +5303,7 @@ function GenogramChart({
       <svg
         id="genogram-svg"
         viewBox="0 0 960 620"
-        className="min-h-[460px] w-full min-w-[820px]"
+        className="min-h-[520px] w-full min-w-[820px] lg:min-h-[560px]"
         role="img"
         aria-label={`Genograma de ${student.fullName || "estudiante"}`}
       >
@@ -6102,7 +6106,7 @@ function StudentDetailDialog({
               <div className="space-y-5">
                 <section className="rounded-xl border border-slate-200 bg-white p-5">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Acciones rápidas</h3>
-                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  <div className="mt-3 grid grid-cols-2 gap-2">
                     {([
                       ["cases", "Caso", FileText],
                       ["interviews", "Entrevista", MessageSquareText],
@@ -6113,10 +6117,14 @@ function StudentDetailDialog({
                       <button
                         key={kind}
                         onClick={() => openQuickAdd(kind)}
-                        className="group flex flex-col items-start gap-2 rounded-lg border border-slate-200 bg-white p-3 text-left hover:border-blue-400 hover:bg-blue-50"
+                        className="group flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left transition hover:border-blue-400 hover:bg-blue-50 hover:shadow-sm"
                       >
-                        <Icon className="h-4 w-4 text-slate-500 group-hover:text-blue-600" />
-                        <span className="text-sm font-semibold text-slate-800 group-hover:text-blue-700">+ {label}</span>
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500 transition group-hover:bg-blue-100 group-hover:text-blue-600">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <span className="min-w-0 truncate text-sm font-semibold text-slate-800 group-hover:text-blue-700">
+                          <span className="mr-0.5 text-slate-400 group-hover:text-blue-400">+</span> {label}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -6147,8 +6155,8 @@ function StudentDetailDialog({
           ) : null}
 
           {activeTab === "familia" ? (
-            <div className="grid gap-5 xl:grid-cols-[1.3fr_1fr]">
-              <section className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="space-y-5">
+              <section className="rounded-xl border border-slate-200 bg-white p-4 sm:p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Genograma</h3>
                   <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">{genogram.length} vínculos</span>
@@ -6163,7 +6171,8 @@ function StudentDetailDialog({
               </section>
               <section className="rounded-xl border border-slate-200 bg-white p-5">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">{editingMember ? "Editar vínculo" : "Agregar vínculo"}</h3>
-                <div className="mt-3 grid gap-2">
+                <div className="mt-3 grid items-start gap-5 lg:grid-cols-2">
+                <div className="grid gap-2">
                   <input value={genogramForm.name} onChange={(event) => setGenogramForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre familiar/red" className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                   <div className="grid gap-2 sm:grid-cols-2">
                     <select value={genogramForm.relation} onChange={(event) => setGenogramForm((form) => ({ ...form, relation: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500">
@@ -6189,7 +6198,7 @@ function StudentDetailDialog({
                     ) : null}
                   </div>
                 </div>
-                <div className="mt-4 space-y-2">
+                <div className="space-y-2">
                   {genogram.map((member) => (
                     <div key={member.id} className="flex items-start justify-between gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm hover:border-blue-300 hover:bg-blue-50/50">
                       <button onClick={() => editGenogramMember(member.id)} className="min-w-0 text-left">
@@ -6200,6 +6209,7 @@ function StudentDetailDialog({
                       <button onClick={() => removeGenogramMember(member.id)} className="rounded-md p-1.5 text-red-500 hover:bg-red-50"><Trash2 className="h-4 w-4" /></button>
                     </div>
                   ))}
+                </div>
                 </div>
               </section>
             </div>
@@ -9645,7 +9655,7 @@ function TizaIaMark({ size = 40, className = "" }: { size?: number; className?: 
         <circle cx="13.5" cy="34.5" r="0.8" fill="rgba(255,255,255,0.55)" />
         <circle cx="6" cy="35.5" r="0.7" fill="rgba(255,255,255,0.4)" />
       </svg>
-      <span className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/10" />
+      <span className="pointer-events-none absolute inset-0 rounded-[inherit] ring-1 ring-inset ring-white/10" />
     </div>
   );
 }
@@ -9712,18 +9722,18 @@ function FloatingTizaIA({
 }) {
   return (
     <>
-      <div className={`fixed bottom-24 right-4 z-[65] flex flex-col items-end gap-2 transition lg:bottom-6 lg:right-6 ${open ? "pointer-events-none opacity-0" : "opacity-100"}`}>
-        <span className="hidden rounded-full border border-slate-200 bg-white/95 px-3 py-1 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur sm:inline-flex">
-          Tiza-IA
-        </span>
+      {/* z-[45]: sobre el contenido y la barra inferior (z-40), pero bajo el menú móvil (z-50). */}
+      <div className={`fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-[45] transition lg:bottom-6 lg:right-6 ${open ? "pointer-events-none scale-90 opacity-0" : "scale-100 opacity-100"}`}>
         <button
           type="button"
           onClick={() => onOpenChange(true)}
-          className="tz-press grid h-16 w-16 place-items-center rounded-2xl bg-gradient-to-br from-cyan-700 via-slate-900 to-slate-950 text-white shadow-2xl shadow-slate-950/25 ring-1 ring-white/20 transition hover:-translate-y-0.5"
+          className="tz-press group relative rounded-full shadow-xl shadow-cyan-950/30 ring-2 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-2xl"
           title="Abrir Tiza-IA"
           aria-label="Abrir Tiza-IA"
         >
-          <TizaIaMark size={40} />
+          <span className="pointer-events-none absolute -inset-1 rounded-full bg-cyan-400/25 blur-md transition group-hover:bg-cyan-400/40" />
+          <TizaIaMark size={54} className="relative !rounded-full" />
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-emerald-400 text-[8px] font-black text-emerald-950 ring-2 ring-white">IA</span>
         </button>
       </div>
 
