@@ -701,6 +701,13 @@ const orientationClassTime = (course: string | undefined, schedule: OrientationW
   return slot ? `${slot.start} – ${slot.end}` : "";
 };
 
+const orientationClassStartMinutes = (course: string | undefined, schedule: OrientationWeeklySlot[] = ORIENTATION_WEEKLY_SLOTS) => {
+  const slot = schedule.find((item) => normalize(item.course) === normalize(course || ""));
+  if (!slot) return Number.MAX_SAFE_INTEGER;
+  const [hours, minutes] = slot.start.split(":").map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : Number.MAX_SAFE_INTEGER;
+};
+
 const formatOrientationDate = (value: string | undefined) => {
   if (!value) return "Sin fecha";
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -4752,7 +4759,13 @@ function OrientationCycleView({
       if (!normalize(searchable).includes(query)) return false;
     }
     return true;
-  }).sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))), [filterCourse, filterDate, filterStatus, orientationSearch, ownerClasses]);
+  }).sort((a, b) => {
+    const dateOrder = String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt));
+    if (dateOrder !== 0) return dateOrder;
+    const timeOrder = orientationClassStartMinutes(a.course, scheduleSlots) - orientationClassStartMinutes(b.course, scheduleSlots);
+    if (timeOrder !== 0) return timeOrder;
+    return String(a.course || "").localeCompare(String(b.course || ""), "es") || a.id.localeCompare(b.id);
+  }), [filterCourse, filterDate, filterStatus, orientationSearch, ownerClasses, scheduleSlots]);
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
   const renderedDateCounts = useMemo(() => renderedClasses.reduce((counts, record) => {
     const key = (record.date || "").slice(0, 10) || "sin-fecha";
