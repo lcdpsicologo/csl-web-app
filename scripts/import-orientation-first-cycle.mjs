@@ -1,8 +1,10 @@
 import fs from "node:fs";
+import path from "node:path";
 import crypto from "node:crypto";
 import XLSX from "xlsx";
 
-const csvPath = "D:/Descargas/Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv";
+// Acepta CSV o XLSX: node scripts/import-orientation-first-cycle.mjs <ruta>
+const csvPath = process.argv[2] || "D:/Descargas/Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv";
 const outputPath = "src/lib/orientation-first-cycle.ts";
 
 const clean = (value) =>
@@ -35,7 +37,12 @@ const excelDateToIso = (value) => {
 
 const dateToIso = (value) => {
   if (typeof value === "number") return excelDateToIso(value);
+  if (value instanceof Date) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  }
   const text = clean(value);
+  const isoMatch = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
   const match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (match) return `${match[3]}-${match[2].padStart(2, "0")}-${match[1].padStart(2, "0")}`;
   return text;
@@ -43,16 +50,43 @@ const dateToIso = (value) => {
 
 const currentSource = fs.existsSync(outputPath) ? fs.readFileSync(outputPath, "utf8") : "";
 const configMatch = currentSource.match(/export const ORIENTATION_FIRST_CYCLE_CONFIG = (\[[\s\S]*?\]) as const;/);
-const config = configMatch ? JSON.parse(configMatch[1]) : [];
+let config = configMatch ? JSON.parse(configMatch[1]) : [];
 
-const csvText = fs.readFileSync(csvPath, "utf8");
-const workbook = XLSX.read(csvText, { type: "string", raw: true });
-const sheet = workbook.Sheets[workbook.SheetNames[0]];
-const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "", raw: true });
-const headerIndex = rows.findIndex((row) => row.includes("ID") && row.includes("SEM"));
+const isXlsx = /\.xlsx?$/i.test(csvPath);
+const workbook = isXlsx
+  ? XLSX.readFile(csvPath, { raw: true })
+  : XLSX.read(fs.readFileSync(csvPath, "utf8"), { type: "string", raw: true });
+
+// Elegir la hoja que contiene la bitácora (encabezados ID/SEM).
+let sheetName = workbook.SheetNames[0];
+let rows = [];
+let headerIndex = -1;
+for (const name of workbook.SheetNames) {
+  const candidate = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, defval: "", raw: true });
+  const index = candidate.findIndex((row) => row.includes("ID") && row.includes("SEM"));
+  if (index !== -1) {
+    sheetName = name;
+    rows = candidate;
+    headerIndex = index;
+    break;
+  }
+}
 
 if (headerIndex === -1) {
-  throw new Error("No se encontró la fila de encabezados ID/SEM en el CSV.");
+  throw new Error("No se encontró la fila de encabezados ID/SEM en el archivo.");
+}
+
+const sourceName = path.basename(csvPath);
+
+// Si el archivo trae hoja de Configuración, regenerar acciones/sesiones/semanas desde ahí.
+const configSheetName = workbook.SheetNames.find((name) => /configuraci/i.test(name));
+if (configSheetName) {
+  const configRows = XLSX.utils.sheet_to_json(workbook.Sheets[configSheetName], { header: 1, defval: "", raw: true });
+  const parsedConfig = configRows
+    .slice(1)
+    .map((row) => ({ action: clean(row[0]), session: clean(row[1]), week: clean(row[2]) }))
+    .filter((item) => item.week);
+  if (parsedConfig.length) config = parsedConfig;
 }
 
 const records = rows
@@ -102,8 +136,8 @@ const records = rows
       planificacion,
       folderLink,
       notes,
-      source: "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
-      sourceSheet: "1° Ciclo (PreK-4°B)",
+      source: sourceName,
+      sourceSheet: sheetName,
     };
   });
 
@@ -126,13 +160,15 @@ const output = `export type OrientationSeedRecord = {
   notes: string;
   source: string;
   sourceSheet: string;
+  reprogramReason?: string;
+  reprogramDate?: string;
 };
 
 export const ORIENTATION_FIRST_CYCLE_SUMMARY = ${JSON.stringify(
   {
     records: records.length,
     configItems: config.length,
-    source: "Clases de Orientación FDC - 2026 - 1° Ciclo (PreK-4°B).csv",
+    source: sourceName,
   },
   null,
   2,
