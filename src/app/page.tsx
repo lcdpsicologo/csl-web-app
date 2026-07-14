@@ -5520,7 +5520,8 @@ function OrientationCycleView({
           </div>
         </div>
         <div className="bg-slate-50/60">
-          <div className="hidden border-b border-slate-200 bg-slate-100/80 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
+          {/* px-8 = margen de la tarjeta (16px) + padding interno (16px), para que las columnas calcen con las filas. */}
+          <div className="hidden border-b border-slate-200 bg-slate-100/80 px-8 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
             <span>Curso</span>
             <span>Estado</span>
             <span>Tema / semana</span>
