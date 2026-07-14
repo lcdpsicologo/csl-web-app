@@ -14,6 +14,7 @@ import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/fi
 import {
   ArrowDownToLine,
   BookOpen,
+  BookOpenText,
   Building2,
   AlertTriangle,
   Bell,
@@ -4981,12 +4982,14 @@ function OrientationCycleView({
       : /cancelad|suspendid/i.test(status) ? "bg-rose-100 text-rose-700 ring-rose-200"
       : "bg-slate-100 text-slate-600 ring-slate-200";
   // Tinte de la fila completa según estado, para lectura visual rápida de la bitácora.
+  // Fila blanca limpia (como la vista de profesores); el estado se señala solo
+  // con el filo izquierdo de color y la píldora, sin teñir todo el fondo.
   const rowTone = (status: string) =>
-    /realizad/i.test(status) ? "border-l-4 border-l-emerald-500 bg-emerald-50/50 hover:bg-emerald-50"
-      : /reprogramad/i.test(status) ? "border-l-4 border-l-amber-500 bg-amber-50/50 hover:bg-amber-50"
-      : /cancelad|suspendid/i.test(status) ? "border-l-4 border-l-rose-500 bg-rose-50/50 hover:bg-rose-50"
-      : /planificad/i.test(status) ? "border-l-4 border-l-blue-500 bg-blue-50/40 hover:bg-blue-50"
-      : "border-l-4 border-l-slate-300 bg-white hover:bg-slate-50";
+    /realizad/i.test(status) ? "border-l-4 border-l-emerald-400 bg-white hover:bg-emerald-50/40"
+      : /reprogramad/i.test(status) ? "border-l-4 border-l-amber-400 bg-white hover:bg-amber-50/40"
+      : /cancelad|suspendid/i.test(status) ? "border-l-4 border-l-rose-400 bg-white hover:bg-rose-50/40"
+      : /planificad/i.test(status) ? "border-l-4 border-l-blue-400 bg-white hover:bg-blue-50/40"
+      : "border-l-4 border-l-slate-200 bg-white hover:bg-slate-50";
   const quickStatuses = ["Realizada", "Planificada", "Pendiente", "Reprogramada", "Cancelada"];
   const setClassStatus = (record: DataRecord, status: string) => {
     if (record.source === "calendar") return;
@@ -5438,8 +5441,10 @@ function OrientationCycleView({
       <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-slate-500">Seguimiento de clases SOY+</p>
-            <h2 className="text-lg font-semibold text-slate-950">Bitácora de orientación · {owner.cycle}</h2>
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-700">
+              <BookOpenText className="h-4 w-4" /> Seguimiento de clases SOY+
+            </p>
+            <h2 className="mt-1 text-xl font-bold text-slate-950">Bitácora de orientación · {owner.cycle}</h2>
             <p className="mt-0.5 text-xs font-medium text-slate-500">{owner.name} · clases, estados, materiales y acuerdos por curso.</p>
           </div>
           <div className="grid w-full gap-2 lg:w-auto lg:grid-cols-[minmax(260px,360px)_minmax(190px,1fr)_minmax(190px,1fr)]">
@@ -5603,9 +5608,27 @@ function OrientationCycleView({
                   </div>
 
                   <div className="flex flex-wrap gap-1.5">
-                    {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" title={canvaUrl} className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-bold text-blue-700 hover:bg-blue-100">Canva</a> : <span title="Sin link de Canva guardado" className="cursor-help rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Canva</span>}
-                    {planUrl ? <a href={planUrl} target="_blank" rel="noopener noreferrer" title={planTitle} className="rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100">Planificación</a> : <span title="Sin link de planificación guardado" className="cursor-help rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Planificación</span>}
-                    {driveUrl ? <a href={driveUrl} target="_blank" rel="noopener noreferrer" title={driveTitle} className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">Carpeta</a> : <span title="Sin link de carpeta guardado" className="cursor-help rounded-md bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">Carpeta</span>}
+                    {canvaUrl ? (
+                      <a href={canvaUrl} target="_blank" rel="noopener noreferrer" title={canvaUrl} className="inline-flex items-center gap-1 rounded-lg bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
+                        <FileText className="h-3 w-3" /> Canva <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    ) : (
+                      <span title="Sin link de Canva guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><FileText className="h-3 w-3" /> Canva</span>
+                    )}
+                    {planUrl ? (
+                      <a href={planUrl} target="_blank" rel="noopener noreferrer" title={planTitle} className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
+                        <BookOpenText className="h-3 w-3" /> Planificación <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    ) : (
+                      <span title="Sin link de planificación guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><BookOpenText className="h-3 w-3" /> Planificación</span>
+                    )}
+                    {driveUrl ? (
+                      <a href={driveUrl} target="_blank" rel="noopener noreferrer" title={driveTitle} className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">
+                        <FolderOpen className="h-3 w-3" /> Carpeta <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    ) : (
+                      <span title="Sin link de carpeta guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><FolderOpen className="h-3 w-3" /> Carpeta</span>
+                    )}
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
@@ -5777,116 +5800,6 @@ function OrientationCycleView({
             </div>
           ) : null}
         </div>
-        {false ? (
-        <div className="hidden">
-          <table className="min-w-[2040px] w-full table-fixed border-collapse text-sm">
-            <colgroup>
-              <col className="w-36" />
-              <col className="w-40" />
-              <col className="w-44" />
-              <col className="w-48" />
-              <col className="w-64" />
-              <col className="w-40" />
-              <col className="w-64" />
-              <col className="w-56" />
-              <col className="w-64" />
-              <col className="w-56" />
-              <col className="w-28" />
-            </colgroup>
-            <thead>
-              <tr className="bg-sky-700 text-white">
-                {["SEM", "FECHA", "CURSO", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Acciones"].map((header) => (
-                  <th key={header} className="border-r border-sky-600 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide whitespace-nowrap">{header}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredClasses.map((record) => {
-                const isCalendar = record.source === "calendar";
-                const canvaUrl = record.canvaLink || record.evidence || "";
-                return (
-                  <tr key={record.id} className={`border-b border-slate-100 align-top ${isCalendar ? "bg-slate-50/70" : "hover:bg-blue-50/30"}`}>
-                    <td className="w-32 px-2 py-2">
-                      <input disabled={isCalendar} type="date" defaultValue={record.date || ""} onBlur={(event) => {
-                        const date = event.target.value;
-                        const config = orientationConfigForDate(date);
-                        onUpdateOrientationRecord(record.id, { date, ...(config ? { week: config.week, weekNumber: orientationWeekNumber(config.week) } : {}) });
-                      }} className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                    </td>
-                    <td className="w-52 px-2 py-2">
-                      <input disabled={isCalendar} defaultValue={record.week || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { week: event.target.value })} placeholder="Semana" className="w-full rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                    </td>
-                    <td className="w-40 px-2 py-2">
-                      <select disabled={isCalendar} value={record.course || ""} onChange={(event) => onUpdateOrientationRecord(record.id, { course: event.target.value })} className="w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100">
-                        {owner.courses.map((course) => <option key={course} value={course}>{course}</option>)}
-                      </select>
-                    </td>
-                    <td className="w-48 px-2 py-2">
-                      <TizaSelect
-                        disabled={isCalendar}
-                        value={rawOrientationAction(record)}
-                        onChange={(axis) => onUpdateOrientationRecord(record.id, { axis, characterStrength: axis })}
-                        options={rawOrientationAction(record) && !orientationActionColumns.includes(rawOrientationAction(record)) ? [rawOrientationAction(record), ...orientationActionColumns] : orientationActionColumns}
-                        placeholder="Seleccionar"
-                        buttonClassName="py-1.5 text-xs font-semibold"
-                        menuClassName="min-w-64"
-                      />
-                    </td>
-                    <td className="w-60 px-2 py-2">
-                      <textarea disabled={isCalendar} defaultValue={record.topic || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { topic: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                    </td>
-                    <td className="w-36 px-2 py-2">
-                      <select disabled={isCalendar} value={canonicalOrientationStatus(record.status)} onChange={(event) => setClassStatus(record, event.target.value)} className={`w-full rounded-md border px-2 py-1.5 text-xs font-bold outline-none disabled:bg-slate-100 ${statusTone(record.status || "")}`}>
-                        {quickStatuses.map((status) => <option key={status} value={status}>{status}</option>)}
-                      </select>
-                    </td>
-                    <td className="w-64 px-2 py-2">
-                      <textarea disabled={isCalendar} defaultValue={record.notes || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { notes: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                    </td>
-                    <td className="w-56 px-2 py-2">
-                      <div className="flex gap-1">
-                        <input disabled={isCalendar} defaultValue={canvaUrl} onBlur={(event) => onUpdateOrientationRecord(record.id, { canvaLink: event.target.value, evidence: event.target.value })} placeholder="Canva" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                        {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700">Abrir</a> : null}
-                      </div>
-                    </td>
-                    <td className="w-64 px-2 py-2">
-                      <textarea disabled={isCalendar} defaultValue={record.planificacion || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { planificacion: event.target.value })} rows={2} className="w-full resize-y rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                    </td>
-                    <td className="w-56 px-2 py-2">
-                      <div className="flex gap-1">
-                        <input disabled={isCalendar} defaultValue={record.folderLink || ""} onBlur={(event) => onUpdateOrientationRecord(record.id, { folderLink: event.target.value })} placeholder="Carpeta" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2 py-1.5 text-xs outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                        {record.folderLink?.startsWith("http") ? <a href={record.folderLink} target="_blank" rel="noopener noreferrer" className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs font-bold text-blue-700">Abrir</a> : null}
-                      </div>
-                    </td>
-                    <td className="w-28 px-2 py-2">
-                      {isCalendar ? (
-                        <span className="inline-block whitespace-nowrap rounded-full bg-slate-200 px-2 py-1 text-[10px] font-bold text-slate-600">Calendario</span>
-                      ) : (
-                        <div className="flex flex-col gap-1">
-                          <button onClick={() => onUpdateOrientationRecord(record.id, { status: "Realizada" })} title="Marcar como realizada" className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100">
-                            <Check className="h-3.5 w-3.5" /> Listo
-                          </button>
-                          <button onClick={() => onAddOrientationRecord({ ...record, id: uid(), createdAt: nowIso(), updatedAt: nowIso(), status: "Planificada", topic: `${record.topic || "Clase"} (copia)` })} title="Duplicar registro" className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50">
-                            <Copy className="h-3.5 w-3.5" /> Copiar
-                          </button>
-                          <button onClick={() => { if (window.confirm("¿Eliminar este registro?")) onDeleteOrientationRecord(record.id); }} title="Eliminar registro" className="inline-flex items-center justify-center gap-1 whitespace-nowrap rounded-md border border-red-200 bg-white px-2 py-1.5 text-[11px] font-bold text-red-600 hover:bg-red-50">
-                            <Trash2 className="h-3.5 w-3.5" /> Borrar
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-              {filteredClasses.length === 0 ? (
-                <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-sm text-slate-500">No hay registros con esos filtros. Agrega una fila arriba para comenzar.</td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
-        </div>
-        ) : null}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -5906,12 +5819,12 @@ function OrientationCycleView({
         <div className="tz-contained-x">
           <table className="min-w-[1040px] w-full border-collapse text-sm">
             <thead>
-              <tr className="bg-sky-700 text-white">
-                <th className="sticky left-0 z-10 min-w-36 border-r border-sky-600 bg-sky-800 px-3 py-3 text-left text-xs font-bold uppercase">Curso</th>
+              <tr className="border-b border-slate-200 bg-slate-100/80 text-slate-600">
+                <th className="sticky left-0 z-10 min-w-36 border-r border-slate-200 bg-slate-100 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide">Curso</th>
                 {visibleActionColumns.map((action) => (
-                  <th key={action} className="min-w-24 border-r border-sky-600 px-2 py-3 text-center text-[11px] font-bold leading-tight">{action}</th>
+                  <th key={action} className="min-w-24 border-r border-slate-200 px-2 py-3 text-center text-[11px] font-bold leading-tight">{action}</th>
                 ))}
-                <th className="min-w-16 bg-sky-800 px-2 py-3 text-center text-[11px] font-bold uppercase">Total</th>
+                <th className="min-w-16 bg-slate-200/70 px-2 py-3 text-center text-[11px] font-bold uppercase tracking-wide">Total</th>
               </tr>
             </thead>
             <tbody>
@@ -5924,7 +5837,7 @@ function OrientationCycleView({
                       const count = ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length;
                       return <td key={`${course}-${action}`} className={`border-r border-slate-100 px-2 py-2 text-center text-sm font-bold tabular-nums ${actionCellTone(count)}`}>{count || ""}</td>;
                     })}
-                    <td className={`px-2 py-2 text-center text-sm font-extrabold tabular-nums ${total > 0 ? "bg-slate-900 text-white" : "bg-slate-50 text-slate-300"}`}>{total}</td>
+                    <td className={`px-2 py-2 text-center text-sm font-extrabold tabular-nums ${total > 0 ? "bg-cyan-50 text-cyan-900" : "bg-slate-50 text-slate-300"}`}>{total}</td>
                   </tr>
                 );
               })}
@@ -5934,7 +5847,7 @@ function OrientationCycleView({
                   const t = ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length;
                   return <td key={`total-${action}`} className="border-r border-slate-200 px-2 py-2 text-center text-sm font-extrabold tabular-nums text-slate-800">{t || ""}</td>;
                 })}
-                <td className="bg-blue-700 px-2 py-2 text-center text-sm font-extrabold tabular-nums text-white">{actionGrandTotal}</td>
+                <td className="bg-cyan-700 px-2 py-2 text-center text-sm font-extrabold tabular-nums text-white">{actionGrandTotal}</td>
               </tr>
             </tbody>
           </table>
