@@ -5787,7 +5787,19 @@ function OrientationCycleView({
                       </div>
                       <label className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Accion / fortaleza</span>
-                        <input disabled={isCalendar} value={editDraft.axis} onChange={(event) => updateClassEditDraft(record, { axis: event.target.value, characterStrength: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm font-semibold outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <TizaSelect
+                          disabled={isCalendar}
+                          value={editDraft.axis}
+                          onChange={(axis) => updateClassEditDraft(record, { axis, characterStrength: axis })}
+                          options={!editDraft.axis || orientationActionOptions.some((option) => (typeof option === "string" ? option : option.value) === editDraft.axis)
+                            ? orientationActionOptions
+                            : [{ value: editDraft.axis, label: editDraft.axis }, ...orientationActionOptions]}
+                          placeholder="Seleccionar"
+                          searchable
+                          searchPlaceholder="Acción o fortaleza..."
+                          className="mt-1"
+                          buttonClassName="font-semibold"
+                        />
                       </label>
 
                       <label className="block xl:col-span-6">
