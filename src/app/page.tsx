@@ -30,6 +30,7 @@ import {
   CheckCircle2,
   BarChart3,
   ChevronDown,
+  Clock,
   ClipboardList,
   Database,
   ExternalLink,
@@ -601,6 +602,12 @@ const scheduledDateForCourse = (course: string, weekStartISO: string) => {
   const date = new Date(year, month - 1, day + (slot ? slot.day - 1 : 0));
   const pad = (value: number) => String(value).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+// Hora de la clase según el horario semanal fijo de orientación 2026.
+const orientationClassTime = (course: string | undefined) => {
+  const slot = ORIENTATION_WEEKLY_SLOTS.find((item) => normalize(item.course) === normalize(course || ""));
+  return slot ? `${slot.start} – ${slot.end}` : "";
 };
 
 const formatOrientationDate = (value: string | undefined) => {
@@ -5521,7 +5528,7 @@ function OrientationCycleView({
         </div>
         <div className="bg-slate-50/60">
           {/* Replica la caja de las tarjetas (margen lateral + borde transparente + padding) para que las columnas calcen exactas. */}
-          <div className="hidden border border-transparent border-b-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:mx-4 lg:grid lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
+          <div className="hidden border border-transparent border-b-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:mx-4 lg:grid lg:grid-cols-[168px_126px_minmax(220px,1fr)_150px_132px_188px] lg:items-center lg:gap-3">
             <span>Curso</span>
             <span>Estado</span>
             <span>Tema / semana</span>
@@ -5545,6 +5552,7 @@ function OrientationCycleView({
             const shownStatus = pendingStatus || canonicalOrientationStatus(record.status);
             const editDraft = classEditDrafts[record.id] || classEditDraft(record);
             const headTeacher = headTeacherForCourse(record.course || "");
+            const classTime = orientationClassTime(record.course);
             const dateKey = (record.date || "").slice(0, 10) || "sin-fecha";
             const previousDateKey = index > 0 ? (renderedClasses[index - 1].date || "").slice(0, 10) || "sin-fecha" : "";
             const startsDateGroup = index === 0 || dateKey !== previousDateKey;
@@ -5573,20 +5581,27 @@ function OrientationCycleView({
               <React.Fragment key={record.id}>
                 {dateHeader}
               <article className={`mx-2 mb-2 overflow-hidden rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
-                <div className="grid gap-3 px-4 py-3 lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
+                <div className="grid gap-3 px-4 py-3 lg:grid-cols-[168px_126px_minmax(220px,1fr)_150px_132px_188px] lg:items-center">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Curso</p>
-                    <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{record.course || "Sin curso"}</span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{record.course || "Sin curso"}</span>
+                      {classTime ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-cyan-700 ring-1 ring-cyan-100" title={`Horario de orientación de ${record.course}`}>
+                          <Clock className="h-3 w-3" /> {classTime}
+                        </span>
+                      ) : null}
+                    </div>
                     {headTeacher ? (
-                      <div className="mt-1.5 max-w-[130px] leading-tight">
+                      <div className="mt-1.5 leading-tight">
                         <a
                           href={`mailto:${headTeacher.email}`}
                           title={`Enviar correo a ${headTeacher.name}: ${headTeacher.email}`}
-                          className="block truncate text-[11px] font-bold text-cyan-700 hover:text-cyan-900 hover:underline"
+                          className="block text-[11px] font-bold text-cyan-700 hover:text-cyan-900 hover:underline"
                         >
                           PJ: {headTeacher.name}
                         </a>
-                        <span className="block truncate text-[10px] font-medium text-slate-500" title={headTeacher.email}>
+                        <span className="block break-all text-[10px] font-medium text-slate-500">
                           {headTeacher.email}
                         </span>
                       </div>
