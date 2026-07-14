@@ -8,7 +8,7 @@ import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
-import { ORIENTATION_WEEKLY_SLOTS } from "@/lib/orientation-weekly-schedule";
+import { ORIENTATION_WEEKLY_SLOTS, type OrientationWeeklySlot } from "@/lib/orientation-weekly-schedule";
 import { games } from "@/lib/games";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
 import {
@@ -324,7 +324,9 @@ function TizaSelect({
 }) {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [menuPosition, setMenuPosition] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const normalizedOptions = options.map((option) =>
     typeof option === "string" ? { value: option, label: option, keywords: [] } : { ...option, keywords: option.keywords || [] },
@@ -351,7 +353,7 @@ function TizaSelect({
   useEffect(() => {
     if (!open) return;
     const closeOnOutside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) {
+      if (!rootRef.current?.contains(event.target as Node) && !menuRef.current?.contains(event.target as Node)) {
         setOpen(false);
         setSearchQuery("");
       }
@@ -369,6 +371,31 @@ function TizaSelect({
       document.removeEventListener("keydown", closeOnEscape);
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const positionMenu = () => {
+      const rect = rootRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const estimatedHeight = searchable ? 300 : Math.min(260, normalizedOptions.length * 42 + 16);
+      const roomBelow = window.innerHeight - rect.bottom;
+      const openUp = roomBelow < Math.min(estimatedHeight, 220) && rect.top > roomBelow;
+      setMenuPosition({
+        position: "fixed",
+        left: Math.max(8, Math.min(rect.left, window.innerWidth - Math.max(rect.width, searchable ? 320 : rect.width) - 8)),
+        top: openUp ? "auto" : rect.bottom + 8,
+        bottom: openUp ? window.innerHeight - rect.top + 8 : "auto",
+        width: searchable ? `min(320px, calc(100vw - 1rem))` : rect.width,
+      });
+    };
+    positionMenu();
+    window.addEventListener("resize", positionMenu);
+    window.addEventListener("scroll", positionMenu, true);
+    return () => {
+      window.removeEventListener("resize", positionMenu);
+      window.removeEventListener("scroll", positionMenu, true);
+    };
+  }, [open, searchable, normalizedOptions.length]);
 
   useEffect(() => {
     if (!open || !searchable) return;
@@ -392,10 +419,11 @@ function TizaSelect({
         <span className="truncate">{selected?.label || placeholder}</span>
         <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${open ? "rotate-180" : ""}`} />
       </button>
-      {open ? (
+      {open && typeof document !== "undefined" ? createPortal(
         <div
-          className={`absolute left-0 top-full z-[120] mt-2 min-w-full overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-[0_18px_45px_-12px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5 ${searchable ? "" : "right-0"} ${menuClassName}`}
-          style={searchable ? { width: "min(320px, calc(100vw - 2rem))" } : undefined}
+          ref={menuRef}
+          className={`z-[120] overflow-hidden rounded-lg border border-slate-200 bg-white text-sm shadow-[0_18px_45px_-12px_rgba(15,23,42,0.28)] ring-1 ring-slate-900/5 ${menuClassName}`}
+          style={menuPosition}
         >
           {searchable ? (
             <div className="flex h-11 items-center gap-2.5 border-b border-slate-100 bg-slate-50/80 px-3 transition focus-within:bg-white">
@@ -452,7 +480,8 @@ function TizaSelect({
               </div>
             ) : null}
           </div>
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </div>
   );
@@ -611,6 +640,28 @@ const canonicalCourseKey = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// Los archivos de horario nombran los cursos con palabras completas
+// ("PRIMERO MEDIO A"), mientras la interfaz usa "I° Medio A". Esta clave
+// permite relacionarlos sin depender de cómo fue escrito el nombre original.
+const schoolScheduleCourseKey = (value: string) =>
+  canonicalCourseKey(value)
+    .replace(/[°º]/g, "")
+    .replace(/\bpre\s*kinder\b/g, "prekinder")
+    .replace(/^iv\s+medio\b/g, "4 medio")
+    .replace(/^iii\s+medio\b/g, "3 medio")
+    .replace(/^ii\s+medio\b/g, "2 medio")
+    .replace(/^i\s+medio\b/g, "1 medio")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const schoolWeekDays = [
+  { key: "lunes", label: "Lunes" },
+  { key: "martes", label: "Martes" },
+  { key: "miercoles", label: "Miércoles" },
+  { key: "jueves", label: "Jueves" },
+  { key: "viernes", label: "Viernes" },
+] as const;
+
 const firstCycleHeadTeachers: Record<string, { name: string; email: string }> = {
   [canonicalCourseKey("Prekínder A")]: { name: "Ivonne Espinoza", email: "i.espinoza@colegiosanlucas.com" },
   [canonicalCourseKey("Prekínder B")]: { name: "Ana Huerta", email: "a.huerta@colegiosanlucas.com" },
@@ -635,8 +686,8 @@ const headTeacherForCourse = (course: string) => {
 };
 
 // Fecha que corresponde a un curso dentro de una semana, según el horario fijo.
-const scheduledDateForCourse = (course: string, weekStartISO: string) => {
-  const slot = ORIENTATION_WEEKLY_SLOTS.find((item) => normalize(item.course) === normalize(course));
+const scheduledDateForCourse = (course: string, weekStartISO: string, schedule: OrientationWeeklySlot[] = ORIENTATION_WEEKLY_SLOTS) => {
+  const slot = schedule.find((item) => normalize(item.course) === normalize(course));
   const [year, month, day] = weekStartISO.split("-").map(Number);
   if (!year || !month || !day) return weekStartISO;
   const date = new Date(year, month - 1, day + (slot ? slot.day - 1 : 0));
@@ -645,8 +696,8 @@ const scheduledDateForCourse = (course: string, weekStartISO: string) => {
 };
 
 // Hora de la clase según el horario semanal fijo de orientación 2026.
-const orientationClassTime = (course: string | undefined) => {
-  const slot = ORIENTATION_WEEKLY_SLOTS.find((item) => normalize(item.course) === normalize(course || ""));
+const orientationClassTime = (course: string | undefined, schedule: OrientationWeeklySlot[] = ORIENTATION_WEEKLY_SLOTS) => {
+  const slot = schedule.find((item) => normalize(item.course) === normalize(course || ""));
   return slot ? `${slot.start} – ${slot.end}` : "";
 };
 
@@ -678,6 +729,38 @@ const orientationActionColumns = [
   "Aplicación Pulso Digital",
   "Soy Respetuoso",
 ];
+
+type TizaAppConfiguration = {
+  orientationActions: string[];
+  orientationSchedule: OrientationWeeklySlot[];
+};
+
+const defaultAppConfiguration = (): TizaAppConfiguration => ({
+  orientationActions: [...orientationActionColumns],
+  orientationSchedule: ORIENTATION_WEEKLY_SLOTS.map((slot) => ({ ...slot })),
+});
+
+const parseAppConfiguration = (value: string | undefined): TizaAppConfiguration => {
+  const defaults = defaultAppConfiguration();
+  if (!value) return defaults;
+  try {
+    const parsed = JSON.parse(value) as Partial<TizaAppConfiguration>;
+    const actions = Array.isArray(parsed.orientationActions)
+      ? parsed.orientationActions.map(String).map((item) => item.trim()).filter(Boolean)
+      : [];
+    const schedule = Array.isArray(parsed.orientationSchedule)
+      ? parsed.orientationSchedule.filter((slot): slot is OrientationWeeklySlot => Boolean(
+          slot && Number(slot.day) >= 1 && Number(slot.day) <= 5 && slot.course && slot.start && slot.end && slot.owner,
+        ))
+      : [];
+    return {
+      orientationActions: actions.length ? Array.from(new Set(actions)) : defaults.orientationActions,
+      orientationSchedule: schedule.length ? schedule : defaults.orientationSchedule,
+    };
+  } catch {
+    return defaults;
+  }
+};
 
 const courseSearchKeywords = (course: string) => {
   const normalizedCourse = normalize(course);
@@ -721,12 +804,6 @@ const orientationActionSearchAliases: Record<string, string[]> = {
   [normalize("Aplicación Pulso Digital")]: ["pulso", "pulso digital", "encuesta digital"],
   [normalize("Soy Respetuoso")]: ["respeto", "respetuoso", "buen trato"],
 };
-
-const orientationActionOptions: TizaSelectOption[] = orientationActionColumns.map((action) => ({
-  value: action,
-  label: action,
-  keywords: orientationActionSearchAliases[normalize(action)] || [],
-}));
 
 const officialPersonnelSource = "https://www.colegiosanlucas.com/colegio/#Equipo";
 const officialPersonnelSeededAt = "2026-06-26T00:00:00.000Z";
@@ -1731,6 +1808,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "convivenciaCoordinator", label: "Coord. convivencia", aliases: ["coordinadora convivencia", "coordinador convivencia", "convivencia"] },
       { key: "convivenciaEmail", label: "Correo convivencia", aliases: ["correo convivencia", "email convivencia"] },
       { key: "headTeacher", label: "Profesor/a jefe", aliases: ["profesor jefe", "profesora jefe", "docente", "tutor"] },
+      { key: "headTeacherEmail", label: "Correo profesor/a jefe", aliases: ["correo profesor jefe", "email profesor jefe", "correo docente", "email docente"] },
       { key: "capacity", label: "Capacidad sala", aliases: ["capacidad", "puestos", "cupos"] },
       { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "comentarios"] },
     ],
@@ -3630,6 +3708,24 @@ function CourseWorkspaceView({
   const visibleCourses = cycleTab === "all" ? courses : courses.filter((course) => course.cycle === cycleTab);
   const current = courses.find((course) => course.name === selectedCourse) || courses[0];
   const courseName = current?.name || "";
+  const courseSchedule = useMemo(() => {
+    const entries = COURSE_SCHEDULE.filter((entry) => schoolScheduleCourseKey(entry.course) === schoolScheduleCourseKey(courseName));
+    const rowsByKey = new Map<string, { key: string; block: number; startTime: string; endTime: string }>();
+    const cells = new Map<string, string[]>();
+    entries.forEach((entry) => {
+      const rowKey = `${entry.block}|${entry.startTime}|${entry.endTime}`;
+      rowsByKey.set(rowKey, { key: rowKey, block: entry.block, startTime: entry.startTime, endTime: entry.endTime });
+      const cellKey = `${rowKey}|${normalize(entry.day)}`;
+      const activities = cells.get(cellKey) || [];
+      if (!activities.some((activity) => normalize(activity) === normalize(entry.activity))) activities.push(entry.activity);
+      cells.set(cellKey, activities);
+    });
+    return {
+      entries,
+      cells,
+      rows: Array.from(rowsByKey.values()).sort((left, right) => left.startTime.localeCompare(right.startTime) || left.block - right.block),
+    };
+  }, [courseName]);
   const students = store.students.filter((record) => normalize(record.course || "") === normalize(courseName));
   const cases = store.cases.filter((record) => courseMatches(record, courseName));
   const convivencia = cases.filter((record) => normalize(`${record.category || ""} ${record.title || ""}`).includes("convivencia"));
@@ -3876,6 +3972,80 @@ function CourseWorkspaceView({
                 </div>
               </div>
             </div>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-cyan-50 via-white to-blue-50 px-5 py-4 sm:px-6">
+              <div>
+                <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
+                  <CalendarDays className="h-5 w-5 text-cyan-700" />
+                  Horario semanal de {current.name}
+                </h3>
+                <p className="mt-1 text-sm text-slate-600">Asignaturas y actividades del horario oficial 2026.</p>
+              </div>
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-cyan-800 shadow-sm ring-1 ring-cyan-200">
+                {courseSchedule.rows.length} tramos horarios
+              </span>
+            </div>
+
+            {courseSchedule.rows.length === 0 ? (
+              <div className="p-8 text-center">
+                <Clock className="mx-auto h-8 w-8 text-slate-300" />
+                <p className="mt-3 text-sm font-semibold text-slate-700">No se encontró un horario para este curso</p>
+                <p className="mt-1 text-xs text-slate-500">Revisa que el nombre del curso coincida con el archivo de horarios cargado.</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[920px] table-fixed text-left">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                        <th className="w-28 px-4 py-3">Hora</th>
+                        {schoolWeekDays.map((day) => <th key={day.key} className="px-3 py-3">{day.label}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {courseSchedule.rows.map((row) => (
+                        <tr key={row.key} className="align-top hover:bg-slate-50/60">
+                          <th className="px-4 py-2.5">
+                            <span className="block text-xs font-bold tabular-nums text-slate-800">{row.startTime}</span>
+                            <span className="block text-[10px] tabular-nums text-slate-400">a {row.endTime}</span>
+                          </th>
+                          {schoolWeekDays.map((day) => {
+                            const activities = courseSchedule.cells.get(`${row.key}|${day.key}`) || [];
+                            const activityText = activities.join(" / ");
+                            const activityKey = normalize(activityText);
+                            const isBreak = /recreo|almuerzo|casino|acogida|juego libre/.test(activityKey);
+                            const isOrientation = /orientacion|consejo/.test(activityKey);
+                            return (
+                              <td key={day.key} className="px-2 py-2">
+                                {activities.length ? (
+                                  <div className={`min-h-11 rounded-lg px-2.5 py-2 text-xs font-semibold leading-4 ring-1 ${
+                                    isOrientation
+                                      ? "bg-cyan-100 text-cyan-950 ring-cyan-200"
+                                      : isBreak
+                                        ? "bg-slate-100 text-slate-600 ring-slate-200"
+                                        : "bg-blue-50 text-blue-950 ring-blue-100"
+                                  }`} title={`${day.label} ${row.startTime}–${row.endTime}: ${activityText}`}>
+                                    {activities.map((activity) => <span key={activity} className="block">{activity}</span>)}
+                                  </div>
+                                ) : <span className="block min-h-11 rounded-lg border border-dashed border-slate-100" />}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] text-slate-500">
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-100 ring-1 ring-blue-200" /> Asignatura o actividad</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-cyan-200 ring-1 ring-cyan-300" /> Orientación / Consejo</span>
+                  <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-slate-200 ring-1 ring-slate-300" /> Recreo / alimentación</span>
+                  <span className="ml-auto">Fuente: {courseSchedule.entries[0]?.source || "Horario institucional"}</span>
+                </div>
+              </>
+            )}
           </section>
 
           <section className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -4353,6 +4523,7 @@ function OrientationCycleView({
   onDeleteOrientationRecord,
   onGenerateAnnualPlan,
   calendarEvents,
+  appConfiguration,
 }: {
   store: DataStore;
   accessToken: string;
@@ -4364,6 +4535,7 @@ function OrientationCycleView({
   onDeleteOrientationRecord: (recordId: string) => void;
   onGenerateAnnualPlan: () => void;
   calendarEvents: CalendarEvent[];
+  appConfiguration: TizaAppConfiguration;
 }) {
   const [selectedOwner, setSelectedOwner] = useState(orientationOwners[0].name);
   const [filterCourse, setFilterCourse] = useState<string>("all");
@@ -4392,7 +4564,43 @@ function OrientationCycleView({
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
-  const owner = useMemo(() => orientationOwners.find((item) => item.name === selectedOwner) || orientationOwners[0], [selectedOwner]);
+  const configuredOwners = useMemo(() => {
+    const names = Array.from(new Set([
+      ...orientationOwners.map((item) => item.name),
+      ...appConfiguration.orientationSchedule.map((slot) => slot.owner),
+      ...store.courses.map((course) => course.orientationOwner || "").filter(Boolean),
+    ]));
+    return names.map((name) => {
+      const base = orientationOwners.find((item) => normalize(item.name) === normalize(name));
+      const savedCourses = store.courses.filter((course) => normalize(course.orientationOwner || "") === normalize(name));
+      const scheduledCourses = appConfiguration.orientationSchedule.filter((slot) => normalize(slot.owner) === normalize(name)).map((slot) => slot.course);
+      const courses = Array.from(new Set([...(base?.courses || []), ...savedCourses.map((course) => course.name), ...scheduledCourses].filter(Boolean)));
+      return {
+        name,
+        role: base?.role || "Orientador/a",
+        email: base?.email || savedCourses.find((course) => course.orientationEmail)?.orientationEmail || "",
+        cycle: base?.cycle || savedCourses.find((course) => course.cycle)?.cycle || "Ciclo configurable",
+        convivenciaCoordinator: base?.convivenciaCoordinator || savedCourses.find((course) => course.convivenciaCoordinator)?.convivenciaCoordinator || "",
+        convivenciaEmail: base?.convivenciaEmail || savedCourses.find((course) => course.convivenciaEmail)?.convivenciaEmail || "",
+        courses,
+      };
+    });
+  }, [appConfiguration.orientationSchedule, store.courses]);
+  const owner = useMemo(() => configuredOwners.find((item) => item.name === selectedOwner) || configuredOwners[0] || orientationOwners[0], [configuredOwners, selectedOwner]);
+  const actionColumns = appConfiguration.orientationActions;
+  const actionOptions: TizaSelectOption[] = useMemo(() => actionColumns.map((action) => ({
+    value: action,
+    label: action,
+    keywords: orientationActionSearchAliases[normalize(action)] || [],
+  })), [actionColumns]);
+  const scheduleSlots = appConfiguration.orientationSchedule;
+  const courseHeadTeacher = (courseName: string) => {
+    const saved = store.courses.find((course) => normalize(course.name || "") === normalize(courseName));
+    if (saved?.headTeacher || saved?.headTeacherEmail) return { name: saved.headTeacher || "Profesor/a jefe", email: saved.headTeacherEmail || "" };
+    return headTeacherForCourse(courseName);
+  };
+  const scheduledDate = (course: string, weekStartISO: string) => scheduledDateForCourse(course, weekStartISO, scheduleSlots);
+  const classTime = (course: string | undefined) => orientationClassTime(course, scheduleSlots);
   const today = new Date().toISOString().slice(0, 10);
   const orientationWeekOptions = useMemo(() =>
     ORIENTATION_FIRST_CYCLE_CONFIG.map((config) => ({ value: config.week, label: config.week })),
@@ -4426,12 +4634,12 @@ function OrientationCycleView({
 
   const effectiveCreatorWeek = weekCreatorWeek || defaultOrientationWeek;
   const creatorRange = parseOrientationWeekRange(effectiveCreatorWeek);
-  const creatorSlots = useMemo(() => ORIENTATION_WEEKLY_SLOTS
+  const creatorSlots = useMemo(() => scheduleSlots
     .filter((slot) => normalize(slot.owner) === normalize(owner.name))
     .map((slot) => ({
       slot,
-      date: creatorRange ? scheduledDateForCourse(slot.course, creatorRange.start) : "",
-    })), [creatorRange, owner.name]);
+      date: creatorRange ? scheduledDate(slot.course, creatorRange.start) : "",
+    })), [creatorRange, owner.name, scheduleSlots]);
 
   const ownerStoredClasses = useMemo(() => store.orientation.filter((record) =>
     !isGeneratedOrientationPlaceholder(record) && (
@@ -4477,21 +4685,21 @@ function OrientationCycleView({
   )), [creatorSlots, ownerStoredClasses]);
   const getOrientationAction = (record: DataRecord) => {
     const value = record.axis || record.characterStrength || record.classType || record.topic || "";
-    const exact = orientationActionColumns.find((action) => normalize(action) === normalize(value));
+    const exact = actionColumns.find((action) => normalize(action) === normalize(value));
     if (exact) return exact;
-    const fuzzy = orientationActionColumns.find((action) => normalize(value).includes(normalize(action)) || normalize(action).includes(normalize(value)));
+    const fuzzy = actionColumns.find((action) => normalize(value).includes(normalize(action)) || normalize(action).includes(normalize(value)));
     return fuzzy || value || "Sin acción";
   };
   // Valor tal como está guardado, sin normalizar: es lo que se muestra y edita
   // en la bitácora (getOrientationAction solo agrupa para matriz y estadísticas).
   const rawOrientationAction = (record: DataRecord) => record.axis || record.characterStrength || record.classType || "";
-  const orientationActionTotals = useMemo(() => orientationActionColumns.map((action) => ({
+  const orientationActionTotals = useMemo(() => actionColumns.map((action) => ({
     action,
     count: ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length,
   })), [ownerClasses]);
   const visibleActionColumns = useMemo(() => orientationActionTotals.some((item) => item.count > 0)
     ? orientationActionTotals.filter((item) => item.count > 0).map((item) => item.action)
-    : orientationActionColumns, [orientationActionTotals]);
+    : actionColumns, [orientationActionTotals, actionColumns]);
   const maxActionCount = useMemo(() => Math.max(
     1,
     ...owner.courses.flatMap((course) =>
@@ -4518,7 +4726,7 @@ function OrientationCycleView({
     if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
     const query = normalize(orientationSearch);
     if (query) {
-      const headTeacher = headTeacherForCourse(record.course || "");
+      const headTeacher = courseHeadTeacher(record.course || "");
       const searchable = [
         record.date,
         record.week,
@@ -4608,13 +4816,13 @@ function OrientationCycleView({
   const syncQuickClassWeek = (week: string) => {
     const range = parseOrientationWeekRange(week);
     const patch: Record<string, string> = { week, weekNumber: orientationWeekNumber(week) };
-    if (range) Object.assign(patch, quickFormPatchForDate(scheduledDateForCourse(quickClassForm.course || "", range.start)), { week, weekNumber: orientationWeekNumber(week) });
+    if (range) Object.assign(patch, quickFormPatchForDate(scheduledDate(quickClassForm.course || "", range.start)), { week, weekNumber: orientationWeekNumber(week) });
     updateQuickClassForm(patch);
   };
   const syncQuickClassCourse = (course: string) => {
     const range = parseOrientationWeekRange(quickClassForm.week || "");
     const patch: Record<string, string> = { course };
-    if (range) patch.date = scheduledDateForCourse(course, range.start);
+    if (range) patch.date = scheduledDate(course, range.start);
     updateQuickClassForm(patch);
   };
 
@@ -4635,7 +4843,7 @@ function OrientationCycleView({
     return owner.courses
       .map((course) => ({
         course,
-        teacher: headTeacherForCourse(course),
+        teacher: courseHeadTeacher(course),
         records: inWeek.filter((record) => normalize(record.course || "") === normalize(course)),
       }))
       .filter((group) => group.records.length > 0);
@@ -4774,7 +4982,7 @@ function OrientationCycleView({
       const records = sortedRecords.filter((record) => normalize(record.course || "") === normalize(course));
       const realizedRecords = records.filter((record) => /realizad/i.test(record.status || ""));
       const workshops = ownerWorkshops.filter((workshop) => normalize(`${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`).includes(normalize(course)));
-      const headTeacher = headTeacherForCourse(course);
+      const headTeacher = courseHeadTeacher(course);
       return [
         course,
         headTeacher?.name || "",
@@ -4881,7 +5089,7 @@ function OrientationCycleView({
         ];
       });
     const detailRows = sortedRecords.map((record) => {
-      const headTeacher = headTeacherForCourse(record.course || "");
+      const headTeacher = courseHeadTeacher(record.course || "");
       return [
         record.week || "",
         record.date ? formatOrientationDate(record.date) : "",
@@ -5270,7 +5478,7 @@ function OrientationCycleView({
       )}
 
       <section className="grid gap-3 lg:grid-cols-3">
-        {orientationOwners.map((item) => {
+        {configuredOwners.map((item) => {
           const active = item.name === selectedOwner;
           const itemClasses = store.orientation.filter((record) =>
             !isGeneratedOrientationPlaceholder(record) && (
@@ -5415,7 +5623,7 @@ function OrientationCycleView({
                   <TizaSelect
                     value={quickClassForm.axis}
                     onChange={(axis) => updateQuickClassForm({ axis, characterStrength: axis })}
-                    options={orientationActionOptions}
+                    options={actionOptions}
                     placeholder="Seleccionar"
                     searchable
                     searchPlaceholder="Acción o fortaleza..."
@@ -5589,8 +5797,8 @@ function OrientationCycleView({
             const pendingStatus = pendingStatuses[record.id];
             const shownStatus = pendingStatus || canonicalOrientationStatus(record.status);
             const editDraft = classEditDrafts[record.id] || classEditDraft(record);
-            const headTeacher = headTeacherForCourse(record.course || "");
-            const classTime = orientationClassTime(record.course);
+            const headTeacher = courseHeadTeacher(record.course || "");
+            const recordClassTime = classTime(record.course);
             const dateKey = (record.date || "").slice(0, 10) || "sin-fecha";
             const previousDateKey = index > 0 ? (renderedClasses[index - 1].date || "").slice(0, 10) || "sin-fecha" : "";
             const startsDateGroup = index === 0 || dateKey !== previousDateKey;
@@ -5624,9 +5832,9 @@ function OrientationCycleView({
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Curso</p>
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{record.course || "Sin curso"}</span>
-                      {classTime ? (
+                      {recordClassTime ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-cyan-50 px-2 py-0.5 text-[10px] font-bold tabular-nums text-cyan-700 ring-1 ring-cyan-100" title={`Horario de orientación de ${record.course}`}>
-                          <Clock className="h-3 w-3" /> {classTime}
+                          <Clock className="h-3 w-3" /> {recordClassTime}
                         </span>
                       ) : null}
                     </div>
@@ -5773,7 +5981,7 @@ function OrientationCycleView({
                           onUpdateOrientationRecord(record.id, {
                             week,
                             weekNumber: orientationWeekNumber(week),
-                            ...(range ? { date: scheduledDateForCourse(record.course || "", range.start) } : {}),
+                            ...(range ? { date: scheduledDate(record.course || "", range.start) } : {}),
                           });
                         }} options={weekOptionsFor(record.week)} className="mt-1" />
                       </div>
@@ -5791,9 +5999,9 @@ function OrientationCycleView({
                           disabled={isCalendar}
                           value={editDraft.axis}
                           onChange={(axis) => updateClassEditDraft(record, { axis, characterStrength: axis })}
-                          options={!editDraft.axis || orientationActionOptions.some((option) => (typeof option === "string" ? option : option.value) === editDraft.axis)
-                            ? orientationActionOptions
-                            : [{ value: editDraft.axis, label: editDraft.axis }, ...orientationActionOptions]}
+                          options={!editDraft.axis || actionOptions.some((option) => (typeof option === "string" ? option : option.value) === editDraft.axis)
+                            ? actionOptions
+                            : [{ value: editDraft.axis, label: editDraft.axis }, ...actionOptions]}
                           placeholder="Seleccionar"
                           searchable
                           searchPlaceholder="Acción o fortaleza..."
@@ -10102,15 +10310,149 @@ function GamesView() {
   );
 }
 
+function ConfigurationCenter({
+  configuration,
+  onSave,
+  onNavigate,
+}: {
+  configuration: TizaAppConfiguration;
+  onSave: (configuration: TizaAppConfiguration) => void;
+  onNavigate: (view: ViewId) => void;
+}) {
+  const [draft, setDraft] = useState<TizaAppConfiguration>(configuration);
+  const [newAction, setNewAction] = useState("");
+  const [importNotice, setImportNotice] = useState("");
+  const addAction = () => {
+    const action = newAction.trim();
+    if (!action || draft.orientationActions.some((item) => normalize(item) === normalize(action))) return;
+    setDraft((current) => ({ ...current, orientationActions: [...current.orientationActions, action] }));
+    setNewAction("");
+  };
+  const updateSlot = (index: number, updates: Partial<OrientationWeeklySlot>) => setDraft((current) => ({
+    ...current,
+    orientationSchedule: current.orientationSchedule.map((slot, slotIndex) => slotIndex === index ? { ...slot, ...updates } : slot),
+  }));
+  const addSlot = () => setDraft((current) => ({
+    ...current,
+    orientationSchedule: [...current.orientationSchedule, { day: 1, dayName: "Lunes", start: "08:00", end: "08:45", course: "Nuevo curso", owner: "Orientador/a" }],
+  }));
+  const dayFromValue = (value: unknown) => {
+    const text = normalize(String(value || ""));
+    const number = Number(text);
+    if (number >= 1 && number <= 5) return number as OrientationWeeklySlot["day"];
+    const names = ["lunes", "martes", "miercoles", "jueves", "viernes"];
+    const index = names.findIndex((name) => text.startsWith(name));
+    return (index >= 0 ? index + 1 : 0) as OrientationWeeklySlot["day"] | 0;
+  };
+  const importSchedule = async (file: File) => {
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: "", raw: false });
+      const pick = (row: Record<string, unknown>, aliases: string[]) => {
+        const key = Object.keys(row).find((header) => aliases.includes(normalize(header)));
+        return key ? String(row[key] || "").trim() : "";
+      };
+      const imported = rows.map((row) => {
+        const day = dayFromValue(pick(row, ["dia", "n dia", "numero dia"]));
+        const dayNames: OrientationWeeklySlot["dayName"][] = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+        return {
+          day,
+          dayName: day ? dayNames[day - 1] : "Lunes",
+          start: pick(row, ["inicio", "hora inicio", "desde"]),
+          end: pick(row, ["fin", "hora fin", "hasta"]),
+          course: pick(row, ["curso", "nivel", "grupo"]),
+          owner: pick(row, ["responsable", "orientador", "orientadora", "profesional"]),
+        } as OrientationWeeklySlot;
+      }).filter((slot) => slot.day && slot.start && slot.end && slot.course && slot.owner);
+      if (!imported.length) throw new Error("No se reconocieron filas. Usa las columnas Día, Inicio, Fin, Curso y Responsable.");
+      setDraft((current) => ({ ...current, orientationSchedule: imported }));
+      setImportNotice(`${imported.length} bloques cargados. Revisa la vista previa y guarda los cambios.`);
+    } catch (error) {
+      setImportNotice(error instanceof Error ? error.message : "No se pudo leer el horario.");
+    }
+  };
+  const downloadTemplate = () => {
+    const sheet = XLSX.utils.json_to_sheet([{ Día: "Lunes", Inicio: "08:00", Fin: "08:45", Curso: "1° Básico A", Responsable: "Nombre profesional" }]);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Horario");
+    XLSX.writeFile(workbook, "plantilla-horario-tiza.xlsx");
+  };
+
+  return (
+    <section className="rounded-xl border border-cyan-200 bg-white p-5 shadow-sm xl:col-span-2">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Autoconfiguración sin código</p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">Catálogos y horario de orientación</h2>
+          <p className="mt-1 max-w-3xl text-sm text-slate-600">Estos datos reemplazan las listas fijas de la bitácora, el creador semanal y los reportes. Se sincronizan con tu cuenta para usarlos en otros equipos.</p>
+        </div>
+        <button type="button" onClick={() => onSave(draft)} className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-emerald-700"><Save className="h-4 w-4" /> Guardar configuración</button>
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(280px,0.8fr)_minmax(520px,1.7fr)]">
+        <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+          <h3 className="font-semibold text-slate-950">Acciones / fortalezas</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">Añade categorías con palabras normales; aparecerán inmediatamente en todos los selectores de Orientación.</p>
+          <div className="mt-3 flex gap-2">
+            <input value={newAction} onChange={(event) => setNewAction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addAction(); } }} placeholder="Ej.: Autocuidado" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-600" />
+            <button type="button" onClick={addAction} className="grid h-10 w-10 place-items-center rounded-lg bg-cyan-700 text-white" title="Añadir acción"><Plus className="h-4 w-4" /></button>
+          </div>
+          <div className="mt-3 max-h-80 space-y-1.5 overflow-y-auto pr-1">
+            {draft.orientationActions.map((action) => (
+              <div key={action} className="flex items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+                <span className="min-w-0 truncate font-medium text-slate-700">{action}</span>
+                <button type="button" onClick={() => setDraft((current) => ({ ...current, orientationActions: current.orientationActions.filter((item) => item !== action) }))} title={`Eliminar ${action}`} className="text-slate-400 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><h3 className="font-semibold text-slate-950">Horario semanal</h3><p className="mt-1 text-xs leading-5 text-slate-500">Edítalo aquí o sube un Excel/CSV. Columnas: Día, Inicio, Fin, Curso, Responsable.</p></div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={downloadTemplate} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><ArrowDownToLine className="h-4 w-4" /> Plantilla</button>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 hover:bg-cyan-100"><Upload className="h-4 w-4" /> Subir horario<input type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importSchedule(file); event.target.value = ""; }} /></label>
+              <button type="button" onClick={addSlot} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus className="h-4 w-4" /> Bloque</button>
+            </div>
+          </div>
+          {importNotice ? <p className="mt-3 rounded-md bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800">{importNotice}</p> : null}
+          <div className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1">
+            {draft.orientationSchedule.map((slot, index) => (
+              <div key={`${index}-${slot.course}-${slot.start}`} className="grid gap-2 rounded-lg border border-slate-200 bg-slate-50 p-2 sm:grid-cols-[105px_82px_82px_minmax(130px,1fr)_minmax(140px,1fr)_36px]">
+                <select value={slot.day} onChange={(event) => { const day = Number(event.target.value) as OrientationWeeklySlot["day"]; updateSlot(index, { day, dayName: (["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"] as OrientationWeeklySlot["dayName"][])[day - 1] }); }} className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs"><option value={1}>Lunes</option><option value={2}>Martes</option><option value={3}>Miércoles</option><option value={4}>Jueves</option><option value={5}>Viernes</option></select>
+                <input type="time" value={slot.start} onChange={(event) => updateSlot(index, { start: event.target.value })} aria-label="Hora de inicio" className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs" />
+                <input type="time" value={slot.end} onChange={(event) => updateSlot(index, { end: event.target.value })} aria-label="Hora de término" className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs" />
+                <input value={slot.course} onChange={(event) => updateSlot(index, { course: event.target.value })} placeholder="Curso" className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs" />
+                <input value={slot.owner} onChange={(event) => updateSlot(index, { owner: event.target.value })} placeholder="Responsable" className="rounded-md border border-slate-200 bg-white px-2 py-2 text-xs" />
+                <button type="button" onClick={() => setDraft((current) => ({ ...current, orientationSchedule: current.orientationSchedule.filter((_, slotIndex) => slotIndex !== index) }))} title="Eliminar bloque" className="grid h-9 w-9 place-items-center rounded-md text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-4 w-4" /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-600">
+        <span>Los cursos, profesores jefe, correos, estudiantes y funcionarios se administran en</span>
+        <button type="button" onClick={() => onNavigate("databases")} className="font-bold text-cyan-700 hover:underline">Base de datos</button>
+        <span>y se pueden cargar masivamente desde archivos.</span>
+      </div>
+    </section>
+  );
+}
+
 function SettingsView({
   profile,
   setProfile,
   onClear,
+  onNavigate,
 }: {
   profile: Record<string, string>;
   setProfile: (profile: Record<string, string>) => void;
   onClear: () => void;
+  onNavigate: (view: ViewId) => void;
 }) {
+  const configuration = useMemo(() => parseAppConfiguration(profile.appConfiguration), [profile.appConfiguration]);
   return (
     <div>
       <div className="mb-6">
@@ -10118,6 +10460,11 @@ function SettingsView({
         <p className="mt-2 max-w-3xl text-sm text-slate-600">Configura la institución y revisa el estado de persistencia.</p>
       </div>
       <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
+        <ConfigurationCenter
+          configuration={configuration}
+          onNavigate={onNavigate}
+          onSave={(next) => setProfile({ ...profile, appConfiguration: JSON.stringify(next) })}
+        />
         <section className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="text-lg font-semibold">Institución</h2>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -11916,6 +12263,7 @@ export default function TizaEducationApp() {
     }
   });
   const profile = profileState;
+  const appConfiguration = useMemo(() => parseAppConfiguration(profile.appConfiguration), [profile.appConfiguration]);
   const accessTokenRef = React.useRef("");
   const remoteLoadedUserRef = React.useRef("");
   const [, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -13314,6 +13662,7 @@ export default function TizaEducationApp() {
           onDeleteOrientationRecord={deleteOrientationRecord}
           onGenerateAnnualPlan={() => syncOrientationAnnualPlan(false)}
           calendarEvents={calendarEvents}
+          appConfiguration={appConfiguration}
         />
       );
     }
@@ -13349,7 +13698,7 @@ export default function TizaEducationApp() {
         />
       );
     }
-    if (activeView === "settings") return <SettingsView profile={profile} setProfile={setProfile} onClear={clearLocal} />;
+    if (activeView === "settings") return <SettingsView profile={profile} setProfile={setProfile} onClear={clearLocal} onNavigate={setActiveView} />;
     if (activeView === "team") {
       return (
         <TeamView
