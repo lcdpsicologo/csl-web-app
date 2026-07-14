@@ -5322,20 +5322,6 @@ function OrientationCycleView({
         ))}
       </section>
 
-      <section id="registro-rapido" className="flex flex-col justify-between gap-3 border-y border-slate-200 bg-white px-4 py-4 shadow-sm sm:flex-row sm:items-center">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><Plus className="h-5 w-5" /></span>
-          <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Registro de orientación</p>
-            <h2 className="text-lg font-semibold text-slate-950">Añadir una actividad a la bitácora</h2>
-            <p className="mt-0.5 text-xs font-medium text-slate-500">Clase, intervención, material o planificación vinculada a un curso.</p>
-          </div>
-        </div>
-        <button onClick={() => { setQuickFormAttempted(false); setQuickFormExpanded(true); }} className="tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-slate-800">
-          <Plus className="h-4 w-4" /> Nuevo registro
-        </button>
-      </section>
-
       {quickFormExpanded && typeof document !== "undefined" ? createPortal(
         <div className="tz-backdrop fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/50 p-0 backdrop-blur-[1px] sm:items-center sm:p-6" onClick={closeQuickClassForm}>
           <form
@@ -5449,14 +5435,26 @@ function OrientationCycleView({
         document.body,
       ) : null}
 
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <div>
-            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-cyan-700">
-              <BookOpenText className="h-4 w-4" /> Seguimiento de clases SOY+
-            </p>
-            <h2 className="mt-1 text-xl font-bold text-slate-950">Bitácora de orientación · {owner.cycle}</h2>
-            <p className="mt-0.5 text-xs font-medium text-slate-500">{owner.name} · clases, estados, materiales y acuerdos por curso.</p>
+      <section id="registro-rapido" className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50/70 via-white to-white px-4 py-4 sm:px-5">
+          <div className="flex w-full flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-start gap-3">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cyan-600 to-cyan-800 text-white shadow-sm ring-1 ring-cyan-700/30">
+                <BookOpenText className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Seguimiento de clases SOY+</p>
+                <h2 className="text-xl font-bold text-slate-950">Bitácora de orientación · {owner.cycle}</h2>
+                <p className="mt-0.5 text-xs font-medium text-slate-500">{owner.name} · clases, estados, materiales y acuerdos por curso.</p>
+              </div>
+            </div>
+            <button
+              onClick={() => { setQuickFormAttempted(false); setQuickFormExpanded(true); }}
+              title="Añadir una clase, intervención, material o planificación a la bitácora"
+              className="tz-press inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg"
+            >
+              <Plus className="h-4 w-4" /> Nuevo registro
+            </button>
           </div>
           <div className="grid w-full gap-2 lg:w-auto lg:grid-cols-[minmax(260px,360px)_minmax(190px,1fr)_minmax(190px,1fr)]">
             <label className="relative block">
