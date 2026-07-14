@@ -685,6 +685,28 @@ const headTeacherForCourse = (course: string) => {
   return STAFF_DIRECTORY.find((member) => member.headship && member.email && canonicalCourseKey(member.headship) === key) || null;
 };
 
+// Próxima fecha en que le toca orientación a un curso, después de una fecha dada.
+const nextSlotDateForCourse = (course: string, afterISO: string) => {
+  const slot = ORIENTATION_WEEKLY_SLOTS.find((item) => normalize(item.course) === normalize(course));
+  const [year, month, day] = afterISO.split("-").map(Number);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  if (!year || !month || !day) return afterISO;
+  const base = new Date(year, month - 1, day);
+  for (let offset = 1; offset <= 28; offset += 1) {
+    const candidate = new Date(base.getFullYear(), base.getMonth(), base.getDate() + offset);
+    const weekday = candidate.getDay();
+    if (slot ? weekday === slot.day : offset === 7) {
+      return `${candidate.getFullYear()}-${pad(candidate.getMonth() + 1)}-${pad(candidate.getDate())}`;
+    }
+  }
+  return afterISO;
+};
+
+const formatDateCL = (iso: string) => {
+  const [year, month, day] = iso.split("-");
+  return year && month && day ? `${day}/${month}/${year}` : iso;
+};
+
 // Fecha que corresponde a un curso dentro de una semana, según el horario fijo.
 const scheduledDateForCourse = (course: string, weekStartISO: string, schedule: OrientationWeeklySlot[] = ORIENTATION_WEEKLY_SLOTS) => {
   const slot = schedule.find((item) => normalize(item.course) === normalize(course));
@@ -2561,7 +2583,7 @@ function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: 
         Empieza ingresando un registro manualmente o importa una planilla CSV/TSV exportada desde Google Sheets.
       </p>
       <div className="mt-6 flex flex-wrap justify-center gap-3">
-        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
+        <button onClick={onAdd} className="inline-flex items-center gap-2 rounded-md tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white">
           <Plus className="h-4 w-4" /> Agregar {entity.singular}
         </button>
         <button onClick={onImport} className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">
@@ -2631,7 +2653,7 @@ function EntityView({
           <button onClick={onExport} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <ArrowDownToLine className="h-4 w-4" /> Exportar
           </button>
-          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800">
+          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-3 py-2 text-sm font-semibold text-white shadow">
             <Plus className="h-4 w-4" /> Agregar
           </button>
         </div>
@@ -2834,7 +2856,7 @@ function DatabaseHubView({
           <button onClick={exportCurrent} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <ArrowDownToLine className="h-4 w-4" /> Exportar vista
           </button>
-          <button onClick={addBlank} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800">
+          <button onClick={addBlank} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-3 py-2 text-sm font-semibold text-white shadow">
             <Plus className="h-4 w-4" /> Agregar registro
           </button>
         </div>
@@ -3252,7 +3274,7 @@ function WorkshopsView({
             <Search className="h-4 w-4 text-slate-400" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar talleres..." className="w-full bg-transparent text-sm outline-none" />
           </div>
-          <button onClick={() => setCreateOpen(true)} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow hover:bg-slate-800">
+          <button onClick={() => setCreateOpen(true)} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow">
             <Plus className="h-4 w-4" /> Nuevo taller
           </button>
         </div>
@@ -3336,7 +3358,7 @@ function WorkshopsView({
                     {isEditingSelected ? (
                       <>
                         <button onClick={cancelEditSelected} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
-                        <button onClick={saveEditSelected} disabled={!editWorkshop.title.trim()} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"><Check className="h-3.5 w-3.5" /> Guardar cambios</button>
+                        <button onClick={saveEditSelected} disabled={!editWorkshop.title.trim()} className="inline-flex items-center gap-1.5 rounded-lg tz-btn-primary px-3 py-2 text-xs font-semibold text-white disabled:opacity-50"><Check className="h-3.5 w-3.5" /> Guardar cambios</button>
                       </>
                     ) : (
                       <button onClick={beginEditSelected} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><Settings className="h-3.5 w-3.5" /> Editar</button>
@@ -3653,7 +3675,7 @@ function WorkshopsView({
 
           <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-5 py-4">
             <button onClick={clearDraft} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
-            <button onClick={createWorkshop} disabled={!draftWorkshop.title.trim()} className="tz-press rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-slate-800 disabled:opacity-50">
+            <button onClick={createWorkshop} disabled={!draftWorkshop.title.trim()} className="tz-press rounded-lg tz-btn-primary px-4 py-2 text-sm font-semibold text-white shadow disabled:opacity-50">
               Guardar taller
             </button>
           </div>
@@ -3844,7 +3866,7 @@ function CourseWorkspaceView({
           <button
             onClick={onSeedCourses}
             disabled={missingOfficialCourses === 0}
-            className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+            className="inline-flex items-center gap-2 rounded-md tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white"
           >
             <Save className="h-4 w-4" />
             {missingOfficialCourses === 0 ? "Cursos oficiales guardados" : `Guardar ${missingOfficialCourses} cursos oficiales`}
@@ -4068,7 +4090,7 @@ function CourseWorkspaceView({
                 <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{classroomTeam.length} integrante{classroomTeam.length === 1 ? "" : "s"}</span>
                 <button
                   onClick={() => setShowTeamForm((value) => !value)}
-                  className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                  className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white"
                 >
                   <Plus className="h-4 w-4" /> Añadir miembro
                 </button>
@@ -4091,7 +4113,7 @@ function CourseWorkspaceView({
                     <option value="__new__">＋ Nuevo cargo personalizado…</option>
                   </select>
                   <input value={teamForm.email} onChange={(event) => setTeamForm((form) => ({ ...form, email: event.target.value }))} placeholder="Correo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
-                  <button onClick={addClassroomTeamMember} disabled={!teamForm.name.trim() || showNewRoleInput} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
+                  <button onClick={addClassroomTeamMember} disabled={!teamForm.name.trim() || showNewRoleInput} className="inline-flex items-center justify-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white">
                     <Save className="h-4 w-4" /> Guardar
                   </button>
                 </div>
@@ -5263,26 +5285,67 @@ function OrientationCycleView({
       : /planificad/i.test(status) ? "border-l-4 border-l-blue-400 bg-white hover:bg-blue-50/40"
       : "border-l-4 border-l-slate-200 bg-white hover:bg-slate-50";
   const quickStatuses = ["Realizada", "Planificada", "Pendiente", "Reprogramada", "Cancelada"];
-  const setClassStatus = (record: DataRecord, status: string) => {
-    if (record.source === "calendar") return;
-    const changes: Record<string, string> = { status };
-    // Al reprogramar se piden el motivo y la nueva fecha; quedan guardados en el registro.
-    if (/reprogramad/i.test(status) && !/reprogramad/i.test(record.status || "")) {
-      const reason = window.prompt("Motivo de la reprogramación:", record.reprogramReason || "");
-      if (reason === null) return; // canceló: no se cambia el estado
-      changes.reprogramReason = reason.trim();
-      const newDate = window.prompt("¿Para qué fecha queda reprogramada? (AAAA-MM-DD, deja vacío si aún no se sabe)", record.reprogramDate || "");
-      if (newDate !== null && (/^\d{4}-\d{2}-\d{2}$/.test(newDate.trim()) || newDate.trim() === "")) {
-        changes.reprogramDate = newDate.trim();
-      }
-    }
-    onUpdateOrientationRecord(record.id, changes);
+  const [reprogram, setReprogram] = useState<{ record: DataRecord; newDate: string; reason: string } | null>(null);
+  const clearPendingStatus = (recordId: string) => {
     setPendingStatuses((current) => {
-      if (!(record.id in current)) return current;
+      if (!(recordId in current)) return current;
       const next = { ...current };
-      delete next[record.id];
+      delete next[recordId];
       return next;
     });
+  };
+  const setClassStatus = (record: DataRecord, status: string) => {
+    if (record.source === "calendar") return;
+    // Al reprogramar se abre el diálogo con la próxima fecha del curso ya propuesta.
+    if (/reprogramad/i.test(status) && !/reprogramad/i.test(record.status || "")) {
+      setReprogram({
+        record,
+        newDate: record.reprogramDate || nextSlotDateForCourse(record.course || "", record.date || today),
+        reason: record.reprogramReason || "",
+      });
+      return;
+    }
+    onUpdateOrientationRecord(record.id, { status });
+    clearPendingStatus(record.id);
+  };
+  const confirmReprogram = (createNew: boolean) => {
+    if (!reprogram) return;
+    const { record, newDate, reason } = reprogram;
+    onUpdateOrientationRecord(record.id, {
+      status: "Reprogramada",
+      reprogramReason: reason.trim(),
+      reprogramDate: newDate,
+    });
+    clearPendingStatus(record.id);
+    if (createNew) {
+      const config = orientationConfigForDate(newDate);
+      onAddOrientationRecord({
+        id: uid(),
+        createdAt: nowIso(),
+        updatedAt: nowIso(),
+        date: newDate,
+        week: config?.week || record.week || "",
+        weekNumber: config ? orientationWeekNumber(config.week) : record.weekNumber || "",
+        course: record.course || "",
+        orientationOwner: owner.name,
+        orientationEmail: owner.email,
+        topic: record.topic || "",
+        classType: record.classType || "Clase de orientacion",
+        axis: record.axis || record.characterStrength || "",
+        characterStrength: record.characterStrength || "",
+        status: "Planificada",
+        canvaLink: record.canvaLink || "",
+        evidence: record.evidence || "",
+        teacherLink: record.teacherLink || "",
+        teacherSentStatus: "No enviado",
+        teacherSentAt: "",
+        folderLink: record.folderLink || "",
+        planificacion: record.planificacion || "",
+        notes: `Reprogramación de la clase del ${formatDateCL(record.date || "")}${reason.trim() ? ` (${reason.trim()})` : ""}`,
+        source: "reprogramacion",
+      });
+    }
+    setReprogram(null);
   };
   const classEditDraft = (record: DataRecord): Record<string, string> => ({
     date: record.date || "",
@@ -6106,7 +6169,7 @@ function OrientationCycleView({
                 </button>
                 <button
                   onClick={() => setVisibleClassCount(filteredClasses.length)}
-                  className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white hover:bg-slate-800"
+                  className="rounded-lg tz-btn-primary px-3 py-2 text-xs font-bold text-white"
                 >
                   Mostrar todo
                 </button>
@@ -6213,6 +6276,55 @@ function OrientationCycleView({
           onDownload={exportOwnerClasses}
         />
       ) : null}
+
+      {reprogram && (
+        <div className="tz-backdrop fixed inset-0 z-50 grid place-items-center bg-slate-950/45 p-4" onClick={() => setReprogram(null)}>
+          <div className="tz-pop w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-amber-600">Reprogramar clase</p>
+                <h3 className="mt-0.5 text-lg font-semibold text-slate-950">{reprogram.record.course || "Curso"}</h3>
+                <p className="mt-1 text-sm text-slate-600">
+                  La clase del <strong>{formatDateCL(reprogram.record.date || "")}</strong> quedará marcada como Reprogramada y se creará una nueva fila
+                  <span className="font-semibold text-blue-700"> Planificada</span> con los mismos links en la fecha que elijas.
+                </p>
+              </div>
+              <button onClick={() => setReprogram(null)} aria-label="Cerrar" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <label className="mt-4 block">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Motivo de la reprogramación</span>
+              <input
+                value={reprogram.reason}
+                onChange={(event) => setReprogram((current) => (current ? { ...current, reason: event.target.value } : current))}
+                placeholder="Ej.: salida pedagógica, feriado, licencia…"
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-blue-500"
+              />
+            </label>
+            <label className="mt-3 block">
+              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Nueva fecha (propuesta: próximo día del curso según tu horario)</span>
+              <input
+                type="date"
+                value={reprogram.newDate}
+                onChange={(event) => setReprogram((current) => (current ? { ...current, newDate: event.target.value } : current))}
+                className="mt-1.5 w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-semibold outline-none focus:border-blue-500"
+              />
+              {orientationConfigForDate(reprogram.newDate) && (
+                <span className="mt-1.5 block text-xs font-semibold text-blue-700">{orientationConfigForDate(reprogram.newDate)?.week}</span>
+              )}
+            </label>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button onClick={() => confirmReprogram(false)} className="rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+                Solo marcar reprogramada
+              </button>
+              <button onClick={() => confirmReprogram(true)} disabled={!reprogram.newDate} className="tz-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold">
+                <CalendarDays className="h-4 w-4" /> Reprogramar al {formatDateCL(reprogram.newDate)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -6822,7 +6934,7 @@ function CaseWithInterventions({
         </button>
         <button
           onClick={() => { setAdding(true); setExpanded(true); }}
-          className="tz-press inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800"
+          className="tz-press inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-2.5 py-1 text-[11px] font-semibold text-white"
         >
           <Plus className="h-3 w-3" /> Agregar intervención
         </button>
@@ -7112,7 +7224,7 @@ function StudentDetailDialog({
         </div>
         <div className="mt-3 flex justify-end gap-2">
           <button onClick={() => { setQuickAddOpen(""); setQuickAddForm({}); }} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
-          <button onClick={submitQuickAdd} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-1.5 text-sm font-semibold text-white hover:bg-slate-800">
+          <button onClick={submitQuickAdd} className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-1.5 text-sm font-semibold text-white">
             <Save className="h-4 w-4" /> Guardar
           </button>
         </div>
@@ -7383,7 +7495,7 @@ function StudentDetailDialog({
                   <input value={genogramForm.address} onChange={(event) => setGenogramForm((form) => ({ ...form, address: event.target.value }))} placeholder="Dirección" className="rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                   <textarea value={genogramForm.notes} onChange={(event) => setGenogramForm((form) => ({ ...form, notes: event.target.value }))} placeholder="Notas breves" className="min-h-20 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500" />
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={saveGenogramMember} disabled={!genogramForm.name.trim()} className="inline-flex items-center justify-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300">
+                    <button onClick={saveGenogramMember} disabled={!genogramForm.name.trim()} className="inline-flex items-center justify-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white">
                       <Save className="h-4 w-4" /> {editingMember ? "Guardar" : "Añadir"}
                     </button>
                     {editingMember ? (
@@ -7411,7 +7523,7 @@ function StudentDetailDialog({
           {activeTab === "casos" ? (
             <div className="space-y-4">
               <div className="flex justify-end">
-                <button onClick={() => openQuickAdd("cases")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                <button onClick={() => openQuickAdd("cases")} className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white">
                   <Plus className="h-4 w-4" /> Nuevo caso
                 </button>
               </div>
@@ -7445,7 +7557,7 @@ function StudentDetailDialog({
           {activeTab === "entrevistas" ? (
             <div className="space-y-4">
               <div className="flex justify-end">
-                <button onClick={() => openQuickAdd("interviews")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                <button onClick={() => openQuickAdd("interviews")} className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white">
                   <Plus className="h-4 w-4" /> Nueva entrevista
                 </button>
               </div>
@@ -7457,7 +7569,7 @@ function StudentDetailDialog({
           {activeTab === "bitacoras" ? (
             <div className="space-y-4">
               <div className="flex justify-end">
-                <button onClick={() => openQuickAdd("logs")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                <button onClick={() => openQuickAdd("logs")} className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white">
                   <Plus className="h-4 w-4" /> Nueva bitácora
                 </button>
               </div>
@@ -7472,7 +7584,7 @@ function StudentDetailDialog({
                 <button onClick={() => openQuickAdd("protocols")} className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
                   <Plus className="h-4 w-4" /> Protocolo
                 </button>
-                <button onClick={() => openQuickAdd("documents")} className="inline-flex items-center gap-1.5 rounded-md bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800">
+                <button onClick={() => openQuickAdd("documents")} className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white">
                   <Plus className="h-4 w-4" /> Documento
                 </button>
               </div>
@@ -7496,7 +7608,7 @@ function StudentDetailDialog({
                 Ver en sección Estudiantes
               </button>
             ) : null}
-            <button onClick={onClose} className="rounded-md bg-slate-900 px-3 py-1.5 font-semibold text-white hover:bg-slate-800">Cerrar</button>
+            <button onClick={onClose} className="rounded-md tz-btn-primary px-3 py-1.5 font-semibold text-white">Cerrar</button>
           </div>
         </footer>
       </div>
@@ -7608,7 +7720,7 @@ function StudentsWorkspaceView({
               </button>
             </>
           ) : null}
-          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
+          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow-md">
             <Plus className="h-4 w-4" /> Agregar estudiante
           </button>
         </div>
@@ -8486,7 +8598,7 @@ function PieWorkspaceView({
           <div className="mt-6 flex justify-center gap-3">
             <button
               onClick={() => onNavigate("import")}
-              className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800"
+              className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow-md"
             >
               <Upload className="h-4 w-4" /> Importar Nómina Oficial
             </button>
@@ -9268,7 +9380,7 @@ function RecordDialog({
             <p className="hidden text-xs text-slate-400 sm:block"><span className="font-semibold">Ctrl + Enter</span> para guardar</p>
             <div className="ml-auto flex gap-2">
               <button type="button" onClick={requestClose} className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
-              <button type="submit" className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+              <button type="submit" className="tz-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-white">
                 <Save className="h-4 w-4" /> {isEditing ? "Guardar cambios" : `Guardar ${entity.singular}`}
               </button>
             </div>
@@ -9338,7 +9450,7 @@ function ImportView({
             <button
               onClick={() => onText(paste)}
               disabled={!paste.trim()}
-              className="mt-3 rounded-md bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+              className="mt-3 rounded-md tz-btn-primary px-5 py-3 font-semibold text-white"
             >
               Interpretar tabla pegada
             </button>
@@ -9425,7 +9537,7 @@ function ImportView({
                 </div>
               </div>
 
-              <button onClick={onConfirm} className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-5 py-3 font-semibold text-white hover:bg-slate-800">
+              <button onClick={onConfirm} className="inline-flex items-center gap-2 rounded-md tz-btn-primary px-5 py-3 font-semibold text-white">
                 <Check className="h-5 w-5" /> Confirmar importación
               </button>
             </div>
@@ -10035,7 +10147,7 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
             </p>
 
             <div className="mt-6 flex flex-wrap gap-2">
-              <button onClick={() => onNavigate("today")} className="tz-press inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-slate-800">
+              <button onClick={() => onNavigate("today")} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow-md">
                 <CalendarDays className="h-4 w-4" /> Ver mi día
               </button>
               <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm hover:bg-cyan-50">
@@ -10098,7 +10210,7 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
               <p className="mt-1 text-sm text-slate-600">Actividades socioemocionales listas para abrir en clase o compartir por QR.</p>
             </div>
           </div>
-          <button onClick={() => onNavigate("games")} className="tz-press rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-slate-800">
+          <button onClick={() => onNavigate("games")} className="tz-press rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm">
             Ver juegos
           </button>
         </div>
@@ -10126,7 +10238,7 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
             La plataforma está vacía a propósito. Puedes empezar con formularios o importando tu Google Sheet como CSV/TSV.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <button onClick={() => onNavigate("students")} className="rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Crear primer estudiante</button>
+            <button onClick={() => onNavigate("students")} className="rounded-md tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white">Crear primer estudiante</button>
             <button onClick={() => onNavigate("triage")} className="rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Preguntar a Tiza-IA</button>
           </div>
         </section>
@@ -10194,7 +10306,7 @@ function TeamView({
             <button
               onClick={onSeed}
               disabled={seeding}
-              className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+              className="inline-flex items-center gap-2 rounded-md tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white"
             >
               <UsersRound className="h-4 w-4" />
               {seeding ? "Actualizando..." : "Crear/actualizar equipo"}
@@ -10649,7 +10761,7 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full rounded-md bg-slate-900 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:bg-slate-300"
+                className="w-full rounded-md tz-btn-primary px-4 py-3 text-sm font-semibold text-white"
               >
                 {submitting ? "Verificando..." : "Entrar"}
               </button>
@@ -11719,7 +11831,7 @@ function AIChatMode({
         <div className="border-b border-slate-200 p-3">
           <button
             onClick={startNewConversation}
-            className="tz-press inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            className="tz-press inline-flex w-full items-center justify-center gap-2 rounded-lg tz-btn-primary px-3 py-2 text-sm font-semibold text-white"
           >
             <Plus className="h-4 w-4" /> Nueva conversación
           </button>
@@ -11766,7 +11878,7 @@ function AIChatMode({
           <button
             onClick={startNewConversation}
             title="Nueva conversación"
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-900 text-white hover:bg-slate-800"
+            className="grid h-10 w-10 shrink-0 place-items-center rounded-lg tz-btn-primary text-white"
           >
             <Plus className="h-4 w-4" />
           </button>
@@ -12086,7 +12198,7 @@ function ChatResultRenderer({
 
       {hasProposals > 0 ? (
         <div className="flex justify-end pt-1">
-          <button onClick={onApply} className="tz-press inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+          <button onClick={onApply} className="tz-press inline-flex items-center gap-1.5 rounded-lg tz-btn-primary px-3 py-1.5 text-xs font-semibold text-white">
             <Check className="h-3.5 w-3.5" /> Aplicar seleccionados
           </button>
         </div>
