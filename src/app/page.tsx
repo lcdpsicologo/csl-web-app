@@ -259,6 +259,46 @@ const fuzzySearchScore = (query: string, candidate: string) => {
   return bestSimilarity >= 0.58 ? 400 + Math.round(bestSimilarity * 100) : 0;
 };
 
+// Campo de fecha que siempre muestra DD/MM/AAAA (el input nativo depende del
+// idioma del navegador); el input date transparente encima abre el calendario.
+function TizaDateInput({
+  value,
+  onChange,
+  disabled = false,
+  className = "",
+  fieldClassName = "rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm",
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  className?: string;
+  fieldClassName?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const display = match ? `${match[3]}/${match[2]}/${match[1]}` : "";
+  return (
+    <div className={`relative ${className}`}>
+      <div
+        aria-hidden
+        className={`pointer-events-none flex w-full items-center justify-between gap-2 tabular-nums transition ${fieldClassName} ${disabled ? "!bg-slate-100 text-slate-500" : "text-slate-800"}`}
+      >
+        <span className={display ? "" : "text-slate-400"}>{display || "dd/mm/aaaa"}</span>
+        <CalendarDays className="h-4 w-4 shrink-0 text-slate-400" />
+      </div>
+      <input
+        ref={inputRef}
+        type="date"
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        onClick={() => { try { inputRef.current?.showPicker(); } catch { /* navegador sin showPicker: usa el control nativo */ } }}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+      />
+    </div>
+  );
+}
+
 function TizaSelect({
   value,
   options,
@@ -3184,7 +3224,7 @@ function WorkshopsView({
                       <>
                         <input value={editWorkshop.title} onChange={(event) => setEditWorkshop((current) => ({ ...current, title: event.target.value }))} className="w-full rounded-lg border border-slate-200 px-2 py-1 text-xl font-semibold text-slate-950 outline-none focus:border-blue-500" />
                         <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-500">
-                          <input type="date" value={editWorkshop.date} onChange={(event) => setEditWorkshop((current) => ({ ...current, date: event.target.value }))} className="rounded-md border border-slate-200 px-2 py-1" />
+                          <TizaDateInput value={editWorkshop.date} onChange={(date) => setEditWorkshop((current) => ({ ...current, date }))} fieldClassName="rounded-md border border-slate-200 bg-white px-2 py-1 text-sm" />
                           <select value={editWorkshop.status} onChange={(event) => setEditWorkshop((current) => ({ ...current, status: event.target.value }))} className="rounded-md border border-slate-200 px-2 py-1">
                             {["Planificado", "Realizado", "Pendiente"].map((status) => <option key={status}>{status}</option>)}
                           </select>
@@ -3403,7 +3443,7 @@ function WorkshopsView({
               <div className="space-y-3">
                 <input value={draftWorkshop.title} onChange={(event) => setDraftWorkshop((current) => ({ ...current, title: event.target.value }))} placeholder="Nombre del taller" className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
-                  <input type="date" value={draftWorkshop.date} onChange={(event) => setDraftWorkshop((current) => ({ ...current, date: event.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                  <TizaDateInput value={draftWorkshop.date} onChange={(date) => setDraftWorkshop((current) => ({ ...current, date }))} fieldClassName="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm" />
                   <select value={draftWorkshop.status} onChange={(event) => setDraftWorkshop((current) => ({ ...current, status: event.target.value }))} className="rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-blue-500">
                     {["Planificado", "Realizado", "Pendiente"].map((status) => <option key={status}>{status}</option>)}
                   </select>
@@ -5360,7 +5400,7 @@ function OrientationCycleView({
                 </div>
                 <label className="block lg:col-span-2">
                   <span className="text-sm font-semibold text-slate-800">Fecha</span>
-                  <input type="date" value={quickClassForm.date} onChange={(event) => syncQuickClassDate(event.target.value)} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" />
+                  <TizaDateInput value={quickClassForm.date} onChange={syncQuickClassDate} className="mt-1.5" fieldClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm hover:border-slate-300" />
                 </label>
                 <div className="lg:col-span-2">
                   <span className="text-sm font-semibold text-slate-800">Estado</span>
@@ -5407,7 +5447,7 @@ function OrientationCycleView({
                   <div className="mt-3 grid gap-4 border-t border-slate-200 pt-4 md:grid-cols-3">
                     <label><span className="text-xs font-semibold text-slate-700">Link para profesores</span><input value={quickClassForm.teacherLink} onChange={(event) => updateQuickClassForm({ teacherLink: event.target.value })} placeholder="https://..." className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600" /></label>
                     <div><span className="text-xs font-semibold text-slate-700">Estado de envío</span><TizaSelect value={quickClassForm.teacherSentStatus} onChange={(teacherSentStatus) => updateQuickClassForm({ teacherSentStatus })} options={["No enviado", "Listo para enviar", "Enviado"]} className="mt-1.5" buttonClassName="py-2.5" /></div>
-                    <label><span className="text-xs font-semibold text-slate-700">Fecha de envío</span><input type="date" value={quickClassForm.teacherSentAt} onChange={(event) => updateQuickClassForm({ teacherSentAt: event.target.value })} className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-cyan-600" /></label>
+                    <label><span className="text-xs font-semibold text-slate-700">Fecha de envío</span><TizaDateInput value={quickClassForm.teacherSentAt} onChange={(teacherSentAt) => updateQuickClassForm({ teacherSentAt })} className="mt-1.5" fieldClassName="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm" /></label>
                   </div>
                 ) : null}
               </section>
@@ -5724,7 +5764,7 @@ function OrientationCycleView({
                     <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-12">
                       <label className="block xl:col-span-2">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Fecha</span>
-                        <input disabled={isCalendar} type="date" value={editDraft.date} onChange={(event) => updateClassEditDraft(record, { date: event.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                        <TizaDateInput disabled={isCalendar} value={editDraft.date} onChange={(date) => updateClassEditDraft(record, { date })} className="mt-1" fieldClassName="w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm" />
                       </label>
                       <div className="block xl:col-span-3">
                         <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana / tramo</span>
@@ -5767,7 +5807,7 @@ function OrientationCycleView({
                           </label>
                           <label className="block xl:col-span-3">
                             <span className="text-[11px] font-bold uppercase tracking-wide text-amber-600">Nueva fecha</span>
-                            <input disabled={isCalendar} type="date" value={editDraft.reprogramDate} onChange={(event) => updateClassEditDraft(record, { reprogramDate: event.target.value })} className="mt-1 w-full rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm outline-none focus:border-amber-500 disabled:bg-slate-100" />
+                            <TizaDateInput disabled={isCalendar} value={editDraft.reprogramDate} onChange={(reprogramDate) => updateClassEditDraft(record, { reprogramDate })} className="mt-1" fieldClassName="w-full rounded-md border border-amber-200 bg-amber-50/40 px-2.5 py-2 text-sm" />
                           </label>
                         </>
                       ) : null}
@@ -5803,7 +5843,7 @@ function OrientationCycleView({
                           </div>
                           <label className="block">
                             <span className="text-[11px] font-bold uppercase tracking-wide text-blue-700">Fecha de envio</span>
-                            <input disabled={isCalendar} type="date" value={editDraft.teacherSentAt} onChange={(event) => updateClassEditDraft(record, { teacherSentAt: event.target.value })} className="mt-1 w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
+                            <TizaDateInput disabled={isCalendar} value={editDraft.teacherSentAt} onChange={(teacherSentAt) => updateClassEditDraft(record, { teacherSentAt })} className="mt-1" fieldClassName="w-full rounded-md border border-blue-200 bg-white px-2.5 py-2 text-sm" />
                           </label>
                         </div>
                       ) : null}
@@ -6560,7 +6600,7 @@ function CaseWithInterventions({
           {adding ? (
             <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-3">
               <div className="grid gap-2 sm:grid-cols-[120px_1fr_140px]">
-                <input type="date" value={form.date} onChange={(event) => setForm((f) => ({ ...f, date: event.target.value }))} className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
+                <TizaDateInput value={form.date} onChange={(date) => setForm((f) => ({ ...f, date }))} fieldClassName="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs" />
                 <input value={form.action} onChange={(event) => setForm((f) => ({ ...f, action: event.target.value }))} placeholder="Acción / intervención (ej.: Entrevista con apoderada, derivación a psicología…)" className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
                 <input value={form.by} onChange={(event) => setForm((f) => ({ ...f, by: event.target.value }))} placeholder="Responsable" className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-blue-500" />
               </div>
