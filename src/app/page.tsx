@@ -4338,6 +4338,10 @@ function OrientationCycleView({
   const [feedbackRecordId, setFeedbackRecordId] = useState("");
   // Historial de feedbacks (listado consultable + reporte con Tiza-IA).
   const [feedbackHistoryOpen, setFeedbackHistoryOpen] = useState(false);
+  // Fechas de la bitácora contraídas (clave AAAA-MM-DD).
+  const [collapsedDateKeys, setCollapsedDateKeys] = useState<string[]>([]);
+  const toggleDateCollapsed = (dateKey: string) =>
+    setCollapsedDateKeys((current) => (current.includes(dateKey) ? current.filter((key) => key !== dateKey) : [...current, dateKey]));
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
@@ -5499,9 +5503,21 @@ function OrientationCycleView({
               className="min-w-48"
             />
           </div>
-          <p className="w-full text-right text-[11px] font-semibold text-slate-500">
-            {filteredClasses.length} de {ownerClasses.length} registros visibles
-          </p>
+          <div className="flex w-full items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setCollapsedDateKeys((current) => current.length
+                ? []
+                : Array.from(new Set(filteredClasses.map((record) => (record.date || "").slice(0, 10) || "sin-fecha"))))}
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition ${collapsedDateKeys.length ? "-rotate-90" : ""}`} />
+              {collapsedDateKeys.length ? "Expandir todas las fechas" : "Contraer todas las fechas"}
+            </button>
+            <p className="text-[11px] font-semibold text-slate-500">
+              {filteredClasses.length} de {ownerClasses.length} registros visibles
+            </p>
+          </div>
         </div>
         <div className="bg-slate-50/60">
           <div className="hidden border-b border-slate-200 bg-slate-100/80 px-5 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
@@ -5532,18 +5548,29 @@ function OrientationCycleView({
             const previousDateKey = index > 0 ? (renderedClasses[index - 1].date || "").slice(0, 10) || "sin-fecha" : "";
             const startsDateGroup = index === 0 || dateKey !== previousDateKey;
             const dateGroupCount = startsDateGroup ? renderedDateCounts.get(dateKey) || 0 : 0;
+            const dateCollapsed = collapsedDateKeys.includes(dateKey);
+            const dateHeader = startsDateGroup ? (
+              <div className={index === 0 ? "pb-2" : "pb-2 pt-5"}>
+                <button
+                  type="button"
+                  onClick={() => toggleDateCollapsed(dateKey)}
+                  title={dateCollapsed ? "Expandir esta fecha" : "Contraer esta fecha"}
+                  className="flex w-full items-center gap-3 border-y border-slate-200 bg-white px-4 py-2.5 text-left transition hover:bg-cyan-50/40 sm:px-5"
+                >
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><CalendarDays className="h-3.5 w-3.5" /></span>
+                  <span className="text-sm font-bold text-slate-900">{formatOrientationDate(record.date)}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{dateGroupCount} {dateGroupCount === 1 ? "evento" : "eventos"}</span>
+                  <span className="h-px min-w-4 flex-1 bg-slate-200" />
+                  <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${dateCollapsed ? "-rotate-90" : ""}`} />
+                </button>
+              </div>
+            ) : null;
+            if (dateCollapsed) {
+              return <React.Fragment key={record.id}>{dateHeader}</React.Fragment>;
+            }
             return (
               <React.Fragment key={record.id}>
-                {startsDateGroup ? (
-                  <div className={index === 0 ? "pb-2" : "pb-2 pt-5"}>
-                    <div className="flex items-center gap-3 border-y border-slate-200 bg-white px-4 py-2.5 sm:px-5">
-                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><CalendarDays className="h-3.5 w-3.5" /></span>
-                      <span className="text-sm font-bold text-slate-900">{formatOrientationDate(record.date)}</span>
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{dateGroupCount} {dateGroupCount === 1 ? "evento" : "eventos"}</span>
-                      <span className="h-px min-w-4 flex-1 bg-slate-200" />
-                    </div>
-                  </div>
-                ) : null}
+                {dateHeader}
               <article className={`mx-2 mb-2 overflow-hidden rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center">
                   <div>
