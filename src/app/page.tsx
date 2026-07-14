@@ -5520,8 +5520,8 @@ function OrientationCycleView({
           </div>
         </div>
         <div className="bg-slate-50/60">
-          {/* px-8 = margen de la tarjeta (16px) + padding interno (16px), para que las columnas calcen con las filas. */}
-          <div className="hidden border-b border-slate-200 bg-slate-100/80 px-8 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:grid lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
+          {/* Replica la caja de las tarjetas (margen lateral + borde transparente + padding) para que las columnas calcen exactas. */}
+          <div className="hidden border border-transparent border-b-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:mx-4 lg:grid lg:grid-cols-[130px_126px_minmax(220px,1fr)_180px_132px_188px] lg:items-center lg:gap-3">
             <span>Curso</span>
             <span>Estado</span>
             <span>Tema / semana</span>
@@ -5551,7 +5551,7 @@ function OrientationCycleView({
             const dateGroupCount = startsDateGroup ? renderedDateCounts.get(dateKey) || 0 : 0;
             const dateCollapsed = collapsedDateKeys.includes(dateKey);
             const dateHeader = startsDateGroup ? (
-              <div className={index === 0 ? "pb-2" : "pb-2 pt-5"}>
+              <div className={dateCollapsed ? "" : index === 0 ? "pb-2" : "pb-2 pt-5"}>
                 <button
                   type="button"
                   onClick={() => toggleDateCollapsed(dateKey)}
