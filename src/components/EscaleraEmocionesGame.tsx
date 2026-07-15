@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, Check, ChevronRight, Crown, Expand, Footprints, HelpCircle, Minimize, RotateCcw, Send, Sparkles, Trophy, Users, Volume2, VolumeX, X } from "lucide-react";
 import { escaleraPrompts, ladderMoves, slideMoves, type EscaleraPrompt } from "@/lib/maletin";
 import { GameShareModal } from "@/components/GameShareModal";
@@ -11,8 +11,10 @@ type Player = { id: number; name: string; position: number; color: string };
 type MoveKind = "normal" | "ladder" | "slide";
 type SoundKind = "dice" | "land" | "ladder" | "slide" | "complete" | "win";
 type MoveDetail = { from: number; rolledTo: number; to: number; kind: MoveKind; dice: number; player: string };
+type PawnMotion = { playerId: number; kind: "step" | "ladder" | "slide"; tick: number };
 
 const playerColors = ["bg-[#f5a623]", "bg-[#e75b52]", "bg-[#25a18e]", "bg-[#3b82c4]"];
+const pawnColors = ["#f5a623", "#e75b52", "#25a18e", "#3b82c4"];
 const categoryStyle: Record<EscaleraPrompt["category"], string> = {
   Reconocer: "bg-sky-100 text-sky-800",
   Expresar: "bg-amber-100 text-amber-800",
@@ -118,7 +120,8 @@ function ClassicBoardArt() {
 
 export function EscaleraEmocionesGame() {
   const gameRoot = useRef<HTMLElement>(null);
-  const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const animationRun = useRef(0);
+  const animationTimers = useRef<Set<ReturnType<typeof setTimeout>>>(new Set());
   const [players, setPlayers] = useState<Player[]>([
     { id: 1, name: "Jugador 1", position: 0, color: playerColors[0] },
     { id: 2, name: "Jugador 2", position: 0, color: playerColors[1] },
@@ -129,6 +132,8 @@ export function EscaleraEmocionesGame() {
   const [moveNotice, setMoveNotice] = useState("");
   const [winner, setWinner] = useState<string | null>(null);
   const [rolling, setRolling] = useState(false);
+  const [moving, setMoving] = useState(false);
+  const [pawnMotion, setPawnMotion] = useState<PawnMotion | null>(null);
   const [lastLanding, setLastLanding] = useState<number | null>(null);
   const [moveKind, setMoveKind] = useState<MoveKind>("normal");
   const [lastMove, setLastMove] = useState<MoveDetail | null>(null);
@@ -140,16 +145,27 @@ export function EscaleraEmocionesGame() {
   const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
+    const timers = animationTimers.current;
     const onFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", onFullscreen);
     return () => {
       document.removeEventListener("fullscreenchange", onFullscreen);
-      if (rollTimer.current) clearTimeout(rollTimer.current);
+      animationRun.current += 1;
+      timers.forEach((timer) => clearTimeout(timer));
+      timers.clear();
     };
   }, []);
 
   const currentPlayer = players[turn];
-  const phase = winner ? "Partida completada" : prompt ? "Conversen la tarjeta" : rolling ? "El dado está girando" : `Turno de ${currentPlayer.name}`;
+  const phase = winner ? "Partida completada" : prompt ? "Conversen la tarjeta" : rolling ? "El dado está girando" : moving ? `Avanza ${currentPlayer.name}` : `Turno de ${currentPlayer.name}`;
+
+  const waitForAnimation = (milliseconds: number) => new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      animationTimers.current.delete(timer);
+      resolve();
+    }, milliseconds);
+    animationTimers.current.add(timer);
+  });
 
   const toggleFullscreen = async () => {
     if (document.fullscreenElement) await document.exitFullscreen();
@@ -160,44 +176,77 @@ export function EscaleraEmocionesGame() {
     } else setIsFullscreen(true);
   };
 
-  const roll = () => {
-    if (prompt || winner || rolling) return;
+  const roll = async () => {
+    if (prompt || winner || rolling || moving) return;
+    const run = ++animationRun.current;
     const value = Math.floor(Math.random() * 6) + 1;
     setDice(value);
     setRolling(true);
     setLastLanding(null);
+    setLastMove(null);
     if (soundEnabled) playGameSound("dice");
-    rollTimer.current = setTimeout(() => {
-      const active = players[turn];
-      const from = active.position;
-      let target = from + value;
-      if (target > 100) target = active.position;
-      const rolledTo = target;
-      let kind: MoveKind = "normal";
-      let notice = target === active.position ? "Necesitas el número exacto para llegar a 100." : `${active.name} avanzó ${value} casillas.`;
-      if (ladderMoves[target]) {
-        notice = `¡Escalera! ${active.name} sube de ${target} a ${ladderMoves[target]}.`;
-        target = ladderMoves[target];
-        kind = "ladder";
-      } else if (slideMoves[target]) {
-        notice = `Serpiente: ${active.name} vuelve de ${target} a ${slideMoves[target]} y puede intentarlo nuevamente.`;
-        target = slideMoves[target];
-        kind = "slide";
+    await waitForAnimation(760);
+    if (run !== animationRun.current) return;
+
+    setRolling(false);
+    setMoving(true);
+    const active = players[turn];
+    const from = active.position;
+    let rolledTo = from + value;
+    if (rolledTo > 100) rolledTo = from;
+    let target = rolledTo;
+    let kind: MoveKind = "normal";
+    let notice = rolledTo === from ? "Necesitas el número exacto para llegar a 100." : `${active.name} avanzó ${value} casillas.`;
+    let tick = 0;
+
+    if (rolledTo !== from) {
+      for (let position = from + 1; position <= rolledTo; position += 1) {
+        if (run !== animationRun.current) return;
+        setPawnMotion({ playerId: active.id, kind: "step", tick: ++tick });
+        setPlayers((current) => current.map((player) => player.id === active.id ? { ...player, position } : player));
+        await waitForAnimation(360);
       }
-      setPlayers((current) => current.map((player, index) => index === turn ? { ...player, position: target } : player));
-      setMoveNotice(notice);
-      setMoveKind(kind);
-      setLastMove({ from, rolledTo, to: target, kind, dice: value, player: active.name });
-      setLastLanding(target);
-      setRolling(false);
-      if (soundEnabled) playGameSound(kind === "normal" ? "land" : kind);
-      if (target === 100) {
-        setWinner(active.name);
-        if (soundEnabled) window.setTimeout(() => playGameSound("win"), 380);
-      } else {
-        setPrompt(escaleraPrompts[Math.floor(Math.random() * escaleraPrompts.length)]);
-      }
-    }, 760);
+    }
+
+    if (run !== animationRun.current) return;
+    if (ladderMoves[rolledTo]) {
+      target = ladderMoves[rolledTo];
+      kind = "ladder";
+      notice = `¡Escalera! ${active.name} sube de ${rolledTo} a ${target}.`;
+      await waitForAnimation(180);
+      if (run !== animationRun.current) return;
+      setPawnMotion({ playerId: active.id, kind: "ladder", tick: ++tick });
+      setPlayers((current) => current.map((player) => player.id === active.id ? { ...player, position: target } : player));
+      if (soundEnabled) playGameSound("ladder");
+      await waitForAnimation(900);
+    } else if (slideMoves[rolledTo]) {
+      target = slideMoves[rolledTo];
+      kind = "slide";
+      notice = `Serpiente: ${active.name} baja de ${rolledTo} a ${target} y puede intentarlo nuevamente.`;
+      await waitForAnimation(180);
+      if (run !== animationRun.current) return;
+      setPawnMotion({ playerId: active.id, kind: "slide", tick: ++tick });
+      setPlayers((current) => current.map((player) => player.id === active.id ? { ...player, position: target } : player));
+      if (soundEnabled) playGameSound("slide");
+      await waitForAnimation(1050);
+    } else if (soundEnabled) {
+      playGameSound("land");
+      await waitForAnimation(160);
+    }
+
+    if (run !== animationRun.current) return;
+    setMoveNotice(notice);
+    setMoveKind(kind);
+    setLastMove({ from, rolledTo, to: target, kind, dice: value, player: active.name });
+    setLastLanding(target);
+    setPawnMotion(null);
+    setMoving(false);
+    if (target === 100) {
+      setWinner(active.name);
+      if (soundEnabled) window.setTimeout(() => playGameSound("win"), 380);
+    } else {
+      setPrompt(escaleraPrompts[Math.floor(Math.random() * escaleraPrompts.length)]);
+    }
   };
 
   const finishConversation = (passed = false) => {
@@ -209,7 +258,9 @@ export function EscaleraEmocionesGame() {
   };
 
   const reset = () => {
-    if (rollTimer.current) clearTimeout(rollTimer.current);
+    animationRun.current += 1;
+    animationTimers.current.forEach((timer) => clearTimeout(timer));
+    animationTimers.current.clear();
     setPlayers((current) => current.map((player) => ({ ...player, position: 0 })));
     setTurn(0);
     setDice(1);
@@ -217,6 +268,8 @@ export function EscaleraEmocionesGame() {
     setMoveNotice("");
     setWinner(null);
     setRolling(false);
+    setMoving(false);
+    setPawnMotion(null);
     setLastLanding(null);
     setLastMove(null);
   };
@@ -254,8 +307,8 @@ export function EscaleraEmocionesGame() {
           </div>
 
           <div className="hud-dice"><DiceCube value={dice} rolling={rolling} /></div>
-          <button onClick={roll} disabled={Boolean(prompt || winner || rolling)} className="game-primary-button hud-roll-button">
-            <Footprints className="h-5 w-5" /> {rolling ? "Lanzando…" : prompt ? "Conversa primero" : "Lanzar dado"}
+          <button onClick={roll} disabled={Boolean(prompt || winner || rolling || moving)} className="game-primary-button hud-roll-button">
+            <Footprints className="h-5 w-5" /> {rolling ? "Lanzando…" : moving ? "Avanzando…" : prompt ? "Conversa primero" : "Lanzar dado"}
           </button>
 
           <div className="player-manager">
@@ -280,15 +333,32 @@ export function EscaleraEmocionesGame() {
             <div className="emotion-board escalera-fit-board relative grid grid-cols-10 rounded-[22px] border-[5px] border-[#062b67] bg-[#062b67] gap-0.5 p-1 sm:gap-1 sm:p-1.5">
               <ClassicBoardArt />
               {boardNumbers.map((number) => {
-                const occupants = players.filter((player) => player.position === number);
                 return (
                   <div key={number} className={`board-cell relative aspect-square rounded-[4px] p-0.5 sm:rounded-md sm:p-1 ${number % 2 === 0 ? "board-cell-teal" : "board-cell-cream"} ${lastLanding === number ? `is-landing is-${moveKind}` : ""}`}>
                     <span className={`board-number relative z-30 text-[8px] font-black drop-shadow-sm sm:text-[10px] lg:text-xs ${number % 2 === 0 ? "text-white" : "text-[#062b67]"}`}>{number}</span>
                     {lastMove?.to === number ? <span className="destination-pulse" aria-label={`Destino: casilla ${number}`}>{number}</span> : null}
-                    <div className="absolute inset-x-0.5 bottom-0.5 z-40 flex flex-wrap gap-px">{occupants.map((player) => <span key={player.id} title={`${player.name}, casilla ${number}`} className={`game-token token-arrive h-2.5 w-2.5 rounded-full sm:h-3.5 sm:w-3.5 ${player.color}`} />)}</div>
                   </div>
                 );
               })}
+              <div className="board-pawn-layer" aria-live="polite">
+                {players.map((player, playerIndex) => {
+                  if (player.position === 0) return null;
+                  const point = boardPoint(player.position);
+                  const playersHere = players.filter((item) => item.position === player.position);
+                  const positionHere = playersHere.findIndex((item) => item.id === player.id);
+                  const offset = (positionHere - (playersHere.length - 1) / 2) * 12;
+                  const motion = pawnMotion?.playerId === player.id ? pawnMotion : null;
+                  const motionClass = motion?.kind === "ladder" ? "is-ladder-flight" : motion?.kind === "slide" ? "is-snake-slide" : motion ? "is-stepping" : "";
+                  const style = { left: `${point.x}%`, top: `${point.y}%`, "--pawn-color": pawnColors[playerIndex], "--pawn-offset": `${offset}px` } as CSSProperties;
+                  return (
+                    <span key={player.id} className={`board-pawn-position ${motionClass}`} style={style} role="img" aria-label={`${player.name} en la casilla ${player.position}`}>
+                      <span key={motion?.tick ?? 0} className={`monopoly-pawn ${motion ? `pawn-motion-${motion.kind}` : ""}`} aria-hidden="true">
+                        <i className="pawn-head" /><i className="pawn-collar" /><i className="pawn-body" /><i className="pawn-base" />
+                      </span>
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </section>

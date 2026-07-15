@@ -653,8 +653,37 @@ a {
 .classic-snake ellipse { stroke: white; stroke-width: .55; }
 .classic-snake circle { fill: white; stroke: #062b67; stroke-width: .18; }
 .classic-snake-tongue { fill: none; stroke: #062b67; stroke-width: .42; stroke-linecap: round; }
+.board-pawn-layer { position: absolute; inset: 1.5%; z-index: 60; pointer-events: none; }
+.board-pawn-position {
+  --pawn-offset: 0px;
+  position: absolute;
+  width: 0;
+  height: 0;
+  transform: translate(calc(-50% + var(--pawn-offset)), -50%);
+  transition: left 300ms cubic-bezier(.22,.8,.32,1), top 300ms cubic-bezier(.22,.8,.32,1);
+  will-change: left, top;
+}
+.board-pawn-position.is-ladder-flight { transition-duration: 820ms; transition-timing-function: cubic-bezier(.18,.82,.22,1); }
+.board-pawn-position.is-snake-slide { transition-duration: 980ms; transition-timing-function: cubic-bezier(.5,.05,.8,.55); }
+.monopoly-pawn { position: absolute; left: 50%; top: 50%; display: block; width: clamp(17px, 2vw, 24px); height: clamp(24px, 2.8vw, 34px); transform: translate(-50%, -76%); filter: drop-shadow(0 4px 2px rgb(3 30 72 / .42)); }
+.monopoly-pawn i { position: absolute; display: block; background-color: var(--pawn-color); }
+.pawn-head { left: 50%; top: 0; width: 42%; aspect-ratio: 1; translate: -50% 0; border: 1.5px solid white; border-radius: 50%; box-shadow: inset -2px -3px 3px rgb(3 30 72 / .24), inset 2px 2px 3px rgb(255 255 255 / .55); }
+.pawn-collar { left: 50%; top: 27%; width: 58%; height: 16%; translate: -50% 0; border: 1px solid white; border-radius: 999px; box-shadow: inset 0 -2px 2px rgb(3 30 72 / .2); }
+.pawn-body { left: 50%; top: 39%; width: 67%; height: 39%; translate: -50% 0; clip-path: polygon(33% 0, 67% 0, 93% 100%, 7% 100%); box-shadow: inset -4px 0 3px rgb(3 30 72 / .2); }
+.pawn-base { left: 50%; bottom: 0; width: 90%; height: 22%; translate: -50% 0; border: 1.5px solid white; border-radius: 50%; box-shadow: inset -3px -3px 3px rgb(3 30 72 / .24), 0 1px 0 rgb(3 30 72 / .35); }
+.pawn-motion-step { animation: pawnBoardHop 350ms cubic-bezier(.2,.8,.25,1) both; }
+.pawn-motion-ladder { animation: pawnLadderLeap 860ms cubic-bezier(.16,.8,.25,1) both; }
+.pawn-motion-slide { animation: pawnSnakeRide 1030ms ease-in-out both; }
 .destination-pulse { position: absolute; z-index: 50; left: 50%; top: 50%; display: grid; width: 74%; height: 74%; translate: -50% -50%; place-items: center; border: 2px solid white; border-radius: 999px; background: #062b67; color: white; font-size: clamp(8px, 1vw, 13px); font-weight: 950; box-shadow: 0 0 0 3px #f5b82e, 0 0 18px #f5b82e; animation: destinationPulse 1.25s ease-in-out infinite; }
 @keyframes destinationPulse { 0%,100% { transform: scale(.88); } 50% { transform: scale(1.08); } }
+@keyframes pawnBoardHop { 0% { transform: translate(-50%, -76%) scale(.95); } 42% { transform: translate(-50%, -145%) scale(1.08) rotate(-5deg); } 72% { transform: translate(-50%, -68%) scale(1.04); } 100% { transform: translate(-50%, -76%) scale(1); } }
+@keyframes pawnLadderLeap { 0% { transform: translate(-50%, -76%) scale(1); } 34% { transform: translate(-50%, -190%) scale(1.18) rotate(-9deg); } 68% { transform: translate(-50%, -145%) scale(1.1) rotate(6deg); } 100% { transform: translate(-50%, -76%) scale(1); } }
+@keyframes pawnSnakeRide { 0% { transform: translate(-50%, -76%) rotate(0) scale(1); } 26% { transform: translate(-50%, -52%) rotate(18deg) scale(.94); } 52% { transform: translate(-50%, -94%) rotate(-16deg) scale(1.04); } 78% { transform: translate(-50%, -55%) rotate(13deg) scale(.96); } 100% { transform: translate(-50%, -76%) rotate(0) scale(1); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .board-pawn-position { transition-duration: 1ms !important; }
+  .monopoly-pawn { animation-duration: 1ms !important; }
+}
 
 .game-dialog-backdrop {
   position: fixed;
