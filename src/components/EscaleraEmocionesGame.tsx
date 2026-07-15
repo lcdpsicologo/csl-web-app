@@ -10,6 +10,7 @@ import { MaletinBrand, StrengthsMark } from "@/components/MaletinBrand";
 type Player = { id: number; name: string; position: number; color: string };
 type MoveKind = "normal" | "ladder" | "slide";
 type SoundKind = "dice" | "land" | "ladder" | "slide" | "complete" | "win";
+type MoveDetail = { from: number; rolledTo: number; to: number; kind: MoveKind; dice: number; player: string };
 
 const playerColors = ["bg-[#f5a623]", "bg-[#e75b52]", "bg-[#25a18e]", "bg-[#3b82c4]"];
 const categoryStyle: Record<EscaleraPrompt["category"], string> = {
@@ -63,6 +64,56 @@ function DiceCube({ value, rolling }: { value: number; rolling: boolean }) {
   );
 }
 
+function boardPoint(number: number) {
+  const rowFromBottom = Math.floor((number - 1) / 10);
+  const offset = (number - 1) % 10;
+  const column = rowFromBottom % 2 === 0 ? offset : 9 - offset;
+  return { x: column * 10 + 5, y: (9 - rowFromBottom) * 10 + 5 };
+}
+
+function snakePath(from: { x: number; y: number }, end: { x: number; y: number }, index: number) {
+  const dx = end.x - from.x;
+  const dy = end.y - from.y;
+  const length = Math.hypot(dx, dy) || 1;
+  const nx = -dy / length;
+  const ny = dx / length;
+  const bend = 5.5 + index % 3;
+  const point = (t: number, direction: number) => ({ x: from.x + dx * t + nx * bend * direction, y: from.y + dy * t + ny * bend * direction });
+  const controlOne = point(.16, 1);
+  const third = point(.33, 0);
+  const controlTwo = point(.5, -1);
+  const twoThirds = point(.66, 0);
+  const controlThree = point(.84, 1);
+  return `M ${from.x} ${from.y} Q ${controlOne.x} ${controlOne.y} ${third.x} ${third.y} Q ${controlTwo.x} ${controlTwo.y} ${twoThirds.x} ${twoThirds.y} Q ${controlThree.x} ${controlThree.y} ${end.x} ${end.y}`;
+}
+
+function BoardConnections() {
+  return (
+    <svg className="board-connections" viewBox="0 0 100 100" aria-label="Serpientes y escaleras del tablero" role="img">
+      <defs>
+        <filter id="connection-shadow"><feDropShadow dx="0" dy=".8" stdDeviation=".7" floodOpacity=".35" /></filter>
+        <linearGradient id="ladder-color" x1="0" y1="1" x2="0" y2="0"><stop stopColor="#059669" /><stop offset="1" stopColor="#34d399" /></linearGradient>
+        <linearGradient id="snake-color" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#e11d48" /><stop offset="1" stopColor="#fb7185" /></linearGradient>
+      </defs>
+      {Object.entries(ladderMoves).map(([fromValue, to]) => {
+        const from = boardPoint(Number(fromValue));
+        const end = boardPoint(to);
+        const dx = end.x - from.x;
+        const dy = end.y - from.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const px = -dy / length * 1.05;
+        const py = dx / length * 1.05;
+        return <g key={`ladder-${fromValue}`} className="board-ladder" filter="url(#connection-shadow)"><line x1={from.x + px} y1={from.y + py} x2={end.x + px} y2={end.y + py} /><line x1={from.x - px} y1={from.y - py} x2={end.x - px} y2={end.y - py} />{[.18, .34, .5, .66, .82].map((t) => <line key={t} x1={from.x + dx * t + px} y1={from.y + dy * t + py} x2={from.x + dx * t - px} y2={from.y + dy * t - py} className="ladder-rung" />)}</g>;
+      })}
+      {Object.entries(slideMoves).map(([fromValue, to], index) => {
+        const from = boardPoint(Number(fromValue));
+        const end = boardPoint(to);
+        return <g key={`snake-${fromValue}`} className="board-snake" filter="url(#connection-shadow)"><path d={snakePath(from, end, index)} /><circle cx={from.x} cy={from.y} r="2.15" className="snake-head" /><circle cx={from.x - .7} cy={from.y - .45} r=".28" className="snake-eye" /><circle cx={from.x + .7} cy={from.y - .45} r=".28" className="snake-eye" /><path d={`M ${from.x} ${from.y + 1.1} l -1.15 1.35 m 1.15 -1.35 l 1.15 1.35`} className="snake-mouth" /></g>;
+      })}
+    </svg>
+  );
+}
+
 export function EscaleraEmocionesGame() {
   const gameRoot = useRef<HTMLElement>(null);
   const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -78,6 +129,7 @@ export function EscaleraEmocionesGame() {
   const [rolling, setRolling] = useState(false);
   const [lastLanding, setLastLanding] = useState<number | null>(null);
   const [moveKind, setMoveKind] = useState<MoveKind>("normal");
+  const [lastMove, setLastMove] = useState<MoveDetail | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showIntro, setShowIntro] = useState(true);
@@ -115,8 +167,10 @@ export function EscaleraEmocionesGame() {
     if (soundEnabled) playGameSound("dice");
     rollTimer.current = setTimeout(() => {
       const active = players[turn];
-      let target = active.position + value;
+      const from = active.position;
+      let target = from + value;
       if (target > 100) target = active.position;
+      const rolledTo = target;
       let kind: MoveKind = "normal";
       let notice = target === active.position ? "Necesitas el número exacto para llegar a 100." : `${active.name} avanzó ${value} casillas.`;
       if (ladderMoves[target]) {
@@ -131,6 +185,7 @@ export function EscaleraEmocionesGame() {
       setPlayers((current) => current.map((player, index) => index === turn ? { ...player, position: target } : player));
       setMoveNotice(notice);
       setMoveKind(kind);
+      setLastMove({ from, rolledTo, to: target, kind, dice: value, player: active.name });
       setLastLanding(target);
       setRolling(false);
       if (soundEnabled) playGameSound(kind === "normal" ? "land" : kind);
@@ -161,6 +216,7 @@ export function EscaleraEmocionesGame() {
     setWinner(null);
     setRolling(false);
     setLastLanding(null);
+    setLastMove(null);
   };
 
   const addPlayer = () => {
@@ -182,6 +238,7 @@ export function EscaleraEmocionesGame() {
           <div className="mr-2 hidden xl:block"><StrengthsMark compact /></div>
           <button onClick={() => setSoundEnabled((value) => !value)} aria-pressed={soundEnabled} aria-label={soundEnabled ? "Desactivar sonidos" : "Activar sonidos"} className="game-header-button"><span className="hidden sm:inline">Sonido</span>{soundEnabled ? <Volume2 /> : <VolumeX />}</button>
           <button onClick={() => setShowGuide(true)} aria-label="Cómo jugar" className="game-header-button"><span className="hidden sm:inline">Cómo jugar</span><HelpCircle /></button>
+          <button onClick={() => setShowPlayers(true)} aria-label="Cambiar nombres de jugadores" className="game-header-button"><span className="hidden md:inline">Nombres</span><Users /></button>
           <button onClick={toggleFullscreen} aria-label={isFullscreen ? "Salir de pantalla completa" : "Ver en pantalla completa"} className="game-header-button game-header-primary"><span className="hidden md:inline">{isFullscreen ? "Salir" : "Pantalla completa"}</span>{isFullscreen ? <Minimize /> : <Expand />}</button>
           <button onClick={() => setShareOpen(true)} aria-label="Compartir juego" className="game-header-button"><Send /></button>
         </div>
@@ -202,7 +259,7 @@ export function EscaleraEmocionesGame() {
           <div className="player-manager">
             <div className="mb-2 flex items-center justify-between"><p className="text-[9px] font-black uppercase tracking-[.16em] text-blue-200">Participantes</p><button onClick={() => setShowPlayers(true)} className="text-[10px] font-bold text-white/70 hover:text-white">Editar</button></div>
             <div className="space-y-1.5">
-              {players.map((player, index) => <div key={player.id} className={`flex items-center gap-2 rounded-xl px-2.5 py-2 ${index === turn ? "bg-white/14 ring-1 ring-white/20" : "bg-white/5"}`}><span className={`game-token h-4 w-4 rounded-full ${player.color}`} /><span className="min-w-0 flex-1 truncate text-xs font-bold">{player.name}</span><span className="text-xs font-black tabular-nums text-blue-200">{player.position}</span></div>)}
+              {players.map((player, index) => <label key={player.id} className={`flex items-center gap-2 rounded-xl px-2.5 py-2 ${index === turn ? "bg-white/14 ring-1 ring-white/20" : "bg-white/5"}`}><span className={`game-token h-4 w-4 rounded-full ${player.color}`} /><span className="sr-only">Nombre del jugador {index + 1}</span><input value={player.name} onChange={(event) => setPlayers((current) => current.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} className="min-w-0 flex-1 bg-transparent text-xs font-bold text-white outline-none placeholder:text-blue-200" /><span className="rounded-md bg-white/10 px-1.5 py-0.5 text-[10px] font-black tabular-nums text-blue-100">{player.position}</span></label>)}
             </div>
           </div>
 
@@ -214,21 +271,23 @@ export function EscaleraEmocionesGame() {
 
         <section className="escalera-board-stage">
           <div className="board-status-bar">
-            <div><p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Objetivo</p><p className="text-xs font-black text-slate-700">Lleguen exactamente a 100</p></div>
-            <div className="flex items-center gap-1.5 text-[9px] font-black"><span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800">↗ Escalera</span><span className="rounded-full bg-rose-100 px-2 py-1 text-rose-800">↘ Serpiente</span></div>
+            <div className="min-w-0">{lastMove ? <><p className="text-[9px] font-black uppercase tracking-[.16em] text-[#087f8c]">Último movimiento · dado {lastMove.dice}</p><p className="truncate text-xs font-black text-slate-800"><span className="text-slate-500">{lastMove.player}:</span> {lastMove.from} <strong className="mx-1 text-[#087f8c]">→</strong> {lastMove.rolledTo}{lastMove.kind === "ladder" ? ` · escalera hasta ${lastMove.to}` : lastMove.kind === "slide" ? ` · serpiente hasta ${lastMove.to}` : ` · llegó a ${lastMove.to}`}</p></> : <><p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Objetivo</p><p className="text-xs font-black text-slate-700">Lleguen exactamente a 100</p></>}</div>
+            <div className="flex shrink-0 items-center gap-1.5"><div className="hidden items-center gap-1.5 text-[9px] font-black sm:flex"><span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800">Escaleras verdes</span><span className="rounded-full bg-rose-100 px-2 py-1 text-rose-800">Serpientes rosadas</span></div><button onClick={toggleFullscreen} className="board-expand-button">{isFullscreen ? <Minimize /> : <Expand />}<span>{isFullscreen ? "Reducir" : "Ampliar tablero"}</span></button></div>
           </div>
           <div className="board-fit-area">
-            <div className="emotion-board escalera-fit-board grid grid-cols-10 rounded-[22px] border-[5px] border-[#062b67] bg-[#062b67] gap-0.5 p-1 sm:gap-1 sm:p-1.5">
+            <div className="emotion-board escalera-fit-board relative grid grid-cols-10 rounded-[22px] border-[5px] border-[#062b67] bg-[#062b67] gap-0.5 p-1 sm:gap-1 sm:p-1.5">
+              <BoardConnections />
               {boardNumbers.map((number) => {
                 const occupants = players.filter((player) => player.position === number);
                 const ladder = ladderMoves[number];
                 const slide = slideMoves[number];
                 return (
                   <div key={number} className={`board-cell relative aspect-square rounded-[4px] p-0.5 sm:rounded-md sm:p-1 ${number % 2 === 0 ? "board-cell-teal" : "board-cell-cream"} ${lastLanding === number ? `is-landing is-${moveKind}` : ""} ${ladder ? "has-ladder" : ""} ${slide ? "has-slide" : ""}`}>
-                    <span className="board-number text-[8px] font-black text-[#062b67] sm:text-[10px] lg:text-xs">{number}</span>
+                    <span className="board-number relative z-30 text-[8px] font-black text-[#062b67] sm:text-[10px] lg:text-xs">{number}</span>
                     {ladder ? <span className="board-jump text-emerald-700">↗{ladder}</span> : null}
                     {slide ? <span className="board-jump text-rose-700">↘{slide}</span> : null}
-                    <div className="absolute inset-x-0.5 bottom-0.5 flex flex-wrap gap-px">{occupants.map((player) => <span key={player.id} title={player.name} className={`game-token token-arrive h-2.5 w-2.5 rounded-full sm:h-3.5 sm:w-3.5 ${player.color}`} />)}</div>
+                    {lastMove?.to === number ? <span className="destination-pulse" aria-label={`Destino: casilla ${number}`}>{number}</span> : null}
+                    <div className="absolute inset-x-0.5 bottom-0.5 z-40 flex flex-wrap gap-px">{occupants.map((player) => <span key={player.id} title={`${player.name}, casilla ${number}`} className={`game-token token-arrive h-2.5 w-2.5 rounded-full sm:h-3.5 sm:w-3.5 ${player.color}`} />)}</div>
                   </div>
                 );
               })}
