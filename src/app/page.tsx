@@ -93,13 +93,23 @@ type DataRecord = {
 
 type DataStore = Record<EntityId, DataRecord[]>;
 
-type RecordDeltaChange = {
-  method: "PATCH" | "DELETE";
+const ENTITY_IDS: EntityId[] = [
+  "students",
+  "courses",
+  "cases",
+  "logs",
+  "interviews",
+  "protocols",
+  "orientation",
+  "workshops",
+  "personnel",
+  "documents",
+];
+
+type EntityDelta = {
   entity: EntityId;
-  records?: DataRecord[];
-  recordIds?: string[];
-  previousStore: DataStore;
-  nextStore: DataStore;
+  records: DataRecord[];
+  recordIds: string[];
 };
 
 type TeamMember = {
@@ -2099,6 +2109,20 @@ const emptyStore = (): DataStore => ({
   personnel: officialPersonnelRecords,
   documents: [],
 });
+
+const diffStores = (previous: DataStore, next: DataStore): EntityDelta[] =>
+  ENTITY_IDS.flatMap((entity) => {
+    const previousById = new Map(previous[entity].map((record) => [record.id, record]));
+    const nextIds = new Set(next[entity].map((record) => record.id));
+    const records = next[entity].filter((record) => {
+      const before = previousById.get(record.id);
+      return !before || JSON.stringify(before) !== JSON.stringify(record);
+    });
+    const recordIds = previous[entity]
+      .filter((record) => !nextIds.has(record.id))
+      .map((record) => record.id);
+    return records.length || recordIds.length ? [{ entity, records, recordIds }] : [];
+  });
 
 const parseCsv = (text: string): { headers: string[]; rows: Record<string, string>[]; delimiter: string } => {
   const delimiter = text.includes("\t") ? "\t" : text.includes(";") ? ";" : ",";
@@ -10576,11 +10600,13 @@ function ConfigurationCenter({
 function SettingsView({
   profile,
   setProfile,
+  onSaveConfiguration,
   onClear,
   onNavigate,
 }: {
   profile: Record<string, string>;
   setProfile: (profile: Record<string, string>) => void;
+  onSaveConfiguration: (configuration: TizaAppConfiguration) => void;
   onClear: () => void;
   onNavigate: (view: ViewId) => void;
 }) {
@@ -10595,7 +10621,7 @@ function SettingsView({
         <ConfigurationCenter
           configuration={configuration}
           onNavigate={onNavigate}
-          onSave={(next) => setProfile({ ...profile, appConfiguration: JSON.stringify(next) })}
+          onSave={onSaveConfiguration}
         />
         <section className="rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="text-lg font-semibold">Institución</h2>
@@ -12406,6 +12432,10 @@ export default function TizaEducationApp() {
   const remoteLoadedUserRef = React.useRef("");
   const [, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const storeRef = React.useRef(store);
+  const lastSyncedStoreRef = React.useRef<DataStore | null>(null);
+  const profilePatchTimerRef = React.useRef<number | null>(null);
+  const pendingProfileChangesRef = React.useRef<Record<string, string>>({});
+  const pendingConfigurationChangesRef = React.useRef<Partial<TizaAppConfiguration>>({});
   const openNewRecord = (entity: EntityId) => {
     setDialogRecordId("");
     setDialogEntity(entity);
@@ -12418,31 +12448,66 @@ export default function TizaEducationApp() {
     setDialogEntity(null);
     setDialogRecordId("");
   };
-  // Wrap setProfile so every update is persisted server-side to the user's
-  // Supabase metadata (global per user → travels across devices).
-  const setProfile = (next: Record<string, string>) => {
-    setProfileState(next);
-    if (!accessTokenRef.current) return; // not authenticated yet; localStorage caches it
+  const syncProfilePatch = (
+    changes: Record<string, string>,
+    configurationChanges: Partial<TizaAppConfiguration> = {},
+  ) => {
+    if (!accessTokenRef.current) return;
+    if (!Object.keys(changes).length && !Object.keys(configurationChanges).length) return;
+    pendingProfileChangesRef.current = { ...pendingProfileChangesRef.current, ...changes };
+    pendingConfigurationChangesRef.current = { ...pendingConfigurationChangesRef.current, ...configurationChanges };
+    if (profilePatchTimerRef.current) window.clearTimeout(profilePatchTimerRef.current);
     setProfileSyncStatus("saving");
-    fetch("/api/profile", {
-      method: "PUT",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${accessTokenRef.current}`,
-      },
-      body: JSON.stringify({ profile: next }),
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || !data.ok) throw new Error(data?.error || `Error ${res.status}`);
-        setProfileSyncStatus("saved");
-        window.setTimeout(() => setProfileSyncStatus((s) => (s === "saved" ? "idle" : s)), 2000);
+    profilePatchTimerRef.current = window.setTimeout(() => {
+      const pendingChanges = pendingProfileChangesRef.current;
+      const pendingConfigurationChanges = pendingConfigurationChangesRef.current;
+      pendingProfileChangesRef.current = {};
+      pendingConfigurationChangesRef.current = {};
+      profilePatchTimerRef.current = null;
+      fetch("/api/profile", {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${accessTokenRef.current}`,
+        },
+        body: JSON.stringify({ changes: pendingChanges, configurationChanges: pendingConfigurationChanges }),
       })
-      .catch((err) => {
-        console.warn("Profile sync to Supabase failed", err);
-        setProfileSyncStatus("error");
-        setToast(`No se pudo sincronizar el perfil: ${err instanceof Error ? err.message : String(err)}`);
-      });
+        .then(async (res) => {
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || !data.ok) throw new Error(data?.error || `Error ${res.status}`);
+          setProfileSyncStatus("saved");
+          window.setTimeout(() => setProfileSyncStatus((s) => (s === "saved" ? "idle" : s)), 2000);
+        })
+        .catch((err) => {
+          console.warn("Profile sync to Supabase failed", err);
+          pendingProfileChangesRef.current = { ...pendingChanges, ...pendingProfileChangesRef.current };
+          pendingConfigurationChangesRef.current = { ...pendingConfigurationChanges, ...pendingConfigurationChangesRef.current };
+          setProfileSyncStatus("error");
+          setToast(`No se pudo sincronizar el perfil: ${err instanceof Error ? err.message : String(err)}`);
+        });
+    }, 600);
+  };
+
+  // Los campos se sincronizan por separado: cambiar el calendario o el nombre
+  // del colegio no vuelve a transferir todos los horarios institucionales.
+  const setProfile = (next: Record<string, string>) => {
+    const changes = Object.fromEntries(
+      Object.entries(next).filter(([key, value]) => key !== "appConfiguration" && profileState[key] !== value),
+    );
+    setProfileState(next);
+    syncProfilePatch(changes);
+  };
+
+  const saveAppConfiguration = (next: TizaAppConfiguration) => {
+    const current = parseAppConfiguration(profileState.appConfiguration);
+    const configurationChanges: Partial<TizaAppConfiguration> = {};
+    (["orientationActions", "orientationSchedule", "courseSchedule", "staffSchedule"] as const).forEach((key) => {
+      if (JSON.stringify(current[key]) !== JSON.stringify(next[key])) {
+        configurationChanges[key] = next[key] as never;
+      }
+    });
+    setProfileState((profileCurrent) => ({ ...profileCurrent, appConfiguration: JSON.stringify(next) }));
+    syncProfilePatch({}, configurationChanges);
   };
 
   useEffect(() => {
@@ -12532,7 +12597,7 @@ export default function TizaEducationApp() {
         // La nómina de funcionarios viene sembrada localmente; no dejar que un remoto vacío la borre.
         if (!remoteStore.personnel?.length) remoteStore.personnel = officialPersonnelRecords;
         setStore(remoteStore);
-        lastSavedSerializedRef.current = JSON.stringify(remoteStore);
+        lastSyncedStoreRef.current = remoteStore;
         remoteLoadedUserRef.current = authUser.id;
         setRemoteLoaded(true);
         setRemoteStatus("synced");
@@ -12600,57 +12665,66 @@ export default function TizaEducationApp() {
     window.localStorage.setItem(SIDEBAR_MODE_KEY, sidebarMode);
   }, [sidebarMode]);
 
-  const lastSavedSerializedRef = React.useRef<string>("");
   const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
-  const failedDeltaRef = React.useRef<RecordDeltaChange | null>(null);
-  const saveStoreSnapshot = React.useCallback(async (nextStore: DataStore, successStatus: "synced" | "saving" = "synced") => {
-    if (!authUser || !accessToken || !remoteLoaded) return;
-    const serialized = JSON.stringify(nextStore);
+  const saveStoreIncrementally = React.useCallback(async (nextStore: DataStore) => {
+    if (!authUser || !accessToken || !remoteLoaded || !lastSyncedStoreRef.current) return;
     const saveOperation = async () => {
-      // Una copia completa antigua no debe ejecutarse después de cambios más
-      // nuevos. Si hay un delta fallido, su reintento tiene prioridad.
-      if (failedDeltaRef.current) return;
-      if (serialized !== JSON.stringify(storeRef.current) && serialized !== lastSavedSerializedRef.current) return;
-      // La comparación ocurre dentro de la cola porque una escritura anterior
-      // puede haber guardado exactamente esta misma versión mientras esperaba.
-      if (serialized === lastSavedSerializedRef.current) {
-        setRemoteStatus(successStatus);
+      const previousStore = lastSyncedStoreRef.current;
+      if (!previousStore) return;
+      const deltas = diffStores(previousStore, nextStore);
+      if (!deltas.length) {
+        setRemoteStatus("synced");
         return;
       }
+
       setRemoteStatus("saving");
       setRemoteError("");
       try {
-        let response = await fetch("/api/records", {
-          method: "PUT",
-          headers: {
-            authorization: `Bearer ${accessToken}`,
-            "content-type": "application/json",
-          },
-          body: JSON.stringify({ store: nextStore }),
-        });
-        // Sesión vencida: pide el token vigente a Supabase y reintenta una vez.
-        if (response.status === 401 && supabaseAuth) {
-          const { data } = await supabaseAuth.auth.getSession();
-          const freshToken = data.session?.access_token;
-          if (freshToken && freshToken !== accessToken) {
-            response = await fetch("/api/records", {
-              method: "PUT",
-              headers: {
-                authorization: `Bearer ${freshToken}`,
-                "content-type": "application/json",
-              },
-              body: JSON.stringify({ store: nextStore }),
+        for (const delta of deltas) {
+          const batchCount = Math.max(
+            Math.ceil(delta.records.length / 100),
+            Math.ceil(delta.recordIds.length / 250),
+          );
+          for (let batchIndex = 0; batchIndex < batchCount; batchIndex += 1) {
+            const body = JSON.stringify({
+              entity: delta.entity,
+              records: delta.records.slice(batchIndex * 100, (batchIndex + 1) * 100),
+              recordIds: delta.recordIds.slice(batchIndex * 250, (batchIndex + 1) * 250),
             });
+            let lastError = "No se pudieron guardar los cambios.";
+            let saved = false;
+            for (let attempt = 0; attempt < 3 && !saved; attempt += 1) {
+              let token = accessTokenRef.current || accessToken;
+              let response = await fetch("/api/records", {
+                method: "PATCH",
+                headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+                body,
+              });
+              if (response.status === 401 && supabaseAuth) {
+                const { data } = await supabaseAuth.auth.refreshSession();
+                token = data.session?.access_token || token;
+                response = await fetch("/api/records", {
+                  method: "PATCH",
+                  headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+                  body,
+                });
+              }
+              if (response.ok) {
+                saved = true;
+                break;
+              }
+              const payload = await response.json().catch(() => null);
+              lastError = payload?.error || `Error ${response.status} al sincronizar.`;
+              if (response.status < 500 && response.status !== 429) break;
+              await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
+            }
+            if (!saved) throw new Error(lastError);
           }
         }
-        if (!response.ok) {
-          const payload = await response.json().catch(() => null);
-          throw new Error(payload?.error || "No se pudieron guardar los datos remotos.");
-        }
-        lastSavedSerializedRef.current = serialized;
-        setRemoteStatus(successStatus);
+        lastSyncedStoreRef.current = nextStore;
+        setRemoteStatus("synced");
       } catch (error) {
-        console.warn("Remote records save failed; local backup remains active", error);
+        console.warn("Incremental records sync failed; local backup remains active", error);
         setRemoteStatus("error");
         setRemoteError(error instanceof Error ? error.message : "No se pudieron guardar los datos remotos.");
       }
@@ -12660,90 +12734,23 @@ export default function TizaEducationApp() {
     await queuedSave;
   }, [authUser, accessToken, remoteLoaded]);
 
-  const saveRecordDelta = React.useCallback(async ({
-    method,
-    entity,
-    records = [],
-    recordIds = [],
-    previousStore,
-    nextStore,
-  }: RecordDeltaChange) => {
-    if (!authUser || !accessToken || !remoteLoaded) return;
-    const previousSerialized = JSON.stringify(previousStore);
-    const nextSerialized = JSON.stringify(nextStore);
-    const operation = async () => {
-      setRemoteStatus("saving");
-      setRemoteError("");
-      let lastError = "No se pudieron guardar los cambios.";
-
-      for (let attempt = 0; attempt < 3; attempt += 1) {
-        try {
-          let token = accessTokenRef.current || accessToken;
-          let response = await fetch("/api/records", {
-            method,
-            headers: {
-              authorization: `Bearer ${token}`,
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({ entity, records, recordIds }),
-          });
-          if (response.status === 401 && supabaseAuth) {
-            const { data } = await supabaseAuth.auth.refreshSession();
-            token = data.session?.access_token || token;
-            response = await fetch("/api/records", {
-              method,
-              headers: {
-                authorization: `Bearer ${token}`,
-                "content-type": "application/json",
-              },
-              body: JSON.stringify({ entity, records, recordIds }),
-            });
-          }
-          if (response.ok) {
-            failedDeltaRef.current = null;
-            if (lastSavedSerializedRef.current === previousSerialized) {
-              lastSavedSerializedRef.current = nextSerialized;
-            }
-            setRemoteStatus("synced");
-            return;
-          }
-          const payload = await response.json().catch(() => null);
-          lastError = payload?.error || `Error ${response.status} al sincronizar.`;
-          if (response.status < 500 && response.status !== 429) break;
-        } catch (error) {
-          lastError = error instanceof Error ? error.message : "No se pudo conectar con Supabase.";
-        }
-        await new Promise((resolve) => window.setTimeout(resolve, 350 * (attempt + 1)));
-      }
-
-      setRemoteStatus("error");
-      setRemoteError(lastError);
-      failedDeltaRef.current = { method, entity, records, recordIds, previousStore, nextStore };
-    };
-    const queuedSave = saveQueueRef.current.then(operation, operation);
-    saveQueueRef.current = queuedSave;
-    await queuedSave;
-  }, [authUser, accessToken, remoteLoaded]);
-
   useEffect(() => {
     if (!authUser || !accessToken || !remoteLoaded) return;
 
     const timer = window.setTimeout(async () => {
-      await saveStoreSnapshot(store);
-    }, 1500);
+      await saveStoreIncrementally(store);
+    }, 800);
 
     return () => window.clearTimeout(timer);
-  }, [store, authUser, accessToken, remoteLoaded, saveStoreSnapshot]);
+  }, [store, authUser, accessToken, remoteLoaded, saveStoreIncrementally]);
 
   useEffect(() => {
     if (remoteStatus !== "error" || !authUser || !accessToken || !remoteLoaded) return;
     const timer = window.setTimeout(async () => {
-      const failedDelta = failedDeltaRef.current;
-      if (failedDelta) await saveRecordDelta(failedDelta);
-      else await saveStoreSnapshot(storeRef.current);
+      await saveStoreIncrementally(storeRef.current);
     }, 6000);
     return () => window.clearTimeout(timer);
-  }, [remoteStatus, authUser, accessToken, remoteLoaded, saveRecordDelta, saveStoreSnapshot]);
+  }, [remoteStatus, authUser, accessToken, remoteLoaded, saveStoreIncrementally]);
 
   useEffect(() => {
     window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
@@ -12811,7 +12818,6 @@ export default function TizaEducationApp() {
     const nextStore = { ...storeRef.current, [entity]: [record, ...storeRef.current[entity]] };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
     closeRecordDialog();
     setToast(`${entityConfigs[entity].singular} guardado`);
   };
@@ -12835,7 +12841,6 @@ export default function TizaEducationApp() {
     const nextStore = { ...storeRef.current, [entity]: [...unique, ...existing] };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
     setToast(`${unique.length} registros incorporados en ${entityConfigs[entity].label}`);
   };
 
@@ -12848,7 +12853,6 @@ export default function TizaEducationApp() {
     };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
   };
 
   const saveDialogRecord = (entity: EntityId, record: DataRecord) => {
@@ -12937,7 +12941,7 @@ export default function TizaEducationApp() {
       };
       storeRef.current = nextStore;
       setStore(nextStore);
-      await saveStoreSnapshot(nextStore);
+      await saveStoreIncrementally(nextStore);
       const removed = Math.max(0, firstCycleCurrent.length - reused.size);
       setToast(`Primer Ciclo corregido: ${nextFirstCycle.length} estudiantes oficiales en ${FIRST_CYCLE_COURSES.length} cursos. ${removed} duplicados/no vigentes fuera.`);
     } catch (error) {
@@ -13003,7 +13007,6 @@ export default function TizaEducationApp() {
     const nextStore = { ...storeRef.current, [entity]: storeRef.current[entity].filter((record) => record.id !== id) };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveStoreSnapshot(nextStore);
     setToast("Registro eliminado");
   };
 
@@ -13325,8 +13328,6 @@ export default function TizaEducationApp() {
     };
     storeRef.current = nextStore;
     setStore(nextStore);
-    const changedRecord = orientation.find((record) => record.id === recordId);
-    if (changedRecord) void saveRecordDelta({ method: "PATCH", entity: "orientation", records: [changedRecord], previousStore, nextStore });
   };
 
   const addOrientationRecord = (record: DataRecord) => {
@@ -13334,7 +13335,6 @@ export default function TizaEducationApp() {
     const nextStore = { ...previousStore, orientation: [record, ...previousStore.orientation] };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveRecordDelta({ method: "PATCH", entity: "orientation", records: [record], previousStore, nextStore });
     setToast("Clase de orientación guardada");
   };
 
@@ -13342,9 +13342,6 @@ export default function TizaEducationApp() {
     if (!records.length) return;
     const previousStore = storeRef.current;
     const scheduledKeys = new Set(records.map((record) => normalize([record.date, record.course].join("|"))));
-    const replacedPlaceholderIds = previousStore.orientation
-      .filter((record) => scheduledKeys.has(normalize([record.date, record.course].join("|"))) && isGeneratedOrientationPlaceholder(record))
-      .map((record) => record.id);
     const nextStore = {
       ...previousStore,
       orientation: [
@@ -13357,7 +13354,6 @@ export default function TizaEducationApp() {
     };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveRecordDelta({ method: "PATCH", entity: "orientation", records, recordIds: replacedPlaceholderIds, previousStore, nextStore });
     setToast(`${records.length} clases de la semana creadas y listas para editar`);
   };
 
@@ -13369,7 +13365,6 @@ export default function TizaEducationApp() {
     };
     storeRef.current = nextStore;
     setStore(nextStore);
-    void saveRecordDelta({ method: "DELETE", entity: "orientation", recordIds: [recordId], previousStore, nextStore });
     setToast("Clase eliminada");
   };
 
@@ -13764,6 +13759,12 @@ export default function TizaEducationApp() {
 
   const clearLocal = () => {
     if (!window.confirm("¿Borrar todos los datos locales de Tiza Education en este navegador?")) return;
+    window.localStorage.removeItem(STORAGE_KEY);
+    if (remoteLoaded && lastSyncedStoreRef.current) {
+      setStore(lastSyncedStoreRef.current);
+      setToast("Respaldo local borrado; los datos de Supabase se conservaron");
+      return;
+    }
     setStore(emptyStore());
     setToast("Datos locales borrados");
   };
@@ -13779,7 +13780,7 @@ export default function TizaEducationApp() {
         <DatabaseHubView
           store={store}
           configuration={appConfiguration}
-          onSaveConfiguration={(next) => { setProfile({ ...profile, appConfiguration: JSON.stringify(next) }); setToast("Configuración institucional guardada"); }}
+          onSaveConfiguration={(next) => { saveAppConfiguration(next); setToast("Configuración institucional guardada"); }}
           onImportRecords={importRecords}
           onOpenNewRecord={openNewRecord}
           onOpenStudent={openStudent}
@@ -13862,7 +13863,7 @@ export default function TizaEducationApp() {
         />
       );
     }
-    if (activeView === "settings") return <SettingsView profile={profile} setProfile={setProfile} onClear={clearLocal} onNavigate={setActiveView} />;
+    if (activeView === "settings") return <SettingsView profile={profile} setProfile={setProfile} onSaveConfiguration={saveAppConfiguration} onClear={clearLocal} onNavigate={setActiveView} />;
     if (activeView === "team") {
       return (
         <TeamView
@@ -13892,9 +13893,7 @@ export default function TizaEducationApp() {
   };
 
   const retrySynchronization = () => {
-    const failedDelta = failedDeltaRef.current;
-    if (failedDelta) void saveRecordDelta(failedDelta);
-    else void saveStoreSnapshot(storeRef.current);
+    void saveStoreIncrementally(storeRef.current);
   };
 
   const syncLabel = {

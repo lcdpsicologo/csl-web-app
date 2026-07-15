@@ -4,6 +4,10 @@ import { createClient, type SupabaseClient, type User } from "@supabase/supabase
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
 
+const MAX_DELTA_BYTES = 750 * 1024;
+const MAX_RECORDS_PER_DELTA = 100;
+const MAX_IDS_PER_DELTA = 250;
+
 type EntityId =
   | "students"
   | "courses"
@@ -121,6 +125,21 @@ const authenticate = async (request: Request, supabase: SupabaseClient) => {
   return { user: data.user };
 };
 
+const readLimitedJson = async (request: Request) => {
+  const declaredLength = Number(request.headers.get("content-length") || 0);
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_DELTA_BYTES) {
+    throw new Error("PAYLOAD_TOO_LARGE");
+  }
+  const text = await request.text();
+  if (new TextEncoder().encode(text).byteLength > MAX_DELTA_BYTES) {
+    throw new Error("PAYLOAD_TOO_LARGE");
+  }
+  return {
+    body: JSON.parse(text) as Record<string, unknown>,
+    receivedBytes: new TextEncoder().encode(text).byteLength,
+  };
+};
+
 const ensureInstitution = async (supabase: SupabaseClient, user: User) => {
   const { data: existingProfile, error: profileError } = await supabase
     .from("profiles")
@@ -211,6 +230,13 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
+  // Las copias completas fueron la causa principal del tráfico entrante. Solo se
+  // conserva esta ruta para una recuperación manual y explícita.
+  if (request.headers.get("x-tiza-snapshot-mode") !== "manual-recovery") {
+    return NextResponse.json({
+      error: "Las copias completas están deshabilitadas; actualiza la aplicación para usar sincronización incremental.",
+    }, { status: 409 });
+  }
   const supabase = getAdminClient();
   if (!supabase) {
     return NextResponse.json({ error: "Supabase service credentials are not configured" }, { status: 503 });
@@ -315,12 +341,18 @@ export async function PATCH(request: Request) {
   if (auth.error) return auth.error;
 
   try {
-    const body = await request.json();
+    const { body, receivedBytes } = await readLimitedJson(request);
     const entity = body.entity as EntityId;
-    const records = Array.isArray(body.records) ? body.records as DataRecord[] : [];
+    const records = Array.isArray(body.records)
+      ? (body.records as unknown[]).filter((record): record is DataRecord =>
+          Boolean(record && typeof record === "object" && typeof (record as DataRecord).id === "string"))
+      : [];
     const recordIds = Array.isArray(body.recordIds)
       ? body.recordIds.map((value: unknown) => String(value || "").trim()).filter(Boolean)
       : [];
+    if (records.length > MAX_RECORDS_PER_DELTA || recordIds.length > MAX_IDS_PER_DELTA) {
+      return NextResponse.json({ error: "El lote incremental supera el límite permitido" }, { status: 413 });
+    }
     if (!ENTITY_IDS.includes(entity) || (records.length === 0 && recordIds.length === 0)) {
       return NextResponse.json({ error: "Entity and record changes are required" }, { status: 400 });
     }
@@ -361,8 +393,14 @@ export async function PATCH(request: Request) {
       if (deleteError) throw deleteError;
     }
 
-    return NextResponse.json({ ok: true, persistent: true, saved: rows.length, deleted: recordIds.length });
+    if (receivedBytes > 500 * 1024) {
+      console.warn("Large incremental records payload", { entity, receivedBytes, saved: rows.length, deleted: recordIds.length });
+    }
+    return NextResponse.json({ ok: true, persistent: true, saved: rows.length, deleted: recordIds.length, receivedBytes });
   } catch (error) {
+    if (error instanceof Error && error.message === "PAYLOAD_TOO_LARGE") {
+      return NextResponse.json({ error: "La solicitud incremental supera 750 KB" }, { status: 413 });
+    }
     console.error("Incremental records save failed", error);
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Unable to save records",
