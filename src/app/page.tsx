@@ -4553,6 +4553,7 @@ function OrientationCycleView({
   onGenerateAnnualPlan,
   calendarEvents,
   appConfiguration,
+  onOpenConfiguration,
 }: {
   store: DataStore;
   accessToken: string;
@@ -4565,6 +4566,7 @@ function OrientationCycleView({
   onGenerateAnnualPlan: () => void;
   calendarEvents: CalendarEvent[];
   appConfiguration: TizaAppConfiguration;
+  onOpenConfiguration: () => void;
 }) {
   const [selectedOwner, setSelectedOwner] = useState(orientationOwners[0].name);
   const [filterCourse, setFilterCourse] = useState<string>("all");
@@ -5440,6 +5442,13 @@ function OrientationCycleView({
           </button>
           <button onClick={onGenerateAnnualPlan} className="tz-press inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
             <CalendarDays className="h-4 w-4" /> Completar año
+          </button>
+          <button
+            onClick={onOpenConfiguration}
+            title="Personalizar acciones/fortalezas, horario semanal y catálogos (sin programar)"
+            className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            <Settings className="h-4 w-4" /> Configurar
           </button>
         </div>
       </div>
@@ -13789,6 +13798,7 @@ export default function TizaEducationApp() {
           onGenerateAnnualPlan={() => syncOrientationAnnualPlan(false)}
           calendarEvents={calendarEvents}
           appConfiguration={appConfiguration}
+          onOpenConfiguration={() => setActiveView("settings")}
         />
       );
     }
