@@ -68,17 +68,16 @@ export const familyConversationGuide = [
 ];
 
 export const ladderMoves: Record<number, number> = {
-  4: 58,
-  24: 43,
-  28: 48,
+  5: 58,
+  14: 49,
   53: 72,
+  64: 83,
 };
 
 export const slideMoves: Record<number, number> = {
-  30: 21,
-  50: 31,
-  54: 45,
-  74: 66,
-  89: 73,
-  91: 83,
+  38: 20,
+  51: 11,
+  75: 54,
+  91: 73,
+  97: 61,
 };

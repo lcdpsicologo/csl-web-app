@@ -485,8 +485,8 @@ a {
   transition: transform 240ms var(--spring), filter 240ms ease, box-shadow 240ms ease;
 }
 .board-cell:hover { z-index: 5; transform: translateY(-4px) scale(1.06); filter: brightness(1.05); }
-.board-cell-teal { background: linear-gradient(145deg, #e8faf6, #bfe9e0); }
-.board-cell-cream { background: linear-gradient(145deg, #fffdf4, #fae9b5); }
+.board-cell-teal { background: linear-gradient(145deg, #48bec5, #178f9e); }
+.board-cell-cream { background: linear-gradient(145deg, #fffef8, #f4e9c9); }
 .board-cell.has-ladder { background: linear-gradient(145deg, #ecfdf5, #86efac); }
 .board-cell.has-slide { background: linear-gradient(145deg, #fff1f2, #fda4af); }
 .board-cell.is-landing { z-index: 10; animation: cellLanding 780ms var(--spring) both; }
@@ -643,17 +643,16 @@ a {
 .board-expand-button { display: inline-flex; height: 30px; align-items: center; gap: 5px; border-radius: 10px; background: #062b67; padding: 0 9px; color: white; font-size: 9px; font-weight: 900; box-shadow: 0 4px 0 #031e48; }
 .board-expand-button:hover { transform: translateY(-1px); background: #08448d; }
 .board-expand-button svg { width: 13px; height: 13px; }
-.cell-connection { position: absolute; z-index: 2; inset: 16% 5% 5%; display: flex; align-items: center; justify-content: center; gap: 2px; pointer-events: none; }
-.cell-connection svg { width: 48%; height: 78%; overflow: visible; filter: drop-shadow(0 2px 1px rgb(3 30 72 / .2)); }
-.cell-connection svg path { fill: none; stroke: currentColor; stroke-width: 3.6; stroke-linecap: round; stroke-linejoin: round; }
-.cell-connection-snake svg > path:first-child { stroke-width: 4.5; }
-.cell-connection svg circle:first-of-type { fill: currentColor; }
-.cell-connection svg circle:not(:first-of-type) { fill: white; stroke: none; }
-.cell-connection .snake-tongue { stroke-width: 1.6; }
-.cell-connection strong { display: flex; min-width: 25px; flex-direction: column; align-items: center; border: 1px solid rgb(255 255 255 / .8); border-radius: 7px; background: rgb(255 255 255 / .85); padding: 2px 3px; font-size: clamp(7px, .75vw, 11px); line-height: 1; box-shadow: 0 2px 5px rgb(3 30 72 / .15); }
-.cell-connection small { margin-bottom: 1px; font-size: clamp(4px, .42vw, 6px); font-weight: 950; letter-spacing: .02em; }
-.cell-connection-ladder { color: #047857; }
-.cell-connection-snake { color: #be123c; }
+.escalera-fit-board .board-cell { transform: none; }
+.classic-board-art { position: absolute; inset: 1.5%; z-index: 10; width: 97%; height: 97%; overflow: visible; pointer-events: none; }
+.classic-ladder line { stroke: #27236f; stroke-width: 1.05; stroke-linecap: round; }
+.classic-ladder .classic-ladder-rung { stroke: #4c4bb1; stroke-width: .82; }
+.classic-snake-outline { fill: none; stroke: white; stroke-width: 5.6; stroke-linecap: round; stroke-linejoin: round; }
+.classic-snake-body { fill: none; stroke-width: 4.7; stroke-linecap: round; stroke-linejoin: round; }
+.classic-snake-stripes { fill: none; stroke-width: 4.75; stroke-linecap: butt; stroke-dasharray: 3.5 6.5; }
+.classic-snake ellipse { stroke: white; stroke-width: .55; }
+.classic-snake circle { fill: white; stroke: #062b67; stroke-width: .18; }
+.classic-snake-tongue { fill: none; stroke: #062b67; stroke-width: .42; stroke-linecap: round; }
 .destination-pulse { position: absolute; z-index: 50; left: 50%; top: 50%; display: grid; width: 74%; height: 74%; translate: -50% -50%; place-items: center; border: 2px solid white; border-radius: 999px; background: #062b67; color: white; font-size: clamp(8px, 1vw, 13px); font-weight: 950; box-shadow: 0 0 0 3px #f5b82e, 0 0 18px #f5b82e; animation: destinationPulse 1.25s ease-in-out infinite; }
 @keyframes destinationPulse { 0%,100% { transform: scale(.88); } 50% { transform: scale(1.08); } }
 

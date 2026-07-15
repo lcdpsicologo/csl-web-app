@@ -64,17 +64,55 @@ function DiceCube({ value, rolling }: { value: number; rolling: boolean }) {
   );
 }
 
-function CellConnection({ kind, destination }: { kind: "ladder" | "slide"; destination: number }) {
-  const isLadder = kind === "ladder";
+function boardPoint(number: number) {
+  const rowFromBottom = Math.floor((number - 1) / 10);
+  const offset = (number - 1) % 10;
+  const column = rowFromBottom % 2 === 0 ? offset : 9 - offset;
+  return { x: column * 10 + 5, y: (9 - rowFromBottom) * 10 + 5 };
+}
+
+const classicSnakes = [
+  { from: 97, to: 61, path: "M35 5 C28 1 23 7 20 14 C17 20 14 18 12 25 C10 30 7 33 5 35", body: "#d75b6a", stripe: "#f4b95e" },
+  { from: 91, to: 73, path: "M95 5 C87 2 84 9 87 14 C90 18 82 20 75 25", body: "#ed3866", stripe: "#f7d6df" },
+  { from: 75, to: 54, path: "M55 25 C48 22 45 28 51 32 C59 37 56 43 65 45", body: "#f0c553", stripe: "#43358f" },
+  { from: 51, to: 11, path: "M95 45 C91 52 99 58 95 64 C91 70 97 78 95 85", body: "#ee9237", stripe: "#4f83af" },
+  { from: 38, to: 20, path: "M25 65 C18 61 14 67 17 73 C20 79 11 82 5 85", body: "#6650a4", stripe: "#e77282" },
+];
+
+function ClassicBoardArt() {
   return (
-    <span className={`cell-connection ${isLadder ? "cell-connection-ladder" : "cell-connection-snake"}`} aria-label={`${isLadder ? "Escalera: sube" : "Serpiente: baja"} a la casilla ${destination}`}>
-      {isLadder ? (
-        <svg viewBox="0 0 32 38" aria-hidden="true"><path d="M9 35V3M23 35V3M9 29h14M9 22h14M9 15h14M9 8h14" /></svg>
-      ) : (
-        <svg viewBox="0 0 32 38" aria-hidden="true"><path d="M21 5C8 6 9 14 17 17c10 4 9 11-2 15-3 1-4 3-2 4" /><circle cx="22" cy="5" r="4.5" /><circle cx="21" cy="4" r=".8" /><path className="snake-tongue" d="m25 7 4 2m-4-2 3-1" /></svg>
-      )}
-      <strong><small>{isLadder ? "SUBE A" : "BAJA A"}</small>{destination}</strong>
-    </span>
+    <svg className="classic-board-art" viewBox="0 0 100 100" role="img" aria-label="Tablero clásico con cinco serpientes y cuatro escaleras">
+      <defs><filter id="classic-piece-shadow"><feDropShadow dx="0" dy=".8" stdDeviation=".65" floodColor="#031e48" floodOpacity=".35" /></filter></defs>
+      {Object.entries(ladderMoves).map(([fromValue, to]) => {
+        const from = boardPoint(Number(fromValue));
+        const end = boardPoint(to);
+        const dx = end.x - from.x;
+        const dy = end.y - from.y;
+        const length = Math.hypot(dx, dy) || 1;
+        const px = -dy / length * 1.35;
+        const py = dx / length * 1.35;
+        return (
+          <g key={`ladder-${fromValue}`} className="classic-ladder" filter="url(#classic-piece-shadow)">
+            <line x1={from.x + px} y1={from.y + py} x2={end.x + px} y2={end.y + py} />
+            <line x1={from.x - px} y1={from.y - py} x2={end.x - px} y2={end.y - py} />
+            {[.1, .22, .34, .46, .58, .7, .82, .94].map((t) => <line key={t} className="classic-ladder-rung" x1={from.x + dx * t + px} y1={from.y + dy * t + py} x2={from.x + dx * t - px} y2={from.y + dy * t - py} />)}
+          </g>
+        );
+      })}
+      {classicSnakes.map((snake) => {
+        const head = boardPoint(snake.from);
+        return (
+          <g key={`snake-${snake.from}`} className="classic-snake" filter="url(#classic-piece-shadow)">
+            <path d={snake.path} className="classic-snake-outline" />
+            <path d={snake.path} className="classic-snake-body" style={{ stroke: snake.body }} />
+            <path d={snake.path} className="classic-snake-stripes" style={{ stroke: snake.stripe }} />
+            <ellipse cx={head.x} cy={head.y} rx="3.4" ry="2.45" style={{ fill: snake.body }} />
+            <circle cx={head.x + 1.15} cy={head.y - .65} r=".38" />
+            <path d={`M ${head.x + 3} ${head.y + .15} l 2.2 .9 m -2.2 -.9 l 2.1 -.7`} className="classic-snake-tongue" />
+          </g>
+        );
+      })}
+    </svg>
   );
 }
 
@@ -240,15 +278,12 @@ export function EscaleraEmocionesGame() {
           </div>
           <div className="board-fit-area">
             <div className="emotion-board escalera-fit-board relative grid grid-cols-10 rounded-[22px] border-[5px] border-[#062b67] bg-[#062b67] gap-0.5 p-1 sm:gap-1 sm:p-1.5">
+              <ClassicBoardArt />
               {boardNumbers.map((number) => {
                 const occupants = players.filter((player) => player.position === number);
-                const ladder = ladderMoves[number];
-                const slide = slideMoves[number];
                 return (
-                  <div key={number} className={`board-cell relative aspect-square rounded-[4px] p-0.5 sm:rounded-md sm:p-1 ${number % 2 === 0 ? "board-cell-teal" : "board-cell-cream"} ${lastLanding === number ? `is-landing is-${moveKind}` : ""} ${ladder ? "has-ladder" : ""} ${slide ? "has-slide" : ""}`}>
-                    <span className="board-number relative z-30 text-[8px] font-black text-[#062b67] sm:text-[10px] lg:text-xs">{number}</span>
-                    {ladder ? <CellConnection kind="ladder" destination={ladder} /> : null}
-                    {slide ? <CellConnection kind="slide" destination={slide} /> : null}
+                  <div key={number} className={`board-cell relative aspect-square rounded-[4px] p-0.5 sm:rounded-md sm:p-1 ${number % 2 === 0 ? "board-cell-teal" : "board-cell-cream"} ${lastLanding === number ? `is-landing is-${moveKind}` : ""}`}>
+                    <span className={`board-number relative z-30 text-[8px] font-black drop-shadow-sm sm:text-[10px] lg:text-xs ${number % 2 === 0 ? "text-white" : "text-[#062b67]"}`}>{number}</span>
                     {lastMove?.to === number ? <span className="destination-pulse" aria-label={`Destino: casilla ${number}`}>{number}</span> : null}
                     <div className="absolute inset-x-0.5 bottom-0.5 z-40 flex flex-wrap gap-px">{occupants.map((player) => <span key={player.id} title={`${player.name}, casilla ${number}`} className={`game-token token-arrive h-2.5 w-2.5 rounded-full sm:h-3.5 sm:w-3.5 ${player.color}`} />)}</div>
                   </div>
