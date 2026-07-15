@@ -5902,7 +5902,8 @@ function OrientationCycleView({
             return (
               <React.Fragment key={record.id}>
                 {dateHeader}
-              <article className={`mx-2 mb-2 overflow-hidden rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
+              {/* Sin overflow-hidden: recortaba los menús desplegables (Estado, Envío) dentro de la tarjeta. */}
+              <article className={`mx-2 mb-2 rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
                 <div className="grid gap-3 px-4 py-3 lg:grid-cols-[168px_126px_minmax(220px,1fr)_150px_132px_188px] lg:items-center">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Curso</p>
@@ -6028,7 +6029,7 @@ function OrientationCycleView({
                 </div>
 
                 {expanded ? (
-                  <div className="border-t border-slate-100 bg-white px-4 pb-4 pt-3">
+                  <div className="rounded-b-lg border-t border-slate-100 bg-white px-4 pb-4 pt-3">
                     <div className="mb-3 flex flex-wrap justify-end gap-2">
                       {!isCalendar ? (
                         <>

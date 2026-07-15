@@ -78,6 +78,14 @@ if (headerIndex === -1) {
 
 const sourceName = path.basename(csvPath);
 
+// Hipervínculos de las celdas (sheet_to_json solo entrega el texto visible).
+const sheet = workbook.Sheets[sheetName];
+const sheetRange = XLSX.utils.decode_range(sheet["!ref"] || "A1");
+const linkAt = (sheetRow, colIndex) => {
+  const address = XLSX.utils.encode_cell({ r: sheetRange.s.r + sheetRow, c: sheetRange.s.c + colIndex });
+  return clean(sheet[address]?.l?.Target || "");
+};
+
 // Si el archivo trae hoja de Configuración, regenerar acciones/sesiones/semanas desde ahí.
 const configSheetName = workbook.SheetNames.find((name) => /configuraci/i.test(name));
 if (configSheetName) {
@@ -91,8 +99,9 @@ if (configSheetName) {
 
 const records = rows
   .slice(headerIndex + 1)
-  .filter((row) => clean(row[1] || row[2] || row[3]))
-  .map((row, index) => {
+  .map((row, offset) => ({ row, sheetRow: headerIndex + 1 + offset }))
+  .filter(({ row }) => clean(row[1] || row[2] || row[3]))
+  .map(({ row, sheetRow }, index) => {
     const date = dateToIso(row[1]);
     const week = clean(row[2]);
     const course = normalizeCourse(row[3]);
@@ -100,10 +109,16 @@ const records = rows
     const rawTopic = clean(row[5]);
     const status = clean(row[6]) || "Realizado";
     const notes = clean(row[7]);
-    const canvaLink = clean(row[8]);
-    const planificacion = clean(row[9]);
-    const folderLink = clean(row[10]);
-    const topic = pickTopic(rawTopic, planificacion, notes, axis);
+    // Texto visible de las columnas con link (la firma/id se calcula con esto
+    // para que los ids no cambien respecto a importaciones anteriores).
+    const canvaText = clean(row[8]);
+    const planificacionText = clean(row[9]);
+    const folderText = clean(row[10]);
+    // URL real: el hipervínculo de la celda; si no hay, el texto (si ya es URL).
+    const canvaLink = /^https?:\/\//i.test(canvaText) ? canvaText : (linkAt(sheetRow, 8) || canvaText);
+    const planificacion = linkAt(sheetRow, 9) || planificacionText;
+    const folderLink = linkAt(sheetRow, 10) || folderText;
+    const topic = pickTopic(rawTopic, planificacionText, notes, axis);
     const signature = [
       date,
       week,
@@ -112,9 +127,9 @@ const records = rows
       rawTopic,
       status,
       notes,
-      canvaLink,
-      planificacion,
-      folderLink,
+      canvaText,
+      planificacionText,
+      folderText,
       index,
     ].join("|");
     const id = `orientacion-primer-ciclo-${crypto.createHash("sha1").update(signature).digest("hex").slice(0, 12)}`;
