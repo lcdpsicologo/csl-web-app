@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, Check, CircleHelp, HeartHandshake, RotateCcw, Send, Shuffle, Sparkles, Volume2, VolumeX, Wind } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
+import { ArrowLeft, ArrowRight, BadgeCheck, Check, CircleHelp, HeartHandshake, RotateCcw, Send, Shuffle, Sparkles, Trophy, Volume2, VolumeX, Wind, Zap } from "lucide-react";
 import { colorMeanings, colorStyles, type EmotionColor, levelOptions, type LevelId, type RevoltijoCard, revoltijoCards } from "@/lib/revoltijoCards";
 import { GameShareModal } from "@/components/GameShareModal";
 import { MaletinBrand, StrengthsMark } from "@/components/MaletinBrand";
@@ -47,24 +48,39 @@ export function RevoltijoGame() {
   const [completedColors, setCompletedColors] = useState<EmotionColor[]>([]);
   const [audience, setAudience] = useState<"familia" | "curso">("familia");
   const [shareOpen, setShareOpen] = useState(false);
+  const [shuffling, setShuffling] = useState(false);
+  const shuffleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => () => { if (shuffleTimer.current) clearTimeout(shuffleTimer.current); }, []);
 
   const cardsForSelection = useMemo(() => revoltijoCards.filter((card) => card.level === level && card.color === selectedColor), [level, selectedColor]);
   const activeStyle = colorStyles[currentCard?.color ?? selectedColor];
+  const routeFromCurrent = [...colorOrder.slice(colorOrder.indexOf(selectedColor) + 1), ...colorOrder.slice(0, colorOrder.indexOf(selectedColor) + 1)];
+  const nextRouteColor = routeFromCurrent.find((color) => !completedColors.includes(color) && color !== selectedColor) ?? currentCard?.nextColor ?? "Rojo";
 
   const drawCard = () => {
-    if (currentCard) setPreviousCard(currentCard);
-    const pool = cardsForSelection.filter((card) => card.id !== currentCard?.id);
-    const source = pool.length ? pool : cardsForSelection;
-    setCurrentCard(source[Math.floor(Math.random() * source.length)]);
-    setDrawCount((count) => count + 1);
+    if (shuffling) return;
+    const outgoingCard = currentCard;
+    if (outgoingCard) setPreviousCard(outgoingCard);
+    setShuffling(true);
+    setCurrentCard(null);
     if (soundEnabled) playTone();
+    shuffleTimer.current = setTimeout(() => {
+      const pool = cardsForSelection.filter((card) => card.id !== outgoingCard?.id);
+      const source = pool.length ? pool : cardsForSelection;
+      setCurrentCard(source[Math.floor(Math.random() * source.length)]);
+      setDrawCount((count) => count + 1);
+      setShuffling(false);
+    }, 560);
   };
 
   const completeCard = () => {
-    if (!completedColors.includes(selectedColor)) setCompletedColors((current) => [...current, selectedColor]);
-    const targetColor = currentCard?.nextColor ?? colorOrder[(colorOrder.indexOf(selectedColor) + 1) % colorOrder.length];
-    setSelectedColor(targetColor);
+    const nextCompleted = completedColors.includes(selectedColor) ? completedColors : [...completedColors, selectedColor];
+    setCompletedColors(nextCompleted);
     setCurrentCard(null);
+    if (nextCompleted.length === colorOrder.length) return;
+    const targetColor = routeFromCurrent.find((color) => !nextCompleted.includes(color)) ?? nextRouteColor;
+    setSelectedColor(targetColor);
   };
 
   const reset = () => {
@@ -73,6 +89,8 @@ export function RevoltijoGame() {
     setDrawCount(0);
     setCompletedColors([]);
     setSelectedColor("Rojo");
+    setShuffling(false);
+    if (shuffleTimer.current) clearTimeout(shuffleTimer.current);
   };
 
   return (
@@ -95,36 +113,41 @@ export function RevoltijoGame() {
 
       <div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-6 sm:px-6 xl:grid-cols-[320px_1fr]">
         <aside className="space-y-4">
-          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="game-panel-3d rounded-[26px] border border-white/80 bg-white p-5 shadow-xl">
             <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Preparar experiencia</p>
             <label className="mt-4 block text-sm font-black text-slate-700">Nivel<select value={level} onChange={(event) => { setLevel(event.target.value as LevelId); reset(); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-bold outline-none focus:border-[#087f8c]">{levelOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}</select></label>
             <p className="mt-5 text-sm font-black text-slate-700">¿Dónde lo realizarán?</p>
             <div className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1.5">{(["familia", "curso"] as const).map((value) => <button key={value} onClick={() => setAudience(value)} className={`rounded-lg px-2 py-2 text-xs font-black ${audience === value ? "bg-white text-[#073b78] shadow-sm" : "text-slate-500"}`}>{value === "familia" ? "En familia" : "En el curso"}</button>)}</div>
           </section>
 
-          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+          <section className="game-panel-3d rounded-[26px] border border-white/80 bg-white p-5 shadow-xl">
             <div className="flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Ruta emocional</p><p className="mt-1 text-sm font-bold text-slate-700">{completedColors.length} de 4 colores explorados</p></div><button onClick={reset} title="Reiniciar" className="grid h-9 w-9 place-items-center rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200"><RotateCcw className="h-4 w-4" /></button></div>
-            <div className="mt-4 space-y-2">{colorOrder.map((color) => { const selected = selectedColor === color; const complete = completedColors.includes(color); return <button key={color} onClick={() => { setSelectedColor(color); setCurrentCard(null); }} className={`flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition ${selected ? "border-slate-900 bg-slate-950 text-white shadow-md" : "border-slate-200 bg-white hover:bg-slate-50"}`}><span className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: colorHex[color] }}>{complete ? <Check className="h-4 w-4" /> : color.slice(0, 1)}</span><span className="min-w-0"><span className="block text-sm font-black">{color}</span><span className={`block truncate text-[10px] font-medium ${selected ? "text-slate-300" : "text-slate-500"}`}>{colorMeanings[color]}</span></span></button>; })}</div>
+            <div className="mt-4 space-y-2">{colorOrder.map((color) => { const selected = selectedColor === color; const complete = completedColors.includes(color); return <button key={color} onClick={() => { if (!shuffling) { setSelectedColor(color); setCurrentCard(null); } }} className={`emotion-route-button flex w-full items-center gap-3 rounded-2xl border p-3 text-left ${selected ? "is-active border-slate-900 bg-slate-950 text-white shadow-lg" : "border-slate-200 bg-white hover:bg-slate-50"}`} style={{ "--emotion-color": colorHex[color] } as CSSProperties}><span className="emotion-orb grid h-10 w-10 shrink-0 place-items-center rounded-full text-white" style={{ backgroundColor: colorHex[color] }}>{complete ? <Check className="h-4 w-4" /> : color.slice(0, 1)}</span><span className="min-w-0"><span className="block text-sm font-black">{color}</span><span className={`block truncate text-[10px] font-medium ${selected ? "text-slate-300" : "text-slate-500"}`}>{colorMeanings[color]}</span></span>{complete ? <Sparkles className="ml-auto h-4 w-4 text-amber-300" /> : null}</button>; })}</div>
           </section>
 
           {previousCard ? <section className="rounded-[24px] border border-slate-200 bg-white p-4 text-sm shadow-sm"><p className="text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Tarjeta anterior</p><p className="mt-2 line-clamp-3 font-semibold leading-5 text-slate-600">{previousCard.prompt}</p></section> : null}
         </aside>
 
-        <section className="overflow-hidden rounded-[30px] border border-slate-200 bg-white shadow-xl">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 sm:px-7"><div className="flex items-center gap-3"><span className="h-4 w-4 rounded-full shadow-inner" style={{ backgroundColor: colorHex[selectedColor] }} /><div><p className="text-sm font-black">Explorando {selectedColor.toLowerCase()}</p><p className="text-xs text-slate-500">{colorInstruction[selectedColor]}</p></div></div><div className="flex gap-2"><span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">{drawCount} tarjetas</span><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">Se puede pasar</span></div></div>
+        <section className="revoltijo-stage overflow-hidden rounded-[34px] border border-white/80 bg-white shadow-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-white/85 px-5 py-4 backdrop-blur sm:px-7"><div className="flex items-center gap-3"><span className="emotion-orb h-5 w-5 rounded-full" style={{ backgroundColor: colorHex[selectedColor] }} /><div><p className="text-sm font-black">Explorando {selectedColor.toLowerCase()}</p><p className="text-xs text-slate-500">{colorInstruction[selectedColor]}</p></div></div><div className="flex gap-2"><span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-3 py-1.5 text-xs font-black text-amber-700"><Zap className="h-3.5 w-3.5" /> {drawCount} tarjetas</span><span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">Se puede pasar</span></div></div>
+          <div className="h-1.5 bg-slate-100"><span className="block h-full rounded-r-full bg-gradient-to-r from-[#ef513e] via-[#f5b82e] to-[#25a18e] transition-all duration-700" style={{ width: `${completedColors.length * 25}%` }} /></div>
 
           <div className="grid min-h-[650px] place-items-center p-5 sm:p-8">
-            {currentCard ? (
-              <article className={`w-full max-w-4xl overflow-hidden rounded-[30px] ring-4 ${activeStyle.ring} ${activeStyle.soft}`}>
+            {completedColors.length === 4 ? (
+              <div className="winner-burst relative w-full max-w-3xl overflow-hidden rounded-[32px] bg-gradient-to-br from-[#062b67] via-[#08448d] to-[#087f8c] p-8 text-center text-white shadow-2xl sm:p-12"><span className="celebration-particles" aria-hidden="true" /><Trophy className="mx-auto h-16 w-16 text-[#ffd365] drop-shadow-xl" /><p className="mt-5 text-xs font-black uppercase tracking-[0.2em] text-teal-200">Ruta completada</p><h2 className="mt-2 text-4xl font-black tracking-tight">¡Exploraron las cuatro emociones!</h2><p className="mx-auto mt-4 max-w-xl text-sm leading-7 text-blue-100">Cierren nombrando una estrategia que quieran recordar y una fortaleza que observaron en otra persona.</p><button onClick={reset} className="game-primary-button mt-7 rounded-2xl bg-[#f5b82e] px-6 py-3.5 font-black text-[#062b67]">Jugar una nueva ronda</button></div>
+            ) : shuffling ? (
+              <div className="card-deck-scene" role="status" aria-live="polite"><div className="card-deck is-shuffling"><span /><span /><span /><div className="deck-front" style={{ "--emotion-color": colorHex[selectedColor] } as CSSProperties}><Shuffle className="h-10 w-10" /><strong>Mezclando</strong></div></div><p className="mt-8 text-sm font-black uppercase tracking-[0.18em] text-slate-500">Buscando una nueva experiencia…</p></div>
+            ) : currentCard ? (
+              <article key={currentCard.id} className={`revoltijo-card-3d w-full max-w-4xl overflow-hidden rounded-[32px] ring-4 ${activeStyle.ring} ${activeStyle.soft}`}>
                 <div className="p-6 sm:p-10">
                   <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap gap-2"><span className="rounded-full bg-white px-3 py-1.5 text-xs font-black shadow-sm">{currentCard.activityType}</span><span className={`rounded-full px-3 py-1.5 text-xs font-black text-white ${activeStyle.bg}`}>{currentCard.color}</span></div><span className="rounded-full bg-white/80 px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm">{audience === "familia" ? "Conversen por turnos" : "Participación voluntaria"}</span></div>
                   <p className="mt-8 max-w-4xl text-3xl font-black leading-[1.08] tracking-[-0.035em] text-slate-950 sm:text-5xl">{currentCard.prompt}</p>
                   <div className="mt-8 grid gap-3 md:grid-cols-3"><div className="rounded-2xl bg-white p-4 shadow-sm"><CircleHelp className="h-5 w-5 text-[#087f8c]" /><p className="mt-3 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Apoyo didáctico</p><p className="mt-1 text-sm font-semibold leading-6 text-slate-700">{currentCard.support}</p></div><div className="rounded-2xl bg-white p-4 shadow-sm"><BadgeCheck className="h-5 w-5 text-[#f5a623]" /><p className="mt-3 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Fortaleza conectada</p><p className="mt-1 text-sm font-semibold leading-6 text-slate-700">{currentCard.strength}</p></div><div className="rounded-2xl bg-white p-4 shadow-sm"><HeartHandshake className="h-5 w-5 text-rose-500" /><p className="mt-3 text-[10px] font-black uppercase tracking-[0.14em] text-slate-400">Cuidado del vínculo</p><p className="mt-1 text-sm font-semibold leading-6 text-slate-700">Escuchen sin corregir la emoción ni pedir detalles privados.</p></div></div>
-                  <div className="mt-7 flex flex-wrap gap-3"><button onClick={completeCard} className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#062b67] px-5 py-4 text-sm font-black text-white shadow-lg hover:bg-[#08448d]"><Check className="h-4 w-4" /> Listo, ir a {currentCard.nextColor.toLowerCase()} <ArrowRight className="h-4 w-4" /></button><button onClick={drawCard} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-4 text-sm font-black text-slate-700 hover:bg-slate-50"><Shuffle className="h-4 w-4" /> Otra tarjeta</button></div>
+                  <div className="mt-7 flex flex-wrap gap-3"><button onClick={completeCard} className="game-primary-button inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-[#062b67] px-5 py-4 text-sm font-black text-white shadow-lg"><Check className="h-4 w-4" /> {completedColors.length === 3 ? "Completar recorrido" : `Listo, ir a ${nextRouteColor.toLowerCase()}`} <ArrowRight className="h-4 w-4" /></button><button onClick={drawCard} className="game-secondary-button inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-5 py-4 text-sm font-black text-slate-700"><Shuffle className="h-4 w-4" /> Otra tarjeta</button></div>
                 </div>
               </article>
             ) : (
-              <div className="w-full max-w-3xl text-center"><div className="relative mx-auto grid h-28 w-28 place-items-center rounded-full text-white shadow-xl" style={{ backgroundColor: colorHex[selectedColor] }}><Wind className="h-11 w-11" /><span className="absolute inset-2 rounded-full border border-white/40" /></div><h2 className="mt-7 text-3xl font-black tracking-tight">Respiren. Miren. Escuchen.</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-600">Saquen una tarjeta {selectedColor.toLowerCase()}. Lean despacio, den tiempo para pensar y recuerden que también se puede responder con un gesto o pasar.</p><button onClick={drawCard} className="mt-7 inline-flex items-center gap-2 rounded-2xl bg-[#062b67] px-7 py-4 text-base font-black text-white shadow-xl transition hover:-translate-y-0.5 hover:bg-[#08448d]"><Shuffle className="h-5 w-5" /> Sacar tarjeta</button></div>
+              <div className="w-full max-w-3xl text-center"><div className="emotion-core relative mx-auto grid h-32 w-32 place-items-center rounded-full text-white" style={{ "--emotion-color": colorHex[selectedColor], backgroundColor: colorHex[selectedColor] } as CSSProperties}><Wind className="h-12 w-12" /><span className="absolute inset-3 rounded-full border border-white/50" /><span className="emotion-ring" /></div><h2 className="mt-8 text-3xl font-black tracking-tight">Respiren. Miren. Escuchen.</h2><p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-slate-600">Saquen una tarjeta {selectedColor.toLowerCase()}. Lean despacio, den tiempo para pensar y recuerden que también se puede responder con un gesto o pasar.</p><button onClick={drawCard} className="game-primary-button mt-7 inline-flex items-center gap-2 rounded-2xl bg-[#062b67] px-7 py-4 text-base font-black text-white shadow-xl"><Shuffle className="h-5 w-5" /> Sacar tarjeta</button></div>
             )}
           </div>
         </section>

@@ -364,6 +364,197 @@ a {
   animation: tzPulseSoft 1.6s ease-in-out infinite;
 }
 
+/* Juegos Vinculares — identidad y física visual */
+.fdc-lockup {
+  filter: drop-shadow(0 12px 26px rgb(3 30 72 / 0.28));
+}
+
+.fdc-orbit {
+  border: 1px solid rgb(255 255 255 / 0.55);
+  background: conic-gradient(from 30deg, #ef513e, #f5b82e, #70b64a, #4f91c8, #ef513e);
+  box-shadow: 0 0 0 5px rgb(255 255 255 / 0.09);
+  animation: fdcFloat 4s ease-in-out infinite;
+}
+
+.fdc-satellite {
+  position: absolute;
+  z-index: 20;
+  display: grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 999px;
+  color: white;
+  box-shadow: 0 4px 10px rgb(3 30 72 / 0.28);
+}
+
+.fdc-satellite svg { width: 8px; height: 8px; stroke-width: 3; }
+.fdc-satellite-red { left: -4px; top: 5px; background: #ef513e; }
+.fdc-satellite-green { bottom: -2px; left: 19px; background: #70b64a; }
+.fdc-satellite-blue { right: -4px; top: 6px; background: #4f91c8; }
+
+.game-panel-3d,
+.game-board-shell,
+.revoltijo-stage {
+  transform: translateZ(0);
+  box-shadow: 0 2px 0 rgb(255 255 255 / 0.9) inset,
+    0 18px 30px -18px rgb(3 30 72 / 0.25),
+    0 3px 0 rgb(203 213 225 / 0.75);
+}
+
+.game-control-panel { isolation: isolate; }
+.game-control-glow {
+  position: absolute;
+  width: 180px;
+  height: 180px;
+  right: -65px;
+  top: -85px;
+  z-index: -1;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgb(37 161 142 / 0.72), transparent 68%);
+  animation: gameBreathe 3.2s ease-in-out infinite;
+}
+
+.game-primary-button,
+.game-secondary-button {
+  transform: translateY(0);
+  transition: transform 180ms var(--spring), box-shadow 180ms ease, filter 180ms ease;
+}
+
+.game-primary-button { box-shadow: 0 8px 0 rgb(3 30 72 / 0.22), 0 16px 28px -16px rgb(3 30 72 / 0.6); }
+.game-secondary-button { box-shadow: 0 5px 0 rgb(148 163 184 / 0.35); }
+.game-primary-button:hover:not(:disabled), .game-secondary-button:hover:not(:disabled) { transform: translateY(-3px); filter: brightness(1.04); }
+.game-primary-button:active:not(:disabled), .game-secondary-button:active:not(:disabled) { transform: translateY(4px) scale(0.99); box-shadow: 0 2px 0 rgb(3 30 72 / 0.2); }
+
+.dice-scene {
+  display: block;
+  width: 72px;
+  height: 72px;
+  perspective: 500px;
+}
+
+.game-die {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 620ms var(--spring);
+}
+
+.die-face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgb(255 255 255 / 0.78);
+  border-radius: 17px;
+  background: linear-gradient(145deg, #fff 5%, #fff6d6 92%);
+  color: #062b67;
+  font-size: 28px;
+  font-weight: 950;
+  box-shadow: inset -7px -7px 14px rgb(217 155 8 / 0.14), inset 5px 5px 9px white;
+  backface-visibility: hidden;
+}
+
+.die-face-1 { transform: rotateY(0deg) translateZ(36px); }
+.die-face-2 { transform: rotateY(90deg) translateZ(36px); }
+.die-face-3 { transform: rotateY(180deg) translateZ(36px); }
+.die-face-4 { transform: rotateY(-90deg) translateZ(36px); }
+.die-face-5 { transform: rotateX(90deg) translateZ(36px); }
+.die-face-6 { transform: rotateX(-90deg) translateZ(36px); }
+.game-die[data-value="1"] { transform: rotateX(-8deg) rotateY(-8deg); }
+.game-die[data-value="2"] { transform: rotateX(-8deg) rotateY(-98deg); }
+.game-die[data-value="3"] { transform: rotateX(-8deg) rotateY(-188deg); }
+.game-die[data-value="4"] { transform: rotateX(-8deg) rotateY(82deg); }
+.game-die[data-value="5"] { transform: rotateX(-98deg) rotateY(0); }
+.game-die[data-value="6"] { transform: rotateX(82deg) rotateY(0); }
+.game-die.is-rolling { animation: diceRoll3d 760ms cubic-bezier(.2,.8,.2,1) infinite; }
+
+.emotion-board {
+  perspective: 1100px;
+  transform: rotateX(1.2deg);
+  transform-origin: center bottom;
+  box-shadow: 0 18px 0 #031e48, 0 30px 44px -22px rgb(3 30 72 / 0.58);
+}
+
+.board-cell {
+  transform: translateZ(0);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.95), inset 0 -5px 9px rgb(3 30 72 / 0.08);
+  transition: transform 240ms var(--spring), filter 240ms ease, box-shadow 240ms ease;
+}
+.board-cell:hover { z-index: 5; transform: translateY(-4px) scale(1.06); filter: brightness(1.05); }
+.board-cell-teal { background: linear-gradient(145deg, #e8faf6, #bfe9e0); }
+.board-cell-cream { background: linear-gradient(145deg, #fffdf4, #fae9b5); }
+.board-cell.has-ladder { background: linear-gradient(145deg, #ecfdf5, #86efac); }
+.board-cell.has-slide { background: linear-gradient(145deg, #fff1f2, #fda4af); }
+.board-cell.is-landing { z-index: 10; animation: cellLanding 780ms var(--spring) both; }
+.board-cell.is-ladder { box-shadow: 0 0 0 4px #34d399, 0 0 30px #34d399; }
+.board-cell.is-slide { box-shadow: 0 0 0 4px #fb7185, 0 0 30px #fb7185; }
+
+.game-token {
+  border: 2px solid white;
+  box-shadow: inset -3px -4px 5px rgb(3 30 72 / 0.25), 0 5px 8px rgb(3 30 72 / 0.28), 0 0 0 2px rgb(3 30 72 / 0.12);
+}
+.token-arrive { animation: tokenHop 720ms var(--spring) both; }
+.question-card-enter { transform-origin: top center; animation: cardDeal 520ms var(--spring) both; }
+.winner-burst::before,
+.winner-burst::after {
+  content: "✦  ·  ✦  ·  ✦";
+  position: absolute;
+  inset-inline: 0;
+  top: 18px;
+  color: #ffd365;
+  letter-spacing: 1.3rem;
+  animation: celebrationFloat 2.4s ease-in-out infinite;
+}
+.winner-burst::after { top: auto; bottom: 16px; animation-delay: -1.2s; }
+
+.emotion-route-button { transition: transform 220ms var(--spring), box-shadow 220ms ease, background-color 220ms ease; }
+.emotion-route-button:hover { transform: translateX(4px); }
+.emotion-route-button.is-active { transform: translateX(7px); box-shadow: -5px 0 0 var(--emotion-color), 0 12px 22px -14px rgb(3 30 72 / 0.7); }
+.emotion-orb {
+  box-shadow: inset -6px -7px 10px rgb(3 30 72 / 0.2), inset 4px 4px 8px rgb(255 255 255 / 0.35), 0 7px 14px rgb(3 30 72 / 0.22);
+}
+.emotion-core {
+  box-shadow: inset -18px -20px 28px rgb(3 30 72 / 0.24), inset 12px 12px 18px rgb(255 255 255 / 0.26), 0 18px 35px color-mix(in srgb, var(--emotion-color) 40%, transparent);
+  animation: emotionHover 3s ease-in-out infinite;
+}
+.emotion-ring { position: absolute; inset: -14px; border: 2px solid color-mix(in srgb, var(--emotion-color) 45%, transparent); border-radius: 999px; animation: emotionRing 2.2s ease-out infinite; }
+
+.revoltijo-stage { background: radial-gradient(circle at 50% 44%, rgb(255 255 255 / 0.98), rgb(241 245 249 / 0.7)); }
+.revoltijo-card-3d {
+  transform-origin: center bottom;
+  animation: cardFlipIn 620ms var(--spring) both;
+  box-shadow: 0 22px 0 -12px rgb(255 255 255 / 0.8), 0 34px 45px -24px rgb(3 30 72 / 0.4);
+}
+.card-deck-scene { perspective: 900px; text-align: center; }
+.card-deck { position: relative; width: 210px; height: 280px; margin: auto; transform-style: preserve-3d; }
+.card-deck > span,
+.deck-front { position: absolute; inset: 0; border-radius: 28px; border: 2px solid rgb(255 255 255 / 0.85); }
+.card-deck > span:nth-child(1) { transform: translate3d(-14px, 10px, -30px) rotate(-7deg); background: #3b82c4; }
+.card-deck > span:nth-child(2) { transform: translate3d(13px, 7px, -18px) rotate(6deg); background: #f5b82e; }
+.card-deck > span:nth-child(3) { transform: translate3d(-5px, 3px, -8px) rotate(-2deg); background: #25a18e; }
+.deck-front { display: grid; place-content: center; gap: 12px; background: linear-gradient(145deg, color-mix(in srgb, var(--emotion-color) 78%, white), var(--emotion-color)); color: white; box-shadow: inset -18px -22px 30px rgb(3 30 72 / 0.2), 0 25px 40px -18px rgb(3 30 72 / 0.45); }
+.deck-front svg { margin: auto; }
+.card-deck.is-shuffling { animation: deckShuffle 540ms var(--spring) infinite alternate; }
+.celebration-particles { position: absolute; inset: 0; pointer-events: none; background-image: radial-gradient(circle, #ffd365 0 3px, transparent 4px), radial-gradient(circle, #70b64a 0 3px, transparent 4px), radial-gradient(circle, #ef513e 0 3px, transparent 4px); background-size: 87px 91px, 113px 107px, 137px 121px; opacity: .35; animation: particlesDrift 5s linear infinite; }
+
+@keyframes fdcFloat { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-5px) rotate(2deg); } }
+@keyframes gameBreathe { 0%,100% { transform: scale(.9); opacity: .65; } 50% { transform: scale(1.1); opacity: 1; } }
+@keyframes diceRoll3d { 0% { transform: rotateX(0) rotateY(0) rotateZ(0); } 50% { transform: rotateX(220deg) rotateY(160deg) rotateZ(40deg) scale(1.12); } 100% { transform: rotateX(440deg) rotateY(520deg) rotateZ(90deg); } }
+@keyframes cellLanding { 0% { transform: translateY(-28px) scale(.75); filter: brightness(1.3); } 55% { transform: translateY(4px) scale(1.12); } 100% { transform: translateY(0) scale(1); } }
+@keyframes tokenHop { 0% { opacity: 0; transform: translateY(-24px) scale(.5); } 60% { opacity: 1; transform: translateY(3px) scale(1.35); } 100% { transform: translateY(0) scale(1); } }
+@keyframes cardDeal { 0% { opacity: 0; transform: translateY(-28px) rotateX(-22deg) scale(.92); } 65% { opacity: 1; transform: translateY(4px) rotateX(3deg) scale(1.01); } 100% { transform: none; } }
+@keyframes celebrationFloat { 0%,100% { transform: translateY(0); opacity: .55; } 50% { transform: translateY(-6px); opacity: 1; } }
+@keyframes emotionHover { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-9px) rotate(2deg); } }
+@keyframes emotionRing { 0% { transform: scale(.85); opacity: 0; } 35% { opacity: .7; } 100% { transform: scale(1.25); opacity: 0; } }
+@keyframes cardFlipIn { 0% { opacity: 0; transform: perspective(900px) rotateY(76deg) translateY(18px) scale(.88); } 62% { opacity: 1; transform: perspective(900px) rotateY(-5deg) translateY(-3px) scale(1.01); } 100% { transform: perspective(900px) rotateY(0) translateY(0) scale(1); } }
+@keyframes deckShuffle { 0% { transform: rotateY(-8deg) rotateX(4deg) translateX(-14px); } 100% { transform: rotateY(10deg) rotateX(-3deg) translateX(14px) translateY(-6px); } }
+@keyframes particlesDrift { to { background-position: 87px 91px, -113px 107px, 137px -121px; } }
+
+
 ::selection {
   background: rgb(103 232 249 / 0.55);
   color: #0f172a;
