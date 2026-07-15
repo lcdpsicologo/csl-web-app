@@ -647,12 +647,15 @@ a {
 .classic-board-art { position: absolute; inset: 1.5%; z-index: 10; width: 97%; height: 97%; overflow: visible; pointer-events: none; }
 .classic-ladder line { stroke: #27236f; stroke-width: 1.05; stroke-linecap: round; }
 .classic-ladder .classic-ladder-rung { stroke: #4c4bb1; stroke-width: .82; }
-.classic-snake-outline { fill: none; stroke: white; stroke-width: 5.6; stroke-linecap: round; stroke-linejoin: round; }
-.classic-snake-body { fill: none; stroke-width: 4.7; stroke-linecap: round; stroke-linejoin: round; }
-.classic-snake-stripes { fill: none; stroke-width: 4.75; stroke-linecap: butt; stroke-dasharray: 3.5 6.5; }
-.classic-snake ellipse { stroke: white; stroke-width: .55; }
-.classic-snake circle { fill: white; stroke: #062b67; stroke-width: .18; }
-.classic-snake-tongue { fill: none; stroke: #062b67; stroke-width: .42; stroke-linecap: round; }
+.classic-snake-outline { fill: none; stroke: rgb(255 255 255 / .92); stroke-width: 5.45; stroke-linecap: round; stroke-linejoin: round; }
+.classic-snake-body { fill: none; stroke-width: 4.62; stroke-linecap: round; stroke-linejoin: round; }
+.classic-snake-stripes { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.classic-snake-shine { fill: none; stroke: rgb(255 255 255 / .32); stroke-width: .65; stroke-linecap: round; }
+.classic-snake > ellipse:not(.classic-snake-head-shine) { stroke: rgb(255 255 255 / .94); stroke-width: .5; }
+.classic-snake-head-shine { fill: white; opacity: .3; stroke: none; }
+.classic-snake-eye { fill: white; stroke: rgb(3 30 72 / .3); stroke-width: .14; }
+.classic-snake-pupil { fill: #062b67; stroke: none; }
+.classic-snake-tongue { fill: none; stroke: #b91c3c; stroke-width: .34; stroke-linecap: round; }
 .board-pawn-layer { position: absolute; inset: 1.5%; z-index: 60; pointer-events: none; }
 .board-pawn-position {
   --pawn-offset: 0px;
@@ -660,25 +663,29 @@ a {
   width: 0;
   height: 0;
   transform: translate(calc(-50% + var(--pawn-offset)), -50%);
-  transition: left 300ms cubic-bezier(.22,.8,.32,1), top 300ms cubic-bezier(.22,.8,.32,1);
+  transition: left 320ms cubic-bezier(.2,.76,.3,1), top 320ms cubic-bezier(.2,.76,.3,1);
   will-change: left, top;
 }
 .board-pawn-position.is-ladder-flight { transition-duration: 820ms; transition-timing-function: cubic-bezier(.18,.82,.22,1); }
 .board-pawn-position.is-snake-slide { transition-duration: 980ms; transition-timing-function: cubic-bezier(.5,.05,.8,.55); }
-.monopoly-pawn { position: absolute; left: 50%; top: 50%; display: block; width: clamp(17px, 2vw, 24px); height: clamp(24px, 2.8vw, 34px); transform: translate(-50%, -76%); filter: drop-shadow(0 4px 2px rgb(3 30 72 / .42)); }
+.monopoly-pawn { position: absolute; left: 50%; top: 50%; display: block; width: clamp(17px, 2vw, 24px); height: clamp(24px, 2.8vw, 34px); transform: translate(-50%, -76%); transform-origin: 50% 100%; filter: drop-shadow(0 3px 1.5px rgb(3 30 72 / .36)); }
 .monopoly-pawn i { position: absolute; display: block; background-color: var(--pawn-color); }
-.pawn-head { left: 50%; top: 0; width: 42%; aspect-ratio: 1; translate: -50% 0; border: 1.5px solid white; border-radius: 50%; box-shadow: inset -2px -3px 3px rgb(3 30 72 / .24), inset 2px 2px 3px rgb(255 255 255 / .55); }
-.pawn-collar { left: 50%; top: 27%; width: 58%; height: 16%; translate: -50% 0; border: 1px solid white; border-radius: 999px; box-shadow: inset 0 -2px 2px rgb(3 30 72 / .2); }
-.pawn-body { left: 50%; top: 39%; width: 67%; height: 39%; translate: -50% 0; clip-path: polygon(33% 0, 67% 0, 93% 100%, 7% 100%); box-shadow: inset -4px 0 3px rgb(3 30 72 / .2); }
-.pawn-base { left: 50%; bottom: 0; width: 90%; height: 22%; translate: -50% 0; border: 1.5px solid white; border-radius: 50%; box-shadow: inset -3px -3px 3px rgb(3 30 72 / .24), 0 1px 0 rgb(3 30 72 / .35); }
+.pawn-head { left: 50%; top: 0; width: 40%; aspect-ratio: 1; translate: -50% 0; border: 1.25px solid rgb(255 255 255 / .95); border-radius: 50%; background-image: radial-gradient(circle at 33% 25%, rgb(255 255 255 / .72), transparent 33%); box-shadow: inset -2px -3px 3px rgb(3 30 72 / .2); }
+.pawn-collar { left: 50%; top: 27%; width: 54%; height: 14%; translate: -50% 0; border: 1px solid rgb(255 255 255 / .86); border-radius: 999px; box-shadow: inset 0 -2px 2px rgb(3 30 72 / .16); }
+.pawn-body { left: 50%; top: 38%; width: 61%; height: 42%; translate: -50% 0; clip-path: polygon(35% 0, 65% 0, 88% 100%, 12% 100%); background-image: linear-gradient(90deg, rgb(3 30 72 / .17), transparent 44%, rgb(255 255 255 / .3)); }
+.pawn-base { left: 50%; bottom: 2%; width: 76%; height: 17%; translate: -50% 0; border: 1px solid rgb(255 255 255 / .88); border-radius: 50%; background-image: linear-gradient(90deg, rgb(3 30 72 / .18), transparent 45%, rgb(255 255 255 / .35)); box-shadow: inset 0 -2px 2px rgb(3 30 72 / .18), 0 1px 1px rgb(3 30 72 / .22); }
 .pawn-motion-step { animation: pawnBoardHop 350ms cubic-bezier(.2,.8,.25,1) both; }
 .pawn-motion-ladder { animation: pawnLadderLeap 860ms cubic-bezier(.16,.8,.25,1) both; }
 .pawn-motion-slide { animation: pawnSnakeRide 1030ms ease-in-out both; }
-.destination-pulse { position: absolute; z-index: 50; left: 50%; top: 50%; display: grid; width: 74%; height: 74%; translate: -50% -50%; place-items: center; border: 2px solid white; border-radius: 999px; background: #062b67; color: white; font-size: clamp(8px, 1vw, 13px); font-weight: 950; box-shadow: 0 0 0 3px #f5b82e, 0 0 18px #f5b82e; animation: destinationPulse 1.25s ease-in-out infinite; }
-@keyframes destinationPulse { 0%,100% { transform: scale(.88); } 50% { transform: scale(1.08); } }
-@keyframes pawnBoardHop { 0% { transform: translate(-50%, -76%) scale(.95); } 42% { transform: translate(-50%, -145%) scale(1.08) rotate(-5deg); } 72% { transform: translate(-50%, -68%) scale(1.04); } 100% { transform: translate(-50%, -76%) scale(1); } }
-@keyframes pawnLadderLeap { 0% { transform: translate(-50%, -76%) scale(1); } 34% { transform: translate(-50%, -190%) scale(1.18) rotate(-9deg); } 68% { transform: translate(-50%, -145%) scale(1.1) rotate(6deg); } 100% { transform: translate(-50%, -76%) scale(1); } }
-@keyframes pawnSnakeRide { 0% { transform: translate(-50%, -76%) rotate(0) scale(1); } 26% { transform: translate(-50%, -52%) rotate(18deg) scale(.94); } 52% { transform: translate(-50%, -94%) rotate(-16deg) scale(1.04); } 78% { transform: translate(-50%, -55%) rotate(13deg) scale(.96); } 100% { transform: translate(-50%, -76%) rotate(0) scale(1); } }
+.destination-pulse { position: absolute; z-index: 50; left: 50%; top: 50%; width: 72%; height: 72%; translate: -50% -50%; overflow: visible; border: 0; border-radius: 999px; background: radial-gradient(circle, rgb(255 255 255 / .42) 0 20%, rgb(245 184 46 / .28) 22% 38%, transparent 64%); color: transparent; font-size: 0; box-shadow: none; animation: destinationHalo 1.8s ease-in-out infinite; }
+.destination-pulse::before, .destination-pulse::after { content: ""; position: absolute; border-radius: 999px; pointer-events: none; }
+.destination-pulse::before { inset: 16%; border: 1.5px solid rgb(255 255 255 / .8); }
+.destination-pulse::after { inset: 2%; border: 1.5px solid rgb(245 184 46 / .72); animation: destinationRipple 1.8s ease-out infinite; }
+@keyframes destinationHalo { 0%,100% { opacity: .7; transform: scale(.9); } 50% { opacity: 1; transform: scale(1.03); } }
+@keyframes destinationRipple { 0% { opacity: .8; transform: scale(.72); } 70%,100% { opacity: 0; transform: scale(1.25); } }
+@keyframes pawnBoardHop { 0% { transform: translate(-50%, -76%) scale(.96,1.03); } 36% { transform: translate(-50%, -152%) scale(1.04,1.08) rotate(-3deg); } 64% { transform: translate(-50%, -105%) scale(1.02); } 76% { transform: translate(-50%, -67%) scale(1.13,.82); } 88% { transform: translate(-50%, -84%) scale(.96,1.06); } 100% { transform: translate(-50%, -76%) scale(1); } }
+@keyframes pawnLadderLeap { 0% { transform: translate(-50%, -76%) scale(.98,1.02); } 28% { transform: translate(-50%, -175%) scale(1.08) rotate(-6deg); } 55% { transform: translate(-50%, -220%) scale(1.12) rotate(4deg); } 78% { transform: translate(-50%, -120%) scale(1.04) rotate(-2deg); } 90% { transform: translate(-50%, -67%) scale(1.15,.82); } 100% { transform: translate(-50%, -76%) scale(1); } }
+@keyframes pawnSnakeRide { 0% { transform: translate(-50%, -76%) rotate(0) scale(1); } 22% { transform: translate(-50%, -62%) rotate(10deg) scale(.97); } 43% { transform: translate(-50%, -89%) rotate(-9deg) scale(1.03); } 64% { transform: translate(-50%, -60%) rotate(8deg) scale(.98); } 82% { transform: translate(-50%, -82%) rotate(-5deg) scale(1.01); } 92% { transform: translate(-50%, -68%) scale(1.1,.86); } 100% { transform: translate(-50%, -76%) rotate(0) scale(1); } }
 
 @media (prefers-reduced-motion: reduce) {
   .board-pawn-position { transition-duration: 1ms !important; }

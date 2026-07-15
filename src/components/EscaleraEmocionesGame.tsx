@@ -74,11 +74,11 @@ function boardPoint(number: number) {
 }
 
 const classicSnakes = [
-  { from: 97, to: 61, path: "M35 5 C28 1 23 7 20 14 C17 20 14 18 12 25 C10 30 7 33 5 35", body: "#d75b6a", stripe: "#f4b95e" },
-  { from: 91, to: 73, path: "M95 5 C87 2 84 9 87 14 C90 18 82 20 75 25", body: "#ed3866", stripe: "#f7d6df" },
-  { from: 75, to: 54, path: "M55 25 C48 22 45 28 51 32 C59 37 56 43 65 45", body: "#f0c553", stripe: "#43358f" },
-  { from: 51, to: 11, path: "M95 45 C91 52 99 58 95 64 C91 70 97 78 95 85", body: "#ee9237", stripe: "#4f83af" },
-  { from: 38, to: 20, path: "M25 65 C18 61 14 67 17 73 C20 79 11 82 5 85", body: "#6650a4", stripe: "#e77282" },
+  { from: 97, to: 61, path: "M35 5 C28 1 23 7 20 14 C17 20 14 18 12 25 C10 30 7 33 5 35", body: "#d75b6a", accent: "#f4b95e", dash: ".01 5.8", accentWidth: 2.15 },
+  { from: 91, to: 73, path: "M95 5 C87 2 84 9 87 14 C90 18 82 20 75 25", body: "#ed3866", accent: "#f7b8c9", dash: "2.2 5.4", accentWidth: 3.45 },
+  { from: 75, to: 54, path: "M55 25 C48 22 45 28 51 32 C59 37 56 43 65 45", body: "#f0c553", accent: "#5142a0", dash: "2.1 5.6", accentWidth: 3.5 },
+  { from: 51, to: 11, path: "M95 45 C91 52 99 58 95 64 C91 70 97 78 95 85", body: "#ee9237", accent: "#4f83af", dash: "2 5.7", accentWidth: 3.35 },
+  { from: 38, to: 20, path: "M25 65 C18 61 14 67 17 73 C20 79 11 82 5 85", body: "#6650a4", accent: "#e77282", dash: "2.2 5.5", accentWidth: 3.5 },
 ];
 
 function ClassicBoardArt() {
@@ -107,9 +107,12 @@ function ClassicBoardArt() {
           <g key={`snake-${snake.from}`} className="classic-snake" filter="url(#classic-piece-shadow)">
             <path d={snake.path} className="classic-snake-outline" />
             <path d={snake.path} className="classic-snake-body" style={{ stroke: snake.body }} />
-            <path d={snake.path} className="classic-snake-stripes" style={{ stroke: snake.stripe }} />
+            <path d={snake.path} className="classic-snake-stripes" style={{ stroke: snake.accent, strokeDasharray: snake.dash, strokeWidth: snake.accentWidth }} />
+            <path d={snake.path} className="classic-snake-shine" transform="translate(-.42 -.42)" />
             <ellipse cx={head.x} cy={head.y} rx="3.4" ry="2.45" style={{ fill: snake.body }} />
-            <circle cx={head.x + 1.15} cy={head.y - .65} r=".38" />
+            <ellipse className="classic-snake-head-shine" cx={head.x - .55} cy={head.y - .85} rx="1.35" ry=".5" />
+            <circle className="classic-snake-eye" cx={head.x + 1.15} cy={head.y - .65} r=".48" />
+            <circle className="classic-snake-pupil" cx={head.x + 1.28} cy={head.y - .65} r=".2" />
             <path d={`M ${head.x + 3} ${head.y + .15} l 2.2 .9 m -2.2 -.9 l 2.1 -.7`} className="classic-snake-tongue" />
           </g>
         );
