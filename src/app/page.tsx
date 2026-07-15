@@ -18,6 +18,7 @@ import {
 } from "@/lib/school-schedule";
 import { ORIENTATION_WEEKLY_SLOTS, type OrientationWeeklySlot } from "@/lib/orientation-weekly-schedule";
 import { games } from "@/lib/games";
+import { GameShareModal } from "@/components/GameShareModal";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
 import {
   ArrowDownToLine,
@@ -57,6 +58,8 @@ import {
   Plus,
   QrCode,
   Save,
+  Send,
+  Sparkles,
   Search,
   Settings,
   ShieldCheck,
@@ -10394,74 +10397,74 @@ function TeamView({
 }
 
 function GamesView() {
-  const gamesByCategory = games.reduce<Record<string, typeof games>>((acc, game) => {
+  const [shareGame, setShareGame] = useState<(typeof games)[number] | null>(null);
+  const maletinGames = games.filter((game) => game.collection === "Maletín Viajero");
+  const libraryGames = games.filter((game) => game.collection !== "Maletín Viajero");
+  const gamesByCategory = libraryGames.reduce<Record<string, typeof games>>((acc, game) => {
     acc[game.category] = [...(acc[game.category] || []), game];
     return acc;
   }, {});
 
   return (
-    <div>
-      <div className="mb-6">
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-800">
-          <Gamepad2 className="h-3.5 w-3.5" />
-          Juegos socioemocionales
-        </div>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight text-slate-950">Juegos Vinculares San Lucas</h1>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          Biblioteca de juegos interactivos para abrir desde Tiza Education o compartir en Canva mediante enlace o QR. Hay {games.filter((game) => game.status === "listo").length} juegos listos para usar.
-        </p>
-      </div>
-
-      <section className="rounded-lg border border-slate-200 bg-white p-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 place-items-center rounded-md bg-slate-900 text-white">
-              <QrCode className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="text-base font-semibold text-slate-950">Enlaces para Canva o QR</h2>
-              <p className="text-sm text-slate-600">Cada tarjeta abre una ruta independiente del juego.</p>
-            </div>
+    <div className="space-y-10">
+      <section className="relative isolate overflow-hidden rounded-[32px] bg-[#062b67] text-white shadow-xl">
+        <Image src="/maletin/familia-hero.webp" alt="Familia realizando una actividad socioemocional" fill sizes="(max-width: 1400px) 100vw, 1400px" className="z-0 object-cover object-center opacity-65" />
+        <div className="absolute inset-0 z-10 bg-gradient-to-r from-[#041d47] via-[#062b67]/90 to-transparent" />
+        <div className="relative z-20 max-w-3xl p-7 sm:p-10 lg:p-12">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="grid h-14 w-14 place-items-center overflow-hidden rounded-2xl bg-white shadow-lg"><Image src="/maletin/logo-san-lucas.png" alt="Colegio San Lucas" width={48} height={48} /></span>
+            <span className="rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-black backdrop-blur">Juegos Vinculares · Tiza Education</span>
           </div>
-          <span className="rounded-md bg-slate-100 px-3 py-2 text-xs font-bold text-slate-600">{games.length} rutas disponibles</span>
+          <h1 className="mt-7 text-4xl font-black tracking-[-0.045em] sm:text-6xl">Jugar también es una forma de cuidarnos.</h1>
+          <p className="mt-4 max-w-2xl text-base leading-7 text-blue-100">Experiencias listas para facilitar en el colegio o enviar a casa. Cada actividad incluye propósito, nivel, apoyos y una forma segura de participar.</p>
+          <div className="mt-7 flex flex-wrap gap-3">
+            <a href="/maletin-viajero" className="inline-flex items-center gap-2 rounded-2xl bg-[#f5b82e] px-5 py-3.5 text-sm font-black text-[#062b67] shadow-lg transition hover:-translate-y-0.5"><Sparkles className="h-4 w-4" /> Abrir Maletín Viajero</a>
+            <button onClick={() => setShareGame(games[0])} className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-5 py-3.5 text-sm font-black text-white backdrop-blur hover:bg-white/20"><Send className="h-4 w-4" /> Enviar a una familia</button>
+          </div>
         </div>
       </section>
 
-      <div className="mt-6 space-y-7">
+      <section>
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div><div className="inline-flex items-center gap-2 rounded-full bg-teal-50 px-3 py-1.5 text-xs font-black text-[#087f8c]"><QrCode className="h-3.5 w-3.5" /> Colección destacada</div><h2 className="mt-3 text-3xl font-black tracking-[-0.035em] text-slate-950">Maletín Viajero</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Dinámicas para extender el aprendizaje socioemocional entre familias, docentes y estudiantes.</p></div>
+          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">{maletinGames.length} experiencias</span>
+        </div>
+        <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {maletinGames.map((game) => {
+            const Icon = game.icon;
+            return (
+              <article key={game.href} className="group overflow-hidden rounded-[26px] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+                <a href={game.href} className="relative block aspect-[16/10] overflow-hidden bg-[#062b67]">
+                  {game.image ? <Image src={game.image} alt={game.title} fill sizes="(max-width: 768px) 100vw, 33vw" className="object-cover transition duration-700 group-hover:scale-105" /> : null}
+                  <span className="absolute left-4 top-4 grid h-11 w-11 place-items-center rounded-2xl bg-[#f5b82e] text-[#062b67] shadow-lg"><Icon className="h-5 w-5" /></span>
+                </a>
+                <div className="p-5"><p className="text-[10px] font-black uppercase tracking-[0.15em] text-[#087f8c]">{game.audience}</p><a href={game.href}><h3 className="mt-2 text-xl font-black tracking-tight text-slate-950 group-hover:text-[#073b78]">{game.title}</h3></a><p className="mt-2 min-h-12 text-sm leading-6 text-slate-600">{game.summary}</p><div className="mt-5 flex gap-2 border-t border-slate-100 pt-4"><a href={game.href} className="flex-1 rounded-xl bg-[#062b67] px-3 py-2.5 text-center text-xs font-black text-white hover:bg-[#08448d]">Abrir actividad</a><button onClick={() => setShareGame(game)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2.5 text-xs font-black text-slate-700 hover:bg-slate-50"><Send className="h-3.5 w-3.5" /> Enviar</button></div></div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="rounded-[28px] border border-slate-200 bg-white p-5 shadow-sm sm:p-7">
+        <div className="flex flex-wrap items-center justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.15em] text-violet-600">Biblioteca vinculante</p><h2 className="mt-2 text-3xl font-black tracking-tight">Más recursos por propósito</h2><p className="mt-2 text-sm text-slate-600">Filtrados por objetivo pedagógico, con consignas adaptadas a cinco niveles.</p></div><span className="rounded-full bg-violet-50 px-3 py-1.5 text-xs font-black text-violet-700">{libraryGames.length} juegos</span></div>
+      </section>
+
+      <div className="space-y-8">
         {Object.entries(gamesByCategory).map(([category, categoryGames]) => (
           <section key={category}>
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-slate-950">{category}</h2>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-600">{categoryGames.length}</span>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mb-4 flex items-center justify-between gap-3"><h2 className="text-xl font-black text-slate-950">{category}</h2><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-600">{categoryGames.length}</span></div>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {categoryGames.map((game) => {
                 const Icon = game.icon;
                 return (
-                  <a
-                    key={game.href}
-                    href={game.href}
-                    className="group flex min-h-[250px] flex-col rounded-lg border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="grid h-12 w-12 place-items-center rounded-md bg-slate-900 text-white">
-                        <Icon className="h-6 w-6" />
-                      </div>
-                      <span className="rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">Listo</span>
-                    </div>
-                    <h3 className="mt-5 text-lg font-semibold leading-tight tracking-tight text-slate-950">{game.title}</h3>
-                    <p className="mt-3 flex-1 text-sm leading-6 text-slate-600">{game.summary}</p>
-                    <div className="mt-5 flex items-center justify-between gap-3 border-t border-slate-100 pt-4">
-                      <span className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">{game.audience}</span>
-                      <ExternalLink className="h-4 w-4 text-slate-400 transition group-hover:text-slate-900" />
-                    </div>
-                  </a>
+                  <article key={game.href} className="group flex min-h-[250px] flex-col rounded-[22px] border border-slate-200 bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"><div className="flex items-start justify-between gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-gradient-to-br from-[#062b67] to-[#087f8c] text-white shadow-sm"><Icon className="h-5 w-5" /></span><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-700">Listo</span></div><a href={game.href}><h3 className="mt-5 text-lg font-black leading-tight tracking-tight text-slate-950 group-hover:text-[#073b78]">{game.title}</h3></a><p className="mt-3 flex-1 text-sm leading-6 text-slate-600">{game.summary}</p><div className="mt-5 flex items-center justify-between gap-2 border-t border-slate-100 pt-4"><a href={game.href} className="inline-flex items-center gap-1.5 text-xs font-black text-[#073b78]">Abrir <ExternalLink className="h-3.5 w-3.5" /></a><button onClick={() => setShareGame(game)} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-black text-slate-500 hover:bg-slate-100 hover:text-slate-900"><Send className="h-3.5 w-3.5" /> Enviar</button></div></article>
                 );
               })}
             </div>
           </section>
         ))}
       </div>
+      <GameShareModal open={Boolean(shareGame)} onClose={() => setShareGame(null)} title={shareGame?.title || "Juego Vincular"} path={shareGame?.href || "/?view=games"} description={shareGame?.summary} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import {
   CircleDot,
   Compass,
+  Dices,
   Gauge,
   HeartHandshake,
   LucideIcon,
@@ -24,19 +25,49 @@ export type GameInfo = {
   category: string;
   status: GameStatus;
   icon: LucideIcon;
+  image?: string;
+  collection?: "Maletín Viajero" | "Biblioteca Vincular";
+  featured?: boolean;
 };
 
 const promptIcons = [Gauge, HeartHandshake, Wind, UsersRound, Star, MessageCircle, Compass, Sparkles, Smile, CircleDot];
 
 export const games: GameInfo[] = [
   {
-    title: "Revoltijo Vincular de las Emociones",
+    title: "Maletín Viajero",
+    href: "/maletin-viajero",
+    summary: "Colección para llevar experiencias socioemocionales entre el colegio y las familias.",
+    audience: "Familias y equipos educativos",
+    category: "Maletín Viajero",
+    status: "listo",
+    icon: HeartHandshake,
+    image: "/maletin/familia-hero.webp",
+    collection: "Maletín Viajero",
+    featured: true,
+  },
+  {
+    title: "Revoltijo de las emociones",
     href: "/revoltijo-emociones",
     summary: "Tarjetas breves para conversar, moverse, imaginar y regularse por color emocional.",
-    audience: "Prebasica a ensenanza media",
-    category: "Regulacion emocional",
+    audience: "Prebásica a enseñanza media",
+    category: "Regulación emocional",
     status: "listo",
     icon: Shuffle,
+    image: "/maletin/revoltijo.webp",
+    collection: "Maletín Viajero",
+    featured: true,
+  },
+  {
+    title: "La escalera de las emociones",
+    href: "/escalera-emociones",
+    summary: "Tablero interactivo con dado, fichas y 32 conversaciones emocionales del manual.",
+    audience: "Familias y cursos",
+    category: "Maletín Viajero",
+    status: "listo",
+    icon: Dices,
+    image: "/maletin/escalera.webp",
+    collection: "Maletín Viajero",
+    featured: true,
   },
   ...promptGames.map((game, index): GameInfo => ({
     title: game.title,
@@ -46,6 +77,7 @@ export const games: GameInfo[] = [
     category: game.category,
     status: "listo",
     icon: promptIcons[index % promptIcons.length],
+    collection: "Biblioteca Vincular",
   })),
 ];
 
