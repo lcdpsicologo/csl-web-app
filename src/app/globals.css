@@ -554,6 +554,147 @@ a {
 @keyframes deckShuffle { 0% { transform: rotateY(-8deg) rotateX(4deg) translateX(-14px); } 100% { transform: rotateY(10deg) rotateX(-3deg) translateX(14px) translateY(-6px); } }
 @keyframes particlesDrift { to { background-position: 87px 91px, -113px 107px, 137px -121px; } }
 
+/* Escalera de las emociones — cabina de juego adaptable */
+.escalera-game-root:fullscreen { width: 100vw; height: 100dvh; background: #eee9dc; }
+.escalera-game-root.is-immersive { position: fixed; inset: 0; z-index: 500; width: 100vw; height: 100dvh; background: #eee9dc; }
+.game-header-button {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgb(255 255 255 / .13);
+  border-radius: 12px;
+  background: rgb(255 255 255 / .08);
+  padding: 0 10px;
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+}
+.game-header-button:hover { background: rgb(255 255 255 / .16); }
+.game-header-button svg { width: 16px; height: 16px; }
+.game-header-primary { border-color: rgb(245 184 46 / .55); background: #f5b82e; color: #062b67; box-shadow: inset 0 1px 0 rgb(255 255 255 / .45), 0 5px 12px rgb(3 30 72 / .3); }
+.game-header-primary:hover { background: #ffd365; }
+
+.escalera-arena {
+  display: grid;
+  height: calc(100dvh - 4rem);
+  min-height: 0;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 12px;
+  overflow: hidden;
+  padding: 12px;
+  background: radial-gradient(circle at 65% 40%, #fffdf5, #eee9dc 72%);
+}
+
+.escalera-hud {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / .16);
+  border-radius: 26px;
+  background: linear-gradient(155deg, #0a4386, #062b67 58%, #041f4e);
+  padding: 16px;
+  color: white;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .15), 0 18px 34px -20px rgb(3 30 72 / .75);
+}
+.escalera-hud::after { content: ""; position: absolute; right: -70px; top: -80px; width: 190px; height: 190px; border-radius: 999px; background: radial-gradient(circle, rgb(37 161 142 / .75), transparent 68%); animation: gameBreathe 3.2s ease-in-out infinite; pointer-events: none; }
+.hud-phase { position: relative; z-index: 2; display: flex; min-height: 48px; align-items: center; gap: 11px; }
+.hud-dice { position: relative; z-index: 2; display: grid; flex: 1; min-height: 92px; place-items: center; }
+.hud-roll-button { position: relative; z-index: 2; display: flex; width: 100%; align-items: center; justify-content: center; gap: 8px; border-radius: 16px; background: #f5b82e; padding: 12px; color: #062b67; font-size: 14px; font-weight: 950; }
+.hud-roll-button:disabled { cursor: not-allowed; filter: grayscale(.25); opacity: .6; }
+.player-manager { position: relative; z-index: 2; margin-top: 14px; border-top: 1px solid rgb(255 255 255 / .12); padding-top: 12px; }
+.hud-actions { position: relative; z-index: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 10px; }
+.hud-actions button { display: flex; align-items: center; justify-content: center; gap: 5px; border-radius: 10px; background: rgb(255 255 255 / .07); padding: 8px 5px; color: #bfdbfe; font-size: 10px; font-weight: 800; }
+.hud-actions button:hover { background: rgb(255 255 255 / .14); color: white; }
+.hud-actions svg { width: 13px; height: 13px; }
+
+.escalera-board-stage {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / .85);
+  border-radius: 28px;
+  background: rgb(255 255 255 / .82);
+  padding: 10px;
+  box-shadow: inset 0 1px 0 white, 0 18px 38px -24px rgb(3 30 72 / .4);
+  backdrop-filter: blur(12px);
+}
+.board-status-bar { display: flex; height: 42px; flex: 0 0 42px; align-items: center; justify-content: space-between; gap: 8px; padding: 0 5px 7px; }
+.board-fit-area { display: grid; min-height: 0; flex: 1; place-items: center; overflow: hidden; }
+.escalera-fit-board { width: min(100%, calc(100dvh - 140px)); aspect-ratio: 1; max-height: 100%; box-shadow: 0 10px 0 #031e48, 0 18px 34px -18px rgb(3 30 72 / .55); }
+.board-jump { position: absolute; right: 2px; top: 2px; font-size: clamp(5px, .75vw, 9px); font-weight: 950; }
+
+.game-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  background: rgb(3 18 43 / .72);
+  padding: 14px;
+  backdrop-filter: blur(10px) saturate(120%);
+  animation: tzBackdrop 220ms ease both;
+}
+.emotion-question-dialog,
+.game-intro-dialog,
+.players-dialog {
+  width: min(100%, 680px);
+  max-height: calc(100dvh - 28px);
+  overflow-y: auto;
+  border: 1px solid rgb(255 255 255 / .85);
+  border-radius: 28px;
+  background: white;
+  padding: clamp(20px, 4vw, 34px);
+  box-shadow: inset 0 1px 0 white, 0 30px 80px -28px rgb(3 18 43 / .8);
+}
+.emotion-question-dialog { position: relative; overflow: hidden auto; }
+.emotion-dialog-accent { position: absolute; inset: 0 auto 0 0; width: 7px; background: linear-gradient(#25a18e, #4f91c8, #f5b82e); }
+.winner-dialog { position: relative; width: min(100%, 620px); overflow: hidden; border-radius: 32px; background: linear-gradient(145deg, #062b67, #087f8c); padding: 42px 28px; text-align: center; color: white; box-shadow: 0 30px 80px -28px rgb(3 18 43 / .9); }
+.intro-step { border: 1px solid #e2e8f0; border-radius: 18px; background: linear-gradient(145deg, white, #f8fafc); padding: 16px; box-shadow: 0 7px 0 -4px #dbe4ee; }
+.intro-step > span { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 10px; background: #f5b82e; color: #062b67; font-size: 13px; font-weight: 950; box-shadow: 0 4px 0 #d99b08; }
+.intro-step h3 { margin-top: 12px; font-size: 15px; font-weight: 950; }
+.intro-step p { margin-top: 4px; color: #64748b; font-size: 12px; line-height: 1.55; }
+
+@media (max-width: 767px) {
+  .escalera-game-header { height: 58px; padding-inline: 8px; }
+  .escalera-game-header .game-header-button { width: 36px; height: 36px; padding: 0; }
+  .escalera-arena { height: calc(100dvh - 58px); grid-template-columns: 1fr; grid-template-rows: 114px minmax(0, 1fr); gap: 6px; padding: 6px; }
+  .escalera-hud { display: grid; grid-template-columns: minmax(0, 1fr) 66px minmax(128px, .9fr); grid-template-rows: 62px 30px; align-items: center; gap: 3px 6px; border-radius: 19px; padding: 8px 10px; }
+  .hud-phase { min-height: 0; }
+  .hud-phase .game-token { width: 24px; height: 24px; }
+  .hud-phase p:last-child { font-size: 12px; }
+  .hud-dice { min-height: 0; height: 56px; transform: scale(.62); }
+  .hud-roll-button { height: 44px; padding: 6px; font-size: 11px; }
+  .hud-roll-button svg { width: 15px; }
+  .player-manager { display: none; }
+  .hud-actions { grid-column: 1 / -1; height: 28px; margin: 0; }
+  .hud-actions button { padding: 4px; }
+  .escalera-board-stage { border-radius: 20px; padding: 5px; }
+  .board-status-bar { height: 36px; flex-basis: 36px; padding-bottom: 3px; }
+  .board-status-bar p:last-child { font-size: 10px; }
+  .escalera-fit-board { width: min(100%, calc(100dvh - 220px)); border-width: 4px; border-radius: 15px; padding: 3px; box-shadow: 0 6px 0 #031e48, 0 12px 24px -14px rgb(3 30 72 / .55); }
+  .board-cell { box-shadow: inset 0 1px 0 rgb(255 255 255 / .8), inset 0 -2px 4px rgb(3 30 72 / .08); }
+  .game-dialog-backdrop { align-items: end; padding: 8px; }
+  .emotion-question-dialog, .game-intro-dialog, .players-dialog { width: 100%; max-height: calc(100dvh - 16px); border-radius: 26px 26px 18px 18px; padding: 22px; }
+  .emotion-question-dialog > p.text-2xl { font-size: 23px; }
+}
+
+@media (max-height: 650px) and (min-width: 768px) {
+  .escalera-arena { grid-template-columns: 210px minmax(0, 1fr); gap: 7px; padding: 7px; }
+  .escalera-hud { padding: 11px; }
+  .hud-dice { min-height: 65px; transform: scale(.72); }
+  .player-manager { margin-top: 8px; padding-top: 8px; }
+  .player-manager > div:last-child { display: grid; grid-template-columns: 1fr 1fr; }
+  .escalera-fit-board { width: min(100%, calc(100dvh - 112px)); }
+}
+
+
 
 ::selection {
   background: rgb(103 232 249 / 0.55);

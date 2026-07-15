@@ -1,14 +1,15 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, BookOpen, Check, ChevronRight, Crown, Footprints, RotateCcw, Send, Sparkles, Trophy, Users, Wind } from "lucide-react";
+import { ArrowLeft, Check, ChevronRight, Crown, Expand, Footprints, HelpCircle, Minimize, RotateCcw, Send, Sparkles, Trophy, Users, Volume2, VolumeX, X } from "lucide-react";
 import { escaleraPrompts, ladderMoves, slideMoves, type EscaleraPrompt } from "@/lib/maletin";
 import { GameShareModal } from "@/components/GameShareModal";
 import { MaletinBrand, StrengthsMark } from "@/components/MaletinBrand";
 
 type Player = { id: number; name: string; position: number; color: string };
+type MoveKind = "normal" | "ladder" | "slide";
+type SoundKind = "dice" | "land" | "ladder" | "slide" | "complete" | "win";
 
 const playerColors = ["bg-[#f5a623]", "bg-[#e75b52]", "bg-[#25a18e]", "bg-[#3b82c4]"];
 const categoryStyle: Record<EscaleraPrompt["category"], string> = {
@@ -24,6 +25,34 @@ const boardNumbers = Array.from({ length: 10 }, (_, row) => {
   return row % 2 === 0 ? values : values.reverse();
 }).flat();
 
+function playGameSound(kind: SoundKind) {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass) return;
+  const context = new AudioContextClass();
+  const patterns: Record<SoundKind, Array<[number, number, number, OscillatorType]>> = {
+    dice: [[220, 0, .06, "square"], [310, .08, .06, "square"], [250, .16, .07, "square"], [410, .25, .09, "triangle"]],
+    land: [[440, 0, .11, "sine"], [620, .08, .16, "sine"]],
+    ladder: [[380, 0, .12, "sine"], [520, .1, .12, "sine"], [690, .2, .2, "sine"]],
+    slide: [[520, 0, .14, "triangle"], [390, .12, .14, "triangle"], [260, .24, .2, "triangle"]],
+    complete: [[520, 0, .1, "sine"], [660, .08, .16, "sine"]],
+    win: [[392, 0, .14, "sine"], [523, .12, .14, "sine"], [659, .24, .14, "sine"], [784, .36, .32, "sine"]],
+  };
+  patterns[kind].forEach(([frequency, delay, duration, type]) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, context.currentTime + delay);
+    gain.gain.setValueAtTime(.001, context.currentTime + delay);
+    gain.gain.exponentialRampToValueAtTime(kind === "dice" ? .055 : .11, context.currentTime + delay + .015);
+    gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + delay + duration);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(context.currentTime + delay);
+    oscillator.stop(context.currentTime + delay + duration + .02);
+  });
+  window.setTimeout(() => void context.close(), 900);
+}
+
 function DiceCube({ value, rolling }: { value: number; rolling: boolean }) {
   return (
     <span className="dice-scene" aria-hidden="true">
@@ -35,43 +64,67 @@ function DiceCube({ value, rolling }: { value: number; rolling: boolean }) {
 }
 
 export function EscaleraEmocionesGame() {
+  const gameRoot = useRef<HTMLElement>(null);
+  const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [players, setPlayers] = useState<Player[]>([
     { id: 1, name: "Jugador 1", position: 0, color: playerColors[0] },
     { id: 2, name: "Jugador 2", position: 0, color: playerColors[1] },
   ]);
   const [turn, setTurn] = useState(0);
-  const [dice, setDice] = useState<number | null>(null);
+  const [dice, setDice] = useState(1);
   const [prompt, setPrompt] = useState<EscaleraPrompt | null>(null);
   const [moveNotice, setMoveNotice] = useState("");
   const [winner, setWinner] = useState<string | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
-  const [showGuide, setShowGuide] = useState(false);
   const [rolling, setRolling] = useState(false);
   const [lastLanding, setLastLanding] = useState<number | null>(null);
-  const [moveKind, setMoveKind] = useState<"normal" | "ladder" | "slide">("normal");
-  const rollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [moveKind, setMoveKind] = useState<MoveKind>("normal");
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showIntro, setShowIntro] = useState(true);
+  const [showPlayers, setShowPlayers] = useState(false);
+  const [showGuide, setShowGuide] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
-  useEffect(() => () => { if (rollTimer.current) clearTimeout(rollTimer.current); }, []);
+  useEffect(() => {
+    const onFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", onFullscreen);
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreen);
+      if (rollTimer.current) clearTimeout(rollTimer.current);
+    };
+  }, []);
 
   const currentPlayer = players[turn];
+  const phase = winner ? "Partida completada" : prompt ? "Conversen la tarjeta" : rolling ? "El dado está girando" : `Turno de ${currentPlayer.name}`;
+
+  const toggleFullscreen = async () => {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else if (isFullscreen) setIsFullscreen(false);
+    else if (document.fullscreenEnabled && gameRoot.current?.requestFullscreen) {
+      try { await gameRoot.current.requestFullscreen(); }
+      catch { setIsFullscreen(true); }
+    } else setIsFullscreen(true);
+  };
+
   const roll = () => {
     if (prompt || winner || rolling) return;
     const value = Math.floor(Math.random() * 6) + 1;
     setDice(value);
     setRolling(true);
     setLastLanding(null);
+    if (soundEnabled) playGameSound("dice");
     rollTimer.current = setTimeout(() => {
       const active = players[turn];
       let target = active.position + value;
       if (target > 100) target = active.position;
-      let kind: "normal" | "ladder" | "slide" = "normal";
-      let notice = target === active.position ? "Necesitas un número exacto para llegar a 100." : `Avanzaste ${value} casillas.`;
+      let kind: MoveKind = "normal";
+      let notice = target === active.position ? "Necesitas el número exacto para llegar a 100." : `${active.name} avanzó ${value} casillas.`;
       if (ladderMoves[target]) {
-        notice = `¡Escalera! Subes de ${target} a ${ladderMoves[target]}.`;
+        notice = `¡Escalera! ${active.name} sube de ${target} a ${ladderMoves[target]}.`;
         target = ladderMoves[target];
         kind = "ladder";
       } else if (slideMoves[target]) {
-        notice = `La serpiente te invita a volver de ${target} a ${slideMoves[target]} y probar otra estrategia.`;
+        notice = `Serpiente: ${active.name} vuelve de ${target} a ${slideMoves[target]} y puede intentarlo nuevamente.`;
         target = slideMoves[target];
         kind = "slide";
       }
@@ -80,28 +133,34 @@ export function EscaleraEmocionesGame() {
       setMoveKind(kind);
       setLastLanding(target);
       setRolling(false);
-      if (target === 100) setWinner(active.name);
-      setPrompt(escaleraPrompts[Math.floor(Math.random() * escaleraPrompts.length)]);
-    }, 780);
+      if (soundEnabled) playGameSound(kind === "normal" ? "land" : kind);
+      if (target === 100) {
+        setWinner(active.name);
+        if (soundEnabled) window.setTimeout(() => playGameSound("win"), 380);
+      } else {
+        setPrompt(escaleraPrompts[Math.floor(Math.random() * escaleraPrompts.length)]);
+      }
+    }, 760);
   };
 
-  const completeTurn = () => {
+  const finishConversation = (passed = false) => {
+    if (soundEnabled && !passed) playGameSound("complete");
     setPrompt(null);
     setMoveNotice("");
-    setDice(null);
-    if (!winner) setTurn((current) => (current + 1) % players.length);
+    setLastLanding(null);
+    setTurn((current) => (current + 1) % players.length);
   };
 
   const reset = () => {
+    if (rollTimer.current) clearTimeout(rollTimer.current);
     setPlayers((current) => current.map((player) => ({ ...player, position: 0 })));
     setTurn(0);
-    setDice(null);
+    setDice(1);
     setPrompt(null);
     setMoveNotice("");
     setWinner(null);
     setRolling(false);
     setLastLanding(null);
-    if (rollTimer.current) clearTimeout(rollTimer.current);
   };
 
   const addPlayer = () => {
@@ -111,101 +170,93 @@ export function EscaleraEmocionesGame() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f4f1e8] text-slate-950">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#062b67]/95 text-white shadow-lg backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <Link href="/maletin-viajero" aria-label="Volver al Maletín Viajero" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 hover:bg-white/20"><ArrowLeft className="h-5 w-5" /></Link>
-            <MaletinBrand compact />
-          </div>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowGuide((value) => !value)} className="hidden items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold hover:bg-white/20 sm:inline-flex"><BookOpen className="h-4 w-4" /> Cómo jugar</button>
-            <button onClick={() => setShareOpen(true)} className="inline-flex items-center gap-2 rounded-xl bg-[#f5b82e] px-3 py-2 text-xs font-black text-[#062b67] shadow-sm hover:bg-[#ffd365]"><Send className="h-4 w-4" /> Compartir</button>
-          </div>
+    <main ref={gameRoot} className={`escalera-game-root h-dvh overflow-hidden bg-[#eee9dc] text-slate-950 ${isFullscreen ? "is-immersive" : ""}`}>
+      <header className="escalera-game-header relative z-40 flex h-16 items-center justify-between gap-3 border-b border-white/10 bg-[#062b67] px-3 text-white shadow-lg sm:px-5">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+          <Link href="/maletin-viajero" aria-label="Volver al Maletín Viajero" className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-white/10 hover:bg-white/20"><ArrowLeft className="h-5 w-5" /></Link>
+          <MaletinBrand compact />
+          <div className="hidden h-8 w-px bg-white/15 lg:block" />
+          <div className="hidden lg:block"><p className="text-sm font-black">La escalera de las emociones</p><p className="text-[10px] font-bold uppercase tracking-[.14em] text-blue-200">{phase}</p></div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <div className="mr-2 hidden xl:block"><StrengthsMark compact /></div>
+          <button onClick={() => setSoundEnabled((value) => !value)} aria-pressed={soundEnabled} aria-label={soundEnabled ? "Desactivar sonidos" : "Activar sonidos"} className="game-header-button"><span className="hidden sm:inline">Sonido</span>{soundEnabled ? <Volume2 /> : <VolumeX />}</button>
+          <button onClick={() => setShowGuide(true)} aria-label="Cómo jugar" className="game-header-button"><span className="hidden sm:inline">Cómo jugar</span><HelpCircle /></button>
+          <button onClick={toggleFullscreen} aria-label={isFullscreen ? "Salir de pantalla completa" : "Ver en pantalla completa"} className="game-header-button game-header-primary"><span className="hidden md:inline">{isFullscreen ? "Salir" : "Pantalla completa"}</span>{isFullscreen ? <Minimize /> : <Expand />}</button>
+          <button onClick={() => setShareOpen(true)} aria-label="Compartir juego" className="game-header-button"><Send /></button>
         </div>
       </header>
 
-      <section className="relative isolate overflow-hidden bg-[#062b67] text-white">
-        <Image src="/maletin/escalera.webp" alt="Familia jugando La escalera de las emociones" fill priority sizes="100vw" className="z-0 object-cover object-center opacity-70" />
-        <div className="absolute inset-0 z-10 bg-gradient-to-r from-[#041f4e] via-[#062b67]/85 to-[#062b67]/10" />
-        <div className="relative z-20 mx-auto grid min-h-[360px] max-w-[1500px] items-end gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1fr_380px] lg:py-14">
-          <div className="max-w-3xl">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-bold backdrop-blur"><Sparkles className="h-3.5 w-3.5 text-[#ffd365]" /> Dinámica del manual Maletín Viajero</span>
-            <h1 className="mt-4 text-4xl font-black tracking-[-0.04em] sm:text-6xl">La escalera de las emociones</h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-blue-100 sm:text-lg">Avancen, conversen y descubran cómo cada emoción trae información. Aquí no se gana por responder “bien”, sino por escucharse de verdad.</p>
+      <section className="escalera-arena">
+        <aside className="escalera-hud">
+          <div className="hud-phase">
+            <span className={`game-token h-8 w-8 rounded-full ${currentPlayer.color}`} />
+            <div><p className="text-[9px] font-black uppercase tracking-[.16em] text-blue-200">Ahora</p><p className="truncate text-base font-black">{phase}</p></div>
           </div>
-          <div className="justify-self-start lg:justify-self-end"><StrengthsMark /></div>
-        </div>
-      </section>
 
-      <div className="mx-auto grid max-w-[1500px] gap-5 px-4 py-6 sm:px-6 xl:grid-cols-[280px_minmax(0,1fr)] 2xl:grid-cols-[300px_minmax(680px,1fr)_360px]">
-        <aside className="space-y-4">
-          <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Participantes</p><h2 className="mt-1 text-lg font-black">Equipo de juego</h2></div><Users className="h-5 w-5 text-[#087f8c]" /></div>
-            <div className="mt-4 space-y-2">
-              {players.map((player, index) => (
-                <label key={player.id} className={`flex items-center gap-2 rounded-2xl border p-2.5 transition ${turn === index ? "border-[#087f8c] bg-teal-50 ring-2 ring-teal-100" : "border-slate-200"}`}>
-                  <span className={`h-4 w-4 shrink-0 rounded-full ${player.color}`} />
-                  <input value={player.name} onChange={(event) => setPlayers((current) => current.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} className="min-w-0 flex-1 bg-transparent text-sm font-bold outline-none" aria-label={`Nombre del jugador ${index + 1}`} />
-                  <span className="text-xs font-black text-slate-400">{player.position}</span>
-                </label>
-              ))}
+          <div className="hud-dice"><DiceCube value={dice} rolling={rolling} /></div>
+          <button onClick={roll} disabled={Boolean(prompt || winner || rolling)} className="game-primary-button hud-roll-button">
+            <Footprints className="h-5 w-5" /> {rolling ? "Lanzando…" : prompt ? "Conversa primero" : "Lanzar dado"}
+          </button>
+
+          <div className="player-manager">
+            <div className="mb-2 flex items-center justify-between"><p className="text-[9px] font-black uppercase tracking-[.16em] text-blue-200">Participantes</p><button onClick={() => setShowPlayers(true)} className="text-[10px] font-bold text-white/70 hover:text-white">Editar</button></div>
+            <div className="space-y-1.5">
+              {players.map((player, index) => <div key={player.id} className={`flex items-center gap-2 rounded-xl px-2.5 py-2 ${index === turn ? "bg-white/14 ring-1 ring-white/20" : "bg-white/5"}`}><span className={`game-token h-4 w-4 rounded-full ${player.color}`} /><span className="min-w-0 flex-1 truncate text-xs font-bold">{player.name}</span><span className="text-xs font-black tabular-nums text-blue-200">{player.position}</span></div>)}
             </div>
-            {players.length < 4 ? <button onClick={addPlayer} className="mt-3 w-full rounded-xl border border-dashed border-slate-300 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">+ Añadir participante</button> : null}
-          </section>
+          </div>
 
-          <section className="game-control-panel relative overflow-hidden rounded-[28px] bg-[#062b67] p-5 text-white shadow-2xl">
-            <span className="game-control-glow" aria-hidden="true" />
-            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-blue-200">Turno actual</p>
-            <div className="relative mt-3 flex items-center gap-3"><span className={`game-token h-7 w-7 rounded-full ${currentPlayer.color}`} /><p className="text-xl font-black">{currentPlayer.name}</p></div>
-            <div className="relative mt-5 flex justify-center py-2"><DiceCube value={dice ?? 1} rolling={rolling} /></div>
-            <button onClick={roll} disabled={Boolean(prompt || winner || rolling)} className="game-primary-button relative mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#f5b82e] px-4 py-3.5 font-black text-[#062b67] disabled:cursor-not-allowed disabled:opacity-50"><Footprints className="h-5 w-5" /> {rolling ? "Lanzando…" : dice ? `Volver a lanzar` : "Lanzar dado"}</button>
-            <button onClick={reset} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-2 text-xs font-bold text-blue-100 hover:bg-white/10"><RotateCcw className="h-3.5 w-3.5" /> Reiniciar partida</button>
-          </section>
+          <div className="hud-actions">
+            <button onClick={() => setShowPlayers(true)}><Users /> Jugadores</button>
+            <button onClick={reset}><RotateCcw /> Reiniciar</button>
+          </div>
         </aside>
 
-        <section className="game-board-shell overflow-hidden rounded-[32px] border border-white/80 bg-white/90 p-3 shadow-2xl sm:p-5">
-          <div className="mb-4 flex items-center justify-between gap-3 px-1"><div><p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">Tablero interactivo</p><p className="mt-1 text-sm font-bold text-slate-700">Llega exactamente a la casilla 100</p></div><div className="flex gap-2 text-[10px] font-black"><span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-800">↗ Escalera</span><span className="rounded-full bg-rose-100 px-2.5 py-1 text-rose-800">↘ Serpiente</span></div></div>
-          <div className="overflow-x-auto pb-2">
-            <div className="emotion-board grid min-w-[660px] grid-cols-10 rounded-[24px] border-[6px] border-[#062b67] bg-[#062b67] gap-1 p-1.5">
+        <section className="escalera-board-stage">
+          <div className="board-status-bar">
+            <div><p className="text-[9px] font-black uppercase tracking-[.16em] text-slate-400">Objetivo</p><p className="text-xs font-black text-slate-700">Lleguen exactamente a 100</p></div>
+            <div className="flex items-center gap-1.5 text-[9px] font-black"><span className="rounded-full bg-emerald-100 px-2 py-1 text-emerald-800">↗ Escalera</span><span className="rounded-full bg-rose-100 px-2 py-1 text-rose-800">↘ Serpiente</span></div>
+          </div>
+          <div className="board-fit-area">
+            <div className="emotion-board escalera-fit-board grid grid-cols-10 rounded-[22px] border-[5px] border-[#062b67] bg-[#062b67] gap-0.5 p-1 sm:gap-1 sm:p-1.5">
               {boardNumbers.map((number) => {
                 const occupants = players.filter((player) => player.position === number);
                 const ladder = ladderMoves[number];
                 const slide = slideMoves[number];
                 return (
-                  <div key={number} className={`board-cell relative aspect-square rounded-md p-1.5 ${number % 2 === 0 ? "board-cell-teal" : "board-cell-cream"} ${lastLanding === number ? `is-landing is-${moveKind}` : ""} ${ladder ? "has-ladder" : ""} ${slide ? "has-slide" : ""}`}>
-                    <span className="text-xs font-black text-[#062b67] sm:text-sm">{number}</span>
-                    {ladder ? <span className="absolute right-1 top-1 text-[9px] font-black text-emerald-700">↗{ladder}</span> : null}
-                    {slide ? <span className="absolute right-1 top-1 text-[9px] font-black text-rose-700">↘{slide}</span> : null}
-                    <div className="absolute inset-x-1 bottom-1 flex flex-wrap gap-0.5">{occupants.map((player) => <span key={player.id} title={player.name} className={`game-token token-arrive h-4 w-4 rounded-full ${player.color}`} />)}</div>
+                  <div key={number} className={`board-cell relative aspect-square rounded-[4px] p-0.5 sm:rounded-md sm:p-1 ${number % 2 === 0 ? "board-cell-teal" : "board-cell-cream"} ${lastLanding === number ? `is-landing is-${moveKind}` : ""} ${ladder ? "has-ladder" : ""} ${slide ? "has-slide" : ""}`}>
+                    <span className="board-number text-[8px] font-black text-[#062b67] sm:text-[10px] lg:text-xs">{number}</span>
+                    {ladder ? <span className="board-jump text-emerald-700">↗{ladder}</span> : null}
+                    {slide ? <span className="board-jump text-rose-700">↘{slide}</span> : null}
+                    <div className="absolute inset-x-0.5 bottom-0.5 flex flex-wrap gap-px">{occupants.map((player) => <span key={player.id} title={player.name} className={`game-token token-arrive h-2.5 w-2.5 rounded-full sm:h-3.5 sm:w-3.5 ${player.color}`} />)}</div>
                   </div>
                 );
               })}
             </div>
           </div>
         </section>
+      </section>
 
-        <aside className="xl:col-span-2 2xl:col-span-1">
-          <section className="sticky top-20 overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-xl">
-            <div className="bg-gradient-to-br from-[#087f8c] to-[#25a18e] p-5 text-white"><p className="text-[10px] font-black uppercase tracking-[0.16em] text-teal-100">Tarjeta emocional</p><h2 className="mt-1 text-xl font-black">Conversemos</h2></div>
-            {winner ? (
-              <div className="winner-burst p-6 text-center"><Trophy className="mx-auto h-14 w-14 text-[#f5a623] drop-shadow-lg" /><Crown className="mx-auto -mt-1 h-7 w-7 text-[#ef513e]" /><h3 className="mt-3 text-2xl font-black">¡Llegaron juntos!</h3><p className="mt-2 text-sm leading-6 text-slate-600">{winner} llegó a 100. Cierren nombrando algo que descubrieron de otra persona.</p><button onClick={reset} className="game-primary-button mt-5 rounded-xl bg-[#062b67] px-4 py-3 text-sm font-bold text-white">Jugar otra vez</button></div>
-            ) : prompt ? (
-              <div key={prompt.id} className="question-card-enter p-5">
-                <div className="flex flex-wrap gap-2"><span className={`rounded-full px-3 py-1 text-xs font-black ${categoryStyle[prompt.category]}`}>{prompt.category}</span><span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-bold text-slate-700">{prompt.strength}</span></div>
-                <p className="mt-5 text-2xl font-black leading-tight tracking-tight text-slate-950">{prompt.prompt}</p>
-                <div className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Clave:</strong> den tiempo para pensar. Se puede pasar el turno sin explicar una experiencia privada.</div>
-                <p className="mt-4 text-sm font-bold text-[#087f8c]">{moveNotice}</p>
-                <button onClick={completeTurn} className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#062b67] px-4 py-3.5 text-sm font-black text-white hover:bg-[#08448d]"><Check className="h-4 w-4" /> Conversación completada <ChevronRight className="h-4 w-4" /></button>
-              </div>
-            ) : (
-              <div className="p-6 text-center"><div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-teal-50 text-[#087f8c]"><Wind className="h-8 w-8" /></div><h3 className="mt-4 text-xl font-black">Respiren y lancen</h3><p className="mt-2 text-sm leading-6 text-slate-600">Cada lanzamiento abre una pregunta. Todas las emociones y respuestas son válidas.</p></div>
-            )}
+      {prompt ? (
+        <div className="game-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="emotion-question">
+          <section key={prompt.id} className="emotion-question-dialog question-card-enter">
+            <div className="emotion-dialog-accent" />
+            <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#087f8c]">Paso 2 · Conversar</p><h2 id="emotion-question" className="mt-1 text-xl font-black">Tarjeta emocional</h2></div><span className={`rounded-full px-3 py-1 text-xs font-black ${categoryStyle[prompt.category]}`}>{prompt.category}</span></div>
+            <p className="mt-5 text-2xl font-black leading-tight tracking-tight sm:text-4xl">{prompt.prompt}</p>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Fortaleza:</strong> {prompt.strength}</div><div className={`rounded-2xl p-4 text-sm font-bold leading-6 ${moveKind === "ladder" ? "bg-emerald-50 text-emerald-800" : moveKind === "slide" ? "bg-rose-50 text-rose-800" : "bg-blue-50 text-blue-800"}`}>{moveNotice}</div></div>
+            <p className="mt-4 text-xs leading-5 text-slate-500">Escuchen sin corregir. Cualquier persona puede pasar sin explicar algo privado.</p>
+            <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_auto]"><button onClick={() => finishConversation(false)} className="game-primary-button flex items-center justify-center gap-2 rounded-2xl bg-[#062b67] px-5 py-3.5 text-sm font-black text-white"><Check className="h-4 w-4" /> Ya conversamos <ChevronRight className="h-4 w-4" /></button><button onClick={() => finishConversation(true)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50">Pasar por ahora</button></div>
           </section>
-        </aside>
-      </div>
+        </div>
+      ) : null}
 
-      {showGuide ? <div className="fixed inset-0 z-50 bg-slate-950/50 p-4 backdrop-blur-sm" onMouseDown={() => setShowGuide(false)}><section onMouseDown={(event) => event.stopPropagation()} className="ml-auto h-full w-full max-w-md overflow-y-auto rounded-[28px] bg-white p-6 shadow-2xl"><button onClick={() => setShowGuide(false)} className="text-sm font-bold text-slate-500">← Volver al juego</button><h2 className="mt-6 text-3xl font-black tracking-tight">Cómo facilitar</h2><ol className="mt-6 space-y-4 text-sm leading-6 text-slate-700"><li><strong>1. Preparen:</strong> 2 a 4 participantes. Pueden editar sus nombres.</li><li><strong>2. Avancen:</strong> lancen el dado por turnos. Las escaleras ayudan a subir y las serpientes invitan a intentar de nuevo.</li><li><strong>3. Conversen:</strong> respondan la tarjeta antes de continuar. Nadie está obligado a revelar algo privado.</li><li><strong>4. Acompañen:</strong> escuchen sin corregir la emoción ni apresurar una solución.</li><li><strong>5. Cierren:</strong> al llegar a 100, nombren algo que aprendieron de otra persona.</li></ol><div className="mt-6 rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-900">Basado en el material aportado de Fundación Educacional Arauco y Focus, RPI 2023-A-3014.</div></section></div> : null}
+      {winner ? <div className="game-dialog-backdrop" role="dialog" aria-modal="true"><section className="winner-dialog winner-burst"><Trophy className="mx-auto h-16 w-16 text-[#ffd365]" /><Crown className="mx-auto -mt-2 h-8 w-8 text-[#ef513e]" /><p className="mt-4 text-xs font-black uppercase tracking-[.2em] text-teal-200">Partida completada</p><h2 className="mt-2 text-4xl font-black">¡Llegaron juntos!</h2><p className="mt-3 text-blue-100">{winner} llegó a 100. Cierren contando algo que descubrieron de otra persona.</p><button onClick={reset} className="game-primary-button mt-6 rounded-2xl bg-[#f5b82e] px-6 py-3.5 font-black text-[#062b67]">Jugar otra partida</button></section></div> : null}
+
+      {showIntro ? <div className="game-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="start-title"><section className="game-intro-dialog"><div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#087f8c]">Una partida, tres pasos</p><h2 id="start-title" className="mt-2 text-3xl font-black tracking-tight">Jugar es muy simple</h2></div><Sparkles className="h-9 w-9 text-[#f5a623]" /></div><div className="mt-6 grid gap-3 sm:grid-cols-3">{[["1", "Lanza", "La ficha avanza automáticamente."], ["2", "Conversa", "Respondan o pasen sin presión."], ["3", "Continúa", "El turno cambia al terminar."]].map(([step, title, text]) => <div key={step} className="intro-step"><span>{step}</span><h3>{title}</h3><p>{text}</p></div>)}</div><div className="mt-5 rounded-2xl bg-blue-50 p-4 text-sm leading-6 text-blue-900"><strong>Meta:</strong> llegar exactamente a 100. Las escaleras hacen subir y las serpientes invitan a volver a intentar.</div><button onClick={() => setShowIntro(false)} className="game-primary-button mt-5 w-full rounded-2xl bg-[#062b67] px-6 py-4 font-black text-white">Preparar jugadores y comenzar</button></section></div> : null}
+
+      {showPlayers ? <div className="game-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="players-title"><section className="players-dialog"><div className="flex items-center justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#087f8c]">Antes de lanzar</p><h2 id="players-title" className="mt-1 text-2xl font-black">Participantes</h2></div><button onClick={() => setShowPlayers(false)} aria-label="Cerrar jugadores" className="grid h-10 w-10 place-items-center rounded-full bg-slate-100"><X className="h-5 w-5" /></button></div><div className="mt-5 space-y-2">{players.map((player, index) => <label key={player.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 p-3"><span className={`game-token h-6 w-6 rounded-full ${player.color}`} /><span className="sr-only">Nombre del participante {index + 1}</span><input value={player.name} onChange={(event) => setPlayers((current) => current.map((item) => item.id === player.id ? { ...item, name: event.target.value } : item))} className="min-w-0 flex-1 bg-transparent font-bold outline-none" /><span className="text-xs font-black text-slate-400">Casilla {player.position}</span></label>)}</div>{players.length < 4 ? <button onClick={addPlayer} className="mt-3 w-full rounded-2xl border border-dashed border-slate-300 py-3 text-sm font-bold text-slate-600">+ Añadir participante</button> : null}<button onClick={() => setShowPlayers(false)} className="game-primary-button mt-5 w-full rounded-2xl bg-[#062b67] py-3.5 font-black text-white">Listos para jugar</button></section></div> : null}
+
+      {showGuide ? <div className="game-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="guide-title"><section className="players-dialog"><div className="flex items-center justify-between"><h2 id="guide-title" className="text-2xl font-black">Cómo acompañar</h2><button onClick={() => setShowGuide(false)} aria-label="Cerrar guía" className="grid h-10 w-10 place-items-center rounded-full bg-slate-100"><X className="h-5 w-5" /></button></div><ol className="mt-5 space-y-3 text-sm leading-6 text-slate-700"><li><strong>1. Lanza:</strong> el sistema mueve la ficha y aplica escaleras o serpientes.</li><li><strong>2. Lee:</strong> una persona lee la tarjeta en voz alta.</li><li><strong>3. Escucha:</strong> no hay respuestas correctas. Se puede pasar.</li><li><strong>4. Continúa:</strong> confirma la conversación para entregar el turno.</li></ol><div className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900">Validen primero la emoción. Las soluciones pueden venir después.</div></section></div> : null}
 
       <GameShareModal open={shareOpen} onClose={() => setShareOpen(false)} title="La escalera de las emociones" path="/escalera-emociones" description="Juego del Maletín Viajero para reconocer, expresar y regular emociones conversando en familia o en el colegio." />
     </main>
