@@ -7,7 +7,15 @@ import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
-import { COURSE_SCHEDULE, SCHOOL_SCHEDULE_SUMMARY, STAFF_DIRECTORY, STAFF_SCHEDULE } from "@/lib/school-schedule";
+import {
+  COURSE_SCHEDULE,
+  SCHOOL_SCHEDULE_SUMMARY,
+  STAFF_DIRECTORY,
+  STAFF_SCHEDULE,
+  type CourseScheduleEntry,
+  type SchoolDay,
+  type StaffScheduleEntry,
+} from "@/lib/school-schedule";
 import { ORIENTATION_WEEKLY_SLOTS, type OrientationWeeklySlot } from "@/lib/orientation-weekly-schedule";
 import { games } from "@/lib/games";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
@@ -762,11 +770,15 @@ const orientationActionColumns = [
 type TizaAppConfiguration = {
   orientationActions: string[];
   orientationSchedule: OrientationWeeklySlot[];
+  courseSchedule: CourseScheduleEntry[];
+  staffSchedule: StaffScheduleEntry[];
 };
 
 const defaultAppConfiguration = (): TizaAppConfiguration => ({
   orientationActions: [...orientationActionColumns],
   orientationSchedule: ORIENTATION_WEEKLY_SLOTS.map((slot) => ({ ...slot })),
+  courseSchedule: [],
+  staffSchedule: [],
 });
 
 const parseAppConfiguration = (value: string | undefined): TizaAppConfiguration => {
@@ -782,9 +794,17 @@ const parseAppConfiguration = (value: string | undefined): TizaAppConfiguration 
           slot && Number(slot.day) >= 1 && Number(slot.day) <= 5 && slot.course && slot.start && slot.end && slot.owner,
         ))
       : [];
+    const courseSchedule = Array.isArray(parsed.courseSchedule)
+      ? parsed.courseSchedule.filter((slot): slot is CourseScheduleEntry => Boolean(slot?.course && slot?.day && slot?.startTime && slot?.endTime))
+      : [];
+    const staffSchedule = Array.isArray(parsed.staffSchedule)
+      ? parsed.staffSchedule.filter((slot): slot is StaffScheduleEntry => Boolean(slot?.staffName && slot?.day && slot?.startTime && slot?.endTime))
+      : [];
     return {
       orientationActions: actions.length ? Array.from(new Set(actions)) : defaults.orientationActions,
       orientationSchedule: schedule.length ? schedule : defaults.orientationSchedule,
+      courseSchedule,
+      staffSchedule,
     };
   } catch {
     return defaults;
@@ -2024,7 +2044,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "reports", label: "Reportes", icon: PieChart },
   { id: "games", label: "Juegos Vinculares", icon: Gamepad2 },
   { id: "students", label: "Estudiantes", icon: UserRound },
-  { id: "databases", label: "Bases de datos", icon: Database },
+  { id: "databases", label: "Centro de datos", icon: Database },
   { id: "pie", label: "PIE", icon: Puzzle },
   { id: "courses", label: "Cursos", icon: BookOpen },
   { id: "cases", label: "Casos", icon: FileText },
@@ -2706,265 +2726,221 @@ function EntityView({
   );
 }
 
-type DatabaseTab = "students" | "personnel" | "courses" | "pie";
+type DatabaseResourceId = EntityId | "orientationSettings" | "courseSchedule" | "staffSchedule";
+
+const databaseResourceGroups: Array<{ label: string; description: string; resources: DatabaseResourceId[] }> = [
+  { label: "Comunidad escolar", description: "Las personas y grupos que sostienen el colegio.", resources: ["students", "courses", "personnel"] },
+  { label: "Gestión y acompañamiento", description: "Registros que alimentan seguimiento y reportes.", resources: ["cases", "logs", "interviews", "protocols"] },
+  { label: "Formación y recursos", description: "Planificación, talleres y documentación institucional.", resources: ["orientation", "workshops", "documents"] },
+  { label: "Horarios y catálogos", description: "Configuración que adapta Tiza a cada establecimiento.", resources: ["courseSchedule", "staffSchedule", "orientationSettings"] },
+];
+
+const databaseResourceMeta: Record<Exclude<DatabaseResourceId, EntityId>, { label: string; description: string; icon: LucideIcon }> = {
+  courseSchedule: { label: "Horarios de cursos", description: "Bloques, asignaturas y actividades semanales por curso.", icon: CalendarDays },
+  staffSchedule: { label: "Horarios de funcionarios", description: "Carga horaria, cursos y actividades de cada integrante del equipo.", icon: Clock },
+  orientationSettings: { label: "Orientación y fortalezas", description: "Horario de orientación y categorías usadas en bitácoras y reportes.", icon: UsersRound },
+};
+
+const mappingForEntity = (sheet: ParsedSheet, entity: EntityId) => {
+  const normalizedHeaders = sheet.headers.map(normalize);
+  return Object.fromEntries(entityConfigs[entity].fields.flatMap((field) => {
+    const index = normalizedHeaders.findIndex((header) => field.aliases.some((alias) => header === normalize(alias) || header.includes(normalize(alias)) || normalize(alias).includes(header)));
+    return index >= 0 ? [[field.key, sheet.headers[index]]] : [];
+  }));
+};
+
+const normalizedSchoolDay = (value: unknown): SchoolDay | "" => {
+  const day = normalize(String(value || ""));
+  const aliases: Array<[SchoolDay, string[]]> = [
+    ["lunes", ["lunes", "lun", "1"]],
+    ["martes", ["martes", "mar", "2"]],
+    ["miércoles", ["miercoles", "mie", "3"]],
+    ["jueves", ["jueves", "jue", "4"]],
+    ["viernes", ["viernes", "vie", "5"]],
+  ];
+  return aliases.find(([, values]) => values.some((item) => day === item || day.startsWith(item)))?.[0] || "";
+};
 
 function DatabaseHubView({
   store,
-  onAddRecord,
-  onUpdateRecord,
-  onDeleteRecord,
+  configuration,
+  onSaveConfiguration,
+  onImportRecords,
+  onOpenNewRecord,
   onOpenStudent,
   onNavigate,
 }: {
   store: DataStore;
-  onAddRecord: (entity: EntityId, record: DataRecord) => void;
-  onUpdateRecord: (entity: EntityId, recordId: string, updates: Record<string, string>) => void;
-  onDeleteRecord: (entity: EntityId, recordId: string) => void;
+  configuration: TizaAppConfiguration;
+  onSaveConfiguration: (configuration: TizaAppConfiguration) => void;
+  onImportRecords: (entity: EntityId, records: DataRecord[], mode: "merge" | "replace") => void;
+  onOpenNewRecord: (entity: EntityId) => void;
   onOpenStudent: (studentId: string) => void;
   onNavigate: (view: ViewId) => void;
 }) {
-  const [tab, setTab] = useState<DatabaseTab>("students");
-  const [cycle, setCycle] = useState("all");
+  const [selected, setSelected] = useState<DatabaseResourceId>("students");
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<{ entity: EntityId; id: string } | null>(null);
-  const [draft, setDraft] = useState<Record<string, string>>({});
   const [importSheet, setImportSheet] = useState<ParsedSheet | null>(null);
   const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+  const [importMode, setImportMode] = useState<"merge" | "replace">("merge");
+  const [notice, setNotice] = useState("");
+  const isEntity = (resource: DatabaseResourceId): resource is EntityId => resource in entityConfigs;
+  const selectedEntity = isEntity(selected) ? selected : null;
+  const selectedMeta = selectedEntity ? entityConfigs[selectedEntity] : databaseResourceMeta[selected as Exclude<DatabaseResourceId, EntityId>];
+  const SelectedIcon = selectedMeta.icon;
+  const baseRecords = selectedEntity ? store[selectedEntity] : [];
+  const filteredRecords = baseRecords.filter((record) => !query || Object.values(record).some((value) => normalize(String(value)).includes(normalize(query))));
+  const selectedFields = selectedEntity ? entityConfigs[selectedEntity].fields : [];
+  const visibleFields = selectedFields.slice(0, 7);
 
-  const courseCycle = (courseName: string) =>
-    store.courses.find((course) => normalize(course.name || "") === normalize(courseName))?.cycle ||
-    officialCourses.find((course) => normalize(course.name) === normalize(courseName))?.cycle ||
-    "";
-
-  const tabs: Array<{ id: DatabaseTab; label: string; entity: EntityId; count: number; icon: LucideIcon }> = [
-    { id: "students", label: "Estudiantes", entity: "students", count: store.students.length, icon: UserRound },
-    { id: "personnel", label: "Funcionarios", entity: "personnel", count: store.personnel.length, icon: Building2 },
-    { id: "courses", label: "Cursos", entity: "courses", count: store.courses.length, icon: BookOpen },
-    { id: "pie", label: "PIE", entity: "students", count: store.students.filter((student) => /pie|nee|diferencial/i.test(`${student.tags || ""} ${student.supportNeeds || ""} ${student.observations || ""}`)).length, icon: Puzzle },
-  ];
-
-  const activeEntity: EntityId = tab === "pie" ? "students" : tabs.find((item) => item.id === tab)?.entity || "students";
-  const visibleFields: FieldDef[] =
-    tab === "students" ? entityConfigs.students.fields.filter((field) => ["fullName", "course", "rut", "guardian", "phone", "email", "tags", "supportNeeds", "healthAlerts"].includes(field.key))
-      : tab === "pie" ? entityConfigs.students.fields.filter((field) => ["fullName", "course", "rut", "tags", "supportNeeds", "healthAlerts", "observations"].includes(field.key))
-        : tab === "courses" ? entityConfigs.courses.fields
-          : entityConfigs.personnel.fields;
-
-  const baseRecords = tab === "pie"
-    ? store.students.filter((student) => /pie|nee|diferencial/i.test(`${student.tags || ""} ${student.supportNeeds || ""} ${student.observations || ""}`))
-    : store[activeEntity];
-
-  const filteredRecords = baseRecords.filter((record) => {
-    const recordCycle = activeEntity === "students" ? courseCycle(record.course || "") : record.cycle || "";
-    if (cycle !== "all" && normalize(recordCycle) !== normalize(cycle)) return false;
-    if (query && !Object.values(record).some((value) => normalize(String(value)).includes(normalize(query)))) return false;
-    return true;
-  });
-
-  const cycleOptions = ["all", "Institucional", "I Ciclo", "II Ciclo", "III Ciclo", "II/III Ciclo", "PIE"];
-  const startEdit = (entity: EntityId, record: DataRecord) => {
-    setEditing({ entity, id: record.id });
-    setDraft(Object.fromEntries(visibleFields.map((field) => [field.key, record[field.key] || ""])));
-  };
-  const saveEdit = () => {
-    if (!editing) return;
-    onUpdateRecord(editing.entity, editing.id, draft);
-    setEditing(null);
-    setDraft({});
-  };
-  const addBlank = () => {
-    const entity = activeEntity;
-    const fields = entity === "personnel" ? entityConfigs.personnel.fields : entity === "courses" ? entityConfigs.courses.fields : entityConfigs.students.fields;
-    const record = Object.fromEntries(fields.map((field) => [field.key, field.key === "status" ? "Activo" : ""])) as Record<string, string>;
-    if (entity === "personnel") {
-      record.fullName = "Nueva persona";
-      record.role = "Cargo por definir";
-      record.cycle = cycle !== "all" ? cycle : "Institucional";
-      record.source = "Ingreso manual";
-    } else if (entity === "courses") {
-      record.name = "Nuevo curso";
-      record.cycle = cycle !== "all" ? cycle : "";
-    } else {
-      record.fullName = "Nuevo estudiante";
-      record.course = "";
-      if (tab === "pie") record.tags = "PIE";
-    }
-    onAddRecord(entity, { id: uid(), createdAt: nowIso(), updatedAt: nowIso(), ...record });
+  const resourceCount = (resource: DatabaseResourceId) => {
+    if (isEntity(resource)) return store[resource].length;
+    if (resource === "courseSchedule") return (configuration.courseSchedule.length || COURSE_SCHEDULE.length);
+    if (resource === "staffSchedule") return (configuration.staffSchedule.length || STAFF_SCHEDULE.length);
+    return configuration.orientationSchedule.length + configuration.orientationActions.length;
   };
 
   const parseDatabaseFile = async (file: File) => {
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    if (extension === "xlsx" || extension === "xls") {
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
-      const sheetName = workbook.SheetNames[0];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "" });
-      const headers = rows.length ? Object.keys(rows[0]) : [];
-      const parsedSheet = {
-        fileName: file.name,
-        headers,
-        rows: rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? "")]))),
-        delimiter: "xlsx",
-      };
+    try {
+      const extension = file.name.split(".").pop()?.toLowerCase();
+      let parsedSheet: ParsedSheet;
+      if (extension === "xlsx" || extension === "xls" || extension === "xlsm") {
+        const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+        const sheetName = workbook.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "", raw: false });
+        const headers = rows.length ? Object.keys(rows[0]) : [];
+        parsedSheet = {
+          fileName: file.name,
+          headers,
+          rows: rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, String(value ?? "")]))),
+          delimiter: "xlsx",
+        };
+      } else {
+        parsedSheet = { fileName: file.name, ...parseCsv(await file.text()) };
+      }
+      if (!parsedSheet.rows.length) throw new Error("El archivo no contiene filas de datos.");
       setImportSheet(parsedSheet);
-      setImportPlan(inferImportPlan(parsedSheet));
-      return;
+      if (selectedEntity) {
+        const mapping = mappingForEntity(parsedSheet, selectedEntity);
+        const required = entityConfigs[selectedEntity].fields.filter((field) => field.required);
+        const hits = required.filter((field) => mapping[field.key]).length;
+        setImportPlan({ entity: selectedEntity, mapping, confidence: required.length ? Math.round((hits / required.length) * 100) : 100, notes: [] });
+      } else {
+        setImportPlan(null);
+      }
+      setNotice("");
+    } catch (error) {
+      setImportSheet(null);
+      setImportPlan(null);
+      setNotice(error instanceof Error ? error.message : "No se pudo leer el archivo.");
     }
-    const csv = parseCsv(await file.text());
-    const parsedSheet = { fileName: file.name, ...csv };
-    setImportSheet(parsedSheet);
-    setImportPlan(inferImportPlan(parsedSheet));
   };
 
   const applyImport = () => {
-    if (!importSheet || !importPlan) return;
-    const entity = importPlan.entity;
-    importSheet.rows.forEach((row) => {
-      const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso() };
-      Object.entries(importPlan.mapping).forEach(([source, target]) => {
-        record[target] = row[source] || "";
-      });
-      if (entity === "personnel") record.source = record.source || importSheet.fileName;
-      if (entity === "students" && !isValidImportedStudentName(record.fullName || "")) return;
-      onAddRecord(entity, record);
-    });
+    if (!importSheet) return;
+    if (selectedEntity && importPlan) {
+      const requiredMissing = entityConfigs[selectedEntity].fields.filter((field) => field.required && !importPlan.mapping[field.key]);
+      if (requiredMissing.length) {
+        setNotice(`Falta relacionar: ${requiredMissing.map((field) => field.label).join(", ")}.`);
+        return;
+      }
+      const records = importSheet.rows.map((row) => {
+        const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso() };
+        Object.entries(importPlan.mapping).forEach(([field, header]) => { record[field] = row[header] || ""; });
+        if (selectedEntity === "personnel") record.source = record.source || importSheet.fileName;
+        return record;
+      }).filter((record) => selectedEntity !== "students" || isValidImportedStudentName(record.fullName || ""));
+      onImportRecords(selectedEntity, records, importMode);
+      setNotice(`${records.length} registros cargados en ${entityConfigs[selectedEntity].label}.`);
+    } else if (selected === "courseSchedule") {
+      const pick = (row: Record<string, string>, aliases: string[]) => row[Object.keys(row).find((key) => aliases.some((alias) => normalize(key) === normalize(alias))) || ""] || "";
+      const slots = importSheet.rows.map((row, index): CourseScheduleEntry | null => {
+        const day = normalizedSchoolDay(pick(row, ["Día", "Dia"]));
+        const course = pick(row, ["Curso", "Grado", "Nivel"]);
+        const startTime = pick(row, ["Inicio", "Hora inicio", "Desde"]);
+        const endTime = pick(row, ["Fin", "Hora fin", "Hasta"]);
+        if (!day || !course || !startTime || !endTime) return null;
+        return { course, courseSheet: course, day, block: Number(pick(row, ["Bloque", "N° bloque"])) || index + 1, startTime, endTime, activity: pick(row, ["Actividad", "Asignatura", "Clase"]), source: importSheet.fileName };
+      }).filter((slot): slot is CourseScheduleEntry => Boolean(slot));
+      if (!slots.length) { setNotice("No se reconocieron horarios. Usa Curso, Día, Inicio, Fin y Actividad."); return; }
+      onSaveConfiguration({ ...configuration, courseSchedule: importMode === "replace" ? slots : [...configuration.courseSchedule, ...slots] });
+      setNotice(`${slots.length} bloques de cursos cargados.`);
+    } else if (selected === "staffSchedule") {
+      const pick = (row: Record<string, string>, aliases: string[]) => row[Object.keys(row).find((key) => aliases.some((alias) => normalize(key) === normalize(alias))) || ""] || "";
+      const slots = importSheet.rows.map((row, index): StaffScheduleEntry | null => {
+        const day = normalizedSchoolDay(pick(row, ["Día", "Dia"]));
+        const staffName = pick(row, ["Funcionario", "Nombre", "Profesional", "Docente"]);
+        const startTime = pick(row, ["Inicio", "Hora inicio", "Desde"]);
+        const endTime = pick(row, ["Fin", "Hora fin", "Hasta"]);
+        if (!day || !staffName || !startTime || !endTime) return null;
+        return { staffName, staffSheet: staffName, role: pick(row, ["Cargo", "Rol"]), headship: pick(row, ["Jefatura"]), day, block: Number(pick(row, ["Bloque", "N° bloque"])) || index + 1, startTime, endTime, activity: pick(row, ["Actividad", "Asignatura", "Clase"]), courseHint: pick(row, ["Curso", "Nivel"]), source: importSheet.fileName };
+      }).filter((slot): slot is StaffScheduleEntry => Boolean(slot));
+      if (!slots.length) { setNotice("No se reconocieron horarios. Usa Funcionario, Día, Inicio, Fin y Actividad."); return; }
+      onSaveConfiguration({ ...configuration, staffSchedule: importMode === "replace" ? slots : [...configuration.staffSchedule, ...slots] });
+      setNotice(`${slots.length} bloques de funcionarios cargados.`);
+    }
     setImportSheet(null);
     setImportPlan(null);
   };
 
-  const exportCurrent = () => {
-    recordsToExcel(`base-${tab}.xlsx`, tabs.find((item) => item.id === tab)?.label || "Base", filteredRecords, visibleFields);
+  const downloadTemplate = () => {
+    let headers: string[] = [];
+    let example: string[] = [];
+    if (selectedEntity) {
+      headers = entityConfigs[selectedEntity].fields.map((field) => field.label);
+      example = entityConfigs[selectedEntity].fields.map((field) => field.required ? `Ejemplo ${field.label.toLowerCase()}` : "");
+    } else if (selected === "courseSchedule") {
+      headers = ["Curso", "Día", "Bloque", "Inicio", "Fin", "Actividad"];
+      example = ["1° Básico A", "Lunes", "1", "08:00", "08:45", "Lenguaje"];
+    } else if (selected === "staffSchedule") {
+      headers = ["Funcionario", "Cargo", "Jefatura", "Día", "Bloque", "Inicio", "Fin", "Actividad", "Curso"];
+      example = ["María Pérez", "Docente", "1° Básico A", "Lunes", "1", "08:00", "08:45", "Lenguaje", "1° Básico A"];
+    }
+    if (headers.length) downloadExcel(`plantilla-${selected}.xlsx`, "Plantilla", headers, [example]);
+  };
+
+  const selectResource = (resource: DatabaseResourceId) => {
+    setSelected(resource);
+    setQuery("");
+    setImportSheet(null);
+    setImportPlan(null);
+    setNotice("");
   };
 
   return (
-    <div className="tz-fade">
-      <div className="mb-5 flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
-        <div>
-          <div className="flex items-center gap-3">
-            <div className="grid h-10 w-10 place-items-center rounded-xl bg-slate-900 text-white shadow-sm">
-              <Database className="h-5 w-5" />
-            </div>
-            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Bases de datos</h1>
-          </div>
-          <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Directorio global editable de estudiantes, funcionarios, cursos y PIE, ordenado por ciclos y sincronizado con Supabase.
-          </p>
+    <div className="tz-fade space-y-5">
+      <section className="relative overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-xl sm:p-8">
+        <span className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" />
+        <span className="pointer-events-none absolute -bottom-28 left-1/3 h-60 w-60 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="relative flex flex-col justify-between gap-6 xl:flex-row xl:items-end">
+          <div className="max-w-3xl"><p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-300">Configuración institucional sin código</p><h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">Centro de datos del colegio</h1><p className="mt-3 text-sm leading-6 text-slate-300">Carga, revisa y mantiene toda la información que Tiza utiliza. Cada colegio puede partir con sus propias nóminas, horarios, equipos y registros sin depender de programación.</p></div>
+          <div className="grid grid-cols-3 gap-2 text-center"><div className="rounded-xl bg-white/10 px-4 py-3"><strong className="block text-2xl">{Object.values(store).reduce((sum, records) => sum + records.length, 0).toLocaleString("es-CL")}</strong><span className="text-[10px] uppercase tracking-wide text-slate-300">Registros</span></div><div className="rounded-xl bg-white/10 px-4 py-3"><strong className="block text-2xl">{Object.keys(entityConfigs).length + 3}</strong><span className="text-[10px] uppercase tracking-wide text-slate-300">Bases</span></div><div className="rounded-xl bg-emerald-400/15 px-4 py-3"><strong className="block text-2xl text-emerald-300"><Check className="mx-auto h-6 w-6" /></strong><span className="text-[10px] uppercase tracking-wide text-emerald-200">Sincronizado</span></div></div>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-cyan-50 px-3 py-2 text-sm font-semibold text-cyan-800 hover:bg-cyan-100">
-            <TizaIaIcon className="h-4 w-4" /> Abrir Tiza-IA
-          </button>
-          <button onClick={exportCurrent} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <ArrowDownToLine className="h-4 w-4" /> Exportar vista
-          </button>
-          <button onClick={addBlank} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-3 py-2 text-sm font-semibold text-white shadow">
-            <Plus className="h-4 w-4" /> Agregar registro
-          </button>
-        </div>
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[330px_minmax(0,1fr)]">
+        <aside className="space-y-3">
+          {databaseResourceGroups.map((group) => <section key={group.label} className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"><div className="px-2 pb-2"><h2 className="text-xs font-bold uppercase tracking-wider text-slate-700">{group.label}</h2><p className="mt-0.5 text-[11px] leading-4 text-slate-500">{group.description}</p></div><div className="space-y-1">{group.resources.map((resource) => { const meta = isEntity(resource) ? entityConfigs[resource] : databaseResourceMeta[resource as Exclude<DatabaseResourceId, EntityId>]; const Icon = meta.icon; const active = selected === resource; return <button key={resource} type="button" onClick={() => selectResource(resource)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition ${active ? "bg-slate-900 text-white shadow-md" : "hover:bg-slate-50"}`}><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${active ? "bg-white/15 text-cyan-200" : "bg-slate-100 text-slate-600"}`}><Icon className="h-4 w-4" /></span><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{meta.label}</strong><span className={`text-[10px] ${active ? "text-slate-300" : "text-slate-500"}`}>{resourceCount(resource).toLocaleString("es-CL")} {resource === "orientationSettings" ? "elementos" : "registros"}</span></span><ChevronDown className="h-4 w-4 -rotate-90 opacity-50" /></button>; })}</div></section>)}
+        </aside>
+
+        <main className="min-w-0 space-y-4">
+          {selected === "orientationSettings" ? <ConfigurationCenter configuration={configuration} onSave={onSaveConfiguration} onNavigate={onNavigate} /> : <>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <header className="flex flex-col justify-between gap-4 border-b border-slate-100 p-5 sm:flex-row sm:items-start"><div className="flex min-w-0 gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow"><SelectedIcon className="h-5 w-5" /></span><div><p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Base seleccionada</p><h2 className="text-xl font-semibold text-slate-950">{selectedMeta.label}</h2><p className="mt-1 max-w-2xl text-sm text-slate-600">{selectedMeta.description}</p></div></div><div className="flex flex-wrap gap-2">{selectedEntity ? <button type="button" onClick={() => onOpenNewRecord(selectedEntity)} className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white"><Plus className="h-4 w-4" /> Añadir manualmente</button> : null}<button type="button" onClick={downloadTemplate} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"><ArrowDownToLine className="h-4 w-4" /> Descargar plantilla</button>{selectedEntity ? <button type="button" onClick={() => onNavigate(selectedEntity)} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700"><ExternalLink className="h-4 w-4" /> Abrir módulo</button> : null}</div></header>
+
+              <div className="grid gap-0 xl:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="min-w-0 p-5"><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-slate-950">Contenido actual</h3><p className="text-xs text-slate-500">Vista rápida de los datos que ya utiliza la plataforma.</p></div>{selectedEntity ? <label className="flex min-w-52 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2"><Search className="h-4 w-4 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar registros..." className="min-w-0 flex-1 text-xs outline-none" /></label> : null}</div>
+                  {selectedEntity ? <div className="overflow-auto rounded-xl border border-slate-200"><table className="w-full min-w-[720px] text-left text-xs"><thead className="bg-slate-50 text-slate-500"><tr>{visibleFields.map((field) => <th key={field.key} className="px-3 py-2.5 font-bold uppercase tracking-wide">{field.label}</th>)}</tr></thead><tbody>{filteredRecords.slice(0, 8).map((record) => <tr key={record.id} className="border-t border-slate-100 hover:bg-cyan-50/30">{visibleFields.map((field) => <td key={field.key} className="max-w-56 truncate px-3 py-2.5 text-slate-700">{field.key === "fullName" && selectedEntity === "students" ? <button type="button" onClick={() => onOpenStudent(record.id)} className="font-bold text-blue-700 hover:underline">{record[field.key] || "—"}</button> : record[field.key] || "—"}</td>)}</tr>)}</tbody></table>{!filteredRecords.length ? <p className="p-10 text-center text-sm text-slate-500">Esta base aún no tiene registros. Puedes añadir uno o importar una plantilla.</p> : null}</div> : <div className="rounded-xl border border-slate-200 bg-slate-50 p-5"><p className="text-sm font-semibold text-slate-800">{resourceCount(selected).toLocaleString("es-CL")} bloques disponibles</p><p className="mt-1 text-xs leading-5 text-slate-500">{selected === "courseSchedule" ? (configuration.courseSchedule.length ? "Se está usando el horario personalizado del colegio." : "Se muestra el horario inicial incluido. Al cargar uno propio, la sección Cursos comenzará a utilizarlo.") : (configuration.staffSchedule.length ? "Se está usando el horario personalizado del equipo." : "Se muestra el horario inicial incluido. Al cargar uno propio, las vistas Hoy e Inicio comenzarán a utilizarlo.")}</p></div>}
+                </div>
+
+                <aside className="border-t border-slate-100 bg-slate-50/70 p-5 xl:border-l xl:border-t-0"><p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Importación guiada</p><h3 className="mt-1 font-semibold text-slate-950">Sube tu archivo natural</h3><p className="mt-1 text-xs leading-5 text-slate-500">Aceptamos Excel, CSV o TSV. Primero verás las columnas detectadas y podrás corregirlas antes de guardar.</p><label className="mt-4 flex cursor-pointer flex-col items-center rounded-xl border-2 border-dashed border-cyan-200 bg-white p-5 text-center transition hover:border-cyan-400 hover:bg-cyan-50"><Upload className="h-6 w-6 text-cyan-700" /><strong className="mt-2 text-sm text-slate-900">Seleccionar planilla</strong><span className="mt-1 text-[10px] text-slate-500">.xlsx · .xls · .csv · .tsv</span><input type="file" accept=".csv,.tsv,.xlsx,.xls,.xlsm" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void parseDatabaseFile(file); event.currentTarget.value = ""; }} /></label>
+                  {importSheet ? <div className="mt-4 space-y-3 rounded-xl border border-cyan-200 bg-white p-3"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-900">{importSheet.fileName}</p><p className="text-[10px] text-slate-500">{importSheet.rows.length} filas · {importSheet.headers.length} columnas</p></div>{importPlan ? <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${importPlan.confidence === 100 ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{importPlan.confidence}% campos clave</span> : null}</div>{selectedEntity && importPlan ? <div className="max-h-52 space-y-2 overflow-y-auto pr-1">{selectedFields.map((field) => <label key={field.key} className="block"><span className="text-[10px] font-bold text-slate-600">{field.label}{field.required ? " *" : ""}</span><select value={importPlan.mapping[field.key] || ""} onChange={(event) => setImportPlan({ ...importPlan, mapping: { ...importPlan.mapping, [field.key]: event.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-xs"><option value="">No importar</option>{importSheet.headers.map((header) => <option key={header} value={header}>{header}</option>)}</select></label>)}</div> : null}<div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setImportMode("merge")} className={`rounded-lg border px-2 py-2 text-[10px] font-bold ${importMode === "merge" ? "border-blue-500 bg-blue-50 text-blue-700" : "border-slate-200 text-slate-600"}`}>Sumar a lo actual</button><button type="button" onClick={() => setImportMode("replace")} className={`rounded-lg border px-2 py-2 text-[10px] font-bold ${importMode === "replace" ? "border-amber-500 bg-amber-50 text-amber-700" : "border-slate-200 text-slate-600"}`}>Reemplazar base</button></div><button type="button" onClick={applyImport} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-600 px-3 py-2.5 text-xs font-bold text-white hover:bg-emerald-700"><Check className="h-4 w-4" /> Confirmar importación</button></div> : null}{notice ? <p className="mt-3 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-semibold text-cyan-800">{notice}</p> : null}
+                </aside>
+              </div>
+            </section>
+          </>}
+        </main>
       </div>
-
-      <section className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-          <div className="grid gap-2 md:grid-cols-4">
-            {tabs.map(({ id, label, count, icon: Icon }) => (
-              <button key={id} onClick={() => { setTab(id); setEditing(null); }} className={`rounded-lg border px-3 py-3 text-left transition ${tab === id ? "border-blue-500 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
-                <Icon className={`h-4 w-4 ${tab === id ? "text-blue-700" : "text-slate-500"}`} />
-                <span className="mt-2 block text-sm font-bold text-slate-950">{label}</span>
-                <span className="text-xs font-semibold text-slate-500">{count} registros</span>
-              </button>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <div className="flex min-w-[260px] flex-1 items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
-              <Search className="h-4 w-4 text-slate-400" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar en la base actual..." className="w-full bg-transparent text-sm outline-none" />
-            </div>
-            <select value={cycle} onChange={(event) => setCycle(event.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none">
-              {cycleOptions.map((option) => <option key={option} value={option}>{option === "all" ? "Todos los ciclos" : option}</option>)}
-            </select>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-slate-200 bg-slate-950 p-4 text-white shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-wider text-cyan-200">Tiza-IA para bases</p>
-          <h2 className="mt-1 text-lg font-semibold">Adjuntar planilla y ordenar columnas</h2>
-          <p className="mt-1 text-sm text-slate-300">Carga CSV o Excel. Tiza-IA detecta si son estudiantes, funcionarios o cursos y propone columnas globales editables.</p>
-          <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-white/30 bg-white/10 px-3 py-3 text-sm font-semibold hover:bg-white/15">
-            <Upload className="h-4 w-4" />
-            Adjuntar base de datos
-            <input type="file" accept=".csv,.tsv,.xlsx,.xls" className="hidden" onChange={(event) => { const file = event.target.files?.[0]; if (file) void parseDatabaseFile(file); event.currentTarget.value = ""; }} />
-          </label>
-          {importSheet && importPlan ? (
-            <div className="mt-3 rounded-lg bg-white/10 p-3 text-sm">
-              <p className="font-bold">{importSheet.fileName}</p>
-              <p className="mt-1 text-slate-300">{importSheet.rows.length} filas detectadas · destino: {entityConfigs[importPlan.entity].label}</p>
-              <button onClick={applyImport} className="mt-3 w-full rounded-md bg-cyan-400 px-3 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-300">
-                Aplicar importación organizada
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </section>
-
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <span className="text-sm font-semibold text-slate-700">Mostrando {filteredRecords.length} de {baseRecords.length} registros</span>
-          <span className="text-xs text-slate-500">Fuente funcionarios: {officialPersonnelSource}</span>
-        </div>
-        <div className="tz-contained-x">
-          <table className="min-w-[1120px] w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-slate-100 text-slate-600">
-                {visibleFields.map((field) => (
-                  <th key={field.key} className="border-b border-slate-200 px-3 py-2 text-left text-[11px] font-bold uppercase tracking-wide">{field.label}</th>
-                ))}
-                <th className="border-b border-slate-200 px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wide">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRecords.map((record) => {
-                const isEditing = editing?.entity === activeEntity && editing.id === record.id;
-                return (
-                  <tr key={`${activeEntity}-${record.id}`} className="border-b border-slate-100 align-top hover:bg-blue-50/30">
-                    {visibleFields.map((field) => (
-                      <td key={field.key} className="min-w-36 px-3 py-2 text-xs text-slate-700">
-                        {isEditing ? (
-                          field.type === "textarea" ? (
-                            <textarea value={draft[field.key] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} className="min-h-16 w-full rounded-md border border-slate-200 p-2 outline-none focus:border-blue-500" />
-                          ) : field.type === "select" ? (
-                            <select value={draft[field.key] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} className="w-full rounded-md border border-slate-200 px-2 py-1.5 outline-none focus:border-blue-500">
-                              <option value="">Sin dato</option>
-                              {(field.options || []).map((option) => <option key={option} value={option}>{option}</option>)}
-                            </select>
-                          ) : (
-                            <input value={draft[field.key] || ""} onChange={(event) => setDraft((current) => ({ ...current, [field.key]: event.target.value }))} className="w-full rounded-md border border-slate-200 px-2 py-1.5 outline-none focus:border-blue-500" />
-                          )
-                        ) : field.key === "fullName" && activeEntity === "students" ? (
-                          <button onClick={() => onOpenStudent(record.id)} className="font-bold text-blue-700 hover:underline">{record[field.key] || "-"}</button>
-                        ) : (
-                          <span>{record[field.key] || (field.key === "cycle" && activeEntity === "students" ? courseCycle(record.course || "") : "-")}</span>
-                        )}
-                      </td>
-                    ))}
-                    <td className="whitespace-nowrap px-3 py-2 text-right">
-                      {isEditing ? (
-                        <div className="flex justify-end gap-1.5">
-                          <button onClick={saveEdit} className="rounded-md bg-slate-900 px-2.5 py-1.5 text-xs font-bold text-white">Guardar</button>
-                          <button onClick={() => { setEditing(null); setDraft({}); }} className="rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-bold text-slate-600">Cancelar</button>
-                        </div>
-                      ) : (
-                        <div className="flex justify-end gap-1.5">
-                          <button onClick={() => startEdit(activeEntity, record)} className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700">Editar</button>
-                          <button onClick={() => onDeleteRecord(activeEntity, record.id)} className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-bold text-red-600">Eliminar</button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }
@@ -3688,19 +3664,34 @@ function WorkshopsView({
 
 function CourseWorkspaceView({
   store,
+  scheduleEntries,
   onSeedCourses,
   onUpdateCourse,
   onNavigate,
   onOpenStudent,
 }: {
   store: DataStore;
+  scheduleEntries: CourseScheduleEntry[];
   onSeedCourses: () => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
   onNavigate: (view: ViewId) => void;
   onOpenStudent: (studentId: string, focusField?: string) => void;
 }) {
   const savedByName = new Map(store.courses.map((course) => [normalize(course.name || ""), course]));
-  const courses = officialCourses.map((course) => ({ ...course, record: savedByName.get(normalize(course.name)) || makeCourseRecord(course) }));
+  const officialWorkspaceCourses = officialCourses.map((course) => ({ ...course, record: savedByName.get(normalize(course.name)) || makeCourseRecord(course) }));
+  const customWorkspaceCourses = store.courses
+    .filter((course) => course.name && !officialCourses.some((official) => normalize(official.name) === normalize(course.name)))
+    .map((course) => ({
+      name: course.name,
+      cycle: (course.cycle || "I Ciclo") as CourseDef["cycle"],
+      orientationOwner: course.orientationOwner || "",
+      orientationEmail: course.orientationEmail || "",
+      convivenciaCoordinator: course.convivenciaCoordinator || "",
+      convivenciaEmail: course.convivenciaEmail || "",
+      capacity: Number(course.capacity) || 32,
+      record: course,
+    }));
+  const courses = [...officialWorkspaceCourses, ...customWorkspaceCourses];
   const [selectedCourse, setSelectedCourse] = useState(courses[0]?.name || "");
   const [cycleTab, setCycleTab] = useState<"all" | CourseDef["cycle"]>("all");
   const [draggedStudentId, setDraggedStudentId] = useState("");
@@ -3737,8 +3728,8 @@ function CourseWorkspaceView({
   const visibleCourses = cycleTab === "all" ? courses : courses.filter((course) => course.cycle === cycleTab);
   const current = courses.find((course) => course.name === selectedCourse) || courses[0];
   const courseName = current?.name || "";
-  const courseSchedule = useMemo(() => {
-    const entries = COURSE_SCHEDULE.filter((entry) => schoolScheduleCourseKey(entry.course) === schoolScheduleCourseKey(courseName));
+  const courseSchedule = (() => {
+    const entries = scheduleEntries.filter((entry) => schoolScheduleCourseKey(entry.course) === schoolScheduleCourseKey(courseName));
     const rowsByKey = new Map<string, { key: string; block: number; startTime: string; endTime: string }>();
     const cells = new Map<string, string[]>();
     entries.forEach((entry) => {
@@ -3754,7 +3745,7 @@ function CourseWorkspaceView({
       cells,
       rows: Array.from(rowsByKey.values()).sort((left, right) => left.startTime.localeCompare(right.startTime) || left.block - right.block),
     };
-  }, [courseName]);
+  })();
   const students = store.students.filter((record) => normalize(record.course || "") === normalize(courseName));
   const cases = store.cases.filter((record) => courseMatches(record, courseName));
   const convivencia = cases.filter((record) => normalize(`${record.category || ""} ${record.title || ""}`).includes("convivencia"));
@@ -9710,6 +9701,8 @@ function PieImportConfirmationView({
 
 function DashboardAgenda({
   store,
+  courseSchedule,
+  staffSchedule,
   calendarEvents,
   calendarLoading,
   calendarIcalUrl,
@@ -9717,6 +9710,8 @@ function DashboardAgenda({
   onNavigate,
 }: {
   store: DataStore;
+  courseSchedule: CourseScheduleEntry[];
+  staffSchedule: StaffScheduleEntry[];
   calendarEvents: CalendarEvent[];
   calendarLoading: boolean;
   calendarIcalUrl?: string;
@@ -9823,11 +9818,11 @@ function DashboardAgenda({
     const [hours, minutes] = time.split(":").map(Number);
     return hours * 60 + minutes;
   };
-  const currentStaffSlots = STAFF_SCHEDULE
+  const currentStaffSlots = staffSchedule
     .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
     .sort((a, b) => a.staffName.localeCompare(b.staffName, "es"))
     .slice(0, 6);
-  const currentCourseSlots = COURSE_SCHEDULE
+  const currentCourseSlots = courseSchedule
     .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
     .sort((a, b) => a.course.localeCompare(b.course, "es"))
     .slice(0, 6);
@@ -10091,7 +10086,7 @@ function OperationsPanel({
   );
 }
 
-function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team, calendarEvents, calendarLoading, calendarIcalUrl, onReloadCalendar }: { store: DataStore; onNavigate: (view: ViewId) => void; onQuickAdd: (entity: EntityId) => void; schoolName: string; userEmail: string; team: TeamMember[]; calendarEvents: CalendarEvent[]; calendarLoading: boolean; calendarIcalUrl?: string; onReloadCalendar: () => void }) {
+function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team, calendarEvents, calendarLoading, calendarIcalUrl, onReloadCalendar, courseSchedule, staffSchedule }: { store: DataStore; onNavigate: (view: ViewId) => void; onQuickAdd: (entity: EntityId) => void; schoolName: string; userEmail: string; team: TeamMember[]; calendarEvents: CalendarEvent[]; calendarLoading: boolean; calendarIcalUrl?: string; onReloadCalendar: () => void; courseSchedule: CourseScheduleEntry[]; staffSchedule: StaffScheduleEntry[] }) {
   const total = Object.values(store).reduce((sum, records) => sum + records.length, 0);
   const latest = Object.entries(store)
     .flatMap(([entity, records]) => records.map((record) => ({ entity: entity as EntityId, record })))
@@ -10202,6 +10197,8 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
 
       <DashboardAgenda
         store={store}
+        courseSchedule={courseSchedule}
+        staffSchedule={staffSchedule}
         calendarEvents={calendarEvents}
         calendarLoading={calendarLoading}
         calendarIcalUrl={calendarIcalUrl}
@@ -10842,12 +10839,16 @@ type CalendarEvent = {
 
 function TodayView({
   store,
+  courseSchedule,
+  staffSchedule,
   onOpenStudent,
   onNavigate,
   calendarIcalUrl,
   onConnectCalendar,
 }: {
   store: DataStore;
+  courseSchedule: CourseScheduleEntry[];
+  staffSchedule: StaffScheduleEntry[];
   onOpenStudent: (studentId: string) => void;
   onNavigate: (view: ViewId) => void;
   calendarIcalUrl?: string;
@@ -10931,11 +10932,11 @@ function TodayView({
     const [hours, minutes] = time.split(":").map(Number);
     return hours * 60 + minutes;
   };
-  const currentStaffSlots = STAFF_SCHEDULE
+  const currentStaffSlots = staffSchedule
     .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
     .sort((a, b) => a.staffName.localeCompare(b.staffName, "es"))
     .slice(0, 12);
-  const currentCourseSlots = COURSE_SCHEDULE
+  const currentCourseSlots = courseSchedule
     .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
     .sort((a, b) => a.course.localeCompare(b.course, "es"))
     .slice(0, 10);
@@ -12399,6 +12400,8 @@ export default function TizaEducationApp() {
   });
   const profile = profileState;
   const appConfiguration = useMemo(() => parseAppConfiguration(profile.appConfiguration), [profile.appConfiguration]);
+  const effectiveCourseSchedule = appConfiguration.courseSchedule.length ? appConfiguration.courseSchedule : COURSE_SCHEDULE;
+  const effectiveStaffSchedule = appConfiguration.staffSchedule.length ? appConfiguration.staffSchedule : STAFF_SCHEDULE;
   const accessTokenRef = React.useRef("");
   const remoteLoadedUserRef = React.useRef("");
   const [, setProfileSyncStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -12811,6 +12814,29 @@ export default function TizaEducationApp() {
     void saveStoreSnapshot(nextStore);
     closeRecordDialog();
     setToast(`${entityConfigs[entity].singular} guardado`);
+  };
+
+  const importRecords = (entity: EntityId, records: DataRecord[], mode: "merge" | "replace") => {
+    const identityFor = (record: DataRecord) => {
+      if (entity === "students") return normalize(record.rut || `${record.fullName}|${record.course}`);
+      if (entity === "courses") return normalize(record.name || record.id);
+      if (entity === "personnel") return normalize(record.email || `${record.fullName}|${record.role}`);
+      const fields = entityConfigs[entity].fields.filter((field) => field.required).map((field) => record[field.key]).filter(Boolean);
+      return normalize(fields.length ? fields.join("|") : entityConfigs[entity].fields.slice(0, 3).map((field) => record[field.key]).join("|"));
+    };
+    const existing = mode === "replace" ? [] : storeRef.current[entity];
+    const identities = new Set(existing.map(identityFor).filter(Boolean));
+    const unique = records.filter((record) => {
+      const identity = identityFor(record);
+      if (identity && identities.has(identity)) return false;
+      if (identity) identities.add(identity);
+      return true;
+    });
+    const nextStore = { ...storeRef.current, [entity]: [...unique, ...existing] };
+    storeRef.current = nextStore;
+    setStore(nextStore);
+    void saveStoreSnapshot(nextStore);
+    setToast(`${unique.length} registros incorporados en ${entityConfigs[entity].label}`);
   };
 
   const updateRecord = (entity: EntityId, recordId: string, updates: Record<string, string>) => {
@@ -13743,8 +13769,8 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
-    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={openNewRecord} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} />;
-    if (activeView === "today") return <TodayView store={store} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
+    if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={openNewRecord} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} />;
+    if (activeView === "today") return <TodayView store={store} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "games") return <GamesView />;
@@ -13752,9 +13778,10 @@ export default function TizaEducationApp() {
       return (
         <DatabaseHubView
           store={store}
-          onAddRecord={addRecord}
-          onUpdateRecord={updateRecord}
-          onDeleteRecord={deleteRecord}
+          configuration={appConfiguration}
+          onSaveConfiguration={(next) => { setProfile({ ...profile, appConfiguration: JSON.stringify(next) }); setToast("Configuración institucional guardada"); }}
+          onImportRecords={importRecords}
+          onOpenNewRecord={openNewRecord}
           onOpenStudent={openStudent}
           onNavigate={setActiveView}
         />
@@ -13778,6 +13805,7 @@ export default function TizaEducationApp() {
       return (
         <CourseWorkspaceView
           store={store}
+          scheduleEntries={effectiveCourseSchedule}
           onSeedCourses={seedOfficialCourses}
           onUpdateCourse={updateCourseRecord}
           onNavigate={setActiveView}
