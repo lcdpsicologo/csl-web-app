@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { CharacterStrengthLogoStrip } from "@/components/CharacterStrengthBadge";
 
 export function BrandHeader() {
   return (
@@ -14,9 +15,9 @@ export function BrandHeader() {
             <span className="block truncate text-xs font-medium text-slate-500">Socioemocional interactivo</span>
           </span>
         </Link>
-        <div className="hidden items-center gap-2 rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 sm:flex">
-          <span className="h-7 w-7 rounded bg-gradient-to-br from-emerald-400 via-amber-300 to-sky-500" aria-hidden="true" />
-          <span className="text-xs font-semibold text-slate-600">Logo fortalezas</span>
+        <div className="hidden items-center gap-3 sm:flex">
+          <span className="text-xs font-semibold text-slate-500">Fortalezas del carácter</span>
+          <CharacterStrengthLogoStrip />
         </div>
       </div>
     </header>

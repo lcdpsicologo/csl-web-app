@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, BadgeCheck, HelpCircle, Shuffle, Volume2, VolumeX } from "lucide-react";
+import { BrandHeader } from "@/components/BrandHeader";
+import { CharacterStrengthBadge } from "@/components/CharacterStrengthBadge";
 import { levelOptions, LevelId } from "@/lib/revoltijoCards";
 import { PromptGame, PromptGameCard } from "@/lib/promptGames";
 
@@ -60,8 +62,9 @@ export function PromptCardGame({ game }: { game: PromptGame }) {
   };
 
   return (
-    <main className="min-h-screen bg-slate-50 text-slate-950">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-4 py-5 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-50 text-slate-950">
+      <BrandHeader />
+      <main className="mx-auto flex min-h-[calc(100vh-73px)] w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <Link href="/?view=games" className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
             <ArrowLeft className="h-4 w-4" />
@@ -75,6 +78,7 @@ export function PromptCardGame({ game }: { game: PromptGame }) {
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Juego vincular</p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight">{game.title}</h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">{game.summary}</p>
+            <CharacterStrengthBadge strength={game.strength} className="mt-4 max-w-full" />
 
             <label htmlFor="level" className="mt-5 block text-sm font-bold text-slate-700">
               Nivel
@@ -125,10 +129,10 @@ export function PromptCardGame({ game }: { game: PromptGame }) {
 
             <div className="grid flex-1 place-items-center py-6">
               {currentCard ? (
-                <article className={`w-full max-w-3xl rounded-lg border border-slate-200 p-5 ring-4 ${style.ring} ${style.panel} sm:p-8`}>
+                <article key={currentCard.id} className={`tz-pop w-full max-w-3xl rounded-lg border border-slate-200 p-5 ring-4 ${style.ring} ${style.panel} sm:p-8`}>
                   <div className="flex flex-wrap gap-2">
                     <span className={`rounded-md px-3 py-2 text-sm font-bold ${style.badge}`}>{currentCard.type}</span>
-                    <span className="rounded-md bg-white px-3 py-2 text-sm font-bold text-slate-700 ring-1 ring-slate-200">{currentCard.strength}</span>
+                    <CharacterStrengthBadge strength={currentCard.strength} compact />
                   </div>
                   <p className="mt-8 text-3xl font-black leading-tight tracking-tight text-slate-950 sm:text-5xl">{currentCard.prompt}</p>
                   <div className="mt-8 grid gap-3 md:grid-cols-2">
@@ -140,7 +144,7 @@ export function PromptCardGame({ game }: { game: PromptGame }) {
                     <div className="rounded-md bg-white p-4 ring-1 ring-slate-200">
                       <BadgeCheck className="h-5 w-5 text-slate-500" />
                       <p className="mt-3 text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Fortaleza</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-800">{currentCard.strength}</p>
+                      <CharacterStrengthBadge strength={currentCard.strength} className="mt-2 max-w-full" />
                     </div>
                   </div>
                 </article>
@@ -158,7 +162,7 @@ export function PromptCardGame({ game }: { game: PromptGame }) {
             </div>
           </section>
         </section>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

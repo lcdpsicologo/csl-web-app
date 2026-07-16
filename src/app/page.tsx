@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
@@ -36,8 +37,6 @@ import {
   Puzzle,
   Tag,
   Check,
-  CheckCircle2,
-  BarChart3,
   ChevronDown,
   Clock,
   ClipboardList,
@@ -3064,11 +3063,6 @@ function WorkshopsView({
     return !query.trim() || normalize(text).includes(normalize(query));
   }).sort((a, b) => String(b.date || b.createdAt || "").localeCompare(String(a.date || a.createdAt || "")) || String(a.title || "").localeCompare(String(b.title || "")));
 
-  useEffect(() => {
-    if (selectedId && store.workshops.some((record) => record.id === selectedId)) return;
-    setSelectedId("");
-  }, [selectedId, store.workshops]);
-
   const createWorkshop = () => {
     if (!draftWorkshop.title.trim()) return;
     const record: DataRecord = {
@@ -3366,7 +3360,14 @@ function WorkshopsView({
                     ) : (
                       <button onClick={beginEditSelected} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"><Settings className="h-3.5 w-3.5" /> Editar</button>
                     )}
-                    <button onClick={() => onDeleteWorkshop(selected.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50">
+                    <button
+                      onClick={() => {
+                        onDeleteWorkshop(selected.id);
+                        cancelEditSelected();
+                        setSelectedId("");
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                    >
                       <Trash2 className="h-3.5 w-3.5" /> Eliminar
                     </button>
                   </div>
@@ -5025,8 +5026,6 @@ function OrientationCycleView({
     const pending = sortedRecords.filter((record) => /pendiente/i.test(record.status || "") || !record.status).length;
     const planned = statusCount(sortedRecords, /planificad/i);
     const reprogrammed = statusCount(sortedRecords, /reprogramad/i);
-    const canvaCount = linkedCount(sortedRecords, ["canvaLink", "evidence"]);
-    const planCount = linkedCount(sortedRecords, ["planificacion", "folderLink"]);
     const ownerStudents = store.students.filter((student) => owner.courses.includes(student.course || "")).length;
     const reportTheme = (record: DataRecord) => {
       const topic = (record.topic || "").trim();
@@ -8990,7 +8989,7 @@ function CommandPalette({
   const activeResult = flat[selectedIndex];
 
   const RECENTS_KEY = "tiza-search-recent-v1";
-  type RecentEntry = { entity: EntityId; id: string; title: string; subtitle: string; ts: number };
+  type RecentEntry = { entity: EntityId; id: string; title: string; subtitle: string };
   const [recents, setRecents] = useState<RecentEntry[]>(() => {
     if (typeof window === "undefined") return [];
     try {
@@ -9020,7 +9019,6 @@ function CommandPalette({
       id: result.record.id,
       title: result.title,
       subtitle: result.subtitle,
-      ts: Date.now(),
     };
     const next = [entry, ...recents.filter((r) => !(r.entity === entry.entity && r.id === entry.id))].slice(0, 10);
     setRecents(next);
@@ -10012,8 +10010,11 @@ function OperationsPanel({
   onNavigate: (view: ViewId) => void;
   onQuickAdd: (entity: EntityId) => void;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
-  const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const currentDate = new Date();
+  const today = currentDate.toISOString().slice(0, 10);
+  const weekEndDate = new Date(currentDate);
+  weekEndDate.setDate(weekEndDate.getDate() + 7);
+  const weekEnd = weekEndDate.toISOString().slice(0, 10);
   const todayClasses = store.orientation.filter((record) => (record.date || "").slice(0, 10) === today);
   const upcomingClasses = store.orientation
     .filter((record) => record.date && record.date >= today && record.date <= weekEnd)
@@ -10866,6 +10867,38 @@ type CalendarEvent = {
   url?: string;
 };
 
+function TodaySection({
+  title,
+  icon: Icon,
+  count,
+  children,
+  view,
+  onNavigate,
+}: {
+  title: string;
+  icon: LucideIcon;
+  count: number;
+  children: React.ReactNode;
+  view?: ViewId;
+  onNavigate: (view: ViewId) => void;
+}) {
+  return (
+    <section className="tz-card rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow-sm">
+      <div className="mb-1.5 flex items-center justify-between gap-2">
+        <h2 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className="truncate">{title}</span>
+          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white">{count}</span>
+        </h2>
+        {view ? <button onClick={() => onNavigate(view)} className="shrink-0 text-[11px] font-bold text-blue-600 hover:underline">Ver todo</button> : null}
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function TodayView({
   store,
   courseSchedule,
@@ -10935,22 +10968,6 @@ function TodayView({
     const fmt = (d: Date) => d.toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit" });
     return `${fmt(s)} – ${fmt(e)}`;
   };
-
-  const Section = ({ title, icon: Icon, count, children, view }: { title: string; icon: LucideIcon; count: number; children: React.ReactNode; view?: ViewId }) => (
-    <section className="tz-card rounded-xl border border-slate-200 bg-white/95 p-2.5 shadow-sm">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <h2 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-slate-100 text-slate-600">
-            <Icon className="h-3.5 w-3.5" />
-          </span>
-          <span className="truncate">{title}</span>
-          <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-bold text-white">{count}</span>
-        </h2>
-        {view ? <button onClick={() => onNavigate(view)} className="shrink-0 text-[11px] font-bold text-blue-600 hover:underline">Ver todo</button> : null}
-      </div>
-      {children}
-    </section>
-  );
 
   const agendaLoad = interviewsToday.length + classesToday.length + calendarEvents.length;
   const operationalAlerts = protocolsDue.length + criticalCases.length + unplannedClasses.length + healthStudents.length;
@@ -11115,7 +11132,7 @@ function TodayView({
       )}
 
       <div className="grid gap-4 xl:grid-cols-2">
-        <Section title="Entrevistas de hoy" icon={MessageSquareText} count={interviewsToday.length} view="interviews">
+        <TodaySection title="Entrevistas de hoy" icon={MessageSquareText} count={interviewsToday.length} view="interviews" onNavigate={onNavigate}>
           {interviewsToday.length === 0 ? (
             <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin entrevistas agendadas para hoy.</p>
           ) : (
@@ -11128,9 +11145,9 @@ function TodayView({
               ))}
             </ul>
           )}
-        </Section>
+        </TodaySection>
 
-        <Section title="Clases de orientación de hoy" icon={ClipboardList} count={classesToday.length} view="orientation">
+        <TodaySection title="Clases de orientación de hoy" icon={ClipboardList} count={classesToday.length} view="orientation" onNavigate={onNavigate}>
           {classesToday.length === 0 ? (
             <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin clases programadas para hoy.</p>
           ) : (
@@ -11143,9 +11160,9 @@ function TodayView({
               ))}
             </ul>
           )}
-        </Section>
+        </TodaySection>
 
-        <Section title="Protocolos a vencer (7 días)" icon={ShieldCheck} count={protocolsDue.length} view="protocols">
+        <TodaySection title="Protocolos a vencer (7 días)" icon={ShieldCheck} count={protocolsDue.length} view="protocols" onNavigate={onNavigate}>
           {protocolsDue.length === 0 ? (
             <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">No hay protocolos próximos a vencer.</p>
           ) : (
@@ -11161,9 +11178,9 @@ function TodayView({
               ))}
             </ul>
           )}
-        </Section>
+        </TodaySection>
 
-        <Section title="Clases sin planificación" icon={Bell} count={unplannedClasses.length} view="orientation">
+        <TodaySection title="Clases sin planificación" icon={Bell} count={unplannedClasses.length} view="orientation" onNavigate={onNavigate}>
           {unplannedClasses.length === 0 ? (
             <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Todas las clases próximas tienen planificación.</p>
           ) : (
@@ -11176,9 +11193,9 @@ function TodayView({
               ))}
             </ul>
           )}
-        </Section>
+        </TodaySection>
 
-        <Section title="Estudiantes con alertas de salud" icon={AlertTriangle} count={healthStudents.length} view="students">
+        <TodaySection title="Estudiantes con alertas de salud" icon={AlertTriangle} count={healthStudents.length} view="students" onNavigate={onNavigate}>
           {healthStudents.length === 0 ? (
             <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin alertas activas.</p>
           ) : (
@@ -11197,9 +11214,9 @@ function TodayView({
               ))}
             </ul>
           )}
-        </Section>
+        </TodaySection>
 
-        <Section title="Casos críticos abiertos" icon={AlertTriangle} count={criticalCases.length} view="cases">
+        <TodaySection title="Casos críticos abiertos" icon={AlertTriangle} count={criticalCases.length} view="cases" onNavigate={onNavigate}>
           {criticalCases.length === 0 ? (
             <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin casos críticos abiertos.</p>
           ) : (
@@ -11212,7 +11229,7 @@ function TodayView({
               ))}
             </ul>
           )}
-        </Section>
+        </TodaySection>
       </div>
     </div>
   );
@@ -11469,7 +11486,7 @@ function AIChatMode({
   const recordChunksRef = React.useRef<Blob[]>([]);
   const recordTimerRef = React.useRef<number | null>(null);
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || conversations[0];
-  const turns = activeConversation?.turns || [];
+  const turns = useMemo(() => activeConversation?.turns || [], [activeConversation]);
 
   const setTurns = (updater: (current: ChatTurn[]) => ChatTurn[]) => {
     setConversations((current) => {
@@ -12247,6 +12264,26 @@ function ChatResultRenderer({
   );
 }
 
+function ReportBar({ data, color = "bg-blue-500" }: { data: Map<string, number>; color?: string }) {
+  const entries = Array.from(data.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const max = Math.max(1, ...entries.map(([, value]) => value));
+  return (
+    <div className="space-y-1.5">
+      {entries.length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin datos.</p> : entries.map(([label, value]) => (
+        <div key={label} className="text-sm">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="truncate text-slate-700">{label}</span>
+            <span className="tabular-nums font-semibold text-slate-900">{value}</span>
+          </div>
+          <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
+            <div className={`h-full rounded-full ${color}`} style={{ width: `${(value / max) * 100}%` }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ReportsView({ store }: { store: DataStore }) {
   const casesByCategory = new Map<string, number>();
   store.cases.forEach((c) => {
@@ -12269,26 +12306,6 @@ function ReportsView({ store }: { store: DataStore }) {
     interviewsByMonth.set(k, (interviewsByMonth.get(k) || 0) + 1);
   });
 
-  const Bar = ({ data, color = "bg-blue-500" }: { data: Map<string, number>; color?: string }) => {
-    const entries = Array.from(data.entries()).sort((a, b) => b[1] - a[1]).slice(0, 10);
-    const max = Math.max(1, ...entries.map(([, v]) => v));
-    return (
-      <div className="space-y-1.5">
-        {entries.length === 0 ? <p className="rounded-lg bg-slate-50 p-3 text-sm text-slate-500">Sin datos.</p> : entries.map(([label, value]) => (
-          <div key={label} className="text-sm">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="truncate text-slate-700">{label}</span>
-              <span className="tabular-nums font-semibold text-slate-900">{value}</span>
-            </div>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100">
-              <div className={`h-full rounded-full ${color}`} style={{ width: `${(value / max) * 100}%` }} />
-            </div>
-          </div>
-        ))}
-      </div>
-    );
-  };
-
   return (
     <div className="space-y-5">
       <div>
@@ -12302,19 +12319,19 @@ function ReportsView({ store }: { store: DataStore }) {
       <div className="grid gap-5 lg:grid-cols-2">
         <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Casos por categoría</h2>
-          <div className="mt-4"><Bar data={casesByCategory} color="bg-blue-500" /></div>
+          <div className="mt-4"><ReportBar data={casesByCategory} color="bg-blue-500" /></div>
         </section>
         <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Casos por prioridad</h2>
-          <div className="mt-4"><Bar data={casesByPriority} color="bg-rose-500" /></div>
+          <div className="mt-4"><ReportBar data={casesByPriority} color="bg-rose-500" /></div>
         </section>
         <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Top 10 cursos con más casos</h2>
-          <div className="mt-4"><Bar data={casesByCourse} color="bg-amber-500" /></div>
+          <div className="mt-4"><ReportBar data={casesByCourse} color="bg-amber-500" /></div>
         </section>
         <section className="tz-card rounded-2xl border border-slate-200 bg-white p-5">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Entrevistas por mes</h2>
-          <div className="mt-4"><Bar data={interviewsByMonth} color="bg-emerald-500" /></div>
+          <div className="mt-4"><ReportBar data={interviewsByMonth} color="bg-emerald-500" /></div>
         </section>
       </div>
     </div>
@@ -13465,7 +13482,7 @@ export default function TizaEducationApp() {
     }
   };
 
-  const seedPieRoster = (silent = false) => {
+  function seedPieRoster(silent = false) {
     const cleanRut = (r: string) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
     let updated = 0;
     let created = 0;
@@ -13551,7 +13568,7 @@ export default function TizaEducationApp() {
       return { ...current, students: next };
     });
     if (!silent) setToast(`Nómina PIE cargada: ${created} nuevos, ${updated} actualizados.`);
-  };
+  }
 
   const confirmPieImport = () => {
     if (!pieImportData) return;

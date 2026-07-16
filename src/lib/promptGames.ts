@@ -15,6 +15,7 @@ export type PromptGame = {
   category: string;
   summary: string;
   accent: "cyan" | "emerald" | "amber" | "rose" | "violet" | "slate";
+  strength: string;
   cards: PromptGameCard[];
 };
 
