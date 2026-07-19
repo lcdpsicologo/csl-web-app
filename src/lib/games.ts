@@ -11,7 +11,6 @@ import {
   Shuffle,
   Star,
   UsersRound,
-  Waypoints,
   Wind,
 } from "lucide-react";
 import { promptGames } from "@/lib/promptGames";
@@ -24,7 +23,7 @@ export type GameInfo = {
   summary: string;
   audience: string;
   category: string;
-  strength: string;
+  strength?: string;
   status: GameStatus;
   icon: LucideIcon;
   image?: string;
@@ -70,16 +69,6 @@ export const games: GameInfo[] = [
     image: "/maletin/escalera.webp",
     collection: "Maletín Viajero",
     featured: true,
-  },
-  {
-    title: "Serpientes y Escaleras en Familia",
-    href: "/juegos/serpientes-familia",
-    summary: "Tablero cooperativo con movimiento visible y preguntas familiares que permanecen en pantalla.",
-    audience: "Familias y comunidad educativa",
-    category: "Pertenencia y vinculo",
-    strength: "Soy constructivo",
-    status: "listo",
-    icon: Waypoints,
   },
   ...promptGames.map((game, index): GameInfo => ({
     title: game.title,

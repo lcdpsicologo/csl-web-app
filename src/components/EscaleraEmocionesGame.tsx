@@ -6,6 +6,7 @@ import { ArrowLeft, Check, ChevronRight, Crown, Expand, Footprints, HelpCircle, 
 import { escaleraPrompts, ladderMoves, slideMoves, type EscaleraPrompt } from "@/lib/maletin";
 import { GameShareModal } from "@/components/GameShareModal";
 import { MaletinBrand, StrengthsMark } from "@/components/MaletinBrand";
+import { CharacterStrengthBadge } from "@/components/CharacterStrengthBadge";
 
 type Player = { id: number; name: string; position: number; color: string };
 type MoveKind = "normal" | "ladder" | "slide";
@@ -160,7 +161,15 @@ export function EscaleraEmocionesGame() {
   }, []);
 
   const currentPlayer = players[turn];
-  const phase = winner ? "Partida completada" : prompt ? "Conversen la tarjeta" : rolling ? "El dado está girando" : moving ? `Avanza ${currentPlayer.name}` : `Turno de ${currentPlayer.name}`;
+  const phase = winner
+    ? "Partida completada"
+    : prompt
+      ? "Conversen la tarjeta"
+      : rolling
+        ? "El dado está girando"
+        : moving
+          ? lastLanding !== null ? "Observen dónde llegó la ficha" : `Avanza ${currentPlayer.name}`
+          : `Turno de ${currentPlayer.name}`;
 
   const waitForAnimation = (milliseconds: number) => new Promise<void>((resolve) => {
     const timer = setTimeout(() => {
@@ -243,11 +252,14 @@ export function EscaleraEmocionesGame() {
     setLastMove({ from, rolledTo, to: target, kind, dice: value, player: active.name });
     setLastLanding(target);
     setPawnMotion(null);
-    setMoving(false);
     if (target === 100) {
+      setMoving(false);
       setWinner(active.name);
       if (soundEnabled) window.setTimeout(() => playGameSound("win"), 380);
     } else {
+      await waitForAnimation(2200);
+      if (run !== animationRun.current) return;
+      setMoving(false);
       setPrompt(escaleraPrompts[Math.floor(Math.random() * escaleraPrompts.length)]);
     }
   };
@@ -310,7 +322,7 @@ export function EscaleraEmocionesGame() {
           </div>
 
           <div className="hud-dice"><DiceCube value={dice} rolling={rolling} /></div>
-          <button onClick={roll} disabled={Boolean(prompt || winner || rolling || moving)} className="game-primary-button hud-roll-button">
+          <button data-testid="escalera-roll" onClick={roll} disabled={Boolean(prompt || winner || rolling || moving)} className="game-primary-button hud-roll-button">
             <Footprints className="h-5 w-5" /> {rolling ? "Lanzando…" : moving ? "Avanzando…" : prompt ? "Conversa primero" : "Lanzar dado"}
           </button>
 
@@ -368,12 +380,12 @@ export function EscaleraEmocionesGame() {
       </section>
 
       {prompt ? (
-        <div className="game-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="emotion-question">
+        <div data-testid="escalera-prompt" className="game-dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="emotion-question">
           <section key={prompt.id} className="emotion-question-dialog question-card-enter">
             <div className="emotion-dialog-accent" />
             <div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-black uppercase tracking-[.18em] text-[#087f8c]">Paso 2 · Conversar</p><h2 id="emotion-question" className="mt-1 text-xl font-black">Tarjeta emocional</h2></div><span className={`rounded-full px-3 py-1 text-xs font-black ${categoryStyle[prompt.category]}`}>{prompt.category}</span></div>
             <p className="mt-5 text-2xl font-black leading-tight tracking-tight sm:text-4xl">{prompt.prompt}</p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-amber-50 p-4 text-sm leading-6 text-amber-900"><strong>Fortaleza:</strong> {prompt.strength}</div><div className={`rounded-2xl p-4 text-sm font-bold leading-6 ${moveKind === "ladder" ? "bg-emerald-50 text-emerald-800" : moveKind === "slide" ? "bg-rose-50 text-rose-800" : "bg-blue-50 text-blue-800"}`}>{moveNotice}</div></div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-amber-50 p-3"><p className="mb-2 text-[10px] font-black uppercase tracking-[.14em] text-amber-800">Fortaleza del carácter</p><CharacterStrengthBadge strength={prompt.strength} className="max-w-full" /></div><div className={`rounded-2xl p-4 text-sm font-bold leading-6 ${moveKind === "ladder" ? "bg-emerald-50 text-emerald-800" : moveKind === "slide" ? "bg-rose-50 text-rose-800" : "bg-blue-50 text-blue-800"}`}>{moveNotice}</div></div>
             <p className="mt-4 text-xs leading-5 text-slate-500">Escuchen sin corregir. Cualquier persona puede pasar sin explicar algo privado.</p>
             <div className="mt-5 grid gap-2 sm:grid-cols-[1fr_auto]"><button onClick={() => finishConversation(false)} className="game-primary-button flex items-center justify-center gap-2 rounded-2xl bg-[#062b67] px-5 py-3.5 text-sm font-black text-white"><Check className="h-4 w-4" /> Ya conversamos <ChevronRight className="h-4 w-4" /></button><button onClick={() => finishConversation(true)} className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-bold text-slate-500 hover:bg-slate-50">Pasar por ahora</button></div>
           </section>

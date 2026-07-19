@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import React, { useEffect, useState, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
@@ -725,6 +724,46 @@ const nextSlotDateForCourse = (course: string, afterISO: string) => {
 const formatDateCL = (iso: string) => {
   const [year, month, day] = iso.split("-");
   return year && month && day ? `${day}/${month}/${year}` : iso;
+};
+
+const localISODate = (date = new Date()) => {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+};
+
+type OrientationPeriodFilter = "all" | "this-week" | "next-week" | "upcoming" | "history";
+
+const orientationWeekWindows = (todayISO: string) => {
+  const [year, month, day] = todayISO.split("-").map(Number);
+  const base = new Date(year, month - 1, day || 1, 12);
+  const weekday = base.getDay();
+  const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const addDays = (offset: number) => {
+    const date = new Date(base.getFullYear(), base.getMonth(), base.getDate() + mondayOffset + offset, 12);
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+  return {
+    thisWeekStart: addDays(0),
+    thisWeekEnd: addDays(6),
+    nextWeekStart: addDays(7),
+    nextWeekEnd: addDays(13),
+  };
+};
+
+const orientationDateMatchesPeriod = (
+  dateValue: string | undefined,
+  period: OrientationPeriodFilter,
+  todayISO: string,
+  windows: ReturnType<typeof orientationWeekWindows>,
+) => {
+  const date = (dateValue || "").slice(0, 10);
+  if (period === "all") return true;
+  if (!date) return false;
+  if (period === "this-week") return date >= windows.thisWeekStart && date <= windows.thisWeekEnd;
+  if (period === "next-week") return date >= windows.nextWeekStart && date <= windows.nextWeekEnd;
+  if (period === "upcoming") return date >= todayISO;
+  return date < todayISO;
 };
 
 // Fecha que corresponde a un curso dentro de una semana, según el horario fijo.
@@ -4590,7 +4629,7 @@ function OrientationCycleView({
   const [selectedOwner, setSelectedOwner] = useState(orientationOwners[0].name);
   const [filterCourse, setFilterCourse] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterDate, setFilterDate] = useState<string>("all");
+  const [filterPeriod, setFilterPeriod] = useState<OrientationPeriodFilter>("all");
   const [orientationSearch, setOrientationSearch] = useState("");
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [weekCreatorOpen, setWeekCreatorOpen] = useState(false);
@@ -4637,21 +4676,31 @@ function OrientationCycleView({
     });
   }, [appConfiguration.orientationSchedule, store.courses]);
   const owner = useMemo(() => configuredOwners.find((item) => item.name === selectedOwner) || configuredOwners[0] || orientationOwners[0], [configuredOwners, selectedOwner]);
-  const actionColumns = appConfiguration.orientationActions;
+  const actionColumns = useMemo(
+    () => appConfiguration.orientationActions,
+    [appConfiguration.orientationActions],
+  );
   const actionOptions: TizaSelectOption[] = useMemo(() => actionColumns.map((action) => ({
     value: action,
     label: action,
     keywords: orientationActionSearchAliases[normalize(action)] || [],
   })), [actionColumns]);
-  const scheduleSlots = appConfiguration.orientationSchedule;
-  const courseHeadTeacher = (courseName: string) => {
+  const scheduleSlots = useMemo(
+    () => appConfiguration.orientationSchedule,
+    [appConfiguration.orientationSchedule],
+  );
+  const courseHeadTeacher = React.useCallback((courseName: string) => {
     const saved = store.courses.find((course) => normalize(course.name || "") === normalize(courseName));
     if (saved?.headTeacher || saved?.headTeacherEmail) return { name: saved.headTeacher || "Profesor/a jefe", email: saved.headTeacherEmail || "" };
     return headTeacherForCourse(courseName);
-  };
-  const scheduledDate = (course: string, weekStartISO: string) => scheduledDateForCourse(course, weekStartISO, scheduleSlots);
+  }, [store.courses]);
+  const scheduledDate = React.useCallback(
+    (course: string, weekStartISO: string) => scheduledDateForCourse(course, weekStartISO, scheduleSlots),
+    [scheduleSlots],
+  );
   const classTime = (course: string | undefined) => orientationClassTime(course, scheduleSlots);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localISODate();
+  const periodWindows = useMemo(() => orientationWeekWindows(today), [today]);
   const orientationWeekOptions = useMemo(() =>
     ORIENTATION_FIRST_CYCLE_CONFIG.map((config) => ({ value: config.week, label: config.week })),
   []);
@@ -4689,7 +4738,7 @@ function OrientationCycleView({
     .map((slot) => ({
       slot,
       date: creatorRange ? scheduledDate(slot.course, creatorRange.start) : "",
-    })), [creatorRange, owner.name, scheduleSlots]);
+    })), [creatorRange, owner.name, scheduleSlots, scheduledDate]);
 
   const ownerStoredClasses = useMemo(() => store.orientation.filter((record) =>
     !isGeneratedOrientationPlaceholder(record) && (
@@ -4733,20 +4782,20 @@ function OrientationCycleView({
   const missingCreatorSlots = useMemo(() => creatorSlots.filter(({ slot, date }) => date && !ownerStoredClasses.some((record) =>
     (record.date || "").slice(0, 10) === date && normalize(record.course || "") === normalize(slot.course)
   )), [creatorSlots, ownerStoredClasses]);
-  const getOrientationAction = (record: DataRecord) => {
+  const getOrientationAction = React.useCallback((record: DataRecord) => {
     const value = record.axis || record.characterStrength || record.classType || record.topic || "";
     const exact = actionColumns.find((action) => normalize(action) === normalize(value));
     if (exact) return exact;
     const fuzzy = actionColumns.find((action) => normalize(value).includes(normalize(action)) || normalize(action).includes(normalize(value)));
     return fuzzy || value || "Sin acción";
-  };
+  }, [actionColumns]);
   // Valor tal como está guardado, sin normalizar: es lo que se muestra y edita
   // en la bitácora (getOrientationAction solo agrupa para matriz y estadísticas).
   const rawOrientationAction = (record: DataRecord) => record.axis || record.characterStrength || record.classType || "";
   const orientationActionTotals = useMemo(() => actionColumns.map((action) => ({
     action,
     count: ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length,
-  })), [ownerClasses]);
+  })), [actionColumns, getOrientationAction, ownerClasses]);
   const visibleActionColumns = useMemo(() => orientationActionTotals.some((item) => item.count > 0)
     ? orientationActionTotals.filter((item) => item.count > 0).map((item) => item.action)
     : actionColumns, [orientationActionTotals, actionColumns]);
@@ -4757,7 +4806,7 @@ function OrientationCycleView({
         ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length,
       ),
     ),
-  ), [owner.courses, ownerClasses, visibleActionColumns]);
+  ), [getOrientationAction, owner.courses, ownerClasses, visibleActionColumns]);
   const actionCellTone = (count: number) => {
     if (count === 0) return "bg-white text-slate-300";
     if (count >= Math.max(4, Math.ceil(maxActionCount * 0.75))) return "bg-emerald-200 text-emerald-950";
@@ -4773,7 +4822,7 @@ function OrientationCycleView({
   const filteredClasses = useMemo(() => ownerClasses.filter((record) => {
     if (filterCourse !== "all" && normalize(record.course || "") !== normalize(filterCourse)) return false;
     if (filterStatus !== "all" && canonicalOrientationStatus(record.status) !== filterStatus) return false;
-    if (filterDate !== "all" && (record.date || "") !== filterDate) return false;
+    if (!orientationDateMatchesPeriod(record.date, filterPeriod, today, periodWindows)) return false;
     const query = normalize(orientationSearch);
     if (query) {
       const headTeacher = courseHeadTeacher(record.course || "");
@@ -4803,12 +4852,40 @@ function OrientationCycleView({
     }
     return true;
   }).sort((a, b) => {
-    const dateOrder = String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt));
+    const chronological = filterPeriod === "this-week" || filterPeriod === "next-week" || filterPeriod === "upcoming";
+    const dateOrder = chronological
+      ? String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt))
+      : String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt));
     if (dateOrder !== 0) return dateOrder;
     const timeOrder = orientationClassStartMinutes(a.course, scheduleSlots) - orientationClassStartMinutes(b.course, scheduleSlots);
     if (timeOrder !== 0) return timeOrder;
     return String(a.course || "").localeCompare(String(b.course || ""), "es") || a.id.localeCompare(b.id);
-  }), [filterCourse, filterDate, filterStatus, orientationSearch, ownerClasses, scheduleSlots]);
+  }), [courseHeadTeacher, filterCourse, filterPeriod, filterStatus, orientationSearch, ownerClasses, periodWindows, scheduleSlots, today]);
+
+  const periodCounts = useMemo(() => ({
+    all: ownerClasses.length,
+    "this-week": ownerClasses.filter((record) => orientationDateMatchesPeriod(record.date, "this-week", today, periodWindows)).length,
+    "next-week": ownerClasses.filter((record) => orientationDateMatchesPeriod(record.date, "next-week", today, periodWindows)).length,
+    upcoming: ownerClasses.filter((record) => orientationDateMatchesPeriod(record.date, "upcoming", today, periodWindows)).length,
+    history: ownerClasses.filter((record) => orientationDateMatchesPeriod(record.date, "history", today, periodWindows)).length,
+  }), [ownerClasses, periodWindows, today]);
+  const nextWeekNeedsPreparation = useMemo(() => ownerClasses.filter((record) =>
+    orientationDateMatchesPeriod(record.date, "next-week", today, periodWindows) &&
+    (!(record.canvaLink || record.evidence) || !(record.planificacion || record.folderLink))
+  ).length, [ownerClasses, periodWindows, today]);
+  const periodFilters: Array<{ value: OrientationPeriodFilter; label: string; detail: string }> = [
+    { value: "all", label: "Todo", detail: "Bitácora completa" },
+    { value: "this-week", label: "Esta semana", detail: `${formatDateCL(periodWindows.thisWeekStart).slice(0, 5)}–${formatDateCL(periodWindows.thisWeekEnd).slice(0, 5)}` },
+    { value: "next-week", label: "Próxima semana", detail: nextWeekNeedsPreparation ? `${nextWeekNeedsPreparation} por preparar` : "Materiales listos" },
+    { value: "upcoming", label: "Próximas", detail: "Desde hoy" },
+    { value: "history", label: "Historial", detail: "Clases anteriores" },
+  ];
+  const selectPeriodFilter = (period: OrientationPeriodFilter) => {
+    setFilterPeriod(period);
+    setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
+    setExpandedClassIds([]);
+    setCollapsedDateKeys([]);
+  };
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
   const renderedDateCounts = useMemo(() => renderedClasses.reduce((counts, record) => {
     const key = (record.date || "").slice(0, 10) || "sin-fecha";
@@ -4903,7 +4980,7 @@ function OrientationCycleView({
         records: inWeek.filter((record) => normalize(record.course || "") === normalize(course)),
       }))
       .filter((group) => group.records.length > 0);
-  }, [effectiveSendWeek, owner.courses, ownerStoredClasses, sendCourse, sendRange]);
+  }, [courseHeadTeacher, effectiveSendWeek, owner.courses, ownerStoredClasses, sendCourse, sendRange]);
   const sendRecipients = Array.from(new Set(sendGroups.map((group) => group.teacher?.email || "").filter(Boolean)));
 
   const openGmailWithWeekPlan = () => {
@@ -5415,7 +5492,7 @@ function OrientationCycleView({
   const showReprogrammedClasses = () => {
     setFilterCourse("all");
     setFilterStatus("Reprogramada");
-    setFilterDate("all");
+    setFilterPeriod("all");
     setOrientationSearch("");
     setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
   };
@@ -5601,7 +5678,7 @@ function OrientationCycleView({
                 setSelectedOwner(item.name);
                 setFilterCourse("all");
                 setFilterStatus("all");
-                setFilterDate("all");
+                setFilterPeriod("all");
                 setOrientationSearch("");
                 setNewClassForm({});
                 setExpandedClassIds([]);
@@ -5806,6 +5883,31 @@ function OrientationCycleView({
               <Plus className="h-4 w-4" /> Nuevo registro
             </button>
           </div>
+          <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+            {periodFilters.map((period) => {
+              const active = filterPeriod === period.value;
+              const count = periodCounts[period.value];
+              return (
+                <button
+                  key={period.value}
+                  type="button"
+                  onClick={() => selectPeriodFilter(period.value)}
+                  aria-pressed={active}
+                  className={`min-h-[68px] rounded-lg border px-3 py-2 text-left transition ${active
+                    ? "border-cyan-700 bg-cyan-700 text-white shadow-sm"
+                    : period.value === "next-week"
+                      ? "border-blue-200 bg-blue-50 text-blue-950 hover:border-blue-400 hover:bg-blue-100"
+                      : "border-slate-200 bg-white text-slate-800 hover:border-slate-300 hover:bg-slate-50"}`}
+                >
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold">{period.label}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-black tabular-nums ${active ? "bg-white/20 text-white" : "bg-white text-slate-700 ring-1 ring-slate-200"}`}>{count}</span>
+                  </span>
+                  <span className={`mt-1 block truncate text-[10px] font-semibold ${active ? "text-cyan-100" : period.value === "next-week" && nextWeekNeedsPreparation ? "text-amber-700" : "text-slate-500"}`}>{period.detail}</span>
+                </button>
+              );
+            })}
+          </div>
           <div className="grid w-full gap-2 lg:w-auto lg:grid-cols-[minmax(260px,360px)_minmax(190px,1fr)_minmax(190px,1fr)]">
             <label className="relative block">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -5906,6 +6008,7 @@ function OrientationCycleView({
             const startsDateGroup = index === 0 || dateKey !== previousDateKey;
             const dateGroupCount = startsDateGroup ? renderedDateCounts.get(dateKey) || 0 : 0;
             const dateCollapsed = collapsedDateKeys.includes(dateKey);
+            const nextWeekDate = orientationDateMatchesPeriod(record.date, "next-week", today, periodWindows);
             const dateHeader = startsDateGroup ? (
               <div className={dateCollapsed ? "" : index === 0 ? "pb-2" : "pb-2 pt-5"}>
                 <button
@@ -5916,6 +6019,7 @@ function OrientationCycleView({
                 >
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><CalendarDays className="h-3.5 w-3.5" /></span>
                   <span className="text-sm font-bold text-slate-900">{formatOrientationDate(record.date)}</span>
+                  {nextWeekDate ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue-700">Próxima semana</span> : null}
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{dateGroupCount} {dateGroupCount === 1 ? "evento" : "eventos"}</span>
                   <span className="h-px min-w-4 flex-1 bg-slate-200" />
                   <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${dateCollapsed ? "-rotate-90" : ""}`} />
@@ -10422,6 +10526,17 @@ function GamesView() {
             <a href="/maletin-viajero" className="inline-flex items-center gap-2 rounded-2xl bg-[#f5b82e] px-5 py-3.5 text-sm font-black text-[#062b67] shadow-lg transition hover:-translate-y-0.5"><Sparkles className="h-4 w-4" /> Abrir Maletín Viajero</a>
             <button onClick={() => setShareGame(games[0])} className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-5 py-3.5 text-sm font-black text-white backdrop-blur hover:bg-white/20"><Send className="h-4 w-4" /> Enviar a una familia</button>
           </div>
+        </div>
+      </section>
+
+      <section className="grid items-center gap-7 border-y border-slate-200 bg-white px-5 py-8 sm:px-8 lg:grid-cols-[minmax(0,1fr)_420px]">
+        <div>
+          <p className="text-xs font-black uppercase tracking-[0.16em] text-[#087f8c]">Fortalezas del carácter</p>
+          <h2 className="mt-2 text-3xl font-black tracking-[-0.035em] text-slate-950">Los nueve referentes visuales, dentro de cada experiencia</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600">Cada tarjeta y conversación conecta su propósito con una fortaleza reconocible. Los juegos muestran el logo correspondiente cuando aparece la pregunta.</p>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <Image src="/maletin/fortalezas-caracter.jpg" alt="Logos oficiales de las nueve fortalezas del carácter" width={792} height={790} className="h-auto w-full" />
         </div>
       </section>
 

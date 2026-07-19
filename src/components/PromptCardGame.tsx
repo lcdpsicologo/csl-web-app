@@ -78,7 +78,7 @@ export function PromptCardGame({ game }: { game: PromptGame }) {
             <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Juego vincular</p>
             <h1 className="mt-2 text-2xl font-bold tracking-tight">{game.title}</h1>
             <p className="mt-2 text-sm leading-6 text-slate-600">{game.summary}</p>
-            <CharacterStrengthBadge strength={game.strength} className="mt-4 max-w-full" />
+            {game.strength ? <CharacterStrengthBadge strength={game.strength} className="mt-4 max-w-full" /> : null}
 
             <label htmlFor="level" className="mt-5 block text-sm font-bold text-slate-700">
               Nivel
