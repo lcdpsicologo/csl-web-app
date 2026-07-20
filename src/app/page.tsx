@@ -2090,6 +2090,7 @@ const TizaIaIcon = ((props: React.SVGProps<SVGSVGElement>) => (
 
 const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Inicio", icon: Home },
+  { id: "orientation", label: "Orientación", icon: UsersRound },
   { id: "today", label: "Hoy", icon: CalendarDays },
   { id: "triage", label: "Tiza-IA", icon: TizaIaIcon },
   { id: "reports", label: "Reportes", icon: PieChart },
@@ -2102,7 +2103,6 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "logs", label: "Bitácoras", icon: ClipboardList },
   { id: "interviews", label: "Entrevistas", icon: MessageSquareText },
   { id: "protocols", label: "Protocolos", icon: ShieldCheck },
-  { id: "orientation", label: "Orientación", icon: UsersRound },
   { id: "workshops", label: "Talleres", icon: GraduationCap },
   { id: "documents", label: "Documentos", icon: FolderOpen },
   { id: "team", label: "Equipo", icon: UsersRound },
@@ -4608,7 +4608,6 @@ function OrientationCycleView({
   onAddOrientationWeekRecords,
   onUpdateOrientationRecord,
   onDeleteOrientationRecord,
-  onGenerateAnnualPlan,
   calendarEvents,
   appConfiguration,
   onOpenConfiguration,
@@ -4621,7 +4620,6 @@ function OrientationCycleView({
   onAddOrientationWeekRecords: (records: DataRecord[]) => void;
   onUpdateOrientationRecord: (recordId: string, updates: Record<string, string>) => void;
   onDeleteOrientationRecord: (recordId: string) => void;
-  onGenerateAnnualPlan: () => void;
   calendarEvents: CalendarEvent[];
   appConfiguration: TizaAppConfiguration;
   onOpenConfiguration: () => void;
@@ -4629,7 +4627,7 @@ function OrientationCycleView({
   const [selectedOwner, setSelectedOwner] = useState(orientationOwners[0].name);
   const [filterCourse, setFilterCourse] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterPeriod, setFilterPeriod] = useState<OrientationPeriodFilter>("all");
+  const [filterPeriod, setFilterPeriod] = useState<OrientationPeriodFilter>("this-week");
   const [orientationSearch, setOrientationSearch] = useState("");
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [weekCreatorOpen, setWeekCreatorOpen] = useState(false);
@@ -4646,6 +4644,8 @@ function OrientationCycleView({
   const [feedbackRecordId, setFeedbackRecordId] = useState("");
   // Historial de feedbacks (listado consultable + reporte con Tiza-IA).
   const [feedbackHistoryOpen, setFeedbackHistoryOpen] = useState(false);
+  // Panel plegable con el detalle de actividades realizadas por tipo/fortaleza.
+  const [showActivityDetails, setShowActivityDetails] = useState(false);
   // Fechas de la bitácora contraídas (clave AAAA-MM-DD).
   const [collapsedDateKeys, setCollapsedDateKeys] = useState<string[]>([]);
   const toggleDateCollapsed = (dateKey: string) =>
@@ -4993,70 +4993,6 @@ function OrientationCycleView({
     const patch: Record<string, string> = { course };
     if (range) patch.date = scheduledDate(course, range.start);
     updateQuickClassForm(patch);
-  };
-
-  // ---- Envío de la planificación semanal a profesores jefes por Gmail ----
-  const [sendOpen, setSendOpen] = useState(false);
-  const [sendWeek, setSendWeek] = useState("");
-  const [sendCourse, setSendCourse] = useState("all");
-  const effectiveSendWeek = sendWeek || defaultOrientationWeek;
-  const sendRange = parseOrientationWeekRange(effectiveSendWeek);
-  const sendGroups = useMemo(() => {
-    const inWeek = ownerStoredClasses.filter((record) => {
-      const matchesWeek = (record.week || "") === effectiveSendWeek ||
-        (sendRange && record.date && record.date >= sendRange.start && record.date <= sendRange.end);
-      if (!matchesWeek) return false;
-      if (sendCourse !== "all" && normalize(record.course || "") !== normalize(sendCourse)) return false;
-      return true;
-    });
-    return owner.courses
-      .map((course) => ({
-        course,
-        teacher: courseHeadTeacher(course),
-        records: inWeek.filter((record) => normalize(record.course || "") === normalize(course)),
-      }))
-      .filter((group) => group.records.length > 0);
-  }, [courseHeadTeacher, effectiveSendWeek, owner.courses, ownerStoredClasses, sendCourse, sendRange]);
-  const sendRecipients = Array.from(new Set(sendGroups.map((group) => group.teacher?.email || "").filter(Boolean)));
-
-  const openGmailWithWeekPlan = () => {
-    if (!sendGroups.length) return;
-    const lines: string[] = [];
-    lines.push("Estimados/as:");
-    lines.push("");
-    lines.push(`Comparto la planificación de Orientación (SOY+) para la semana ${effectiveSendWeek}.`);
-    lines.push("");
-    sendGroups.forEach((group) => {
-      lines.push(`■ ${group.course}${group.teacher ? ` — ${group.teacher.name}` : ""}`);
-      group.records.forEach((record) => {
-        const action = record.axis || record.characterStrength || record.classType || "";
-        const topic = (record.topic || "").trim();
-        lines.push(`  • ${record.date || "Fecha por confirmar"}${action ? ` · ${action}` : ""}${topic ? ` · ${topic}` : ""}`);
-        const canva = (record.canvaLink || record.evidence || "").trim();
-        const plan = (record.planificacion || "").trim();
-        const folder = (record.folderLink || "").trim();
-        if (canva) lines.push(`    Presentación: ${canva}`);
-        if (plan) lines.push(`    Planificación: ${plan}`);
-        if (folder) lines.push(`    Carpeta: ${folder}`);
-      });
-      lines.push("");
-    });
-    lines.push("Todas las clases también están disponibles en: https://tiza-education-app.vercel.app/clases");
-    lines.push("");
-    lines.push(`Saludos cordiales,`);
-    lines.push(`${owner.name} · ${owner.role}`);
-    lines.push("Colegio San Lucas de Lo Espejo");
-
-    const subject = `Planificación Orientación SOY+ · ${effectiveSendWeek}`;
-    const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(sendRecipients.join(","))}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(lines.join("\n"))}`;
-    window.open(url, "_blank", "noopener");
-
-    const sentAt = today;
-    sendGroups.forEach((group) => {
-      group.records.forEach((record) => {
-        onUpdateOrientationRecord(record.id, { teacherSentStatus: "Enviado", teacherSentAt: sentAt });
-      });
-    });
   };
 
   const saveNewClass = () => {
@@ -5534,6 +5470,15 @@ function OrientationCycleView({
   };
 
   // ---- Estadísticas del orientador seleccionado (sin inflar por calendario) ----
+  // Desglose de actividades realizadas del orientador activo (para el panel de detalle).
+  const ownerCompletedActionCounts = useMemo(() => {
+    const totals = new Map<string, number>();
+    ownerClasses.filter((r) => /realizad/i.test(r.status || "")).forEach((record) => {
+      const action = rawOrientationAction(record) || "Sin tipo definido";
+      totals.set(action, (totals.get(action) || 0) + 1);
+    });
+    return Array.from(totals.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"));
+  }, [ownerClasses]);
   const reprogCount = ownerStoredClasses.filter((r) => /reprogramad/i.test(r.status || "")).length;
   const ownerFeedbackCount = ownerStoredClasses.filter((r) => r.classFeedback).length;
   const plannedCount = ownerStoredClasses.filter((r) => /planificad/i.test(r.status || "")).length;
@@ -5557,9 +5502,6 @@ function OrientationCycleView({
               <Plus className="h-4 w-4" /> Preparar semana
             </button>
           ) : null}
-          <button onClick={() => setSendOpen((value) => !value)} className={`tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold ${sendOpen ? "border-emerald-400 bg-emerald-100 text-emerald-800" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}>
-            <Mail className="h-4 w-4" /> Enviar semana
-          </button>
           <a href="/clases" target="_blank" rel="noreferrer" className="tz-press inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
             <ExternalLink className="h-4 w-4" /> Vista profesores
           </a>
@@ -5569,9 +5511,6 @@ function OrientationCycleView({
           </button>
           <button onClick={() => setReportPreviewOpen(true)} title={`Ver el registro integral de ${owner.name}`} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
             <FileText className="h-4 w-4" /> Reporte integral
-          </button>
-          <button onClick={onGenerateAnnualPlan} className="tz-press inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
-            <CalendarDays className="h-4 w-4" /> Completar año
           </button>
           <button
             onClick={onOpenConfiguration}
@@ -5633,66 +5572,8 @@ function OrientationCycleView({
         </section>
       )}
 
-      {sendOpen && (
-        <section className="tz-slide-down rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-emerald-700">Enviar por Gmail</p>
-              <h2 className="text-lg font-semibold text-slate-950">Planificación semanal para profesores jefes</h2>
-              <p className="mt-0.5 text-xs text-slate-600">Se abrirá Gmail con el correo ya redactado desde tu cuenta institucional; solo revisas y envías.</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <div className="min-w-56">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana</span>
-                <TizaSelect value={effectiveSendWeek} onChange={setSendWeek} options={weekOptionsFor(effectiveSendWeek)} className="mt-1" />
-              </div>
-              <div className="min-w-40">
-                <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</span>
-                <TizaSelect value={sendCourse} onChange={setSendCourse} options={[{ value: "all", label: "Todos los cursos" }, ...owner.courses.map((course) => ({ value: course, label: course }))]} className="mt-1" />
-              </div>
-            </div>
-          </div>
-
-          {sendGroups.length === 0 ? (
-            <p className="mt-3 rounded-lg border border-dashed border-emerald-300 bg-white p-4 text-center text-sm text-slate-500">
-              No hay clases registradas para esta semana{sendCourse !== "all" ? " en este curso" : ""}. Regístralas primero en el formulario de abajo.
-            </p>
-          ) : (
-            <>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {sendGroups.map((group) => (
-                  <div key={group.course} className="rounded-lg border border-emerald-200 bg-white p-3 text-xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <strong className="text-slate-950">{group.course}</strong>
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 font-bold text-emerald-700 tabular-nums">{group.records.length} clase{group.records.length === 1 ? "" : "s"}</span>
-                    </div>
-                    <p className={`mt-1 truncate ${group.teacher ? "text-slate-600" : "font-semibold text-amber-600"}`}>
-                      {group.teacher ? `${group.teacher.name} · ${group.teacher.email}` : "Sin correo de profesor/a jefe en la nómina"}
-                    </p>
-                    <p className="mt-1 truncate text-slate-500">
-                      {group.records.map((record) => record.axis || record.characterStrength || record.topic || "Clase").join(" · ")}
-                    </p>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
-                <p className="text-xs font-semibold text-slate-600">
-                  {sendRecipients.length} destinatario{sendRecipients.length === 1 ? "" : "s"} · al abrir Gmail las clases quedan marcadas como &quot;Enviado&quot;
-                </p>
-                <button
-                  onClick={openGmailWithWeekPlan}
-                  disabled={sendRecipients.length === 0}
-                  className="tz-press inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow hover:bg-emerald-700 disabled:bg-slate-300"
-                >
-                  <Mail className="h-4 w-4" /> Abrir en Gmail
-                </button>
-              </div>
-            </>
-          )}
-        </section>
-      )}
-
-      <section className="grid gap-3 lg:grid-cols-3">
+      {/* ---- Orientadores: tarjetas compactas horizontales ---- */}
+      <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
         {configuredOwners.map((item) => {
           const active = item.name === selectedOwner;
           const itemClasses = store.orientation.filter((record) =>
@@ -5701,12 +5582,7 @@ function OrientationCycleView({
               item.courses.some((course) => normalize(record.course || "") === normalize(course))
             )
           );
-          const completedClasses = itemClasses.filter((record) => /realizad/i.test(record.status || ""));
-          const actionCounts = Array.from(completedClasses.reduce((totals, record) => {
-            const action = rawOrientationAction(record) || "Sin tipo definido";
-            totals.set(action, (totals.get(action) || 0) + 1);
-            return totals;
-          }, new Map<string, number>()).entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "es"));
+          const completedCount = itemClasses.filter((record) => /realizad/i.test(record.status || "")).length;
           return (
             <button
               key={item.email}
@@ -5714,75 +5590,90 @@ function OrientationCycleView({
                 setSelectedOwner(item.name);
                 setFilterCourse("all");
                 setFilterStatus("all");
-                setFilterPeriod("all");
+                setFilterPeriod("this-week");
                 setOrientationSearch("");
                 setNewClassForm({});
                 setExpandedClassIds([]);
                 setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
               }}
-              className={`tz-card rounded-2xl border p-3.5 text-left transition ${
+              className={`tz-card flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                 active ? "border-blue-500 bg-blue-50/60 shadow-sm ring-1 ring-blue-200" : "border-slate-200 bg-white hover:bg-slate-50"
               }`}
             >
-              <div className="flex items-center gap-3">
-                <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-sm font-bold text-white shadow-sm ${active ? "bg-blue-600" : `bg-gradient-to-br ${avatarTone(item.name)}`}`}>
-                  {initialsOf(item.name)}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.cycle}</p>
-                  <h2 className="truncate text-sm font-bold text-slate-950">{item.name}</h2>
-                  <p className="truncate text-xs text-slate-500">{item.courses.length} cursos · {store.students.filter((s) => item.courses.includes(s.course || "")).length} estudiantes</p>
-                </div>
+              <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-sm font-bold text-white shadow-sm ${active ? "bg-blue-600" : `bg-gradient-to-br ${avatarTone(item.name)}`}`}>
+                {initialsOf(item.name)}
               </div>
-              <div className="mt-3 border-t border-slate-200/80 pt-3">
-                <div className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Actividades realizadas</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${active ? "bg-blue-100 text-blue-700" : "bg-emerald-50 text-emerald-700"}`}>{completedClasses.length}</span>
-                </div>
-                {actionCounts.length ? (
-                  <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
-                    {actionCounts.map(([action, count]) => (
-                      <div key={action} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-white/80 px-2 py-1.5">
-                        <span className="truncate text-[11px] font-semibold text-slate-600" title={action}>{action}</span>
-                        <span className="shrink-0 text-xs font-bold tabular-nums text-slate-900">{count}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="rounded-md border border-dashed border-slate-200 bg-white/60 px-2 py-2 text-[11px] font-medium text-slate-500">Aún no hay actividades realizadas registradas.</p>
-                )}
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{item.cycle}</p>
+                <h2 className="truncate text-sm font-bold text-slate-950">{item.name}</h2>
+                <p className="truncate text-[11px] text-slate-500">{item.courses.length} cursos · {store.students.filter((s) => item.courses.includes(s.course || "")).length} estudiantes</p>
+              </div>
+              <div className="shrink-0 text-right">
+                <span className={`block text-xl font-bold leading-none tabular-nums ${active ? "text-blue-700" : "text-emerald-700"}`}>{completedCount}</span>
+                <span className="text-[9px] font-bold uppercase tracking-wide text-slate-400">Realizadas</span>
               </div>
             </button>
           );
         })}
       </section>
 
-      {/* ---- Banda de estadísticas del orientador ---- */}
-      <section className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
-        {([
-          ["Pendientes", classCounts.pendientes, "text-slate-700", "bg-slate-50 ring-slate-200", ClipboardList],
-          ["Reprogramadas", reprogCount, "text-amber-700", "bg-amber-50 ring-amber-100", CalendarDays],
-          ["Planificadas", plannedCount, "text-violet-700", "bg-violet-50 ring-violet-100", ClipboardList],
-          ["Con Canva", withCanva, "text-cyan-700", "bg-cyan-50 ring-cyan-100", FileText],
-          ["Con planificación", withPlan, "text-indigo-700", "bg-indigo-50 ring-indigo-100", FolderOpen],
-          ["Talleres", classCounts.talleres, "text-rose-700", "bg-rose-50 ring-rose-100", GraduationCap],
-        ] as Array<[string, string | number, string, string, LucideIcon]>).map(([label, value, color, tone, Icon]) => (
-          <div
-            key={label}
-            onClick={label === "Reprogramadas" ? showReprogrammedClasses : undefined}
-            role={label === "Reprogramadas" ? "button" : undefined}
-            tabIndex={label === "Reprogramadas" ? 0 : undefined}
-            onKeyDown={label === "Reprogramadas" ? (event) => { if (event.key === "Enter" || event.key === " ") showReprogrammedClasses(); } : undefined}
-            title={label === "Reprogramadas" ? "Ver clases reprogramadas en la bitácora" : undefined}
-            className={`rounded-2xl px-3 py-3 ring-1 ${label === "Reprogramadas" ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-300" : ""} ${tone}`}
-          >
-            <div className="flex items-center justify-between">
-              <span className={`text-2xl font-bold leading-none tabular-nums ${color}`}>{value}</span>
-              <Icon className={`h-4 w-4 ${color} opacity-60`} />
+      {/* ---- Detalle plegable de actividades realizadas del orientador activo ---- */}
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <button
+          onClick={() => setShowActivityDetails((value) => !value)}
+          className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+        >
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            <PieChart className="h-4 w-4 text-cyan-600" />
+            Mostrar detalles de las actividades realizadas
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 tabular-nums">{classCounts.realizadas}</span>
+          </span>
+          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition ${showActivityDetails ? "rotate-180" : ""}`} />
+        </button>
+        {showActivityDetails ? (
+          <div className="border-t border-slate-100 px-4 py-4">
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500">Por acción / fortaleza del carácter</p>
+            {ownerCompletedActionCounts.length ? (
+              <div className="grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {ownerCompletedActionCounts.map(([action, count]) => (
+                  <div key={action} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1.5">
+                    <span className="truncate text-[11px] font-semibold text-slate-600" title={action}>{action}</span>
+                    <span className="shrink-0 text-xs font-bold tabular-nums text-slate-900">{count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-md border border-dashed border-slate-200 bg-slate-50/60 px-3 py-3 text-xs font-medium text-slate-500">Aún no hay actividades realizadas registradas para este orientador.</p>
+            )}
+            <p className="mb-2 mt-4 text-[11px] font-bold uppercase tracking-wider text-slate-500">Otros estados y materiales</p>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+              {([
+                ["Pendientes", classCounts.pendientes, "text-slate-700", "bg-slate-50 ring-slate-200", ClipboardList, false],
+                ["Reprogramadas", reprogCount, "text-amber-700", "bg-amber-50 ring-amber-100", CalendarDays, true],
+                ["Planificadas", plannedCount, "text-violet-700", "bg-violet-50 ring-violet-100", ClipboardList, false],
+                ["Con Canva", withCanva, "text-cyan-700", "bg-cyan-50 ring-cyan-100", FileText, false],
+                ["Con planificación", withPlan, "text-indigo-700", "bg-indigo-50 ring-indigo-100", FolderOpen, false],
+                ["Talleres", classCounts.talleres, "text-rose-700", "bg-rose-50 ring-rose-100", GraduationCap, false],
+              ] as Array<[string, string | number, string, string, LucideIcon, boolean]>).map(([label, value, color, tone, Icon, clickable]) => (
+                <div
+                  key={label}
+                  onClick={clickable ? showReprogrammedClasses : undefined}
+                  role={clickable ? "button" : undefined}
+                  tabIndex={clickable ? 0 : undefined}
+                  onKeyDown={clickable ? (event) => { if (event.key === "Enter" || event.key === " ") showReprogrammedClasses(); } : undefined}
+                  title={clickable ? "Ver clases reprogramadas en la bitácora" : undefined}
+                  className={`rounded-xl px-3 py-2.5 ring-1 ${clickable ? "cursor-pointer transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-300" : ""} ${tone}`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xl font-bold leading-none tabular-nums ${color}`}>{value}</span>
+                    <Icon className={`h-4 w-4 ${color} opacity-60`} />
+                  </div>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">{label}</p>
+                </div>
+              ))}
             </div>
-            <p className="mt-1.5 text-[11px] font-semibold text-slate-500">{label}</p>
           </div>
-        ))}
+        ) : null}
       </section>
 
       {quickFormExpanded && typeof document !== "undefined" ? createPortal(
@@ -14051,7 +13942,6 @@ export default function TizaEducationApp() {
           onAddOrientationWeekRecords={addOrientationWeekRecords}
           onUpdateOrientationRecord={updateOrientationRecord}
           onDeleteOrientationRecord={deleteOrientationRecord}
-          onGenerateAnnualPlan={() => syncOrientationAnnualPlan(false)}
           calendarEvents={calendarEvents}
           appConfiguration={appConfiguration}
           onOpenConfiguration={() => setActiveView("settings")}
