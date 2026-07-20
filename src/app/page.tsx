@@ -4671,6 +4671,14 @@ function OrientationCycleView({
     const from = sameMonth ? String(monday.getDate()) : fmt(monday);
     return `Semana del ${from} al ${fmt(friday)}${monday.getFullYear() !== new Date().getFullYear() ? ` ${monday.getFullYear()}` : ""}`;
   };
+  // Etiqueta del segmento mensual ("Junio 2026"); el mes se toma del lunes de
+  // cada semana para que ningún bloque semanal quede partido entre dos meses.
+  const monthLabelOf = (monthKey: string) => {
+    if (monthKey === "sin-fecha") return "Sin fecha";
+    const [y, m] = monthKey.split("-").map(Number);
+    const name = new Date(y, m - 1, 1).toLocaleDateString("es-CL", { month: "long" });
+    return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${y}`;
+  };
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
@@ -5988,17 +5996,29 @@ function OrientationCycleView({
               className="min-w-48"
             />
           </div>
-          <div className="flex w-full items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setCollapsedDateKeys((current) => current.length
-                ? []
-                : Array.from(new Set(filteredClasses.map((record) => (record.date || "").slice(0, 10) || "sin-fecha"))))}
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
-            >
-              <ChevronDown className={`h-3.5 w-3.5 transition ${collapsedDateKeys.length ? "-rotate-90" : ""}`} />
-              {collapsedDateKeys.length ? "Expandir todas las fechas" : "Contraer todas las fechas"}
-            </button>
+          <div className="flex w-full flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setCollapsedWeekKeys((current) => current.length
+                  ? []
+                  : Array.from(new Set(filteredClasses.map((record) => weekKeyOf(record.date || "")))))}
+                className="inline-flex items-center gap-1.5 rounded-md border border-cyan-200 bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-800 hover:bg-cyan-100"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition ${collapsedWeekKeys.length ? "-rotate-90" : ""}`} />
+                {collapsedWeekKeys.length ? "Expandir todas las semanas" : "Contraer todas las semanas"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCollapsedDateKeys((current) => current.length
+                  ? []
+                  : Array.from(new Set(filteredClasses.map((record) => (record.date || "").slice(0, 10) || "sin-fecha"))))}
+                className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+              >
+                <ChevronDown className={`h-3.5 w-3.5 transition ${collapsedDateKeys.length ? "-rotate-90" : ""}`} />
+                {collapsedDateKeys.length ? "Expandir todas las fechas" : "Contraer todas las fechas"}
+              </button>
+            </div>
             <p className="text-[11px] font-semibold text-slate-500">
               {filteredClasses.length} de {ownerClasses.length} registros visibles
             </p>
@@ -6041,11 +6061,24 @@ function OrientationCycleView({
             const weekKey = weekKeyOf(record.date || "");
             const previousWeekKey = index > 0 ? weekKeyOf(renderedClasses[index - 1].date || "") : "";
             const startsWeekGroup = index === 0 || weekKey !== previousWeekKey;
+            // Segmento mensual: separador con el mes a los costados de la lista.
+            const monthKey = weekKey === "sin-fecha" ? "sin-fecha" : weekKey.slice(0, 7);
+            const previousMonthKey = index > 0 ? (previousWeekKey === "sin-fecha" ? "sin-fecha" : previousWeekKey.slice(0, 7)) : "";
+            const startsMonthGroup = index === 0 || monthKey !== previousMonthKey;
+            const monthHeader = startsMonthGroup ? (
+              <div className={`flex items-center gap-3 px-2 pb-2 sm:px-3 lg:px-4 ${index === 0 ? "pt-3" : "pt-8"}`}>
+                <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-slate-900 px-3.5 py-1.5 text-[11px] font-black uppercase tracking-[0.15em] text-white shadow-sm">
+                  <CalendarDays className="h-3.5 w-3.5" /> {monthLabelOf(monthKey)}
+                </span>
+                <span className="h-px flex-1 bg-slate-300" />
+                <span className="hidden shrink-0 text-[10px] font-black uppercase tracking-[0.2em] text-slate-300 sm:block">{monthLabelOf(monthKey)}</span>
+              </div>
+            ) : null;
             const weekCollapsed = collapsedWeekKeys.includes(weekKey);
             const weekCount = startsWeekGroup ? renderedWeekCounts.get(weekKey) || 0 : 0;
             const isCurrentWeek = weekKey !== "sin-fecha" && weekKey === weekKeyOf(today);
             const weekHeader = startsWeekGroup ? (
-              <div className={index === 0 ? "px-2 pb-1 sm:px-3 lg:px-4" : "px-2 pb-1 pt-6 sm:px-3 lg:px-4"}>
+              <div className={index === 0 || startsMonthGroup ? "px-2 pb-1 sm:px-3 lg:px-4" : "px-2 pb-1 pt-6 sm:px-3 lg:px-4"}>
                 <button
                   type="button"
                   onClick={() => toggleWeekCollapsed(weekKey)}
@@ -6064,7 +6097,7 @@ function OrientationCycleView({
               </div>
             ) : null;
             if (weekCollapsed) {
-              return <React.Fragment key={record.id}>{weekHeader}</React.Fragment>;
+              return <React.Fragment key={record.id}>{monthHeader}{weekHeader}</React.Fragment>;
             }
             const dateHeader = startsDateGroup ? (
               <div className={dateCollapsed ? "" : "pb-2 pt-1"}>
@@ -6084,10 +6117,11 @@ function OrientationCycleView({
               </div>
             ) : null;
             if (dateCollapsed) {
-              return <React.Fragment key={record.id}>{weekHeader}{dateHeader}</React.Fragment>;
+              return <React.Fragment key={record.id}>{monthHeader}{weekHeader}{dateHeader}</React.Fragment>;
             }
             return (
               <React.Fragment key={record.id}>
+                {monthHeader}
                 {weekHeader}
                 {dateHeader}
               {/* Sin overflow-hidden: recortaba los menús desplegables (Estado, Envío) dentro de la tarjeta. */}
