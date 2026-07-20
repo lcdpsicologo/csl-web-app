@@ -16,7 +16,7 @@ import {
   type SchoolDay,
   type StaffScheduleEntry,
 } from "@/lib/school-schedule";
-import { ORIENTATION_WEEKLY_SLOTS, type OrientationWeeklySlot } from "@/lib/orientation-weekly-schedule";
+import { ORIENTATION_WEEKLY_SLOTS, mondayOfWeek, toISODate, type OrientationWeeklySlot } from "@/lib/orientation-weekly-schedule";
 import { games } from "@/lib/games";
 import { GameShareModal } from "@/components/GameShareModal";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
@@ -4650,6 +4650,27 @@ function OrientationCycleView({
   const [collapsedDateKeys, setCollapsedDateKeys] = useState<string[]>([]);
   const toggleDateCollapsed = (dateKey: string) =>
     setCollapsedDateKeys((current) => (current.includes(dateKey) ? current.filter((key) => key !== dateKey) : [...current, dateKey]));
+  // Semanas de la bitácora contraídas (clave = lunes de la semana AAAA-MM-DD).
+  const [collapsedWeekKeys, setCollapsedWeekKeys] = useState<string[]>([]);
+  const toggleWeekCollapsed = (weekKey: string) =>
+    setCollapsedWeekKeys((current) => (current.includes(weekKey) ? current.filter((key) => key !== weekKey) : [...current, weekKey]));
+  // Lunes de la semana de una fecha AAAA-MM-DD; agrupa los registros por bloque semanal.
+  const weekKeyOf = (dateStr: string) => {
+    const clean = (dateStr || "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return "sin-fecha";
+    const [y, m, d] = clean.split("-").map(Number);
+    return toISODate(mondayOfWeek(new Date(y, m - 1, d)));
+  };
+  const weekRangeLabel = (weekKey: string) => {
+    if (weekKey === "sin-fecha") return "Sin fecha definida";
+    const [y, m, d] = weekKey.split("-").map(Number);
+    const monday = new Date(y, m - 1, d);
+    const friday = new Date(y, m - 1, d + 4);
+    const fmt = (date: Date) => date.toLocaleDateString("es-CL", { day: "numeric", month: "long" });
+    const sameMonth = monday.getMonth() === friday.getMonth();
+    const from = sameMonth ? String(monday.getDate()) : fmt(monday);
+    return `Semana del ${from} al ${fmt(friday)}${monday.getFullYear() !== new Date().getFullYear() ? ` ${monday.getFullYear()}` : ""}`;
+  };
   const [reportPreviewOpen, setReportPreviewOpen] = useState(false);
   const [visibleClassCount, setVisibleClassCount] = useState(ORIENTATION_LOG_PAGE_SIZE);
 
@@ -4885,12 +4906,19 @@ function OrientationCycleView({
     setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
     setExpandedClassIds([]);
     setCollapsedDateKeys([]);
+    setCollapsedWeekKeys([]);
   };
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
   const renderedDateCounts = useMemo(() => renderedClasses.reduce((counts, record) => {
     const key = (record.date || "").slice(0, 10) || "sin-fecha";
     counts.set(key, (counts.get(key) || 0) + 1);
     return counts;
+  }, new Map<string, number>()), [renderedClasses]);
+  const renderedWeekCounts = useMemo(() => renderedClasses.reduce((counts, record) => {
+    const key = weekKeyOf(record.date || "");
+    counts.set(key, (counts.get(key) || 0) + 1);
+    return counts;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, new Map<string, number>()), [renderedClasses]);
 
   const classCounts = useMemo(() => ({
@@ -6009,16 +6037,45 @@ function OrientationCycleView({
             const dateGroupCount = startsDateGroup ? renderedDateCounts.get(dateKey) || 0 : 0;
             const dateCollapsed = collapsedDateKeys.includes(dateKey);
             const nextWeekDate = orientationDateMatchesPeriod(record.date, "next-week", today, periodWindows);
+            // Bloque semanal: encabezado fuerte que agrupa las fechas de esa semana.
+            const weekKey = weekKeyOf(record.date || "");
+            const previousWeekKey = index > 0 ? weekKeyOf(renderedClasses[index - 1].date || "") : "";
+            const startsWeekGroup = index === 0 || weekKey !== previousWeekKey;
+            const weekCollapsed = collapsedWeekKeys.includes(weekKey);
+            const weekCount = startsWeekGroup ? renderedWeekCounts.get(weekKey) || 0 : 0;
+            const isCurrentWeek = weekKey !== "sin-fecha" && weekKey === weekKeyOf(today);
+            const weekHeader = startsWeekGroup ? (
+              <div className={index === 0 ? "px-2 pb-1 sm:px-3 lg:px-4" : "px-2 pb-1 pt-6 sm:px-3 lg:px-4"}>
+                <button
+                  type="button"
+                  onClick={() => toggleWeekCollapsed(weekKey)}
+                  title={weekCollapsed ? "Expandir esta semana" : "Contraer esta semana"}
+                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left shadow-sm ring-1 transition ${isCurrentWeek ? "bg-gradient-to-r from-cyan-700 to-cyan-800 text-white ring-cyan-700 hover:from-cyan-800 hover:to-cyan-900" : "bg-gradient-to-r from-slate-100 to-slate-50 text-slate-900 ring-slate-200 hover:from-cyan-50 hover:to-white hover:ring-cyan-200"}`}
+                >
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${isCurrentWeek ? "bg-white/15 text-white" : "bg-cyan-700 text-white"}`}><CalendarDays className="h-4 w-4" /></span>
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold">{weekRangeLabel(weekKey)}</span>
+                    {record.weekNumber ? <span className={`block text-[10px] font-bold uppercase tracking-wider ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"}`}>Semana {record.weekNumber} del plan</span> : null}
+                  </span>
+                  {isCurrentWeek ? <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">Semana actual</span> : null}
+                  <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums ${isCurrentWeek ? "bg-white/20 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{weekCount} {weekCount === 1 ? "clase" : "clases"}</span>
+                  <ChevronDown className={`h-4 w-4 shrink-0 transition ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"} ${weekCollapsed ? "-rotate-90" : ""}`} />
+                </button>
+              </div>
+            ) : null;
+            if (weekCollapsed) {
+              return <React.Fragment key={record.id}>{weekHeader}</React.Fragment>;
+            }
             const dateHeader = startsDateGroup ? (
-              <div className={dateCollapsed ? "" : index === 0 ? "pb-2" : "pb-2 pt-5"}>
+              <div className={dateCollapsed ? "" : "pb-2 pt-1"}>
                 <button
                   type="button"
                   onClick={() => toggleDateCollapsed(dateKey)}
                   title={dateCollapsed ? "Expandir esta fecha" : "Contraer esta fecha"}
-                  className="flex w-full items-center gap-3 border-y border-slate-200 bg-white px-4 py-2.5 text-left transition hover:bg-cyan-50/40 sm:px-5"
+                  className="flex w-full items-center gap-3 border-y border-slate-200 bg-white px-4 py-2 text-left transition hover:bg-cyan-50/40 sm:px-6"
                 >
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><CalendarDays className="h-3.5 w-3.5" /></span>
-                  <span className="text-sm font-bold text-slate-900">{formatOrientationDate(record.date)}</span>
+                  <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-cyan-50 text-cyan-700 ring-1 ring-cyan-200"><CalendarDays className="h-3 w-3" /></span>
+                  <span className="text-sm font-bold text-slate-800">{formatOrientationDate(record.date)}</span>
                   {nextWeekDate ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue-700">Próxima semana</span> : null}
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-500">{dateGroupCount} {dateGroupCount === 1 ? "evento" : "eventos"}</span>
                   <span className="h-px min-w-4 flex-1 bg-slate-200" />
@@ -6027,10 +6084,11 @@ function OrientationCycleView({
               </div>
             ) : null;
             if (dateCollapsed) {
-              return <React.Fragment key={record.id}>{dateHeader}</React.Fragment>;
+              return <React.Fragment key={record.id}>{weekHeader}{dateHeader}</React.Fragment>;
             }
             return (
               <React.Fragment key={record.id}>
+                {weekHeader}
                 {dateHeader}
               {/* Sin overflow-hidden: recortaba los menús desplegables (Estado, Envío) dentro de la tarjeta. */}
               <article className={`mx-2 mb-2 rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
