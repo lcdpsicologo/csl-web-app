@@ -4786,6 +4786,15 @@ function OrientationCycleView({
       ? [{ value: current, label: current }, ...orientationWeekOptions]
       : orientationWeekOptions;
   };
+  const planWeekForWeekKey = (weekKey: string) => {
+    if (weekKey === "sin-fecha") return defaultOrientationWeek;
+    const match = ORIENTATION_FIRST_CYCLE_CONFIG.find((config) => parseOrientationWeekRange(config.week)?.start === weekKey);
+    return match?.week || defaultOrientationWeek;
+  };
+  const openWeekCreatorForKey = (weekKey: string) => {
+    setWeekCreatorWeek(planWeekForWeekKey(weekKey));
+    setWeekCreatorOpen(true);
+  };
 
   const effectiveCreatorWeek = weekCreatorWeek || defaultOrientationWeek;
   const creatorRange = parseOrientationWeekRange(effectiveCreatorWeek);
@@ -5513,9 +5522,86 @@ function OrientationCycleView({
   const withPlan = ownerStoredClasses.filter((r) => (r.planificacion || r.folderLink || "").trim()).length;
   const courseTotal = (course: string) => ownerClasses.filter((r) => normalize(r.course || "") === normalize(course)).length;
   const actionGrandTotal = ownerClasses.length;
+  const renderOrientationTools = (variant: "row" | "rail") => {
+    const isRail = variant === "rail";
+    const buttonBase = isRail
+      ? "tz-press flex w-full items-center justify-start gap-2 rounded-lg border px-3 py-2 text-sm font-semibold"
+      : "tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold";
+    return (
+      <div className={isRail ? "space-y-2" : "flex flex-wrap gap-2"}>
+        {isRail ? <p className="px-1 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Acciones</p> : null}
+        <a href="/clases" target="_blank" rel="noreferrer" className={`${buttonBase} border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100`}>
+          <ExternalLink className="h-4 w-4" /> Vista profesores
+        </a>
+        <button onClick={() => setFeedbackHistoryOpen(true)} className={`${buttonBase} border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100`}>
+          <ClipboardList className="h-4 w-4" /> Feedbacks
+          {ownerFeedbackCount ? <span className="ml-auto rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-800 tabular-nums">{ownerFeedbackCount}</span> : null}
+        </button>
+        <button onClick={() => setReportPreviewOpen(true)} title={`Ver el registro integral de ${owner.name}`} className={`${buttonBase} border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}>
+          <FileText className="h-4 w-4" /> Reporte integral
+        </button>
+        <button
+          onClick={onOpenConfiguration}
+          title="Personalizar acciones/fortalezas, horario semanal y catálogos (sin programar)"
+          className={`${buttonBase} border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}
+        >
+          <Settings className="h-4 w-4" /> Configurar
+        </button>
+      </div>
+    );
+  };
+  const weekCreatorPanel = weekCreatorOpen ? (
+    <section className="tz-slide-down rounded-xl border border-cyan-200 bg-cyan-50/50 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Horario semanal de {owner.name}</p>
+          <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Crear clases desde el horario</h2>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán solo los cursos que todavía no tengan una clase registrada en su fecha correspondiente. Después podrás editar tema, fortaleza y enlaces desde la bitácora.</p>
+        </div>
+        <div className="w-full sm:w-72">
+          <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana a preparar</span>
+          <TizaSelect value={effectiveCreatorWeek} onChange={setWeekCreatorWeek} options={weekOptionsFor(effectiveCreatorWeek)} className="mt-1" />
+        </div>
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
+        <div className="hidden grid-cols-[110px_1fr_150px_120px] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:grid">
+          <span>Día</span><span>Curso</span><span>Fecha</span><span>Horario</span>
+        </div>
+        {creatorSlots.map(({ slot, date }) => {
+          const exists = !missingCreatorSlots.some((candidate) => candidate.date === date && normalize(candidate.slot.course) === normalize(slot.course));
+          return (
+            <div key={`${slot.day}-${slot.course}`} className="grid gap-1 border-b border-slate-100 px-3 py-2.5 text-xs last:border-b-0 sm:grid-cols-[110px_1fr_150px_120px] sm:items-center sm:gap-3">
+              <span className="font-semibold text-slate-600">{slot.dayName}</span>
+              <span className="font-bold text-slate-950">{slot.course}</span>
+              <span className="tabular-nums text-slate-600">{formatOrientationDate(date)}</span>
+              <span className="flex items-center justify-between gap-2 tabular-nums text-slate-600">
+                {slot.start}-{slot.end}
+                {exists ? <Check className="h-4 w-4 text-emerald-600" aria-label="Clase ya creada" /> : null}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-xs font-medium text-slate-600">
+          {missingCreatorSlots.length
+            ? `${missingCreatorSlots.length} clases nuevas · ${creatorSlots.length - missingCreatorSlots.length} ya registradas`
+            : "Esta semana ya tiene todas sus clases registradas."}
+        </p>
+        <div className="flex gap-2">
+          <button onClick={() => setWeekCreatorOpen(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button onClick={createWeekFromSchedule} disabled={!dataReady || !creatorRange || !missingCreatorSlots.length} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300">
+            <CalendarDays className="h-4 w-4" /> {missingCreatorSlots.length ? `Crear ${missingCreatorSlots.length} clases` : "Semana preparada"}
+          </button>
+        </div>
+      </div>
+    </section>
+  ) : null;
 
   return (
-    <div className="tz-fade space-y-5">
+    <div className="tz-fade space-y-5 xl:pr-48">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Orientación</h1>
@@ -5523,81 +5609,12 @@ function OrientationCycleView({
             Bitácora SOY+ por ciclo: cuántas clases, talleres e intervenciones lleva cada curso, con su cobertura por fortaleza.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {creatorSlots.length ? (
-            <button disabled={!dataReady} title={dataReady ? "Crear las clases del horario semanal" : "Espera a que termine la sincronización inicial"} onClick={() => setWeekCreatorOpen((value) => !value)} className={`tz-press inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${weekCreatorOpen ? "border-cyan-400 bg-cyan-100 text-cyan-800" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}>
-              <Plus className="h-4 w-4" /> Preparar semana
-            </button>
-          ) : null}
-          <a href="/clases" target="_blank" rel="noreferrer" className="tz-press inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
-            <ExternalLink className="h-4 w-4" /> Vista profesores
-          </a>
-          <button onClick={() => setFeedbackHistoryOpen(true)} className="tz-press inline-flex items-center gap-2 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100">
-            <ClipboardList className="h-4 w-4" /> Feedbacks
-            {ownerFeedbackCount ? <span className="rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-800 tabular-nums">{ownerFeedbackCount}</span> : null}
-          </button>
-          <button onClick={() => setReportPreviewOpen(true)} title={`Ver el registro integral de ${owner.name}`} className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-            <FileText className="h-4 w-4" /> Reporte integral
-          </button>
-          <button
-            onClick={onOpenConfiguration}
-            title="Personalizar acciones/fortalezas, horario semanal y catálogos (sin programar)"
-            className="tz-press inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            <Settings className="h-4 w-4" /> Configurar
-          </button>
-        </div>
+        <div className="xl:hidden">{renderOrientationTools("row")}</div>
       </div>
 
-      {weekCreatorOpen && (
-        <section className="tz-slide-down rounded-xl border border-cyan-200 bg-cyan-50/50 p-4">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Horario semanal de {owner.name}</p>
-              <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Crear clases desde el horario</h2>
-              <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán solo los cursos que todavía no tengan una clase registrada en su fecha correspondiente. Después podrás editar tema, fortaleza y enlaces desde la bitácora.</p>
-            </div>
-            <div className="w-full sm:w-72">
-              <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana a preparar</span>
-              <TizaSelect value={effectiveCreatorWeek} onChange={setWeekCreatorWeek} options={weekOptionsFor(effectiveCreatorWeek)} className="mt-1" />
-            </div>
-          </div>
-
-          <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
-            <div className="hidden grid-cols-[110px_1fr_150px_120px] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-slate-500 sm:grid">
-              <span>Día</span><span>Curso</span><span>Fecha</span><span>Horario</span>
-            </div>
-            {creatorSlots.map(({ slot, date }) => {
-              const exists = !missingCreatorSlots.some((candidate) => candidate.date === date && normalize(candidate.slot.course) === normalize(slot.course));
-              return (
-                <div key={`${slot.day}-${slot.course}`} className="grid gap-1 border-b border-slate-100 px-3 py-2.5 text-xs last:border-b-0 sm:grid-cols-[110px_1fr_150px_120px] sm:items-center sm:gap-3">
-                  <span className="font-semibold text-slate-600">{slot.dayName}</span>
-                  <span className="font-bold text-slate-950">{slot.course}</span>
-                  <span className="tabular-nums text-slate-600">{formatOrientationDate(date)}</span>
-                  <span className="flex items-center justify-between gap-2 tabular-nums text-slate-600">
-                    {slot.start}–{slot.end}
-                    {exists ? <Check className="h-4 w-4 text-emerald-600" aria-label="Clase ya creada" /> : null}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-xs font-medium text-slate-600">
-              {missingCreatorSlots.length
-                ? `${missingCreatorSlots.length} clases nuevas · ${creatorSlots.length - missingCreatorSlots.length} ya registradas`
-                : "Esta semana ya tiene todas sus clases registradas."}
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setWeekCreatorOpen(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
-              <button onClick={createWeekFromSchedule} disabled={!dataReady || !creatorRange || !missingCreatorSlots.length} className="inline-flex items-center gap-2 rounded-lg bg-cyan-700 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-cyan-800 disabled:cursor-not-allowed disabled:bg-slate-300">
-                <CalendarDays className="h-4 w-4" /> {missingCreatorSlots.length ? `Crear ${missingCreatorSlots.length} clases` : "Semana preparada"}
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+      <aside className="fixed right-4 top-28 z-40 hidden w-44 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-xl shadow-slate-900/10 backdrop-blur xl:block">
+        {renderOrientationTools("rail")}
+      </aside>
 
       {/* ---- Orientadores: tarjetas compactas horizontales ---- */}
       <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
@@ -5995,27 +6012,43 @@ function OrientationCycleView({
             const weekCollapsed = collapsedWeekKeys.includes(weekKey);
             const weekCount = startsWeekGroup ? renderedWeekCounts.get(weekKey) || 0 : 0;
             const isCurrentWeek = weekKey !== "sin-fecha" && weekKey === weekKeyOf(today);
+            const weekPlan = planWeekForWeekKey(weekKey);
+            const weekCreatorForThisWeek = weekCreatorOpen && effectiveCreatorWeek === weekPlan;
+            const ownerHasScheduleSlots = scheduleSlots.some((slot) => normalize(slot.owner) === normalize(owner.name));
             const weekHeader = startsWeekGroup ? (
               <div className={index === 0 || startsMonthGroup ? "px-2 pb-1 sm:px-3 lg:px-4" : "px-2 pb-1 pt-6 sm:px-3 lg:px-4"}>
-                <button
-                  type="button"
-                  onClick={() => toggleWeekCollapsed(weekKey)}
-                  title={weekCollapsed ? "Expandir esta semana" : "Contraer esta semana"}
-                  className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left shadow-sm ring-1 transition ${isCurrentWeek ? "bg-gradient-to-r from-cyan-700 to-cyan-800 text-white ring-cyan-700 hover:from-cyan-800 hover:to-cyan-900" : "bg-gradient-to-r from-slate-100 to-slate-50 text-slate-900 ring-slate-200 hover:from-cyan-50 hover:to-white hover:ring-cyan-200"}`}
-                >
-                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${isCurrentWeek ? "bg-white/15 text-white" : "bg-cyan-700 text-white"}`}><CalendarDays className="h-4 w-4" /></span>
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm font-bold">{weekRangeLabel(weekKey)}</span>
-                    {record.weekNumber ? <span className={`block text-[10px] font-bold uppercase tracking-wider ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"}`}>Semana {record.weekNumber} del plan</span> : null}
-                  </span>
-                  {isCurrentWeek ? <span className="rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white">Semana actual</span> : null}
-                  <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums ${isCurrentWeek ? "bg-white/20 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{weekCount} {weekCount === 1 ? "clase" : "clases"}</span>
-                  <ChevronDown className={`h-4 w-4 shrink-0 transition ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"} ${weekCollapsed ? "-rotate-90" : ""}`} />
-                </button>
+                <div className={`flex w-full flex-wrap items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm ring-1 transition sm:flex-nowrap ${isCurrentWeek ? "bg-gradient-to-r from-cyan-700 to-cyan-800 text-white ring-cyan-700" : "bg-gradient-to-r from-slate-100 to-slate-50 text-slate-900 ring-slate-200"}`}>
+                  <button
+                    type="button"
+                    onClick={() => toggleWeekCollapsed(weekKey)}
+                    title={weekCollapsed ? "Expandir esta semana" : "Contraer esta semana"}
+                    className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1.5 py-1 text-left transition ${isCurrentWeek ? "hover:bg-white/10" : "hover:bg-white/70"}`}
+                  >
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${isCurrentWeek ? "bg-white/15 text-white" : "bg-cyan-700 text-white"}`}><CalendarDays className="h-4 w-4" /></span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold">{weekRangeLabel(weekKey)}</span>
+                      {record.weekNumber ? <span className={`block text-[10px] font-bold uppercase tracking-wider ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"}`}>Semana {record.weekNumber} del plan</span> : null}
+                    </span>
+                    {isCurrentWeek ? <span className="hidden rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white sm:inline-flex">Semana actual</span> : null}
+                    <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums ${isCurrentWeek ? "bg-white/20 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{weekCount} {weekCount === 1 ? "clase" : "clases"}</span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"} ${weekCollapsed ? "-rotate-90" : ""}`} />
+                  </button>
+                  {weekKey !== "sin-fecha" && ownerHasScheduleSlots ? (
+                    <button
+                      disabled={!dataReady}
+                      type="button"
+                      onClick={() => openWeekCreatorForKey(weekKey)}
+                      title={dataReady ? "Crear las clases del horario semanal" : "Espera a que termine la sincronización inicial"}
+                      className={`tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${weekCreatorForThisWeek ? "border-white/40 bg-white text-cyan-800" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
+                    >
+                      <Plus className="h-3.5 w-3.5" /> Preparar
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null;
             if (weekCollapsed) {
-              return <React.Fragment key={record.id}>{monthHeader}{weekHeader}</React.Fragment>;
+              return <React.Fragment key={record.id}>{monthHeader}{weekHeader}{weekCreatorForThisWeek ? <div className="px-2 pb-3 sm:px-3 lg:px-4">{weekCreatorPanel}</div> : null}</React.Fragment>;
             }
             const dateHeader = startsDateGroup ? (
               <div className={dateCollapsed ? "" : "pb-2 pt-1"}>
@@ -6041,6 +6074,7 @@ function OrientationCycleView({
               <React.Fragment key={record.id}>
                 {monthHeader}
                 {weekHeader}
+                {weekCreatorForThisWeek ? <div className="px-2 pb-3 sm:px-3 lg:px-4">{weekCreatorPanel}</div> : null}
                 {dateHeader}
               {/* Sin overflow-hidden: recortaba los menús desplegables (Estado, Envío) dentro de la tarjeta. */}
               <article className={`mx-2 mb-2 rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
