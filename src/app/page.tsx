@@ -205,6 +205,62 @@ const supabaseAuth = isSupabaseAuthConfigured
   ? createClient(SUPABASE_PUBLIC_URL, SUPABASE_PUBLIC_ANON_KEY)
   : null;
 
+const setLocalStorageSafely = (key: string, value: string) => {
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch (error) {
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.warn(`[local-storage] No se pudo guardar ${key}. La aplicacion seguira funcionando.`, reason);
+    return false;
+  }
+};
+
+const setJsonLocalStorageSafely = (key: string, value: unknown) => {
+  try {
+    return setLocalStorageSafely(key, JSON.stringify(value));
+  } catch (error) {
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+    console.warn(`[local-storage] No se pudo serializar ${key}. La aplicacion seguira funcionando.`, reason);
+    return false;
+  }
+};
+
+const compactAttachmentsForLocalBackup = (value: string) => {
+  try {
+    const attachments = JSON.parse(value);
+    if (!Array.isArray(attachments)) return value;
+    return JSON.stringify(
+      attachments.map((attachment) => {
+        if (!attachment || typeof attachment !== "object") return attachment;
+        const metadata = { ...(attachment as Record<string, unknown>) };
+        delete metadata.dataUrl;
+        return metadata;
+      }),
+    );
+  } catch {
+    return value.length <= 64_000 ? value : "";
+  }
+};
+
+// Supabase es la fuente principal. El respaldo del navegador conserva los
+// registros, pero excluye medios pesados y URLs temporales que pueden superar
+// rapidamente la cuota de localStorage y derribar la interfaz.
+const compactStoreForLocalBackup = (source: DataStore): DataStore =>
+  Object.fromEntries(
+    ENTITY_IDS.map((entity) => [
+      entity,
+      (source[entity] || []).map((record) => {
+        const compact = { ...record };
+        if (entity === "students") delete compact.profilePhoto;
+        if (entity === "workshops" && compact.attachments) {
+          compact.attachments = compactAttachmentsForLocalBackup(compact.attachments);
+        }
+        return compact;
+      }),
+    ]),
+  ) as DataStore;
+
 const nowIso = () => new Date().toISOString();
 const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
@@ -10591,7 +10647,7 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
     if (!cacheKey || !teamMatch?.name) return;
     const first = teamMatch.name.split(/\s+/)[0] || teamMatch.name;
     if (first && first !== cachedName) {
-      window.localStorage.setItem(cacheKey, first);
+      setLocalStorageSafely(cacheKey, first);
       setCachedName(first);
     }
   }, [teamMatch, cacheKey, cachedName]);
@@ -13139,16 +13195,17 @@ export default function TizaEducationApp() {
   }, [authUser, accessToken]);
 
   useEffect(() => {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    const localBackup = isSupabaseAuthConfigured ? compactStoreForLocalBackup(store) : store;
+    setJsonLocalStorageSafely(STORAGE_KEY, localBackup);
     storeRef.current = store;
   }, [store]);
 
   useEffect(() => {
-    window.localStorage.setItem(NAV_ORDER_KEY, JSON.stringify(navOrder));
+    setJsonLocalStorageSafely(NAV_ORDER_KEY, navOrder);
   }, [navOrder]);
 
   useEffect(() => {
-    window.localStorage.setItem(SIDEBAR_MODE_KEY, sidebarMode);
+    setLocalStorageSafely(SIDEBAR_MODE_KEY, sidebarMode);
   }, [sidebarMode]);
 
   const saveQueueRef = React.useRef<Promise<void>>(Promise.resolve());
@@ -13239,7 +13296,7 @@ export default function TizaEducationApp() {
   }, [remoteStatus, authUser, accessToken, remoteLoaded, saveStoreIncrementally]);
 
   useEffect(() => {
-    window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+    setJsonLocalStorageSafely(PROFILE_KEY, profile);
   }, [profile]);
 
   useEffect(() => {
