@@ -274,16 +274,28 @@ const initialsOf = (name: string) =>
     .join("")
     .toUpperCase();
 
-function StudentPhoto({ student, sizes, fallback }: { student: DataRecord; sizes: string; fallback: React.ReactNode }) {
+function StudentPhoto({
+  student,
+  sizes,
+  fallback,
+  alt = "",
+  fit = "cover",
+}: {
+  student: DataRecord;
+  sizes: string;
+  fallback: React.ReactNode;
+  alt?: string;
+  fit?: "cover" | "contain";
+}) {
   const src = student.profilePhoto || "";
   if (!src) return fallback;
   return (
     <Image
       src={src}
-      alt=""
+      alt={alt}
       fill
       sizes={sizes}
-      className="object-cover object-center"
+      className={fit === "contain" ? "object-contain object-center" : "object-cover object-center"}
       unoptimized={src.startsWith("data:") || src.startsWith("blob:")}
     />
   );
@@ -7548,7 +7560,9 @@ function StudentDetailDialog({
 }) {
   const [activeTab, setActiveTab] = useState<"resumen" | "familia" | "casos" | "entrevistas" | "bitacoras" | "documentos">("resumen");
   const [highlightField, setHighlightField] = useState<string>("");
+  const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | null>>({});
+  const photoInputRef = React.useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!focusField) return;
@@ -7575,11 +7589,16 @@ function StudentDetailDialog({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      if (photoPreviewOpen) {
+        setPhotoPreviewOpen(false);
+        return;
+      }
+      onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, photoPreviewOpen]);
 
   const genogram = parseGenogram(student.genogram);
   const cases = store.cases.filter((record) => studentMatches(record, student));
@@ -7647,7 +7666,10 @@ function StudentDetailDialog({
   const handlePhoto = (file: File | undefined) => {
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = () => onUpdateStudent(student.id, { profilePhoto: String(reader.result || "") });
+    reader.onload = () => {
+      onUpdateStudent(student.id, { profilePhoto: String(reader.result || "") });
+      setPhotoPreviewOpen(true);
+    };
     reader.readAsDataURL(file);
   };
 
@@ -7777,6 +7799,7 @@ function StudentDetailDialog({
   };
 
   return (
+    <>
     <div className="tz-backdrop fixed inset-0 z-50 grid bg-slate-950/45 p-4 backdrop-blur-sm" onClick={onClose}>
       <div
         className="tz-pop tz-print-root m-auto flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
@@ -7796,7 +7819,12 @@ function StudentDetailDialog({
           </div>
           <div className="border-b border-slate-200 bg-white px-6 pt-3 pb-3 sm:px-8 sm:pt-4 sm:pb-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <label className="group relative -mt-8 inline-block h-16 w-16 shrink-0 cursor-pointer sm:-mt-10 sm:h-20 sm:w-20">
+              <button
+                type="button"
+                onClick={() => setPhotoPreviewOpen(true)}
+                aria-label={`Ver foto de ${student.fullName || "estudiante"} en grande`}
+                className="group relative -mt-8 inline-block h-16 w-16 shrink-0 rounded-2xl text-left outline-none focus-visible:ring-4 focus-visible:ring-blue-200 sm:-mt-10 sm:h-20 sm:w-20"
+              >
                 <span className="relative block h-full w-full overflow-hidden rounded-2xl bg-white ring-4 ring-white shadow-lg">
                   <StudentPhoto
                     student={student}
@@ -7809,13 +7837,22 @@ function StudentDetailDialog({
                   />
                 </span>
                 <span className="absolute -bottom-1 -right-1 grid h-6 w-6 sm:h-8 sm:w-8 place-items-center rounded-full bg-slate-900 text-white ring-2 ring-white shadow-md transition group-hover:scale-110">
-                  <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                 </span>
-                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-slate-950/50 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-white opacity-0 transition group-hover:opacity-100">
-                  Cambiar foto
+                <span className="pointer-events-none absolute inset-0 grid place-items-center rounded-2xl bg-slate-950/45 text-[10px] font-bold uppercase tracking-wide text-white opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100">
+                  Ver foto
                 </span>
-                <input type="file" accept="image/*" className="hidden" onChange={(event) => handlePhoto(event.target.files?.[0])} />
-              </label>
+              </button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(event) => {
+                  handlePhoto(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+              />
               <div className="min-w-0 flex-1">
                 <h2 className="text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl">{student.fullName || "Estudiante"}</h2>
                 <p className="mt-0.5 text-xs sm:text-sm text-slate-600">{formatRutValue(student.rut) || "Sin RUT/ID"}{student.guardian ? ` · Apoderado/a: ${student.guardian}` : ""}</p>
@@ -8162,6 +8199,64 @@ function StudentDetailDialog({
         </footer>
       </div>
     </div>
+    {photoPreviewOpen && typeof document !== "undefined" ? createPortal(
+      <div
+        className="tz-backdrop fixed inset-0 z-[220] flex items-end justify-center bg-slate-950/80 p-0 backdrop-blur-sm sm:items-center sm:p-6"
+        onClick={() => setPhotoPreviewOpen(false)}
+      >
+        <section
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="student-photo-preview-title"
+          onClick={(event) => event.stopPropagation()}
+          className="tz-pop flex max-h-[96dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-slate-950 shadow-2xl sm:max-h-[92vh] sm:rounded-2xl"
+        >
+          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 px-4 py-3 text-white sm:px-5">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-cyan-300">Foto de perfil</p>
+              <h3 id="student-photo-preview-title" className="truncate text-base font-semibold sm:text-lg">
+                {student.fullName || "Estudiante"}
+              </h3>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPhotoPreviewOpen(false)}
+              aria-label="Cerrar foto ampliada"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </header>
+
+          <div className="relative h-[min(70dvh,720px)] min-h-64 w-full bg-slate-950 sm:min-h-96">
+            <StudentPhoto
+              student={student}
+              sizes="(max-width: 768px) 100vw, 896px"
+              alt={`Foto de ${student.fullName || "estudiante"}`}
+              fit="contain"
+              fallback={(
+                <span className={`grid h-full w-full place-items-center bg-gradient-to-br ${avatarTone(student.id)} text-7xl font-bold text-white sm:text-9xl`}>
+                  {initialsOf(student.fullName) || <UserRound className="h-24 w-24 opacity-80" />}
+                </span>
+              )}
+            />
+          </div>
+
+          <footer className="flex shrink-0 justify-center border-t border-white/10 bg-slate-950 px-4 py-4">
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              className="inline-flex w-full max-w-xs items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-slate-950 shadow-sm transition hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-cyan-300/40"
+            >
+              <Camera className="h-4 w-4" />
+              Cambiar foto
+            </button>
+          </footer>
+        </section>
+      </div>,
+      document.body,
+    ) : null}
+    </>
   );
 }
 
