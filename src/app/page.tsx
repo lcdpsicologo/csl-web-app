@@ -21,6 +21,7 @@ import { games } from "@/lib/games";
 import { GameShareModal } from "@/components/GameShareModal";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
 import { formatRutValue } from "@/lib/student-identity";
+import { CLASSROOM_TEAMS_BY_COURSE } from "@/lib/classroom-teams";
 import {
   ArrowDownToLine,
   BookOpen,
@@ -757,6 +758,37 @@ const schoolScheduleCourseKey = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
+// Clave compacta compartida por las tablas del PDF (PK°A, 1°A, II°B)
+// y los nombres completos de la app (Prekínder A, 1° Básico A, II° Medio B).
+const classroomTeamCourseKey = (value: string) => {
+  let text = normalize(value).replace(/\bpre\s+kinder\b/g, "prekinder");
+  const isHighSchool = /\bmedio\b/.test(text);
+  text = text
+    .replace(/\bprimero\b/g, "1")
+    .replace(/\bsegundo\b/g, "2")
+    .replace(/\btercero\b/g, "3")
+    .replace(/\bcuarto\b/g, "4")
+    .replace(/\bquinto\b/g, "5")
+    .replace(/\bsexto\b/g, "6")
+    .replace(/\bseptimo\b/g, "7")
+    .replace(/\boctavo\b/g, "8")
+    .replace(/\b(?:basico|medio)\b/g, "")
+    .replace(/\s+/g, "");
+  const section = text.match(/([abc])$/)?.[1] || "";
+  if (/^(?:prekinder|pk)/.test(text)) return `pk${section}`;
+  if (/^(?:kinder|k)/.test(text)) return `k${section}`;
+  if (isHighSchool || /^(?:iv|iii|ii|i)/.test(text)) {
+    const level = /^iv/.test(text) ? "4" : /^iii/.test(text) ? "3" : /^ii/.test(text) ? "2" : /^i/.test(text) ? "1" : text.match(/^([1-4])/)?.[1];
+    return level ? `m${level}${section}` : "";
+  }
+  const level = text.match(/^([1-8])/)?.[1];
+  return level ? `b${level}${section}` : "";
+};
+
+const classroomTeamSeedsByCourse = new Map(
+  Object.entries(CLASSROOM_TEAMS_BY_COURSE).map(([course, members]) => [classroomTeamCourseKey(course), members]),
+);
+
 const schoolWeekDays = [
   { key: "lunes", label: "Lunes" },
   { key: "martes", label: "Martes" },
@@ -1363,6 +1395,43 @@ const parseClassroomTeam = (value: string | undefined): ClassroomTeamMember[] =>
   } catch {
     return [];
   }
+};
+
+const classroomRoleFromSubject = (subject: string, course: string) => {
+  const normalizedSubject = normalize(subject);
+  if (normalizedSubject.includes("tecnico")) {
+    return /^(?:pk|k)/.test(classroomTeamCourseKey(course)) ? "Técnico en párvulos" : "Asistente de aula";
+  }
+  if (/\bpie\b|diferencial/.test(normalizedSubject)) return "Educadora diferencial";
+  if (/biblioteca|cra/.test(normalizedSubject)) return "Otro apoyo";
+  return subject ? `Profesor/a de ${subject}` : "Profesor/a de asignatura";
+};
+
+const officialClassroomTeamForCourse = (course: string): ClassroomTeamMember[] => {
+  const seeds = classroomTeamSeedsByCourse.get(classroomTeamCourseKey(course)) || [];
+  const headTeacher = headTeacherForCourse(course);
+  return seeds.map((member, index) => {
+    const isHeadTeacher = Boolean(
+      headTeacher
+      && (
+        normalize(member.name) === normalize(headTeacher.name)
+        || (member.email && headTeacher.email && normalize(member.email) === normalize(headTeacher.email))
+      ),
+    );
+    return {
+      id: `official-team-${classroomTeamCourseKey(course)}-${index}-${normalize(member.email || member.name).replace(/\s+/g, "-")}`,
+      name: member.name,
+      role: isHeadTeacher ? "Profesor/a jefe" : classroomRoleFromSubject(member.subject, course),
+      email: member.email,
+      notes: member.subject ? `Asignatura: ${member.subject}` : "",
+    };
+  });
+};
+
+const classroomTeamForCourse = (course: string, record: DataRecord | undefined) => {
+  const savedTeam = parseClassroomTeam(record?.classroomTeam);
+  if (record?.classroomTeamInitialized === "true" || savedTeam.length > 0) return savedTeam;
+  return officialClassroomTeamForCourse(course);
 };
 
 type CaseIntervention = {
@@ -4090,7 +4159,7 @@ function CourseWorkspaceView({
   const seatStudentIds = [...savedSeats, ...unsavedStudentIds];
   const seats = Array.from({ length: capacity }, (_, index) => studentsById.get(seatStudentIds[index] || ""));
   const missingOfficialCourses = officialCourses.filter((course) => !savedByName.has(normalize(course.name))).length;
-  const classroomTeam = parseClassroomTeam(current?.record.classroomTeam);
+  const classroomTeam = classroomTeamForCourse(courseName, current?.record);
   const caseCountByStudent = new Map<string, number>();
   store.cases.forEach((record) => {
     students.forEach((student) => {
@@ -4127,6 +4196,7 @@ function CourseWorkspaceView({
     };
     onUpdateCourse(current.name, {
       classroomTeam: JSON.stringify([...classroomTeam, member]),
+      classroomTeamInitialized: "true",
       headTeacher: member.role === "Profesor/a jefe" ? member.name : current.record.headTeacher || "",
     });
     setTeamForm({ name: "", role: "Profesor/a jefe", email: "" });
@@ -4139,6 +4209,7 @@ function CourseWorkspaceView({
     const removed = classroomTeam.find((member) => member.id === memberId);
     onUpdateCourse(current.name, {
       classroomTeam: JSON.stringify(nextTeam),
+      classroomTeamInitialized: "true",
       headTeacher: current.record.headTeacher === removed?.name ? "" : current.record.headTeacher || "",
     });
   };
@@ -4146,13 +4217,13 @@ function CourseWorkspaceView({
   const updateClassroomTeamMember = (memberId: string, patch: Partial<ClassroomTeamMember>) => {
     if (!current) return;
     const nextTeam = classroomTeam.map((member) => (member.id === memberId ? { ...member, ...patch } : member));
-    onUpdateCourse(current.name, { classroomTeam: JSON.stringify(nextTeam) });
+    onUpdateCourse(current.name, { classroomTeam: JSON.stringify(nextTeam), classroomTeamInitialized: "true" });
   };
 
   const [showPjPanel, setShowPjPanel] = useState(false);
   const pjList = courses
     .map((c) => {
-      const team = parseClassroomTeam(c.record.classroomTeam);
+      const team = classroomTeamForCourse(c.name, c.record);
       const pj = team.find((m) => normalize(m.role || "").includes("profesor a jefe") || normalize(m.role || "") === "profesor jefe");
       return pj ? { courseName: c.name, cycle: c.cycle, name: pj.name, email: pj.email || "", role: pj.role } : null;
     })
@@ -4439,7 +4510,7 @@ function CourseWorkspaceView({
           </section>
 
           <div className="order-2 flex min-w-0 flex-col gap-4 xl:col-span-2 xl:flex-row xl:items-start">
-            <div className="order-2 space-y-4 xl:w-[340px] xl:shrink-0">
+            <div className="order-1 space-y-4 xl:order-2 xl:w-[340px] xl:shrink-0">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <button
               type="button"
@@ -4642,7 +4713,7 @@ function CourseWorkspaceView({
 
             </div>
 
-          <div className="order-1 min-w-0 flex-1">
+          <div className="order-2 min-w-0 flex-1 xl:order-1">
             <section className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -12420,14 +12491,14 @@ function AIChatMode({
     const courseName = (r.courseTarget || "").trim();
     if (courseName) {
       const saved = store.courses.find((c) => normalize(c.name || "") === normalize(courseName));
-      const team = parseClassroomTeam(saved?.classroomTeam);
+      const team = classroomTeamForCourse(courseName, saved);
       const newMembers = (r.teamAdditions || []).filter((_, i) => acc[`ta-${i}`]);
       if (newMembers.length > 0) {
         const nextTeam: ClassroomTeamMember[] = [
           ...team,
           ...newMembers.map((m) => ({ id: uid(), name: m.name || "Sin nombre", role: m.role || "Otro apoyo", email: m.email || "", notes: "" })),
         ];
-        onUpdateCourse(courseName, { classroomTeam: JSON.stringify(nextTeam) });
+        onUpdateCourse(courseName, { classroomTeam: JSON.stringify(nextTeam), classroomTeamInitialized: "true" });
         count += newMembers.length;
       }
       if (acc["erc"] && (r.ercAppend || "").trim()) {
