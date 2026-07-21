@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Archive,
   BookOpenText,
   CalendarDays,
-  CheckCircle2,
+  Check,
+  ChevronDown,
   Clock,
   ExternalLink,
   FileText,
@@ -122,7 +123,72 @@ function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "
   );
 }
 
-function WeekClassCard({
+function FilterMenu({
+  label,
+  allLabel,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  allLabel: string;
+  options: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const menuRef = useRef<HTMLDetailsElement>(null);
+  const selectedLabel = value === "all" ? allLabel : value;
+
+  return (
+    <details
+      ref={menuRef}
+      name="teacher-class-filter"
+      className="group relative"
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          menuRef.current?.removeAttribute("open");
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          menuRef.current?.removeAttribute("open");
+          menuRef.current?.querySelector("summary")?.focus();
+        }
+      }}
+    >
+      <summary className="flex h-12 cursor-pointer list-none items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3.5 outline-none transition hover:border-slate-300 hover:bg-white focus-visible:border-cyan-500 focus-visible:ring-4 focus-visible:ring-cyan-50 [&::-webkit-details-marker]:hidden">
+        <span className="min-w-0">
+          <span className="block text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">{label}</span>
+          <span className="block truncate text-sm font-bold text-slate-800">{selectedLabel}</span>
+        </span>
+        <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-open:rotate-180" />
+      </summary>
+      <div role="listbox" aria-label={label} className="absolute left-0 right-0 top-[calc(100%+6px)] z-50 max-h-72 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-2xl shadow-slate-950/15">
+        {[{ value: "all", label: allLabel }, ...options.map((option) => ({ value: option, label: option }))].map((option) => {
+          const isSelected = option.value === value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="option"
+              aria-selected={isSelected}
+              onClick={() => {
+                onChange(option.value);
+                menuRef.current?.removeAttribute("open");
+              }}
+              className={`flex min-h-10 w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition ${isSelected ? "bg-cyan-50 font-black text-cyan-900" : "font-semibold text-slate-700 hover:bg-slate-50"}`}
+            >
+              <span>{option.label}</span>
+              {isSelected ? <Check className="h-4 w-4 shrink-0 text-cyan-700" /> : null}
+            </button>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
+function WeekClassRow({
   date,
   start,
   end,
@@ -137,30 +203,44 @@ function WeekClassCard({
 }) {
   const day = formatDay(date);
   return (
-    <article className={`group relative overflow-hidden rounded-2xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg ${isToday ? "border-cyan-300 ring-4 ring-cyan-50" : "border-slate-200"}`}>
-      {isToday ? <span className="absolute right-0 top-0 rounded-bl-xl bg-cyan-600 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-white">Hoy</span> : null}
-      <div className="flex items-start gap-3">
+    <article className={`group grid gap-3 px-4 py-4 transition hover:bg-slate-50/80 sm:grid-cols-[64px_minmax(0,1fr)_auto] sm:items-center sm:px-5 ${isToday ? "bg-cyan-50/55" : "bg-white"}`}>
+      <div className="flex items-center gap-3 sm:block">
         <div className={`grid w-14 shrink-0 place-items-center rounded-xl px-2 py-2 text-center ${isToday ? "bg-cyan-950 text-white" : "bg-slate-100 text-slate-700"}`}>
           <span className="text-[10px] font-black uppercase tracking-wider">{day.weekday}</span>
           <span className="text-2xl font-black leading-none">{day.day}</span>
           <span className="text-[10px] font-bold uppercase">{day.month}</span>
         </div>
-        <div className="min-w-0 flex-1 pr-8">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 ring-1 ring-blue-100">{item.course || "Sin curso"}</span>
-            <span className={`rounded-full px-2.5 py-1 text-[11px] font-bold ring-1 ${statusTone(item.status || "Planificada")}`}>{item.status || "Planificada"}</span>
-          </div>
-          <p className="mt-3 text-base font-bold leading-snug text-slate-950">{item.topic || item.action || "Sin tema definido"}</p>
-          {item.action && item.topic ? <p className="mt-1 text-xs font-semibold text-slate-500">{item.action}</p> : null}
+        {isToday ? <span className="text-[10px] font-black uppercase tracking-wider text-cyan-700 sm:mt-1 sm:block sm:text-center">Hoy</span> : null}
+      </div>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-black text-blue-700">{item.course || "Sin curso"}</span>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ring-1 ${statusTone(item.status || "Planificada")}`}>{item.status || "Planificada"}</span>
         </div>
+        <p className="mt-1.5 text-sm font-bold leading-snug text-slate-950 sm:text-base">{item.topic || item.action || "Sin tema definido"}</p>
+        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold text-slate-500">
+          <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-cyan-700" /> {start && end ? `${start}–${end}` : "Horario por confirmar"}</span>
+          <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 text-cyan-700" /> {item.owner || "Orientador por confirmar"}</span>
+        </div>
+        {item.notes ? <p className="mt-2 flex items-start gap-1.5 text-xs leading-relaxed text-amber-800"><StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span className="line-clamp-1">{item.notes}</span></p> : null}
       </div>
+      <div className="sm:max-w-72 sm:justify-self-end"><MaterialLinks item={item} /></div>
+    </article>
+  );
+}
 
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-xs font-semibold text-slate-500">
-        <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5 text-cyan-700" /> {start && end ? `${start}–${end}` : "Horario por confirmar"}</span>
-        <span className="inline-flex items-center gap-1.5"><GraduationCap className="h-3.5 w-3.5 text-cyan-700" /> {item.owner || "Orientador por confirmar"}</span>
+function TodayClass({ item, start, end }: { item: PublicClassRecord; start: string; end: string }) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-white/[0.07] p-4 backdrop-blur-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.12em] text-cyan-200">{item.course || "Sin curso"}</p>
+          <p className="mt-1.5 text-sm font-bold leading-snug text-white">{item.topic || item.action || "Sin tema definido"}</p>
+        </div>
+        <span className="shrink-0 rounded-full bg-white/10 px-2 py-1 text-[10px] font-bold text-white/80">{item.status || "Planificada"}</span>
       </div>
-      {item.notes ? <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-amber-50 px-3 py-2 text-xs leading-relaxed text-amber-800"><StickyNote className="mt-0.5 h-3.5 w-3.5 shrink-0" /><span className="line-clamp-2">{item.notes}</span></p> : null}
-      <div className="mt-3"><MaterialLinks item={item} /></div>
+      <p className="mt-3 flex items-center gap-1.5 text-xs font-bold text-cyan-100"><Clock className="h-3.5 w-3.5" /> {start && end ? `${start}–${end}` : "Horario por confirmar"}</p>
+      <div className="mt-3 border-t border-white/10 pt-3 [&_a]:bg-white/10 [&_a]:text-white [&_a]:ring-white/15 [&_span]:bg-white/5 [&_span]:text-white/35"><MaterialLinks item={item} /></div>
     </article>
   );
 }
@@ -261,9 +341,7 @@ export default function TeacherClassesPage() {
     )), [classes, weekRange.end, weekRange.monday, weekRange.start]);
 
   const filteredWeekSchedule = weekSchedule.filter(({ item }) => recordMatchesFilters(item));
-  const weekDone = filteredWeekSchedule.filter(({ item }) => /realizad/i.test(item.status)).length;
-  const classesToday = filteredWeekSchedule.filter(({ date }) => date === todayISO).length;
-  const readyWithMaterial = filteredWeekSchedule.filter(({ item }) => item.canvaLink || item.planificacionLink || item.teacherLink).length;
+  const todaySchedule = filteredWeekSchedule.filter(({ date }) => date === todayISO);
 
   const historicalClasses = useMemo(() => classes
     .filter((item) => item.date.slice(0, 10) < weekRange.start)
@@ -333,24 +411,12 @@ export default function TeacherClassesPage() {
             {hasFilters ? <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /> Limpiar</button> : null}
           </div>
           <div className="grid gap-2 md:grid-cols-[minmax(240px,1.15fr)_minmax(190px,.8fr)_minmax(280px,1.4fr)]">
-            <label>
-              <span className="sr-only">Filtrar por curso</span>
-              <select value={filterCourse} onChange={(event) => { setFilterCourse(event.target.value); setHistoryLimit(24); }} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-50">
-                <option value="all">Todos los cursos</option>
-                {courses.map((course) => <option key={course} value={course}>{course}</option>)}
-              </select>
-            </label>
-            <label>
-              <span className="sr-only">Filtrar por estado</span>
-              <select value={filterStatus} onChange={(event) => { setFilterStatus(event.target.value); setHistoryLimit(24); }} className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-bold text-slate-800 outline-none transition focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-50">
-                <option value="all">Todos los estados</option>
-                {statuses.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
+            <FilterMenu label="Curso" allLabel="Todos los cursos" options={courses} value={filterCourse} onChange={(value) => { setFilterCourse(value); setHistoryLimit(24); }} />
+            <FilterMenu label="Estado" allLabel="Todos los estados" options={statuses} value={filterStatus} onChange={(value) => { setFilterStatus(value); setHistoryLimit(24); }} />
             <label className="relative">
               <span className="sr-only">Buscar por tema, fortaleza u orientador</span>
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={search} onChange={(event) => { setSearch(event.target.value); setHistoryLimit(24); }} placeholder="Buscar por tema, fortaleza u orientador…" className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-50" />
+              <input value={search} onChange={(event) => { setSearch(event.target.value); setHistoryLimit(24); }} placeholder="Buscar por tema, fortaleza u orientador…" className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-50" />
             </label>
           </div>
         </section>
@@ -358,8 +424,9 @@ export default function TeacherClassesPage() {
 
       <div className="mx-auto max-w-7xl px-4 pt-6 sm:px-6 lg:px-8">
         {status === "loading" ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((item) => <div key={item} className="h-24 animate-pulse rounded-2xl border border-slate-200 bg-white" />)}
+          <div className="grid gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(310px,.75fr)]">
+            <div className="h-[560px] animate-pulse rounded-3xl border border-slate-200 bg-white" />
+            <div className="h-[420px] animate-pulse rounded-3xl bg-slate-900" />
           </div>
         ) : null}
 
@@ -369,41 +436,48 @@ export default function TeacherClassesPage() {
 
         {status === "ready" ? (
           <>
-            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Resumen de la semana">
-              {[
-                { label: "Clases visibles", value: filteredWeekSchedule.length, detail: filterCourse === "all" ? "Esta semana" : filterCourse, icon: CalendarDays, tone: "text-cyan-700 bg-cyan-50" },
-                { label: "Para hoy", value: classesToday, detail: formatDate(todayISO), icon: Clock, tone: "text-blue-700 bg-blue-50" },
-                { label: "Realizadas", value: weekDone, detail: `${Math.max(filteredWeekSchedule.length - weekDone, 0)} por completar`, icon: CheckCircle2, tone: "text-emerald-700 bg-emerald-50" },
-                { label: "Con material", value: readyWithMaterial, detail: "Canva, plan o link", icon: BookOpenText, tone: "text-violet-700 bg-violet-50" },
-              ].map(({ label, value, detail, icon: Icon, tone }) => (
-                <article key={label} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${tone}`}><Icon className="h-5 w-5" /></span>
-                  <div><p className="text-2xl font-black tabular-nums text-slate-950">{value}</p><p className="text-xs font-bold text-slate-700">{label}</p><p className="mt-0.5 truncate text-[10px] text-slate-400">{detail}</p></div>
-                </article>
-              ))}
-            </section>
-
-            <section className="mt-8" aria-labelledby="current-week-title">
-              <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-                <div>
+            <section className="grid gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(310px,.75fr)] lg:items-start" aria-labelledby="current-week-title">
+              <div>
+                <div className="mb-4">
                   <p className="text-[11px] font-black uppercase tracking-[0.18em] text-cyan-700">Semana actual</p>
                   <h2 id="current-week-title" className="mt-1 text-2xl font-black tracking-tight text-slate-950">Tus clases del {formatDate(weekRange.start)} al {formatDate(weekRange.end)}</h2>
-                  <p className="mt-1 text-sm text-slate-500">{filterCourse === "all" ? "Selecciona un curso arriba para ver solo lo que te corresponde." : `Vista filtrada para ${filterCourse}.`}</p>
+                  <p className="mt-1 text-sm text-slate-500">{filterCourse === "all" ? "Una vista simple de toda la semana. Filtra arriba para encontrar tu curso." : `Agenda semanal de ${filterCourse}.`}</p>
                 </div>
-                <span className="rounded-full bg-cyan-950 px-3 py-1.5 text-xs font-bold text-white">{filteredWeekSchedule.length} {filteredWeekSchedule.length === 1 ? "clase" : "clases"}</span>
+
+                {filteredWeekSchedule.length ? (
+                  <div className="divide-y divide-slate-100 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+                    {filteredWeekSchedule.map(({ slot, date, item }) => <WeekClassRow key={item.id} date={date} start={slot?.start || ""} end={slot?.end || ""} item={item} isToday={date === todayISO} />)}
+                  </div>
+                ) : (
+                  <div className="rounded-3xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center">
+                    <CalendarDays className="mx-auto h-9 w-9 text-slate-300" />
+                    <p className="mt-3 text-sm font-bold text-slate-700">No hay clases de esta semana que coincidan con los filtros.</p>
+                    {hasFilters ? <button onClick={clearFilters} className="mt-3 rounded-full bg-slate-950 px-4 py-2 text-xs font-bold text-white">Ver todos los cursos</button> : null}
+                  </div>
+                )}
               </div>
 
-              {filteredWeekSchedule.length ? (
-                <div className="grid gap-3 lg:grid-cols-2">
-                  {filteredWeekSchedule.map(({ slot, date, item }) => <WeekClassCard key={item.id} date={date} start={slot?.start || ""} end={slot?.end || ""} item={item} isToday={date === todayISO} />)}
+              <aside className="order-first overflow-hidden rounded-3xl bg-slate-950 p-5 text-white shadow-xl shadow-slate-950/10 lg:sticky lg:top-6 lg:order-none" aria-labelledby="today-title">
+                <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">Agenda inmediata</p>
+                    <h2 id="today-title" className="mt-1 text-xl font-black tracking-tight">Clases de orientación de hoy</h2>
+                    <p className="mt-1 text-xs capitalize text-slate-400">{formatDate(todayISO)}</p>
+                  </div>
+                  <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-cyan-400/10 text-cyan-200"><CalendarDays className="h-5 w-5" /></span>
                 </div>
-              ) : (
-                <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-12 text-center">
-                  <CalendarDays className="mx-auto h-9 w-9 text-slate-300" />
-                  <p className="mt-3 text-sm font-bold text-slate-700">No hay clases de esta semana que coincidan con los filtros.</p>
-                  {hasFilters ? <button onClick={clearFilters} className="mt-3 rounded-full bg-slate-950 px-4 py-2 text-xs font-bold text-white">Ver todos los cursos</button> : null}
+                <div className="mt-4 space-y-3">
+                  {todaySchedule.length ? todaySchedule.map(({ item, slot }) => (
+                    <TodayClass key={item.id} item={item} start={slot?.start || ""} end={slot?.end || ""} />
+                  )) : (
+                    <div className="rounded-2xl border border-dashed border-white/15 px-4 py-8 text-center">
+                      <Clock className="mx-auto h-7 w-7 text-slate-600" />
+                      <p className="mt-3 text-sm font-bold text-slate-300">No hay clases para hoy con estos filtros.</p>
+                      {hasFilters ? <button onClick={clearFilters} className="mt-3 text-xs font-black text-cyan-300 hover:text-cyan-200">Limpiar filtros</button> : null}
+                    </div>
+                  )}
                 </div>
-              )}
+              </aside>
             </section>
 
             <section className="mt-10" aria-labelledby="history-title">
