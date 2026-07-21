@@ -20,6 +20,7 @@ import { ORIENTATION_WEEKLY_SLOTS, mondayOfWeek, toISODate, type OrientationWeek
 import { games } from "@/lib/games";
 import { GameShareModal } from "@/components/GameShareModal";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
+import { formatRutValue } from "@/lib/student-identity";
 import {
   ArrowDownToLine,
   BookOpen,
@@ -3110,6 +3111,7 @@ function DatabaseHubView({
       const records = importSheet.rows.map((row) => {
         const record: DataRecord = { id: uid(), createdAt: nowIso(), updatedAt: nowIso() };
         Object.entries(importPlan.mapping).forEach(([field, header]) => { record[field] = row[header] || ""; });
+        if (selectedEntity === "students") record.rut = formatRutValue(record.rut || "");
         if (selectedEntity === "personnel") record.source = record.source || importSheet.fileName;
         return record;
       }).filter((record) => selectedEntity !== "students" || isValidImportedStudentName(record.fullName || ""));
@@ -4677,7 +4679,7 @@ function CourseWorkspaceView({
                               <StudentPhoto student={student} sizes="36px" fallback={initialsOf(student.fullName)} />
                             </div>
                             <span className="block text-[13px] font-bold leading-tight text-slate-950">{student.fullName}</span>
-                            {student.rut ? <span className="mt-0.5 block text-[10px] text-slate-500">{student.rut}</span> : null}
+                            {student.rut ? <span className="mt-0.5 block text-[10px] text-slate-500">{formatRutValue(student.rut)}</span> : null}
                             <div className="mt-1.5 flex flex-wrap gap-1">
                               {caseCount ? <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700">{caseCount} caso{caseCount === 1 ? "" : "s"}</span> : null}
                               {student.healthAlerts ? (
@@ -7818,7 +7820,7 @@ function StudentDetailDialog({
               </label>
               <div className="min-w-0 flex-1">
                 <h2 className="text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl">{student.fullName || "Estudiante"}</h2>
-                <p className="mt-0.5 text-xs sm:text-sm text-slate-600">{student.rut || "Sin RUT/ID"}{student.guardian ? ` · Apoderado/a: ${student.guardian}` : ""}</p>
+                <p className="mt-0.5 text-xs sm:text-sm text-slate-600">{formatRutValue(student.rut) || "Sin RUT/ID"}{student.guardian ? ` · Apoderado/a: ${student.guardian}` : ""}</p>
                 <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
                   {student.phone ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.phone}</span> : null}
                   {student.email ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.email}</span> : null}
@@ -7893,6 +7895,9 @@ function StudentDetailDialog({
                         <input
                           value={student[key] || ""}
                           onChange={(event) => updateInfo(key, event.target.value)}
+                          onBlur={(event) => {
+                            if (key === "rut") updateInfo(key, formatRutValue(event.currentTarget.value));
+                          }}
                           className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500"
                         />
                       </label>
@@ -8409,7 +8414,7 @@ function StudentsWorkspaceView({
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-semibold text-slate-950 group-hover:text-blue-700">{student.fullName || "Sin nombre"}</p>
                               <p className="truncate text-[11px] text-slate-500">
-                                {student.rut ? <span>{student.rut}</span> : null}
+                                {student.rut ? <span>{formatRutValue(student.rut)}</span> : null}
                                 {student.guardian ? <span> · Apoderado/a: {student.guardian}</span> : null}
                                 {student.phone ? <span> · {student.phone}</span> : null}
                               </p>
@@ -9322,7 +9327,7 @@ function PieWorkspaceView({
                             </td>
                           )}
                           <td className="px-5 py-3.5 text-xs text-slate-500 font-mono whitespace-nowrap font-semibold">
-                            {student.rut || "—"}
+                            {formatRutValue(student.rut) || "—"}
                           </td>
                           <td className="px-5 py-3.5 whitespace-nowrap">
                             <div className="flex max-w-[240px] flex-wrap gap-1.5">
@@ -9795,11 +9800,14 @@ function RecordDialog({
       window.setTimeout(() => document.getElementById(`record-field-${firstMissing.key}`)?.focus(), 0);
       return;
     }
+    const normalizedForm = entity.id === "students"
+      ? { ...form, rut: formatRutValue(form.rut || "") }
+      : form;
     onSave({
       id: initialRecord?.id || uid(),
       createdAt: initialRecord?.createdAt || nowIso(),
       updatedAt: nowIso(),
-      ...form,
+      ...normalizedForm,
     });
   };
 
@@ -10211,7 +10219,7 @@ function PieImportConfirmationView({
                           </span>
                         )}
                       </td>
-                      <td className="px-4 py-2 text-slate-600">{student.rut}</td>
+                      <td className="px-4 py-2 text-slate-600">{formatRutValue(student.rut)}</td>
                       <td className="px-4 py-2 text-slate-800 font-semibold">{student.course}</td>
                       <td className="px-4 py-2">
                         <span className="font-semibold text-slate-900">{student.diag}</span>
@@ -13358,7 +13366,10 @@ export default function TizaEducationApp() {
   }, [commandOpen, canGoBack, canGoForward]);
 
   const addRecord = (entity: EntityId, record: DataRecord) => {
-    const nextStore = { ...storeRef.current, [entity]: [record, ...storeRef.current[entity]] };
+    const normalizedRecord = entity === "students"
+      ? { ...record, rut: formatRutValue(record.rut || "") }
+      : record;
+    const nextStore = { ...storeRef.current, [entity]: [normalizedRecord, ...storeRef.current[entity]] };
     storeRef.current = nextStore;
     setStore(nextStore);
     closeRecordDialog();
@@ -13453,18 +13464,19 @@ export default function TizaEducationApp() {
       const nextFirstCycle = officialStudents.map((entry: Record<string, string>) => {
         const fullName = String(entry.fullName || "").trim();
         const course = String(entry.course || "").trim();
-        const rut = cleanRutValue(entry.rut || "");
+        const rutKey = cleanRutValue(entry.rut || "");
+        const rut = formatRutValue(rutKey);
         const nameKey = normalize(fullName);
         const courseKey = normalize(course);
         const existing =
-          (rut && byRut.get(rut)) ||
+          (rutKey && byRut.get(rutKey)) ||
           byNameCourse.get(`${nameKey}|${courseKey}`) ||
           byName.get(nameKey) ||
           undefined;
         if (existing?.id) reused.add(existing.id);
         return {
           ...(existing || {}),
-          id: existing?.id || `first-cycle-${rut || `${nameKey}-${courseKey}`.replace(/\s+/g, "-") || uid()}`,
+          id: existing?.id || `first-cycle-${rutKey || `${nameKey}-${courseKey}`.replace(/\s+/g, "-") || uid()}`,
           createdAt: existing?.createdAt || nowIso(),
           updatedAt: nowIso(),
           fullName,

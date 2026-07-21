@@ -1,3 +1,7 @@
+import { cleanRutValue, formatRutValue, moveTwoSurnamesToEnd, titleCaseStudentName } from "./student-identity";
+
+export { cleanRutValue } from "./student-identity";
+
 export type OfficialRosterStudent = {
   fullName: string;
   course: string;
@@ -25,22 +29,11 @@ export const FIRST_CYCLE_COURSES = [
   "4° Básico B",
 ];
 
-export const cleanRutValue = (value: string) => String(value || "").replace(/[^0-9kK]/g, "").toUpperCase();
-
 const normalizeText = (value: string) =>
   String(value || "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
-    .trim();
-
-const titleCaseName = (value: string) =>
-  String(value || "")
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : part)
-    .join(" ")
     .trim();
 
 export const normalizeRosterCourseName = (value: string) => {
@@ -160,23 +153,25 @@ export function parseFirstCycleRosterHtml(html: string) {
         skipped.push(line.slice(0, 120));
         return;
       }
-      const fullName = titleCaseName(
-        looksLikeStudentName(cells[headerMap.fullName] || "") ? cells[headerMap.fullName] : pickNameCell(cells)
+      const fullName = moveTwoSurnamesToEnd(
+        titleCaseStudentName(
+          looksLikeStudentName(cells[headerMap.fullName] || "") ? cells[headerMap.fullName] : pickNameCell(cells)
+        )
       );
       if (!fullName || !tableCourse) return;
 
       const course = normalizeRosterCourseName(cells.find((cell) => isFirstCycleCourse(cell)) || tableCourse);
       if (!isFirstCycleCourse(course)) return;
-      const rut = cleanRutValue(
+      const rut = formatRutValue(cleanRutValue(
         cells[headerMap.rut] ||
         cells.find((cell) => /\b\d{1,2}\.?\d{3}\.?\d{3}-?[0-9kK]\b/.test(cell) || /^\d{7,9}[0-9kK]$/.test(cleanRutValue(cell))) ||
         ""
-      );
+      ));
       const guardianEmail =
         (cells[headerMap.guardianEmail] || "").match(emailPattern)?.[0] ||
         cells.map((cell) => cell.match(emailPattern)?.[0] || "").find(Boolean) ||
         "";
-      const guardianName = looksLikeStudentName(cells[headerMap.guardianName] || "") ? titleCaseName(cells[headerMap.guardianName]) : "";
+      const guardianName = looksLikeStudentName(cells[headerMap.guardianName] || "") ? titleCaseStudentName(cells[headerMap.guardianName]) : "";
       const key = `${normalizeText(fullName)}|${normalizeText(course)}`;
       if (seen.has(key) || (rut && seen.has(`rut:${rut}`))) return;
       seen.add(key);
