@@ -273,6 +273,9 @@ export default function TeacherClassesPage() {
   const [filterCourse, setFilterCourse] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [search, setSearch] = useState("");
+  const [historyCourse, setHistoryCourse] = useState("all");
+  const [historyStatus, setHistoryStatus] = useState("all");
+  const [historySearch, setHistorySearch] = useState("");
   const [historyLimit, setHistoryLimit] = useState(24);
 
   const loadClasses = () => {
@@ -315,7 +318,7 @@ export default function TeacherClassesPage() {
   }, []);
 
   const normalizedSearch = normalize(search);
-  const recordMatchesFilters = (item: PublicClassRecord) => {
+  const recordMatchesAgendaFilters = (item: PublicClassRecord) => {
     if (filterCourse !== "all" && item.course !== filterCourse) return false;
     if (filterStatus !== "all" && item.status !== filterStatus) return false;
     if (!normalizedSearch) return true;
@@ -340,22 +343,35 @@ export default function TeacherClassesPage() {
       || courseSortKey(a.item.course).localeCompare(courseSortKey(b.item.course))
     )), [classes, weekRange.end, weekRange.monday, weekRange.start]);
 
-  const filteredWeekSchedule = weekSchedule.filter(({ item }) => recordMatchesFilters(item));
+  const filteredWeekSchedule = weekSchedule.filter(({ item }) => recordMatchesAgendaFilters(item));
   const todaySchedule = filteredWeekSchedule.filter(({ date }) => date === todayISO);
 
   const historicalClasses = useMemo(() => classes
     .filter((item) => item.date.slice(0, 10) < weekRange.start)
     .sort((a, b) => b.date.localeCompare(a.date) || courseSortKey(a.course).localeCompare(courseSortKey(b.course))),
   [classes, weekRange.start]);
-  const filteredHistory = historicalClasses.filter(recordMatchesFilters);
+  const normalizedHistorySearch = normalize(historySearch);
+  const filteredHistory = historicalClasses.filter((item) => {
+    if (historyCourse !== "all" && item.course !== historyCourse) return false;
+    if (historyStatus !== "all" && item.status !== historyStatus) return false;
+    if (!normalizedHistorySearch) return true;
+    return normalize(`${item.course} ${item.action} ${item.topic} ${item.week} ${item.owner} ${item.notes}`).includes(normalizedHistorySearch);
+  });
   const visibleHistory = filteredHistory.slice(0, historyLimit);
   const historyDone = filteredHistory.filter((item) => /realizad/i.test(item.status)).length;
   const hasFilters = filterCourse !== "all" || filterStatus !== "all" || Boolean(search.trim());
+  const hasHistoryFilters = historyCourse !== "all" || historyStatus !== "all" || Boolean(historySearch.trim());
 
   const clearFilters = () => {
     setFilterCourse("all");
     setFilterStatus("all");
     setSearch("");
+  };
+
+  const clearHistoryFilters = () => {
+    setHistoryCourse("all");
+    setHistoryStatus("all");
+    setHistorySearch("");
     setHistoryLimit(24);
   };
 
@@ -395,7 +411,6 @@ export default function TeacherClassesPage() {
             </div>
           </div>
         </div>
-        <span className="absolute bottom-2 right-3 rounded-full bg-slate-950/55 px-2 py-1 text-[9px] font-semibold text-white/75 backdrop-blur">Imagen referencial generada con IA</span>
       </section>
 
       <div className="relative z-10 mx-auto -mt-8 max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -405,18 +420,18 @@ export default function TeacherClassesPage() {
               <span className="grid h-8 w-8 place-items-center rounded-lg bg-cyan-50 text-cyan-700"><Filter className="h-4 w-4" /></span>
               <div>
                 <h2 className="text-sm font-black text-slate-950">Encuentra tu curso</h2>
-                <p className="text-[11px] text-slate-500">Los filtros se aplican a esta semana y al histórico.</p>
+                <p className="text-[11px] text-slate-500">Filtra la semana y las clases de orientación de hoy.</p>
               </div>
             </div>
             {hasFilters ? <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /> Limpiar</button> : null}
           </div>
           <div className="grid gap-2 md:grid-cols-[minmax(240px,1.15fr)_minmax(190px,.8fr)_minmax(280px,1.4fr)]">
-            <FilterMenu label="Curso" allLabel="Todos los cursos" options={courses} value={filterCourse} onChange={(value) => { setFilterCourse(value); setHistoryLimit(24); }} />
-            <FilterMenu label="Estado" allLabel="Todos los estados" options={statuses} value={filterStatus} onChange={(value) => { setFilterStatus(value); setHistoryLimit(24); }} />
+            <FilterMenu label="Curso" allLabel="Todos los cursos" options={courses} value={filterCourse} onChange={setFilterCourse} />
+            <FilterMenu label="Estado" allLabel="Todos los estados" options={statuses} value={filterStatus} onChange={setFilterStatus} />
             <label className="relative">
               <span className="sr-only">Buscar por tema, fortaleza u orientador</span>
               <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input value={search} onChange={(event) => { setSearch(event.target.value); setHistoryLimit(24); }} placeholder="Buscar por tema, fortaleza u orientador…" className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-50" />
+              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar por tema, fortaleza u orientador…" className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-50" />
             </label>
           </div>
         </section>
@@ -490,7 +505,28 @@ export default function TeacherClassesPage() {
                   <p className="mt-2 max-w-xl text-sm leading-6 text-slate-200">Revisa sesiones anteriores, recupera materiales y encuentra rápidamente una actividad ya realizada.</p>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold"><span className="rounded-full bg-white px-3 py-1.5 text-slate-950">{filteredHistory.length} registros</span><span className="rounded-full border border-white/20 bg-white/10 px-3 py-1.5 backdrop-blur">{historyDone} realizados</span></div>
                 </div>
-                <span className="absolute bottom-2 right-3 rounded-full bg-slate-950/55 px-2 py-1 text-[9px] font-semibold text-white/75 backdrop-blur">Imagen referencial generada con IA</span>
+              </div>
+
+              <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4" aria-label="Filtros del histórico">
+                <div className="mb-3 flex items-center justify-between gap-3 px-1">
+                  <div className="flex items-center gap-2">
+                    <span className="grid h-8 w-8 place-items-center rounded-lg bg-slate-100 text-slate-700"><Search className="h-4 w-4" /></span>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-950">Buscar en el histórico</h3>
+                      <p className="text-[11px] text-slate-500">Estos filtros solo afectan a las clases anteriores.</p>
+                    </div>
+                  </div>
+                  {hasHistoryFilters ? <button onClick={clearHistoryFilters} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1.5 text-[11px] font-bold text-slate-500 hover:bg-slate-100"><X className="h-3.5 w-3.5" /> Limpiar</button> : null}
+                </div>
+                <div className="grid gap-2 md:grid-cols-[minmax(220px,.9fr)_minmax(190px,.75fr)_minmax(280px,1.35fr)]">
+                  <FilterMenu label="Curso histórico" allLabel="Todos los cursos" options={courses} value={historyCourse} onChange={(value) => { setHistoryCourse(value); setHistoryLimit(24); }} />
+                  <FilterMenu label="Estado histórico" allLabel="Todos los estados" options={statuses} value={historyStatus} onChange={(value) => { setHistoryStatus(value); setHistoryLimit(24); }} />
+                  <label className="relative">
+                    <span className="sr-only">Buscar en el histórico por tema, curso u orientador</span>
+                    <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input value={historySearch} onChange={(event) => { setHistorySearch(event.target.value); setHistoryLimit(24); }} placeholder="Buscar tema, curso u orientador…" className="h-12 w-full rounded-xl border border-slate-200 bg-slate-50 pl-10 pr-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-cyan-500 focus:bg-white focus:ring-4 focus:ring-cyan-50" />
+                  </label>
+                </div>
               </div>
 
               <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
