@@ -3961,6 +3961,7 @@ function CourseWorkspaceView({
   const courses = [...officialWorkspaceCourses, ...customWorkspaceCourses];
   const [selectedCourse, setSelectedCourse] = useState(courses[0]?.name || "");
   const [cycleTab, setCycleTab] = useState<"all" | CourseDef["cycle"]>("all");
+  const [courseSearch, setCourseSearch] = useState("");
   const [clockTimestamp, setClockTimestamp] = useState(0);
   const [mobileScheduleDay, setMobileScheduleDay] = useState<SchoolWeekDayKey | "">("");
   const [showDailySchedule, setShowDailySchedule] = useState(false);
@@ -4028,7 +4029,15 @@ function CourseWorkspaceView({
     return counts;
   }, [store.students]);
 
-  const visibleCourses = cycleTab === "all" ? courses : courses.filter((course) => course.cycle === cycleTab);
+  const normalizedCourseSearch = normalize(courseSearch);
+  const visibleCourses = courses.filter((course) => {
+    const matchesCycle = cycleTab === "all" || course.cycle === cycleTab;
+    const normalizedCourseName = normalize(course.name);
+    const matchesSearch = !normalizedCourseSearch
+      || normalizedCourseName.startsWith(normalizedCourseSearch)
+      || normalizedCourseName.split(" ").some((word) => word.startsWith(normalizedCourseSearch));
+    return matchesCycle && matchesSearch;
+  });
   const current = courses.find((course) => course.name === selectedCourse) || courses[0];
   const courseName = current?.name || "";
   const courseSchedule = (() => {
@@ -4255,8 +4264,8 @@ function CourseWorkspaceView({
         </section>
       ) : null}
 
-      <section className="mb-5 rounded-2xl border border-slate-200 bg-white p-3 sm:p-4">
-        <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex max-w-full gap-1 overflow-x-auto rounded-lg bg-slate-100/80 p-1">
             {([
               ["all", "Todos"],
@@ -4279,76 +4288,108 @@ function CourseWorkspaceView({
               </button>
             ))}
           </div>
-          <p className="text-xs text-slate-400">Selecciona un curso</p>
+          <div className="relative w-full lg:max-w-xs">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+              value={courseSearch}
+              onChange={(event) => setCourseSearch(event.target.value)}
+              aria-label="Buscar curso"
+              placeholder="Buscar curso..."
+              className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 pl-9 pr-9 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100"
+            />
+            {courseSearch ? (
+              <button
+                type="button"
+                onClick={() => setCourseSearch("")}
+                aria-label="Limpiar búsqueda de cursos"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
-          {visibleCourses.map((course) => {
-            const state = liveStatesByCourse.get(schoolScheduleCourseKey(course.name)) || liveStateForCourse([], clockTimestamp);
-            const presentation = courseLivePresentation(state.kind);
-            const active = selectedCourse === course.name;
-            const isAnimated = state.kind === "live" || state.kind === "break";
-            const studentCount = studentCountByCourse.get(schoolScheduleCourseKey(course.name)) || 0;
-            return (
+        <div className="relative px-4 py-3">
+          <div className="flex snap-x gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
+            {visibleCourses.map((course) => {
+              const state = liveStatesByCourse.get(schoolScheduleCourseKey(course.name)) || liveStateForCourse([], clockTimestamp);
+              const presentation = courseLivePresentation(state.kind);
+              const active = selectedCourse === course.name;
+              const isAnimated = state.kind === "live" || state.kind === "break";
+              const studentCount = studentCountByCourse.get(schoolScheduleCourseKey(course.name)) || 0;
+              return (
               <button
                 key={course.name}
                 onClick={() => setSelectedCourse(course.name)}
                 aria-pressed={active}
-                className={`group relative min-h-[88px] overflow-hidden rounded-lg border p-3 text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                className={`group relative min-h-[68px] w-[148px] shrink-0 snap-start overflow-hidden rounded-xl border px-3 py-2.5 text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:w-[164px] ${
                   active
-                    ? "border-blue-300 bg-blue-50 text-slate-950 ring-1 ring-blue-100"
+                    ? "border-blue-300 bg-blue-50/80 text-slate-950 shadow-sm ring-1 ring-blue-100"
                     : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
                 }`}
               >
+                {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-blue-500" /> : null}
                 <span className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-bold tracking-tight sm:text-base">{course.name}</span>
+                  <span className="truncate text-sm font-bold tracking-tight">{course.name}</span>
                   <span className="shrink-0 text-[10px] font-semibold text-slate-400">{studentCount}</span>
                 </span>
-                <span className="mt-2.5 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                <span className="mt-1.5 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">
+                  <span className="relative flex h-2 w-2 shrink-0">
                     {isAnimated ? <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${presentation.ping} opacity-60`} /> : null}
-                    <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${presentation.dot}`} />
+                    <span className={`relative inline-flex h-2 w-2 rounded-full ${presentation.dot}`} />
                   </span>
                   {presentation.label}
+                  <span aria-hidden="true" className="text-slate-300">·</span>
+                  <span className="min-w-0 truncate normal-case tracking-normal text-slate-600" title={state.activity}>{state.activity}</span>
                 </span>
-                <span className="mt-1 block truncate text-[11px] font-medium text-slate-600" title={state.activity}>{state.activity}</span>
               </button>
-            );
-          })}
+              );
+            })}
+            {visibleCourses.length === 0 ? (
+              <div className="flex min-h-[68px] w-full items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 text-sm text-slate-500">
+                No encontramos cursos con esa búsqueda.
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-2 flex items-center justify-between gap-3 text-[11px] text-slate-400">
+            <span>{visibleCourses.length} de {courses.length} cursos</span>
+            <span className="hidden sm:inline">Desliza para explorar · Seleccionado: <strong className="font-semibold text-slate-600">{current?.name}</strong></span>
+          </div>
         </div>
       </section>
 
       {current ? (
-        <div className="space-y-5">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="px-5 py-5 sm:px-6 sm:py-6">
-              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] xl:items-center">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,0.72fr)] xl:auto-rows-min xl:items-start">
+          <section className="order-1 overflow-hidden rounded-2xl border border-slate-200 bg-white xl:col-span-2">
+            <div className="px-4 py-4 sm:px-5">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,380px)] xl:items-center">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">{current.cycle}</span>
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">{current.cycle}</span>
                     <span className="truncate">Orientación · {current.orientationOwner || "Sin asignar"}</span>
                   </div>
-                  <h2 className="mt-3 text-2xl font-bold tracking-[-0.035em] text-slate-950 sm:text-3xl">{current.name}</h2>
-                  <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-500">
+                  <h2 className="mt-2 text-2xl font-bold tracking-[-0.035em] text-slate-950">{current.name}</h2>
+                  <p className="mt-1 max-w-2xl text-sm leading-5 text-slate-500">
                     Convivencia: <strong className="font-semibold text-slate-700">{current.convivenciaCoordinator || "Sin asignar"}</strong>
                     {current.convivenciaEmail ? ` · ${current.convivenciaEmail}` : ""}
                   </p>
-                  <div className="mt-5 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-4">
+                  <div className="mt-3 grid grid-cols-4 gap-2">
                     {[
                       ["Estudiantes", students.length],
                       ["Casos", cases.length],
                       ["Orientación", orientation.length],
                       ["Bitácoras", logs.length],
                     ].map(([label, count]) => (
-                      <div key={String(label)} className="bg-white px-3 py-3">
-                        <div className="text-xl font-bold leading-none text-slate-950 sm:text-2xl">{count}</div>
-                        <div className="mt-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
+                      <div key={String(label)} className="rounded-lg bg-slate-50 px-2.5 py-2 ring-1 ring-inset ring-slate-100">
+                        <div className="text-lg font-bold leading-none text-slate-950 sm:text-xl">{count}</div>
+                        <div className="mt-1 truncate text-[9px] font-semibold uppercase tracking-wider text-slate-400">{label}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className={`relative overflow-hidden rounded-xl border p-4 text-slate-950 sm:p-5 ${currentLivePresentation.panel}`}>
+                <div className={`relative overflow-hidden rounded-xl border p-3.5 text-slate-950 ${currentLivePresentation.panel}`}>
                   <div className="flex items-center justify-between gap-3">
                     <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ring-1 ${currentLivePresentation.badge}`}>
                       <span className="relative flex h-2.5 w-2.5">
@@ -4359,17 +4400,17 @@ function CourseWorkspaceView({
                     </span>
                     <span className="text-xs font-bold tabular-nums text-slate-500">{currentLiveState.timeLabel}</span>
                   </div>
-                  <div className="mt-4 flex items-start gap-3">
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200/70">
+                  <div className="mt-3 flex items-start gap-3">
+                    <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200/70">
                       {currentLiveState.kind === "break" ? <Clock className="h-5 w-5" /> : <BookOpenText className="h-5 w-5" />}
                     </span>
                     <div className="min-w-0">
                       <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{currentLiveState.kind === "next" ? "Próxima actividad" : "Actividad actual"}</p>
-                      <p className="mt-1 text-lg font-black leading-tight text-slate-950 sm:text-xl">{currentLiveState.activity}</p>
+                      <p className="mt-0.5 text-lg font-black leading-tight text-slate-950">{currentLiveState.activity}</p>
                     </div>
                   </div>
                   {currentLiveState.kind === "live" || currentLiveState.kind === "break" ? (
-                    <div className="mt-4">
+                    <div className="mt-3">
                       <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold text-slate-500">
                         <span>{currentLiveState.startTime}</span>
                         <span>{Math.round(currentLiveState.progress)}% del bloque</span>
@@ -4385,6 +4426,8 @@ function CourseWorkspaceView({
             </div>
           </section>
 
+          <div className="order-2 flex min-w-0 flex-col gap-4 xl:col-span-2 xl:flex-row xl:items-start">
+            <div className="order-2 space-y-4 xl:w-[340px] xl:shrink-0">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <button
               type="button"
@@ -4482,7 +4525,7 @@ function CourseWorkspaceView({
             ) : null}
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
@@ -4585,8 +4628,10 @@ function CourseWorkspaceView({
             )}
           </section>
 
-          <div className="grid gap-5 xl:grid-cols-[1.4fr_0.6fr]">
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            </div>
+
+          <div className="order-1 min-w-0 flex-1">
+            <section className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
@@ -4658,8 +4703,10 @@ function CourseWorkspaceView({
                 <p className="mt-3 text-center text-[11px] text-slate-500">Frente del aula ↑ · Fondo del aula ↓</p>
               </div>
             </section>
+          </div>
+          </div>
 
-            <section className="rounded-2xl border border-slate-200 bg-white p-5">
+            <section className="order-3 rounded-2xl border border-slate-200 bg-white p-4 xl:col-span-2">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
                 <ShieldCheck className="h-5 w-5 text-rose-600" />
                 Convivencia
@@ -4678,9 +4725,8 @@ function CourseWorkspaceView({
                 ))}
               </div>
             </section>
-          </div>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-5">
+          <section className="order-4 rounded-2xl border border-slate-200 bg-white p-5 xl:col-span-2">
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
@@ -4698,7 +4744,7 @@ function CourseWorkspaceView({
             />
           </section>
 
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="order-5 grid gap-4 lg:grid-cols-3 xl:col-span-2">
             {([
               ["Estudiantes", students.length, "students" as ViewId, UserRound],
               ["Clases de orientación", orientation.length, "orientation" as ViewId, UsersRound],
