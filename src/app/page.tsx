@@ -5601,7 +5601,9 @@ function OrientationCycleView({
   ) : null;
 
   return (
-    <div className="tz-fade space-y-5 xl:pr-48">
+    <div className="tz-fade">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_11rem] xl:items-start">
+        <div className="min-w-0 space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Orientación</h1>
@@ -5611,10 +5613,6 @@ function OrientationCycleView({
         </div>
         <div className="xl:hidden">{renderOrientationTools("row")}</div>
       </div>
-
-      <aside className="fixed right-4 top-28 z-40 hidden w-44 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-xl shadow-slate-900/10 backdrop-blur xl:block">
-        {renderOrientationTools("rail")}
-      </aside>
 
       {/* ---- Orientadores: tarjetas compactas horizontales ---- */}
       <section className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
@@ -6405,6 +6403,12 @@ function OrientationCycleView({
           </table>
         </div>
       </section>
+
+        </div>
+        <aside className="sticky top-24 hidden w-44 rounded-xl border border-slate-200 bg-white/95 p-2 shadow-xl shadow-slate-900/10 backdrop-blur xl:block">
+          {renderOrientationTools("rail")}
+        </aside>
+      </div>
 
       {(() => {
         const feedbackRecord = feedbackRecordId ? store.orientation.find((record) => record.id === feedbackRecordId) : undefined;
