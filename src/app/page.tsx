@@ -1394,12 +1394,14 @@ function OrientationFeedbackModal({
   autoObservationNumber,
   onClose,
   onSave,
+  onAutoSave,
 }: {
   record: DataRecord;
   ownerName: string;
   autoObservationNumber: string;
   onClose: () => void;
   onSave: (data: ClassFeedbackData) => void;
+  onAutoSave: (data: ClassFeedbackData) => void;
 }) {
   const [data, setData] = useState<ClassFeedbackData>(() => {
     const parsed = parseClassFeedback(record.classFeedback);
@@ -1410,9 +1412,34 @@ function OrientationFeedbackModal({
     return parsed;
   });
   const [copied, setCopied] = useState(false);
+  const lastAutoSavedRef = React.useRef(JSON.stringify(data));
   const update = (changes: Partial<ClassFeedbackData>) => setData((current) => ({ ...current, ...changes }));
   const updateItem = (key: "cultureItems" | "strengthItems", index: number, value: string) =>
     setData((current) => ({ ...current, [key]: current[key].map((item, i) => (i === index ? value : item)) }));
+
+  useEffect(() => {
+    const serialized = JSON.stringify(data);
+    if (serialized === lastAutoSavedRef.current) return;
+    const timer = window.setTimeout(() => {
+      lastAutoSavedRef.current = serialized;
+      onAutoSave(data);
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [data, onAutoSave]);
+
+  const saveAndClose = () => {
+    const serialized = JSON.stringify(data);
+    if (serialized !== lastAutoSavedRef.current) {
+      lastAutoSavedRef.current = serialized;
+      onAutoSave(data);
+    }
+    onClose();
+  };
+
+  const saveFeedback = () => {
+    lastAutoSavedRef.current = JSON.stringify(data);
+    onSave(data);
+  };
 
   const copySummary = async () => {
     try {
@@ -1431,7 +1458,7 @@ function OrientationFeedbackModal({
   // Portal a <body>: los contenedores animados de la app crean stacking contexts
   // que dejaban el modal atrapado bajo la barra superior.
   return createPortal(
-    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={onClose}>
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={saveAndClose}>
       <div className="flex h-[94dvh] w-full max-w-3xl flex-col rounded-t-2xl bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
         <header className="flex items-start justify-between gap-3 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-blue-50 to-white px-5 py-4">
           <div>
@@ -1439,7 +1466,7 @@ function OrientationFeedbackModal({
             <h2 className="text-lg font-semibold text-slate-950">Feedback · {record.course || "Sin curso"} · {record.date || "Sin fecha"}</h2>
             <p className="mt-0.5 text-xs text-slate-500">{record.topic || "Sin tema definido"}{(record.axis || record.characterStrength) ? ` · ${record.axis || record.characterStrength}` : ""}</p>
           </div>
-          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Cerrar sin guardar">
+          <button onClick={saveAndClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Guardar y cerrar">
             <X className="h-4 w-4" />
           </button>
         </header>
@@ -1567,10 +1594,10 @@ function OrientationFeedbackModal({
             <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar para enviar"}
           </button>
           <div className="flex gap-2">
-            <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
-              Cancelar
+            <button onClick={saveAndClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+              Guardar y cerrar
             </button>
-            <button onClick={() => onSave(data)} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-violet-700">
+            <button onClick={saveFeedback} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-violet-700">
               <Save className="h-4 w-4" /> Guardar feedback
             </button>
           </div>
@@ -6359,6 +6386,9 @@ function OrientationCycleView({
             ownerName={owner.name}
             autoObservationNumber={String(priorCount + 1)}
             onClose={() => setFeedbackRecordId("")}
+            onAutoSave={(data) => {
+              onUpdateOrientationRecord(feedbackRecord.id, { classFeedback: JSON.stringify({ ...data, updatedAt: nowIso() }) });
+            }}
             onSave={(data) => {
               onUpdateOrientationRecord(feedbackRecord.id, { classFeedback: JSON.stringify({ ...data, updatedAt: nowIso() }) });
               setFeedbackRecordId("");

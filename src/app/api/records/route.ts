@@ -248,6 +248,7 @@ export async function PUT(request: Request) {
   try {
     const body = await request.json();
     const incomingStore = { ...emptyStore(), ...(body.store || {}) } as DataStore;
+    const pruneMissing = body.pruneMissing === true;
     const institutionId = await ensureInstitution(supabase, auth.user);
     const rows = ENTITY_IDS.flatMap((entity) =>
       (incomingStore[entity] || []).map((record, index) => {
@@ -282,27 +283,39 @@ export async function PUT(request: Request) {
       }
     }
 
-    for (const entity of ENTITY_IDS) {
-      const nextIds = new Set((incomingStore[entity] || []).map((record, index) => stableRecordId(entity, record, index)));
-      const { data: existingRows, error: existingError } = await supabase
-        .from("app_records")
-        .select("record_id")
-        .eq("institution_id", institutionId)
-        .eq("entity", entity);
-      if (existingError) throw existingError;
+    // Los snapshots completos pueden venir desde una pestaña atrasada. Por
+    // defecto solo agregan/actualizan; borrar queda reservado a DELETE/PATCH.
+    if (pruneMissing) {
+      for (const entity of ENTITY_IDS) {
+        const nextIds = new Set((incomingStore[entity] || []).map((record, index) => stableRecordId(entity, record, index)));
+        const existingIds: string[] = [];
+        const pageSize = 1000;
+        let from = 0;
+        while (true) {
+          const { data: existingRows, error: existingError } = await supabase
+            .from("app_records")
+            .select("record_id")
+            .eq("institution_id", institutionId)
+            .eq("entity", entity)
+            .range(from, from + pageSize - 1);
+          if (existingError) throw existingError;
+          const batch = ((existingRows || []) as Array<{ record_id: string }>).map((row) => row.record_id);
+          existingIds.push(...batch);
+          if (batch.length < pageSize) break;
+          from += pageSize;
+        }
 
-      const staleIds = ((existingRows || []) as Array<{ record_id: string }>)
-        .map((row) => row.record_id)
-        .filter((recordId) => !nextIds.has(recordId));
-      for (let i = 0; i < staleIds.length; i += chunkSize) {
-        const staleChunk = staleIds.slice(i, i + chunkSize);
-        const { error: deleteError } = await supabase
-          .from("app_records")
-          .delete()
-          .eq("institution_id", institutionId)
-          .eq("entity", entity)
-          .in("record_id", staleChunk);
-        if (deleteError) throw deleteError;
+        const staleIds = existingIds.filter((recordId) => !nextIds.has(recordId));
+        for (let i = 0; i < staleIds.length; i += chunkSize) {
+          const staleChunk = staleIds.slice(i, i + chunkSize);
+          const { error: deleteError } = await supabase
+            .from("app_records")
+            .delete()
+            .eq("institution_id", institutionId)
+            .eq("entity", entity)
+            .in("record_id", staleChunk);
+          if (deleteError) throw deleteError;
+        }
       }
     }
 
@@ -316,6 +329,7 @@ export async function PUT(request: Request) {
           acc[entity] = incomingStore[entity]?.length || 0;
           return acc;
         }, {}),
+        pruneMissing,
       },
     });
     if (auditError) {
