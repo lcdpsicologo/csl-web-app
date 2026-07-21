@@ -217,6 +217,21 @@ const initialsOf = (name: string) =>
     .join("")
     .toUpperCase();
 
+function StudentPhoto({ student, sizes, fallback }: { student: DataRecord; sizes: string; fallback: React.ReactNode }) {
+  const src = student.profilePhoto || "";
+  if (!src) return fallback;
+  return (
+    <Image
+      src={src}
+      alt=""
+      fill
+      sizes={sizes}
+      className="object-cover object-center"
+      unoptimized={src.startsWith("data:") || src.startsWith("blob:")}
+    />
+  );
+}
+
 type TizaSelectOption = string | { value: string; label: string; keywords?: string[] };
 
 const normalize = (value: string) =>
@@ -680,6 +695,106 @@ const schoolWeekDays = [
   { key: "jueves", label: "Jueves" },
   { key: "viernes", label: "Viernes" },
 ] as const;
+
+type SchoolWeekDayKey = (typeof schoolWeekDays)[number]["key"];
+type CourseLiveState = {
+  kind: "loading" | "live" | "break" | "next" | "finished" | "closed" | "empty";
+  activity: string;
+  timeLabel: string;
+  dayKey: SchoolWeekDayKey | "";
+  startTime: string;
+  endTime: string;
+  progress: number;
+};
+
+const schoolTimeFormatter = new Intl.DateTimeFormat("es-CL", {
+  timeZone: "America/Santiago",
+  weekday: "long",
+  hour: "2-digit",
+  minute: "2-digit",
+  hourCycle: "h23",
+});
+
+const minutesFromSchoolTime = (value: string) => {
+  const [hours, minutes] = String(value || "").split(":").map(Number);
+  return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
+};
+
+const currentSchoolTime = (timestamp: number) => {
+  if (!timestamp) return null;
+  const parts = Object.fromEntries(schoolTimeFormatter.formatToParts(new Date(timestamp)).map((part) => [part.type, part.value]));
+  const dayKey = normalize(parts.weekday || "") as SchoolWeekDayKey;
+  const hours = Number(parts.hour || 0);
+  const minutes = Number(parts.minute || 0);
+  return {
+    dayKey,
+    minutes: hours * 60 + minutes,
+    label: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+  };
+};
+
+const isSchoolPause = (activity: string) => /recreo|almuerzo|casino|acogida|juego libre/.test(normalize(activity));
+
+const liveStateForCourse = (entries: CourseScheduleEntry[], timestamp: number): CourseLiveState => {
+  const clock = currentSchoolTime(timestamp);
+  if (!clock) return { kind: "loading", activity: "Sincronizando horario", timeLabel: "", dayKey: "", startTime: "", endTime: "", progress: 0 };
+  if (!schoolWeekDays.some((day) => day.key === clock.dayKey)) {
+    return { kind: "closed", activity: "Sin clases hoy", timeLabel: clock.label, dayKey: "", startTime: "", endTime: "", progress: 0 };
+  }
+
+  const todayEntries = entries
+    .filter((entry) => normalize(entry.day) === clock.dayKey)
+    .sort((left, right) => left.startTime.localeCompare(right.startTime));
+  if (!todayEntries.length) {
+    return { kind: "empty", activity: "Sin horario para hoy", timeLabel: clock.label, dayKey: clock.dayKey, startTime: "", endTime: "", progress: 0 };
+  }
+
+  const activeEntries = todayEntries.filter((entry) => {
+    const start = minutesFromSchoolTime(entry.startTime);
+    const end = minutesFromSchoolTime(entry.endTime);
+    return clock.minutes >= start && clock.minutes < end;
+  });
+  if (activeEntries.length) {
+    const first = activeEntries[0];
+    const activities = [...new Set(activeEntries.map((entry) => entry.activity).filter(Boolean))];
+    const start = minutesFromSchoolTime(first.startTime);
+    const end = minutesFromSchoolTime(first.endTime);
+    const activity = activities.join(" / ") || "Actividad de curso";
+    return {
+      kind: isSchoolPause(activity) ? "break" : "live",
+      activity,
+      timeLabel: `${first.startTime}–${first.endTime}`,
+      dayKey: clock.dayKey,
+      startTime: first.startTime,
+      endTime: first.endTime,
+      progress: Math.max(0, Math.min(100, ((clock.minutes - start) / Math.max(1, end - start)) * 100)),
+    };
+  }
+
+  const next = todayEntries.find((entry) => minutesFromSchoolTime(entry.startTime) > clock.minutes);
+  if (next) {
+    const sameBlock = todayEntries.filter((entry) => entry.startTime === next.startTime && entry.endTime === next.endTime);
+    return {
+      kind: "next",
+      activity: [...new Set(sameBlock.map((entry) => entry.activity).filter(Boolean))].join(" / ") || "Próxima actividad",
+      timeLabel: `${next.startTime}–${next.endTime}`,
+      dayKey: clock.dayKey,
+      startTime: next.startTime,
+      endTime: next.endTime,
+      progress: 0,
+    };
+  }
+
+  return { kind: "finished", activity: "Jornada finalizada", timeLabel: clock.label, dayKey: clock.dayKey, startTime: "", endTime: "", progress: 100 };
+};
+
+const courseLivePresentation = (kind: CourseLiveState["kind"]) => {
+  if (kind === "live") return { label: "En clase", dot: "bg-emerald-500", ping: "bg-emerald-400", badge: "bg-emerald-50 text-emerald-700 ring-emerald-200", panel: "border-emerald-200 bg-emerald-50/90" };
+  if (kind === "break") return { label: "Pausa activa", dot: "bg-amber-500", ping: "bg-amber-400", badge: "bg-amber-50 text-amber-700 ring-amber-200", panel: "border-amber-200 bg-amber-50/90" };
+  if (kind === "next") return { label: "Próxima", dot: "bg-blue-500", ping: "bg-blue-400", badge: "bg-blue-50 text-blue-700 ring-blue-200", panel: "border-blue-200 bg-blue-50/90" };
+  if (kind === "finished") return { label: "Finalizado", dot: "bg-violet-500", ping: "bg-violet-400", badge: "bg-violet-50 text-violet-700 ring-violet-200", panel: "border-violet-200 bg-violet-50/90" };
+  return { label: kind === "closed" ? "Sin clases" : kind === "empty" ? "Sin horario" : "Actualizando", dot: "bg-slate-400", ping: "bg-slate-300", badge: "bg-slate-100 text-slate-600 ring-slate-200", panel: "border-slate-200 bg-slate-50/90" };
+};
 
 const firstCycleHeadTeachers: Record<string, { name: string; email: string }> = {
   [canonicalCourseKey("Prekínder A")]: { name: "Ivonne Espinoza", email: "i.espinoza@colegiosanlucas.com" },
@@ -3788,6 +3903,8 @@ function CourseWorkspaceView({
   const courses = [...officialWorkspaceCourses, ...customWorkspaceCourses];
   const [selectedCourse, setSelectedCourse] = useState(courses[0]?.name || "");
   const [cycleTab, setCycleTab] = useState<"all" | CourseDef["cycle"]>("all");
+  const [clockTimestamp, setClockTimestamp] = useState(0);
+  const [mobileScheduleDay, setMobileScheduleDay] = useState<SchoolWeekDayKey | "">("");
   const [draggedStudentId, setDraggedStudentId] = useState("");
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [teamForm, setTeamForm] = useState({ name: "", role: "Profesor/a jefe", email: "" });
@@ -3819,11 +3936,44 @@ function CourseWorkspaceView({
     setNewRoleDraft("");
   };
 
+  useEffect(() => {
+    const kickoff = window.setTimeout(() => setClockTimestamp(Date.now()), 0);
+    const interval = window.setInterval(() => setClockTimestamp(Date.now()), 30_000);
+    return () => {
+      window.clearTimeout(kickoff);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const scheduleEntriesByCourse = useMemo(() => {
+    const grouped = new Map<string, CourseScheduleEntry[]>();
+    scheduleEntries.forEach((entry) => {
+      const key = schoolScheduleCourseKey(entry.course);
+      const currentEntries = grouped.get(key) || [];
+      currentEntries.push(entry);
+      grouped.set(key, currentEntries);
+    });
+    return grouped;
+  }, [scheduleEntries]);
+  const liveStatesByCourse = useMemo(() => {
+    const states = new Map<string, CourseLiveState>();
+    scheduleEntriesByCourse.forEach((entries, key) => states.set(key, liveStateForCourse(entries, clockTimestamp)));
+    return states;
+  }, [clockTimestamp, scheduleEntriesByCourse]);
+  const studentCountByCourse = useMemo(() => {
+    const counts = new Map<string, number>();
+    store.students.forEach((student) => {
+      const key = schoolScheduleCourseKey(student.course || "");
+      counts.set(key, (counts.get(key) || 0) + 1);
+    });
+    return counts;
+  }, [store.students]);
+
   const visibleCourses = cycleTab === "all" ? courses : courses.filter((course) => course.cycle === cycleTab);
   const current = courses.find((course) => course.name === selectedCourse) || courses[0];
   const courseName = current?.name || "";
   const courseSchedule = (() => {
-    const entries = scheduleEntries.filter((entry) => schoolScheduleCourseKey(entry.course) === schoolScheduleCourseKey(courseName));
+    const entries = scheduleEntriesByCourse.get(schoolScheduleCourseKey(courseName)) || [];
     const rowsByKey = new Map<string, { key: string; block: number; startTime: string; endTime: string }>();
     const cells = new Map<string, string[]>();
     entries.forEach((entry) => {
@@ -3840,6 +3990,13 @@ function CourseWorkspaceView({
       rows: Array.from(rowsByKey.values()).sort((left, right) => left.startTime.localeCompare(right.startTime) || left.block - right.block),
     };
   })();
+  const schoolClock = currentSchoolTime(clockTimestamp);
+  const activeMobileDay = mobileScheduleDay || (schoolWeekDays.some((day) => day.key === schoolClock?.dayKey) ? schoolClock!.dayKey : "lunes");
+  const currentLiveState = liveStatesByCourse.get(schoolScheduleCourseKey(courseName)) || liveStateForCourse([], clockTimestamp);
+  const currentLivePresentation = courseLivePresentation(currentLiveState.kind);
+  const mobileScheduleRows = courseSchedule.rows
+    .map((row) => ({ ...row, activities: courseSchedule.cells.get(`${row.key}|${activeMobileDay}`) || [] }))
+    .filter((row) => row.activities.length > 0);
   const students = store.students.filter((record) => normalize(record.course || "") === normalize(courseName));
   const cases = store.cases.filter((record) => courseMatches(record, courseName));
   const convivencia = cases.filter((record) => normalize(`${record.category || ""} ${record.title || ""}`).includes("convivencia"));
@@ -3934,30 +4091,44 @@ function CourseWorkspaceView({
 
   return (
     <div className="tz-fade">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Cursos</h1>
-          <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Cada curso tiene su propio tablero: equipo de aula, simulación de sala, casos, orientación y documentos.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
+      <section className="relative mb-6 overflow-hidden rounded-3xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-7 sm:py-6">
+        <div className="pointer-events-none absolute -right-12 -top-20 h-52 w-52 rounded-full bg-cyan-100/70 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-24 left-1/3 h-44 w-44 rounded-full bg-blue-100/60 blur-3xl" />
+        <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-2 rounded-full bg-cyan-50 px-3 py-1 text-xs font-bold text-cyan-800 ring-1 ring-cyan-200">
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-60" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-600" />
+                </span>
+                Horario en vivo{schoolClock ? ` · ${schoolClock.label}` : ""}
+              </span>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{courses.length} cursos</span>
+            </div>
+            <h1 className="text-3xl font-bold tracking-[-0.035em] text-slate-950 sm:text-4xl">Cursos</h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600 sm:text-base">
+              Sigue lo que ocurre en cada sala, revisa su horario y entra a su tablero de estudiantes, equipo y acompañamiento.
+            </p>
+          </div>
+          <div className="grid w-full gap-2 sm:grid-cols-2 xl:w-auto">
           <button
             onClick={() => setShowPjPanel((value) => !value)}
-            className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            className="tz-press inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-white"
           >
             <UsersRound className="h-4 w-4" /> {showPjPanel ? "Ocultar PJ" : `Ver Profesores Jefe (${pjList.length})`}
           </button>
           <button
             onClick={onSeedCourses}
             disabled={missingOfficialCourses === 0}
-            className="inline-flex items-center gap-2 rounded-md tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:cursor-default disabled:opacity-70"
           >
             <Save className="h-4 w-4" />
             {missingOfficialCourses === 0 ? "Cursos oficiales guardados" : `Guardar ${missingOfficialCourses} cursos oficiales`}
           </button>
+          </div>
         </div>
-      </div>
+      </section>
 
       {showPjPanel ? (
         <section className="tz-slide-up mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white">
@@ -4026,80 +4197,155 @@ function CourseWorkspaceView({
         </section>
       ) : null}
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        {([
-          ["all", "Todos"],
-          ["I Ciclo", "I Ciclo"],
-          ["II Ciclo", "II Ciclo"],
-          ["III Ciclo", "III Ciclo"],
-        ] as Array<["all" | CourseDef["cycle"], string]>).map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setCycleTab(key)}
-            className={`whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-semibold transition ${cycleTab === key ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="mb-5 tz-contained-x rounded-xl border border-slate-200 bg-white px-3 py-3">
-        <div className="flex min-w-max gap-1.5">
-          {visibleCourses.map((course) => (
-            <button
-              key={course.name}
-              onClick={() => setSelectedCourse(course.name)}
-              className={`whitespace-nowrap shrink-0 rounded-md px-3 py-2 text-sm font-semibold transition ${selectedCourse === course.name ? "bg-slate-900 text-white shadow" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}
-            >
-              {course.name}
-            </button>
-          ))}
+      <section className="mb-6 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="mb-3 flex flex-col gap-3 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
+            {([
+              ["all", "Todos"],
+              ["I Ciclo", "I Ciclo"],
+              ["II Ciclo", "II Ciclo"],
+              ["III Ciclo", "III Ciclo"],
+            ] as Array<["all" | CourseDef["cycle"], string]>).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => {
+                  setCycleTab(key);
+                  if (key !== "all" && current?.cycle !== key) {
+                    const firstCourse = courses.find((course) => course.cycle === key);
+                    if (firstCourse) setSelectedCourse(firstCourse.name);
+                  }
+                }}
+                className={`shrink-0 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-bold transition sm:text-sm ${cycleTab === key ? "bg-white text-slate-950 shadow-sm ring-1 ring-slate-200" : "text-slate-500 hover:text-slate-900"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs font-medium text-slate-500">Selecciona un curso para abrir su tablero</p>
         </div>
-      </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8">
+          {visibleCourses.map((course) => {
+            const state = liveStatesByCourse.get(schoolScheduleCourseKey(course.name)) || liveStateForCourse([], clockTimestamp);
+            const presentation = courseLivePresentation(state.kind);
+            const active = selectedCourse === course.name;
+            const isAnimated = state.kind === "live" || state.kind === "break";
+            const studentCount = studentCountByCourse.get(schoolScheduleCourseKey(course.name)) || 0;
+            return (
+              <button
+                key={course.name}
+                onClick={() => setSelectedCourse(course.name)}
+                aria-pressed={active}
+                className={`group relative min-h-[108px] overflow-hidden rounded-xl border p-3 text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                  active
+                    ? "border-slate-900 bg-slate-950 text-white shadow-lg shadow-slate-900/15 -translate-y-0.5"
+                    : "border-slate-200 bg-white text-slate-900 hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-md"
+                }`}
+              >
+                <span className={`absolute inset-x-0 top-0 h-1 ${state.kind === "live" ? "bg-emerald-500" : state.kind === "break" ? "bg-amber-500" : state.kind === "next" ? "bg-blue-500" : "bg-slate-200"}`} />
+                <span className="flex items-start justify-between gap-2">
+                  <span className="text-sm font-extrabold tracking-tight sm:text-base">{course.name}</span>
+                  <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-black ${active ? "bg-white/15 text-white" : "bg-slate-100 text-slate-500"}`}>{studentCount}</span>
+                </span>
+                <span className={`mt-3 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${active ? "text-white/75" : "text-slate-500"}`}>
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    {isAnimated ? <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${presentation.ping} opacity-60`} /> : null}
+                    <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${presentation.dot}`} />
+                  </span>
+                  {presentation.label}
+                </span>
+                <span className={`mt-1 block truncate text-[11px] font-semibold ${active ? "text-white" : "text-slate-700"}`} title={state.activity}>{state.activity}</span>
+                {state.timeLabel ? <span className={`mt-0.5 block text-[10px] tabular-nums ${active ? "text-white/60" : "text-slate-400"}`}>{state.timeLabel}</span> : null}
+              </button>
+            );
+          })}
+        </div>
+      </section>
 
       {current ? (
         <div className="space-y-6">
-          <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className={`bg-gradient-to-br ${avatarTone(current.name)} px-6 py-5 text-white sm:px-8`}>
-              <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-center">
+          <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+            <div className={`relative overflow-hidden bg-gradient-to-br ${avatarTone(current.name)} px-5 py-6 text-white sm:px-8 sm:py-8`}>
+              <div className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full bg-white/15 blur-3xl" />
+              <div className="pointer-events-none absolute -bottom-24 left-1/3 h-52 w-52 rounded-full bg-slate-950/15 blur-3xl" />
+              <div className="relative grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] xl:items-center">
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-wider text-white/85">
-                    <span className="rounded-full bg-white/20 px-2.5 py-0.5">{current.cycle}</span>
-                    <span className="opacity-70">·</span>
-                    <span className="truncate">{current.orientationOwner}</span>
+                  <div className="flex flex-wrap items-center gap-2 text-xs font-bold uppercase tracking-wider text-white/85">
+                    <span className="rounded-full bg-white/20 px-2.5 py-1 ring-1 ring-white/20">{current.cycle}</span>
+                    <span className="truncate">Orientación · {current.orientationOwner || "Sin asignar"}</span>
                   </div>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">{current.name}</h2>
-                  <p className="mt-1 text-sm text-white/90">Convivencia: <strong>{current.convivenciaCoordinator}</strong> · {current.convivenciaEmail}</p>
+                  <h2 className="mt-3 text-3xl font-black tracking-[-0.04em] sm:text-4xl">{current.name}</h2>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-white/85">
+                    Convivencia: <strong className="text-white">{current.convivenciaCoordinator || "Sin asignar"}</strong>
+                    {current.convivenciaEmail ? ` · ${current.convivenciaEmail}` : ""}
+                  </p>
+                  <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      ["Estudiantes", students.length],
+                      ["Casos", cases.length],
+                      ["Orientación", orientation.length],
+                      ["Bitácoras", logs.length],
+                    ].map(([label, count]) => (
+                      <div key={String(label)} className="rounded-xl border border-white/15 bg-white/10 px-3 py-2.5 backdrop-blur-sm">
+                        <div className="text-xl font-black leading-none sm:text-2xl">{count}</div>
+                        <div className="mt-1 text-[10px] font-bold uppercase tracking-wider text-white/70">{label}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2 text-center text-xs font-semibold sm:grid-cols-4 lg:w-[420px]">
-                  {[
-                    ["Estudiantes", students.length],
-                    ["Casos", cases.length],
-                    ["Orientación", orientation.length],
-                    ["Bitácoras", logs.length],
-                  ].map(([label, count]) => (
-                    <div key={String(label)} className="rounded-lg bg-white/15 px-3 py-2 backdrop-blur">
-                      <div className="text-xl font-bold leading-none">{count}</div>
-                      <div className="mt-1 opacity-85">{label}</div>
+
+                <div className={`relative overflow-hidden rounded-2xl border p-4 text-slate-950 shadow-xl backdrop-blur-md sm:p-5 ${currentLivePresentation.panel}`}>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ring-1 ${currentLivePresentation.badge}`}>
+                      <span className="relative flex h-2.5 w-2.5">
+                        {currentLiveState.kind === "live" || currentLiveState.kind === "break" ? <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${currentLivePresentation.ping} opacity-70`} /> : null}
+                        <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${currentLivePresentation.dot}`} />
+                      </span>
+                      {currentLivePresentation.label}
+                    </span>
+                    <span className="text-xs font-bold tabular-nums text-slate-500">{currentLiveState.timeLabel}</span>
+                  </div>
+                  <div className="mt-4 flex items-start gap-3">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200/70">
+                      {currentLiveState.kind === "break" ? <Clock className="h-5 w-5" /> : <BookOpenText className="h-5 w-5" />}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{currentLiveState.kind === "next" ? "Próxima actividad" : "Actividad actual"}</p>
+                      <p className="mt-1 text-lg font-black leading-tight text-slate-950 sm:text-xl">{currentLiveState.activity}</p>
                     </div>
-                  ))}
+                  </div>
+                  {currentLiveState.kind === "live" || currentLiveState.kind === "break" ? (
+                    <div className="mt-4">
+                      <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold text-slate-500">
+                        <span>{currentLiveState.startTime}</span>
+                        <span>{Math.round(currentLiveState.progress)}% del bloque</span>
+                        <span>{currentLiveState.endTime}</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-white/80 ring-1 ring-slate-200/70">
+                        <div className={`h-full rounded-full transition-[width] duration-700 ${currentLiveState.kind === "break" ? "bg-amber-500" : "bg-emerald-500"}`} style={{ width: `${currentLiveState.progress}%` }} />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>
           </section>
 
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-cyan-50 via-white to-blue-50 px-5 py-4 sm:px-6">
+            <div className="flex flex-col gap-3 border-b border-slate-200 bg-gradient-to-r from-cyan-50 via-white to-blue-50 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-6">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
                   <CalendarDays className="h-5 w-5 text-cyan-700" />
                   Horario semanal de {current.name}
                 </h3>
-                <p className="mt-1 text-sm text-slate-600">Asignaturas y actividades del horario oficial 2026.</p>
+                <p className="mt-1 text-sm text-slate-600">La actividad en curso se destaca automáticamente según la hora de Santiago.</p>
               </div>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-cyan-800 shadow-sm ring-1 ring-cyan-200">
-                {courseSchedule.rows.length} tramos horarios
-              </span>
+              <div className="flex flex-wrap items-center gap-2">
+                {schoolClock ? <span className="rounded-full bg-white px-3 py-1 text-xs font-bold tabular-nums text-slate-600 shadow-sm ring-1 ring-slate-200">{schoolClock.label}</span> : null}
+                <span className="rounded-full bg-white px-3 py-1 text-xs font-bold text-cyan-800 shadow-sm ring-1 ring-cyan-200">
+                  {courseSchedule.rows.length} tramos
+                </span>
+              </div>
             </div>
 
             {courseSchedule.rows.length === 0 ? (
@@ -4110,12 +4356,64 @@ function CourseWorkspaceView({
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="border-b border-slate-100 p-3 lg:hidden">
+                  <div className="flex gap-1 overflow-x-auto rounded-xl bg-slate-100 p-1">
+                    {schoolWeekDays.map((day) => {
+                      const active = activeMobileDay === day.key;
+                      const isToday = schoolClock?.dayKey === day.key;
+                      return (
+                        <button
+                          key={day.key}
+                          onClick={() => setMobileScheduleDay(day.key)}
+                          className={`relative min-w-[76px] flex-1 rounded-lg px-3 py-2 text-xs font-bold transition ${active ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+                        >
+                          {day.label.slice(0, 3)}
+                          {isToday ? <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-cyan-500" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {mobileScheduleRows.length ? mobileScheduleRows.map((row) => {
+                      const activityText = row.activities.join(" / ");
+                      const isBreak = isSchoolPause(activityText);
+                      const isOrientation = /orientacion|consejo/.test(normalize(activityText));
+                      const isCurrent = activeMobileDay === currentLiveState.dayKey && row.startTime === currentLiveState.startTime && row.endTime === currentLiveState.endTime && (currentLiveState.kind === "live" || currentLiveState.kind === "break");
+                      return (
+                        <article key={row.key} className={`relative flex gap-3 overflow-hidden rounded-xl border p-3 transition ${isCurrent ? "border-emerald-300 bg-emerald-50 shadow-sm" : "border-slate-200 bg-white"}`}>
+                          {isCurrent ? <span className="absolute inset-y-0 left-0 w-1 bg-emerald-500" /> : null}
+                          <div className="w-14 shrink-0 pt-0.5 text-right">
+                            <span className="block text-xs font-black tabular-nums text-slate-900">{row.startTime}</span>
+                            <span className="block text-[10px] tabular-nums text-slate-400">{row.endTime}</span>
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              {isCurrent ? (
+                                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
+                                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                                </span>
+                              ) : null}
+                              <p className="truncate text-sm font-bold text-slate-950">{activityText}</p>
+                            </div>
+                            <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${isOrientation ? "bg-cyan-100 text-cyan-700" : isBreak ? "bg-slate-100 text-slate-500" : "bg-blue-50 text-blue-700"}`}>
+                              {isCurrent ? "Ahora" : isOrientation ? "Orientación" : isBreak ? "Pausa" : "Clase"}
+                            </span>
+                          </div>
+                        </article>
+                      );
+                    }) : (
+                      <p className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">Sin actividades para este día.</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="hidden overflow-x-auto lg:block">
                   <table className="w-full min-w-[920px] table-fixed text-left">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
                         <th className="w-28 px-4 py-3">Hora</th>
-                        {schoolWeekDays.map((day) => <th key={day.key} className="px-3 py-3">{day.label}</th>)}
+                        {schoolWeekDays.map((day) => <th key={day.key} className={`px-3 py-3 ${schoolClock?.dayKey === day.key ? "bg-cyan-50 text-cyan-800" : ""}`}>{day.label}{schoolClock?.dayKey === day.key ? <span className="ml-2 inline-block h-1.5 w-1.5 rounded-full bg-cyan-500 align-middle" /> : null}</th>)}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -4131,16 +4429,28 @@ function CourseWorkspaceView({
                             const activityKey = normalize(activityText);
                             const isBreak = /recreo|almuerzo|casino|acogida|juego libre/.test(activityKey);
                             const isOrientation = /orientacion|consejo/.test(activityKey);
+                            const isCurrent = day.key === currentLiveState.dayKey && row.startTime === currentLiveState.startTime && row.endTime === currentLiveState.endTime && (currentLiveState.kind === "live" || currentLiveState.kind === "break");
                             return (
-                              <td key={day.key} className="px-2 py-2">
+                              <td key={day.key} className={`px-2 py-2 ${schoolClock?.dayKey === day.key ? "bg-cyan-50/25" : ""}`}>
                                 {activities.length ? (
-                                  <div className={`min-h-11 rounded-lg px-2.5 py-2 text-xs font-semibold leading-4 ring-1 ${
-                                    isOrientation
+                                  <div className={`relative min-h-11 overflow-hidden rounded-lg px-2.5 py-2 text-xs font-semibold leading-4 ring-1 transition ${
+                                    isCurrent
+                                      ? "bg-emerald-100 text-emerald-950 ring-2 ring-emerald-400 shadow-sm"
+                                      : isOrientation
                                       ? "bg-cyan-100 text-cyan-950 ring-cyan-200"
                                       : isBreak
                                         ? "bg-slate-100 text-slate-600 ring-slate-200"
                                         : "bg-blue-50 text-blue-950 ring-blue-100"
                                   }`} title={`${day.label} ${row.startTime}–${row.endTime}: ${activityText}`}>
+                                    {isCurrent ? (
+                                      <span className="mb-1 flex items-center gap-1.5 text-[9px] font-black uppercase tracking-wider text-emerald-700">
+                                        <span className="relative flex h-2 w-2">
+                                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                                          <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                                        </span>
+                                        Ahora
+                                      </span>
+                                    ) : null}
                                     {activities.map((activity) => <span key={activity} className="block">{activity}</span>)}
                                   </div>
                                 ) : <span className="block min-h-11 rounded-lg border border-dashed border-slate-100" />}
@@ -4152,11 +4462,11 @@ function CourseWorkspaceView({
                     </tbody>
                   </table>
                 </div>
-                <div className="flex flex-wrap items-center gap-4 border-t border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] text-slate-500">
+                <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50/70 px-5 py-3 text-[11px] text-slate-500 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                   <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-100 ring-1 ring-blue-200" /> Asignatura o actividad</span>
                   <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-cyan-200 ring-1 ring-cyan-300" /> Orientación / Consejo</span>
                   <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-slate-200 ring-1 ring-slate-300" /> Recreo / alimentación</span>
-                  <span className="ml-auto">Fuente: {courseSchedule.entries[0]?.source || "Horario institucional"}</span>
+                  <span className="sm:ml-auto">Fuente: {courseSchedule.entries[0]?.source || "Horario institucional"}</span>
                 </div>
               </>
             )}
@@ -4307,12 +4617,8 @@ function CourseWorkspaceView({
                         <span className="absolute right-2 top-2 text-[10px] font-semibold text-slate-400">#{index + 1}</span>
                         {occupied && student ? (
                           <>
-                            <div className={`mb-2 grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[11px] font-bold text-white shadow-sm`}>
-                              {student.profilePhoto ? (
-                                <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
-                              ) : (
-                                initialsOf(student.fullName)
-                              )}
+                            <div className={`relative mb-2 grid h-9 w-9 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[11px] font-bold text-white shadow-sm`}>
+                              <StudentPhoto student={student} sizes="36px" fallback={initialsOf(student.fullName)} />
                             </div>
                             <span className="block text-[13px] font-bold leading-tight text-slate-950">{student.fullName}</span>
                             {student.rut ? <span className="mt-0.5 block text-[10px] text-slate-500">{student.rut}</span> : null}
@@ -7435,14 +7741,16 @@ function StudentDetailDialog({
           <div className="border-b border-slate-200 bg-white px-6 pt-3 pb-3 sm:px-8 sm:pt-4 sm:pb-4">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
               <label className="group relative -mt-8 inline-block h-16 w-16 shrink-0 cursor-pointer sm:-mt-10 sm:h-20 sm:w-20">
-                <span className="block h-full w-full overflow-hidden rounded-2xl bg-white ring-4 ring-white shadow-lg">
-                  {student.profilePhoto ? (
-                    <span className="block h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
-                  ) : (
-                    <span className={`grid h-full w-full place-items-center bg-gradient-to-br ${avatarTone(student.id)} text-xl sm:text-2xl font-bold text-white`}>
-                      {initialsOf(student.fullName) || <UserRound className="h-8 w-8 opacity-80 sm:h-10 sm:w-10" />}
-                    </span>
-                  )}
+                <span className="relative block h-full w-full overflow-hidden rounded-2xl bg-white ring-4 ring-white shadow-lg">
+                  <StudentPhoto
+                    student={student}
+                    sizes="80px"
+                    fallback={(
+                      <span className={`grid h-full w-full place-items-center bg-gradient-to-br ${avatarTone(student.id)} text-xl sm:text-2xl font-bold text-white`}>
+                        {initialsOf(student.fullName) || <UserRound className="h-8 w-8 opacity-80 sm:h-10 sm:w-10" />}
+                      </span>
+                    )}
+                  />
                 </span>
                 <span className="absolute -bottom-1 -right-1 grid h-6 w-6 sm:h-8 sm:w-8 place-items-center rounded-full bg-slate-900 text-white ring-2 ring-white shadow-md transition group-hover:scale-110">
                   <Camera className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
@@ -8039,12 +8347,8 @@ function StudentsWorkspaceView({
                             className="group flex w-full items-center gap-3 px-5 py-2.5 text-left transition hover:bg-blue-50/40"
                           >
                             <span className="w-7 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-400">{idx + 1}</span>
-                            <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[11px] font-bold text-white`}>
-                              {student.profilePhoto ? (
-                                <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
-                              ) : (
-                                initialsOf(student.fullName)
-                              )}
+                            <div className={`relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[11px] font-bold text-white`}>
+                              <StudentPhoto student={student} sizes="36px" fallback={initialsOf(student.fullName)} />
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-semibold text-slate-950 group-hover:text-blue-700">{student.fullName || "Sin nombre"}</p>
@@ -8948,12 +9252,8 @@ function PieWorkspaceView({
                         >
                           <td className="px-5 py-3.5 whitespace-nowrap">
                             <div className="flex items-center gap-3">
-                              <div className={`grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[10px] font-bold text-white shadow-sm`}>
-                                {student.profilePhoto ? (
-                                  <div className="h-full w-full bg-cover bg-center" style={{ backgroundImage: `url(${student.profilePhoto})` }} />
-                                ) : (
-                                  initialsOf(student.fullName)
-                                )}
+                              <div className={`relative grid h-8 w-8 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[10px] font-bold text-white shadow-sm`}>
+                                <StudentPhoto student={student} sizes="32px" fallback={initialsOf(student.fullName)} />
                               </div>
                               <div>
                                 <p className="font-semibold text-slate-900 group-hover:text-emerald-700 truncate max-w-[200px]">{student.fullName || "Sin nombre"}</p>
