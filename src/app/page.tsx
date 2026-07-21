@@ -1629,13 +1629,13 @@ const classFeedbackSummaryText = (record: DataRecord, data: ClassFeedbackData) =
 
 function FeedbackYesNo({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
-    <div className="flex shrink-0 gap-1">
+    <div className="flex w-full shrink-0 gap-1.5 sm:w-auto">
       {(["si", "no"] as const).map((option) => (
         <button
           key={option}
           type="button"
           onClick={() => onChange(value === option ? "" : option)}
-          className={`rounded-md px-2.5 py-1 text-[11px] font-bold ring-1 transition ${
+          className={`min-h-9 flex-1 rounded-lg px-3 py-1.5 text-xs font-bold ring-1 transition sm:min-h-0 sm:flex-none sm:text-[11px] ${
             value === option
               ? option === "si"
                 ? "bg-emerald-100 text-emerald-700 ring-emerald-300"
@@ -1654,6 +1654,8 @@ function OrientationFeedbackModal({
   record,
   ownerName,
   autoObservationNumber,
+  defaultStartTime,
+  defaultEndTime,
   onClose,
   onSave,
   onAutoSave,
@@ -1661,6 +1663,8 @@ function OrientationFeedbackModal({
   record: DataRecord;
   ownerName: string;
   autoObservationNumber: string;
+  defaultStartTime: string;
+  defaultEndTime: string;
   onClose: () => void;
   onSave: (data: ClassFeedbackData) => void;
   onAutoSave: (data: ClassFeedbackData) => void;
@@ -1671,6 +1675,9 @@ function OrientationFeedbackModal({
     if (!parsed.observer) parsed.observer = ownerName;
     // Correlativo automático por curso: se puede corregir a mano si hace falta.
     if (!parsed.observationNumber) parsed.observationNumber = autoObservationNumber;
+    // El horario oficial es el punto de partida y se puede corregir manualmente.
+    if (!parsed.startTime) parsed.startTime = defaultStartTime;
+    if (!parsed.endTime) parsed.endTime = defaultEndTime;
     return parsed;
   });
   const [copied, setCopied] = useState(false);
@@ -1713,29 +1720,29 @@ function OrientationFeedbackModal({
     }
   };
 
-  const sectionTitle = "text-xs font-bold uppercase tracking-wider text-blue-700";
+  const sectionTitle = "text-[11px] font-bold uppercase tracking-[0.12em] text-blue-700 sm:text-xs";
   const fieldLabel = "text-[11px] font-bold uppercase tracking-wide text-slate-500";
-  const inputStyle = "mt-1 w-full rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500";
+  const inputStyle = "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50";
 
   // Portal a <body>: los contenedores animados de la app crean stacking contexts
   // que dejaban el modal atrapado bajo la barra superior.
   return createPortal(
     <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={saveAndClose}>
-      <div className="flex h-[94dvh] w-full max-w-3xl flex-col rounded-t-2xl bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
-        <header className="flex items-start justify-between gap-3 rounded-t-2xl border-b border-slate-100 bg-gradient-to-r from-blue-50 to-white px-5 py-4">
-          <div>
+      <div className="flex h-[100dvh] w-full max-w-3xl flex-col bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-blue-50 to-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:rounded-t-2xl sm:px-5 sm:py-4">
+          <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Pauta de acompañamiento de clase</p>
-            <h2 className="text-lg font-semibold text-slate-950">Feedback · {record.course || "Sin curso"} · {record.date || "Sin fecha"}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">{record.topic || "Sin tema definido"}{(record.axis || record.characterStrength) ? ` · ${record.axis || record.characterStrength}` : ""}</p>
+            <h2 className="mt-0.5 truncate text-base font-semibold text-slate-950 sm:text-lg">Feedback · {record.course || "Sin curso"}</h2>
+            <p className="mt-0.5 truncate text-xs text-slate-500">{record.date || "Sin fecha"} · {record.topic || "Sin tema definido"}{(record.axis || record.characterStrength) ? ` · ${record.axis || record.characterStrength}` : ""}</p>
           </div>
           <button onClick={saveAndClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Guardar y cerrar">
             <X className="h-4 w-4" />
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-5">
-          <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="block">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3 sm:space-y-5 sm:px-5 sm:py-4">
+          <section className="grid grid-cols-2 gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
+            <label className="col-span-2 block sm:col-span-1">
               <span className={fieldLabel}>Nombre docente</span>
               <input value={data.teacher} onChange={(event) => update({ teacher: event.target.value })} className={inputStyle} />
             </label>
@@ -1755,7 +1762,7 @@ function OrientationFeedbackModal({
               <span className={fieldLabel}>Hora de término</span>
               <input type="time" value={data.endTime} onChange={(event) => update({ endTime: event.target.value })} className={inputStyle} />
             </label>
-            <label className="block">
+            <label className="col-span-2 block sm:col-span-1">
               <span className={fieldLabel}>Observador/a</span>
               <input value={data.observer} onChange={(event) => update({ observer: event.target.value })} className={inputStyle} />
             </label>
@@ -1765,8 +1772,8 @@ function OrientationFeedbackModal({
             <h3 className={sectionTitle}>1. Intervención formativa y cultura institucional</h3>
             <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
               {FEEDBACK_SECTION_CULTURE.map((item, index) => (
-                <div key={item} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <p className="text-sm text-slate-700">{item}</p>
+                <div key={item} className="flex flex-col items-start justify-between gap-2 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5">
+                  <p className="text-[13px] leading-5 text-slate-700 sm:text-sm">{item}</p>
                   <FeedbackYesNo value={data.cultureItems[index]} onChange={(value) => updateItem("cultureItems", index, value)} />
                 </div>
               ))}
@@ -1777,8 +1784,8 @@ function OrientationFeedbackModal({
             <h3 className={sectionTitle}>2. Trabajo de fortalezas del carácter en la clase</h3>
             <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
               {FEEDBACK_SECTION_STRENGTHS.map((item, index) => (
-                <div key={item} className="flex items-center justify-between gap-3 px-3 py-2.5">
-                  <p className="text-sm text-slate-700">{item}</p>
+                <div key={item} className="flex flex-col items-start justify-between gap-2 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5">
+                  <p className="text-[13px] leading-5 text-slate-700 sm:text-sm">{item}</p>
                   <FeedbackYesNo value={data.strengthItems[index]} onChange={(value) => updateItem("strengthItems", index, value)} />
                 </div>
               ))}
@@ -1788,7 +1795,7 @@ function OrientationFeedbackModal({
           <section className="space-y-3">
             <h3 className={sectionTitle}>3. Estrategias pedagógicas observadas</h3>
             <div className="rounded-xl border border-slate-200 p-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <p className="text-sm font-semibold text-slate-800">a. ¿Se observa uso de habilidad de comprensión?</p>
                 <FeedbackYesNo value={data.comprehensionUsed} onChange={(value) => update({ comprehensionUsed: value })} />
               </div>
@@ -1819,7 +1826,7 @@ function OrientationFeedbackModal({
               </label>
             </div>
             <div className="rounded-xl border border-slate-200 p-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <p className="text-sm font-semibold text-slate-800">b. ¿Utiliza estrategia de pensamiento?</p>
                 <FeedbackYesNo value={data.thinkingUsed} onChange={(value) => update({ thinkingUsed: value })} />
               </div>
@@ -1829,7 +1836,7 @@ function OrientationFeedbackModal({
               </label>
             </div>
             <div className="rounded-xl border border-slate-200 p-3">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <p className="text-sm font-semibold text-slate-800">c. ¿Utiliza estrategia de clima de aula?</p>
                 <FeedbackYesNo value={data.climateUsed} onChange={(value) => update({ climateUsed: value })} />
               </div>
@@ -1851,15 +1858,15 @@ function OrientationFeedbackModal({
           </section>
         </div>
 
-        <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2xl sm:px-5">
-          <button onClick={copySummary} className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+        <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:rounded-b-2xl sm:px-5">
+          <button onClick={copySummary} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
             <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar para enviar"}
           </button>
-          <div className="flex gap-2">
-            <button onClick={saveAndClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+          <div className="contents sm:flex sm:gap-2">
+            <button onClick={saveAndClose} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 sm:px-4">
               Guardar y cerrar
             </button>
-            <button onClick={saveFeedback} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-violet-700">
+            <button onClick={saveFeedback} className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-violet-700">
               <Save className="h-4 w-4" /> Guardar feedback
             </button>
           </div>
@@ -2839,16 +2846,15 @@ const MOBILE_PRIMARY: ViewId[] = ["dashboard", "today", "games", "students"];
 function MobileNav({
   activeView,
   onNavigate,
-  schoolName,
   navItems,
 }: {
   activeView: ViewId;
   onNavigate: (view: ViewId) => void;
-  schoolName: string;
   navItems: ViewNavItem[];
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const primary = navItems.filter((item) => MOBILE_PRIMARY.includes(item.id));
+  const secondary = navItems.filter((item) => !MOBILE_PRIMARY.includes(item.id));
 
   const go = (view: ViewId) => {
     onNavigate(view);
@@ -2894,47 +2900,44 @@ function MobileNav({
         </div>
       </nav>
 
-      {/* Drawer with the full menu */}
+      {/* Compact launcher: the four main destinations remain in the bottom bar. */}
       {drawerOpen ? (
         <div className="fixed inset-0 z-50 lg:hidden" onClick={() => setDrawerOpen(false)}>
-          <div className="tz-backdrop absolute inset-0 bg-slate-950/40" />
+          <div className="tz-backdrop absolute inset-0 bg-slate-950/25 backdrop-blur-[1px]" />
           <div
-            className="tz-slide-up absolute inset-x-3 bottom-[calc(64px+env(safe-area-inset-bottom))] max-h-[70vh] overflow-y-auto rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl"
+            className="tz-slide-up absolute inset-x-2 bottom-[calc(64px+env(safe-area-inset-bottom))] max-h-[54dvh] overflow-y-auto rounded-[22px] border border-slate-200 bg-white/98 p-2.5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-2 flex items-center gap-3 border-b border-slate-100 px-2 pb-3">
-              <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
-                <Image src="/logo-san-lucas.png" alt={schoolName} width={32} height={32} />
-              </div>
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Trabajando en</p>
-                <p className="truncate text-sm font-semibold text-slate-900">{schoolName}</p>
-              </div>
+            <div className="mb-1.5 flex items-center justify-between px-1.5 py-1">
+              <p className="text-xs font-bold text-slate-700">Más secciones</p>
+              <button type="button" onClick={() => setDrawerOpen(false)} className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-slate-500" aria-label="Cerrar menú">
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-            <div className="grid grid-cols-3 gap-1.5">
-              {navItems.map((item) => {
+            <div className="grid grid-cols-4 gap-1.5">
+              {secondary.map((item) => {
                 const Icon = item.icon;
                 const active = activeView === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => go(item.id)}
-                    className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-semibold transition ${
+                    className={`flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[10px] font-semibold leading-tight transition ${
                       active ? "bg-slate-900 text-white shadow" : "bg-slate-50 text-slate-700 active:bg-slate-100"
                     }`}
                   >
-                    <Icon className="h-5 w-5" />
-                    {item.label}
+                    <Icon className="h-[18px] w-[18px]" />
+                    <span className="line-clamp-2">{item.label}</span>
                   </button>
                 );
               })}
               <button
                 onClick={() => go("settings")}
-                className={`flex flex-col items-center gap-1.5 rounded-xl px-2 py-3 text-[11px] font-semibold transition ${
+                className={`flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition ${
                   activeView === "settings" ? "bg-slate-900 text-white shadow" : "bg-slate-50 text-slate-700 active:bg-slate-100"
                 }`}
               >
-                <Settings className="h-5 w-5" />
+                <Settings className="h-[18px] w-[18px]" />
                 Ajustes
               </button>
             </div>
@@ -6873,12 +6876,15 @@ function OrientationCycleView({
         const priorCount = store.orientation.filter((record) =>
           record.classFeedback && record.id !== feedbackRecord.id && normalize(record.course || "") === normalize(feedbackRecord.course || ""),
         ).length;
+        const feedbackSlot = scheduleSlots.find((slot) => normalize(slot.course) === normalize(feedbackRecord.course || ""));
         return (
           <OrientationFeedbackModal
             key={feedbackRecord.id}
             record={feedbackRecord}
             ownerName={owner.name}
             autoObservationNumber={String(priorCount + 1)}
+            defaultStartTime={feedbackSlot?.start || ""}
+            defaultEndTime={feedbackSlot?.end || ""}
             onClose={() => setFeedbackRecordId("")}
             onAutoSave={(data) => {
               onUpdateOrientationRecord(feedbackRecord.id, { classFeedback: JSON.stringify({ ...data, updatedAt: nowIso() }) });
@@ -12027,15 +12033,106 @@ function FloatingTizaIA({
   onOpenStudent: (studentId: string) => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
 }) {
+  const [buttonPosition, setButtonPosition] = useState<{ x: number; y: number } | null>(null);
+  const [draggingButton, setDraggingButton] = useState(false);
+  const dragStateRef = useRef({ pointerId: -1, startX: 0, startY: 0, originX: 0, originY: 0, moved: false });
+  const skipButtonClickRef = useRef(false);
+  const positionStorageKeyRef = useRef("tiza-ia-floating-position-v1-desktop");
+
+  const clampButtonPosition = (x: number, y: number) => {
+    const size = 58;
+    const margin = 10;
+    return {
+      x: Math.min(Math.max(margin, x), Math.max(margin, window.innerWidth - size - margin)),
+      y: Math.min(Math.max(margin, y), Math.max(margin, window.innerHeight - size - margin)),
+    };
+  };
+
+  useEffect(() => {
+    const defaultPosition = () => clampButtonPosition(
+      window.innerWidth - 70,
+      window.innerHeight - (window.innerWidth < 1024 ? 154 : 82),
+    );
+    let initialPosition = defaultPosition();
+    positionStorageKeyRef.current = `tiza-ia-floating-position-v1-${window.innerWidth < 1024 ? "mobile" : "desktop"}`;
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(positionStorageKeyRef.current) || "null") as { x?: number; y?: number } | null;
+      initialPosition = saved && Number.isFinite(saved.x) && Number.isFinite(saved.y)
+        ? clampButtonPosition(saved.x!, saved.y!)
+        : initialPosition;
+    } catch {
+      // Se usa la posición inicial si el almacenamiento no está disponible.
+    }
+    const initialFrame = window.requestAnimationFrame(() => setButtonPosition(initialPosition));
+
+    const keepInsideViewport = () => setButtonPosition((current) => current
+      ? clampButtonPosition(current.x, current.y)
+      : defaultPosition());
+    window.addEventListener("resize", keepInsideViewport);
+    return () => {
+      window.cancelAnimationFrame(initialFrame);
+      window.removeEventListener("resize", keepInsideViewport);
+    };
+  }, []);
+
+  const moveFloatingButton = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragStateRef.current;
+    if (event.pointerId !== drag.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (Math.hypot(deltaX, deltaY) > 4) drag.moved = true;
+    if (drag.moved) setButtonPosition(clampButtonPosition(drag.originX + deltaX, drag.originY + deltaY));
+  };
+
+  const finishFloatingButtonDrag = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragStateRef.current;
+    if (event.pointerId !== drag.pointerId) return;
+    const next = clampButtonPosition(
+      drag.originX + event.clientX - drag.startX,
+      drag.originY + event.clientY - drag.startY,
+    );
+    if (drag.moved) {
+      setButtonPosition(next);
+      skipButtonClickRef.current = true;
+      try {
+        window.localStorage.setItem(positionStorageKeyRef.current, JSON.stringify(next));
+      } catch {
+        // La posición sigue funcionando aunque el navegador bloquee el almacenamiento.
+      }
+    }
+    setDraggingButton(false);
+    drag.pointerId = -1;
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+
   return (
     <>
       {/* z-[45]: sobre el contenido y la barra inferior (z-40), pero bajo el menú móvil (z-50). */}
-      <div className={`fixed bottom-[calc(76px+env(safe-area-inset-bottom))] right-4 z-[45] transition lg:bottom-6 lg:right-6 ${open ? "pointer-events-none scale-90 opacity-0" : "scale-100 opacity-100"}`}>
+      <div
+        className={`fixed z-[45] ${draggingButton ? "" : "transition"} ${open ? "pointer-events-none scale-90 opacity-0" : "scale-100 opacity-100"} ${buttonPosition ? "" : "bottom-[calc(96px+env(safe-area-inset-bottom))] right-4 lg:bottom-6 lg:right-6"}`}
+        style={buttonPosition ? { left: buttonPosition.x, top: buttonPosition.y } : undefined}
+      >
         <button
           type="button"
-          onClick={() => onOpenChange(true)}
-          className="tz-press group relative rounded-full shadow-xl shadow-cyan-950/30 ring-2 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-2xl"
-          title="Abrir Tiza-IA"
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            dragStateRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: rect.left, originY: rect.top, moved: false };
+            setDraggingButton(true);
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }}
+          onPointerMove={moveFloatingButton}
+          onPointerUp={finishFloatingButtonDrag}
+          onPointerCancel={finishFloatingButtonDrag}
+          onClick={() => {
+            if (skipButtonClickRef.current) {
+              skipButtonClickRef.current = false;
+              return;
+            }
+            onOpenChange(true);
+          }}
+          className={`tz-press group relative cursor-grab touch-none rounded-full shadow-xl shadow-cyan-950/30 ring-2 ring-white/40 transition hover:-translate-y-0.5 hover:shadow-2xl ${draggingButton ? "cursor-grabbing scale-105" : ""}`}
+          title="Abrir o arrastrar Tiza-IA"
           aria-label="Abrir Tiza-IA"
         >
           <span className="pointer-events-none absolute -inset-1 rounded-full bg-cyan-400/25 blur-md transition group-hover:bg-cyan-400/40" />
@@ -12130,6 +12227,30 @@ const AI_CHAT_CONVERSATIONS_KEY = "tiza-ia-conversations-v1";
 const AI_MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 const formatFileSize = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(bytes >= 1024 * 1024 ? 1 : 2)} MB`;
 
+type BrowserSpeechRecognitionResult = {
+  isFinal: boolean;
+  0: { transcript: string };
+};
+
+type BrowserSpeechRecognitionEvent = Event & {
+  resultIndex: number;
+  results: ArrayLike<BrowserSpeechRecognitionResult>;
+};
+
+type BrowserSpeechRecognition = {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((event: BrowserSpeechRecognitionEvent) => void) | null;
+  onend: (() => void) | null;
+  onerror: ((event: Event & { error?: string }) => void) | null;
+  start: () => void;
+  stop: () => void;
+  abort: () => void;
+};
+
+type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
+
 const makeChatConversation = (): ChatConversation => {
   const now = nowIso();
   return { id: uid(), title: "Nueva conversación", createdAt: now, updatedAt: now, turns: [] };
@@ -12184,12 +12305,18 @@ function AIChatMode({
   const [activeConversationId, setActiveConversationId] = useState(() => conversations[0]?.id || "");
   const [isDragActive, setIsDragActive] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+  const textareaRef = React.useRef<HTMLTextAreaElement | null>(null);
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
-  const [recording, setRecording] = useState(false);
+  const [recordingMode, setRecordingMode] = useState<"" | "dictation" | "audio">("");
   const [recordSeconds, setRecordSeconds] = useState(0);
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const speechRecognitionRef = React.useRef<BrowserSpeechRecognition | null>(null);
+  const speechBaseRef = React.useRef("");
+  const speechFinalRef = React.useRef("");
+  const recordingActiveRef = React.useRef(false);
   const recordChunksRef = React.useRef<Blob[]>([]);
   const recordTimerRef = React.useRef<number | null>(null);
+  const recording = recordingMode !== "";
   const activeConversation = conversations.find((conversation) => conversation.id === activeConversationId) || conversations[0];
   const turns = useMemo(() => activeConversation?.turns || [], [activeConversation]);
 
@@ -12241,6 +12368,13 @@ function AIChatMode({
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [turns]);
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 160)}px`;
+  }, [draft]);
 
   useEffect(() => {
     try {
@@ -12316,6 +12450,55 @@ function AIChatMode({
 
   const startRecording = async () => {
     try {
+      const speechWindow = window as typeof window & {
+        SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+        webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      };
+      const SpeechRecognitionApi = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
+      if (SpeechRecognitionApi) {
+        const recognition = new SpeechRecognitionApi();
+        speechBaseRef.current = draft.trimEnd();
+        speechFinalRef.current = "";
+        recognition.lang = "es-CL";
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.onresult = (event) => {
+          let interim = "";
+          for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const result = event.results[index];
+            const transcript = result[0]?.transcript || "";
+            if (result.isFinal) speechFinalRef.current += `${transcript.trim()} `;
+            else interim += transcript;
+          }
+          const spokenText = `${speechFinalRef.current}${interim}`.trim();
+          const base = speechBaseRef.current;
+          setDraft(base && spokenText ? `${base} ${spokenText}` : base || spokenText);
+        };
+        recognition.onerror = (event) => {
+          if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+            setPasteNotice("El micrófono está bloqueado. Habilítalo en los permisos del navegador para dictar.");
+          }
+        };
+        recognition.onend = () => {
+          speechRecognitionRef.current = null;
+          if (recordingActiveRef.current) {
+            recordingActiveRef.current = false;
+            setRecordingMode("");
+            if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+            recordTimerRef.current = null;
+          }
+        };
+        speechRecognitionRef.current = recognition;
+        recognition.start();
+        recordingActiveRef.current = true;
+        setRecordingMode("dictation");
+        setRecordSeconds(0);
+        recordTimerRef.current = window.setInterval(() => setRecordSeconds((seconds) => seconds + 1), 1000);
+        return;
+      }
+
+      // Respaldo para navegadores sin dictado nativo: conserva el mensaje como audio adjunto.
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : (MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "");
       const recorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
@@ -12337,19 +12520,34 @@ function AIChatMode({
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
-      setRecording(true);
+      recordingActiveRef.current = true;
+      setRecordingMode("audio");
       setRecordSeconds(0);
       recordTimerRef.current = window.setInterval(() => setRecordSeconds((s) => s + 1), 1000);
     } catch (err) {
       console.warn("Mic access failed", err);
+      recordingActiveRef.current = false;
+      speechRecognitionRef.current?.abort();
+      speechRecognitionRef.current = null;
+      mediaRecorderRef.current?.stream.getTracks().forEach((track) => track.stop());
+      mediaRecorderRef.current = null;
+      setRecordingMode("");
+      if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
+      recordTimerRef.current = null;
       window.alert("No se pudo acceder al micrófono. Revisa los permisos del navegador.");
     }
   };
 
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    mediaRecorderRef.current = null;
-    setRecording(false);
+    recordingActiveRef.current = false;
+    if (recordingMode === "dictation") {
+      speechRecognitionRef.current?.stop();
+      speechRecognitionRef.current = null;
+    } else {
+      mediaRecorderRef.current?.stop();
+      mediaRecorderRef.current = null;
+    }
+    setRecordingMode("");
     if (recordTimerRef.current) {
       window.clearInterval(recordTimerRef.current);
       recordTimerRef.current = null;
@@ -12358,6 +12556,8 @@ function AIChatMode({
 
   useEffect(() => () => {
     // Cleanup if the component unmounts mid-recording.
+    recordingActiveRef.current = false;
+    speechRecognitionRef.current?.abort();
     mediaRecorderRef.current?.stop();
     if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
   }, []);
@@ -12728,10 +12928,10 @@ function AIChatMode({
         )}
       </div>
 
-      <div className="border-t border-slate-200 bg-slate-50/40 p-3 sm:p-4">
+      <div className="border-t border-slate-200 bg-white/95 p-2.5 backdrop-blur sm:p-4">
         <div className="mx-auto max-w-3xl">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500">
-            {["Excel", "CSV", "PDF", "Word", "TXT/JSON", "imagenes", "screenshots", "audio"].map((label) => (
+          <div className="mb-2 hidden flex-wrap items-center gap-1.5 text-[11px] font-semibold text-slate-500 sm:flex">
+            {["Excel", "CSV", "PDF", "Word", "TXT/JSON", "imágenes", "audio"].map((label) => (
               <span key={label} className="rounded-full border border-slate-200 bg-white px-2 py-1">{label}</span>
             ))}
           </div>
@@ -12749,32 +12949,10 @@ function AIChatMode({
               ))}
             </div>
           ) : null}
-          <div className={`flex items-end gap-2 rounded-2xl border bg-white p-2 shadow-sm transition focus-within:border-cyan-700 ${recording ? "border-rose-400 ring-2 ring-rose-200" : "border-slate-300"}`}>
+          <div className={`rounded-[26px] border bg-white p-2 shadow-[0_8px_30px_-18px_rgba(15,23,42,0.55)] transition focus-within:border-cyan-700 focus-within:ring-4 focus-within:ring-cyan-50 ${recording ? "border-rose-300 ring-4 ring-rose-50" : "border-slate-300"}`}>
             <input ref={fileInputRef} type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.xlsm,.csv,.tsv,.txt,.md,.markdown,.json,.html,.htm,image/*,audio/*" className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
-            <button onClick={() => fileInputRef.current?.click()} title="Adjuntar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-slate-500 hover:bg-slate-100">
-              <Upload className="h-4 w-4" />
-            </button>
-            <button
-              onClick={recording ? stopRecording : startRecording}
-              title={recording ? "Detener grabación" : "Grabar mensaje de voz"}
-              className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition ${recording ? "bg-rose-600 text-white tz-pulse" : "text-slate-500 hover:bg-slate-100"}`}
-            >
-              {recording ? (
-                <span className="block h-3 w-3 rounded-sm bg-white" />
-              ) : (
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4">
-                  <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                  <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
-                  <line x1="12" x2="12" y1="18" y2="22" />
-                </svg>
-              )}
-            </button>
-            {recording ? (
-              <span className="self-center text-xs font-semibold text-rose-600 tabular-nums">
-                ● {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}
-              </span>
-            ) : null}
             <textarea
+              ref={textareaRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onPaste={handlePaste}
@@ -12784,15 +12962,53 @@ function AIChatMode({
                   send();
                 }
               }}
-              placeholder={recording ? "Grabando audio… detén la grabación para adjuntarlo." : "Escribe, pega un correo o usa Ctrl+V para adjuntar un screenshot."}
-              rows={2}
-              className="flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none placeholder:text-slate-400"
+              placeholder={recordingMode === "dictation" ? "Te estoy escuchando…" : recordingMode === "audio" ? "Grabando audio…" : "Pregunta o pega información para Tiza-IA"}
+              rows={1}
+              className="block min-h-11 max-h-40 w-full resize-none overflow-y-auto bg-transparent px-3 py-2.5 text-[15px] leading-6 outline-none placeholder:text-slate-400"
             />
-            <button onClick={send} disabled={(!draft.trim() && files.length === 0) || recording} className="tz-press inline-flex h-9 items-center gap-1.5 rounded-lg bg-gradient-to-br from-cyan-700 to-cyan-900 px-3 text-sm font-semibold text-white shadow-sm hover:opacity-95 disabled:opacity-50">
-              <TizaIaIcon className="h-4 w-4" /> Enviar
-            </button>
+            <div className="flex items-center justify-between gap-2 px-1 pb-0.5">
+              <div className="flex min-w-0 items-center gap-1">
+                <button onClick={() => fileInputRef.current?.click()} title="Adjuntar archivo" aria-label="Adjuntar archivo" className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-slate-200 text-slate-600 transition hover:bg-slate-100">
+                  <Plus className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={recording ? stopRecording : startRecording}
+                  title={recording ? "Detener voz" : "Dictar por voz"}
+                  aria-label={recording ? "Detener voz" : "Dictar por voz"}
+                  aria-pressed={recording}
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition ${recording ? "bg-rose-600 text-white shadow-md shadow-rose-200" : "text-slate-600 hover:bg-slate-100"}`}
+                >
+                  {recording ? (
+                    <span className="block h-3 w-3 rounded-[3px] bg-white" />
+                  ) : (
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-[18px] w-[18px]">
+                      <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+                      <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                      <line x1="12" x2="12" y1="18" y2="22" />
+                    </svg>
+                  )}
+                </button>
+                {recording ? (
+                  <div className="flex min-w-0 items-center gap-2 pl-1 text-xs font-semibold text-rose-600" aria-live="polite">
+                    <span className="flex items-end gap-0.5" aria-hidden="true">
+                      {[3, 5, 8, 5].map((height, index) => <span key={index} className="w-0.5 animate-pulse rounded-full bg-rose-500" style={{ height }} />)}
+                    </span>
+                    <span className="truncate">{recordingMode === "dictation" ? "Escuchando" : "Grabando"} · {Math.floor(recordSeconds / 60)}:{String(recordSeconds % 60).padStart(2, "0")}</span>
+                  </div>
+                ) : null}
+              </div>
+              <button
+                onClick={send}
+                disabled={(!draft.trim() && files.length === 0) || recording}
+                className="tz-press grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-cyan-900 disabled:bg-slate-200 disabled:text-slate-400"
+                title="Enviar"
+                aria-label="Enviar mensaje"
+              >
+                <Send className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <p className="mt-1.5 text-[11px] text-slate-400">Enter para enviar · Shift+Enter para salto de línea · Ctrl+V adjunta screenshots copiados · Arrastra archivos sobre el chat.</p>
+          <p className="mt-1.5 px-2 text-center text-[10px] text-slate-400 sm:text-[11px]">Enter envía · Shift+Enter crea una línea · El micrófono transcribe tu voz cuando el navegador lo permite.</p>
         </div>
       </div>
       </div>
@@ -14724,7 +14940,7 @@ export default function TizaEducationApp() {
           {renderView()}
         </div>
       </main>
-      <MobileNav activeView={activeView} onNavigate={setActiveView} schoolName={profile.organization || "Colegio San Lucas"} navItems={orderedNavItems} />
+      <MobileNav activeView={activeView} onNavigate={setActiveView} navItems={orderedNavItems} />
       <FloatingTizaIA
         open={floatingAiOpen}
         onOpenChange={setFloatingAiOpen}
