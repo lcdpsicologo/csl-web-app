@@ -947,7 +947,7 @@ const localISODate = (date = new Date()) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
-type OrientationPeriodFilter = "all" | "this-week" | "next-week" | "upcoming" | "history";
+type OrientationPeriodFilter = "today" | "all" | "this-week" | "next-week" | "upcoming" | "history";
 
 const orientationWeekWindows = (todayISO: string) => {
   const [year, month, day] = todayISO.split("-").map(Number);
@@ -976,6 +976,7 @@ const orientationDateMatchesPeriod = (
   const date = (dateValue || "").slice(0, 10);
   if (period === "all") return true;
   if (!date) return false;
+  if (period === "today") return date === todayISO;
   if (period === "this-week") return date >= windows.thisWeekStart && date <= windows.thisWeekEnd;
   if (period === "next-week") return date >= windows.nextWeekStart && date <= windows.nextWeekEnd;
   if (period === "upcoming") return date >= todayISO;
@@ -1048,6 +1049,14 @@ const defaultAppConfiguration = (): TizaAppConfiguration => ({
   staffSchedule: [],
 });
 
+// Mantiene vigente el horario institucional corregido aunque el perfil todavía
+// conserve una copia anterior de la configuración semanal.
+const applyOrientationScheduleCorrections = (schedule: OrientationWeeklySlot[]) => schedule.map((slot) => (
+  normalize(slot.owner) === normalize("Gustavo Caro") && normalize(slot.course) === normalize("4° Básico A")
+    ? { ...slot, day: 1 as const, dayName: "Lunes" as const, start: "14:15", end: "14:55" }
+    : slot
+));
+
 const parseAppConfiguration = (value: string | undefined): TizaAppConfiguration => {
   const defaults = defaultAppConfiguration();
   if (!value) return defaults;
@@ -1069,7 +1078,7 @@ const parseAppConfiguration = (value: string | undefined): TizaAppConfiguration 
       : [];
     return {
       orientationActions: actions.length ? Array.from(new Set(actions)) : defaults.orientationActions,
-      orientationSchedule: schedule.length ? schedule : defaults.orientationSchedule,
+      orientationSchedule: applyOrientationScheduleCorrections(schedule.length ? schedule : defaults.orientationSchedule),
       courseSchedule,
       staffSchedule,
     };
@@ -5099,7 +5108,7 @@ function OrientationCycleView({
   const [selectedOwner, setSelectedOwner] = useState(orientationOwners[0].name);
   const [filterCourse, setFilterCourse] = useState<string>("all");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterPeriod, setFilterPeriod] = useState<OrientationPeriodFilter>("this-week");
+  const [filterPeriod, setFilterPeriod] = useState<OrientationPeriodFilter>("today");
   const [orientationSearch, setOrientationSearch] = useState("");
   const [newClassOpen, setNewClassOpen] = useState(false);
   const [weekCreatorOpen, setWeekCreatorOpen] = useState(false);
@@ -5362,7 +5371,7 @@ function OrientationCycleView({
     }
     return true;
   }).sort((a, b) => {
-    const chronological = filterPeriod === "this-week" || filterPeriod === "next-week" || filterPeriod === "upcoming";
+    const chronological = filterPeriod === "today" || filterPeriod === "this-week" || filterPeriod === "next-week" || filterPeriod === "upcoming";
     const dateOrder = chronological
       ? String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt))
       : String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt));
@@ -5373,6 +5382,7 @@ function OrientationCycleView({
   }), [courseHeadTeacher, filterCourse, filterPeriod, filterStatus, orientationSearch, ownerClasses, periodWindows, scheduleSlots, today]);
 
   const periodCounts = useMemo(() => ({
+    today: ownerClasses.filter((record) => orientationDateMatchesPeriod(record.date, "today", today, periodWindows)).length,
     all: ownerClasses.length,
     "this-week": ownerClasses.filter((record) => orientationDateMatchesPeriod(record.date, "this-week", today, periodWindows)).length,
     "next-week": ownerClasses.filter((record) => orientationDateMatchesPeriod(record.date, "next-week", today, periodWindows)).length,
@@ -5384,11 +5394,12 @@ function OrientationCycleView({
     (!(record.canvaLink || record.evidence) || !(record.planificacion || record.folderLink))
   ).length, [ownerClasses, periodWindows, today]);
   const periodFilters: Array<{ value: OrientationPeriodFilter; label: string; detail: string }> = [
-    { value: "all", label: "Todo", detail: "Bitácora completa" },
+    { value: "today", label: "Hoy", detail: new Date(`${today}T12:00:00`).toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "short" }) },
     { value: "this-week", label: "Esta semana", detail: `${formatDateCL(periodWindows.thisWeekStart).slice(0, 5)}–${formatDateCL(periodWindows.thisWeekEnd).slice(0, 5)}` },
     { value: "next-week", label: "Próxima semana", detail: nextWeekNeedsPreparation ? `${nextWeekNeedsPreparation} por preparar` : "Materiales listos" },
     { value: "upcoming", label: "Próximas", detail: "Desde hoy" },
     { value: "history", label: "Historial", detail: "Clases anteriores" },
+    { value: "all", label: "Todo", detail: "Bitácora completa" },
   ];
   const selectPeriodFilter = (period: OrientationPeriodFilter) => {
     setFilterPeriod(period);
@@ -6077,7 +6088,7 @@ function OrientationCycleView({
                 setSelectedOwner(item.name);
                 setFilterCourse("all");
                 setFilterStatus("all");
-                setFilterPeriod("this-week");
+                setFilterPeriod("today");
                 setOrientationSearch("");
                 setNewClassForm({});
                 setExpandedClassIds([]);
@@ -6297,7 +6308,7 @@ function OrientationCycleView({
               <Plus className="h-4 w-4" /> Nuevo registro
             </button>
           </div>
-          <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+          <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {periodFilters.map((period) => {
               const active = filterPeriod === period.value;
               const count = periodCounts[period.value];

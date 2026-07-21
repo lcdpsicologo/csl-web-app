@@ -17,7 +17,7 @@ export const ORIENTATION_WEEKLY_SLOTS: OrientationWeeklySlot[] = [
   { day: 1, dayName: "Lunes", start: "10:45", end: "11:30", course: "Kínder B", owner: GUSTAVO },
   { day: 1, dayName: "Lunes", start: "11:45", end: "12:30", course: "1° Básico A", owner: GUSTAVO },
   { day: 1, dayName: "Lunes", start: "12:30", end: "13:15", course: "3° Básico A", owner: GUSTAVO },
-  { day: 1, dayName: "Lunes", start: "14:00", end: "14:45", course: "4° Básico A", owner: GUSTAVO },
+  { day: 1, dayName: "Lunes", start: "14:15", end: "14:55", course: "4° Básico A", owner: GUSTAVO },
   // Martes
   { day: 2, dayName: "Martes", start: "11:45", end: "12:30", course: "2° Básico B", owner: GUSTAVO },
   { day: 2, dayName: "Martes", start: "12:15", end: "13:15", course: "Prekínder B", owner: GUSTAVO },
