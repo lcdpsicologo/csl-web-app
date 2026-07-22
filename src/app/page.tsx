@@ -1625,7 +1625,111 @@ const classFeedbackSummaryText = (record: DataRecord, data: ClassFeedbackData) =
   if (data.improvements.trim()) {
     lines.push("", "5. ELEMENTOS DESTACADOS Y SUGERENCIAS PARA LA MEJORA", `  ${data.improvements.trim()}`);
   }
+  lines.push("", "Por favor confirma la recepción de este feedback respondiendo a este correo.");
   return lines.join("\n");
+};
+
+// ---- Correo HTML del feedback (con colores) para pegar en Gmail ----
+const escapeFeedbackHtml = (value: string) =>
+  String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/\n/g, "<br>");
+
+const feedbackMarkBadge = (value: string) => {
+  if (value === "si") return `<span style="display:inline-block;padding:3px 11px;border-radius:999px;background:#dcfce7;color:#15803d;font-size:12px;font-weight:700;">&#10003; Sí</span>`;
+  if (value === "no") return `<span style="display:inline-block;padding:3px 11px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;">&#10007; No</span>`;
+  return `<span style="display:inline-block;padding:3px 11px;border-radius:999px;background:#f1f5f9;color:#94a3b8;font-size:12px;font-weight:700;">&mdash;</span>`;
+};
+
+const feedbackChecklistHtml = (items: string[], values: string[]) =>
+  items
+    .map(
+      (item, index) => `<tr>
+        <td style="padding:9px 14px;border-bottom:1px solid #eef2f7;font-size:14px;line-height:1.4;color:#334155;">${escapeFeedbackHtml(item)}</td>
+        <td style="padding:9px 14px;border-bottom:1px solid #eef2f7;text-align:right;white-space:nowrap;">${feedbackMarkBadge(values[index] || "")}</td>
+      </tr>`,
+    )
+    .join("");
+
+const feedbackSectionCard = (accent: string, title: string, inner: string) => `
+  <div style="margin-top:16px;border:1px solid #e5e9f0;border-radius:14px;overflow:hidden;">
+    <div style="background:${accent};padding:10px 16px;">
+      <span style="font-size:12px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ffffff;">${escapeFeedbackHtml(title)}</span>
+    </div>
+    <div style="padding:4px 0;">${inner}</div>
+  </div>`;
+
+const classFeedbackEmailHtml = (record: DataRecord, data: ClassFeedbackData) => {
+  const infoRow = (label: string, value: string) => value && value !== "—"
+    ? `<tr><td style="padding:4px 0;font-size:12px;color:#64748b;width:44%;">${escapeFeedbackHtml(label)}</td><td style="padding:4px 0;font-size:13px;font-weight:600;color:#0f172a;">${escapeFeedbackHtml(value)}</td></tr>`
+    : "";
+  const strengthText = record.axis || record.characterStrength || "";
+  const strategyLine = (label: string, used: string, detail: string) =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #eef2f7;">
+        <span style="font-size:14px;color:#334155;">${escapeFeedbackHtml(label)}</span>
+        ${feedbackMarkBadge(used)}
+      </div>${detail.trim() ? `<div style="padding:2px 14px 10px;font-size:13px;color:#475569;">${escapeFeedbackHtml(detail.trim())}</div>` : ""}`;
+
+  const comprehensionInner =
+    `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #eef2f7;">
+        <span style="font-size:14px;color:#334155;">a. Habilidad de comprensión${data.comprehensionStrategies.length ? ` <span style="color:#7c3aed;font-weight:600;">(${escapeFeedbackHtml(data.comprehensionStrategies.join(", "))})</span>` : ""}</span>
+        ${feedbackMarkBadge(data.comprehensionUsed)}
+      </div>${data.comprehensionEvidence.trim() ? `<div style="padding:2px 14px 10px;font-size:13px;color:#475569;">${escapeFeedbackHtml(data.comprehensionEvidence.trim())}</div>` : ""}` +
+    strategyLine("b. Estrategias de pensamiento", data.thinkingUsed, data.thinkingDetail) +
+    strategyLine("c. Estrategias de clima de aula", data.climateUsed, data.climateDetail);
+
+  const freeText = (title: string, body: string, accent: string) => body.trim()
+    ? feedbackSectionCard(accent, title, `<div style="padding:12px 16px;font-size:14px;line-height:1.55;color:#334155;">${escapeFeedbackHtml(body.trim())}</div>`)
+    : "";
+
+  return `<div style="margin:0;padding:0;background:#f1f5f9;">
+  <div style="max-width:640px;margin:0 auto;padding:20px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+    <div style="background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.08);">
+      <div style="background:#1d4ed8;background-image:linear-gradient(135deg,#1d4ed8 0%,#4f46e5 60%,#7c3aed 100%);padding:24px 24px 22px;">
+        <p style="margin:0;font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#c7d2fe;">Acompañamiento de clase &middot; SOY+</p>
+        <h1 style="margin:6px 0 0;font-size:22px;font-weight:800;color:#ffffff;">Feedback de Orientación</h1>
+        <p style="margin:8px 0 0;font-size:14px;color:#e0e7ff;">${escapeFeedbackHtml(record.course || "Sin curso")} &middot; ${escapeFeedbackHtml(record.date || "Sin fecha")}${record.topic ? ` &middot; ${escapeFeedbackHtml(record.topic)}` : ""}</p>
+      </div>
+
+      <div style="padding:20px 24px 8px;">
+        <p style="margin:0 0 12px;font-size:15px;color:#334155;">Estimada/o <strong style="color:#0f172a;">${escapeFeedbackHtml(data.teacher || "docente")}</strong>,</p>
+        <p style="margin:0 0 4px;font-size:14px;line-height:1.55;color:#475569;">Compartimos contigo el feedback del acompañamiento realizado a tu clase de orientación. Gracias por tu compromiso con la formación de nuestros estudiantes.</p>
+
+        <table style="width:100%;border-collapse:collapse;margin-top:14px;background:#f8fafc;border:1px solid #e5e9f0;border-radius:12px;padding:4px;">
+          ${infoRow("Docente", data.teacher)}
+          ${infoRow("Asignatura", data.subject)}
+          ${infoRow("Fecha", record.date || "")}
+          ${infoRow("Horario", data.startTime || data.endTime ? `${data.startTime || "—"} a ${data.endTime || "—"}` : "")}
+          ${infoRow("N° de observación", data.observationNumber)}
+          ${infoRow("Fortaleza / acción", strengthText)}
+          ${infoRow("Observador/a", data.observer)}
+        </table>
+      </div>
+
+      <div style="padding:0 24px;">
+        ${feedbackSectionCard("#2563eb", "1. Intervención formativa y cultura institucional", `<table style="width:100%;border-collapse:collapse;">${feedbackChecklistHtml(FEEDBACK_SECTION_CULTURE, data.cultureItems)}</table>`)}
+        ${feedbackSectionCard("#7c3aed", "2. Trabajo de fortalezas del carácter", `<table style="width:100%;border-collapse:collapse;">${feedbackChecklistHtml(FEEDBACK_SECTION_STRENGTHS, data.strengthItems)}</table>`)}
+        ${feedbackSectionCard("#0891b2", "3. Estrategias pedagógicas observadas", comprehensionInner)}
+        ${freeText("4. Evidencia / observaciones generales", data.generalEvidence, "#0f766e")}
+        ${freeText("5. Elementos destacados y sugerencias para la mejora", data.improvements, "#d97706")}
+      </div>
+
+      <div style="margin:18px 24px 6px;padding:16px 18px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe;">
+        <p style="margin:0;font-size:14px;font-weight:700;color:#1e40af;">&#128233; Por favor confirma la recepción de este feedback respondiendo a este correo.</p>
+        <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:#3b82f6;">Tu acuse de recibo nos permite dejar registro del acompañamiento. Si tienes dudas o quieres conversar sobre alguna sugerencia, quedo a tu disposición.</p>
+      </div>
+
+      <div style="padding:12px 24px 24px;">
+        <p style="margin:0;font-size:14px;color:#334155;">Un cordial saludo,</p>
+        <p style="margin:2px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${escapeFeedbackHtml(data.observer || "Equipo de Orientación")}</p>
+        <p style="margin:0;font-size:12px;color:#94a3b8;">Equipo de Orientación &middot; Colegio San Lucas de Lo Espejo</p>
+      </div>
+    </div>
+  </div>
+</div>`;
 };
 
 function FeedbackYesNo({ value, onChange }: { value: string; onChange: (value: string) => void }) {
@@ -1719,6 +1823,38 @@ function OrientationFeedbackModal({
     } catch {
       window.prompt("Copia el resumen manualmente:", classFeedbackSummaryText(record, data));
     }
+  };
+
+  const teacherEmail = headTeacherForCourse(record.course || "")?.email || "";
+  const [emailHint, setEmailHint] = useState<"" | "copied" | "plain">("");
+  const sendFeedbackEmail = async () => {
+    // Guarda el feedback antes de enviarlo para no perder cambios recientes.
+    lastAutoSavedRef.current = JSON.stringify(data);
+    onAutoSave(data);
+    const subject = `Feedback de clase de Orientación · ${record.course || "Sin curso"}${record.date ? ` · ${record.date}` : ""}`;
+    const html = classFeedbackEmailHtml(record, data);
+    const plain = classFeedbackSummaryText(record, data);
+    let richCopied = false;
+    try {
+      const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
+      if (navigator.clipboard && ClipboardItemCtor) {
+        await navigator.clipboard.write([
+          new ClipboardItemCtor({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          }),
+        ]);
+        richCopied = true;
+      }
+    } catch {
+      richCopied = false;
+    }
+    // Con formato copiado: Gmail se abre vacío y la profesora pega el correo con colores.
+    // Sin permiso de portapapeles: se abre con el texto plano como respaldo.
+    const params = `view=cm&fs=1&tf=1&to=${encodeURIComponent(teacherEmail)}&su=${encodeURIComponent(subject)}${richCopied ? "" : `&body=${encodeURIComponent(plain)}`}`;
+    window.open(`https://mail.google.com/mail/?${params}`, "_blank", "noopener");
+    setEmailHint(richCopied ? "copied" : "plain");
+    window.setTimeout(() => setEmailHint(""), 9000);
   };
 
   const sectionTitle = "text-[11px] font-bold uppercase tracking-[0.12em] text-blue-700 sm:text-xs";
@@ -1859,10 +1995,28 @@ function OrientationFeedbackModal({
           </section>
         </div>
 
+        {emailHint ? (
+          <div className="shrink-0 border-t border-blue-100 bg-blue-50 px-4 py-2.5 text-xs font-semibold text-blue-800">
+            {emailHint === "copied" ? (
+              <span>📋 Correo con formato copiado. En Gmail haz clic en el cuerpo del mensaje y pega con <span className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-blue-200">⌘/Ctrl + V</span> para enviarlo con colores.</span>
+            ) : (
+              <span>Se abrió Gmail con el feedback en texto{teacherEmail ? "" : " (agrega el correo de la profesora manualmente)"}.</span>
+            )}
+          </div>
+        ) : null}
         <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:rounded-b-2xl sm:px-5">
-          <button onClick={copySummary} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
-            <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar para enviar"}
-          </button>
+          <div className="contents sm:flex sm:gap-2">
+            <button onClick={copySummary} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+              <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar texto"}
+            </button>
+            <button
+              onClick={sendFeedbackEmail}
+              title={teacherEmail ? `Enviar a ${teacherEmail}` : "No se encontró el correo de la profesora jefe; se abrirá Gmail para completarlo"}
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 text-xs font-bold text-white shadow hover:from-blue-700 hover:to-indigo-700"
+            >
+              <Mail className="h-4 w-4" /> Enviar por correo
+            </button>
+          </div>
           <div className="contents sm:flex sm:gap-2">
             <button onClick={saveAndClose} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 sm:px-4">
               Guardar y cerrar
