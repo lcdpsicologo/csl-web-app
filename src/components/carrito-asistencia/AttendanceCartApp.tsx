@@ -89,6 +89,7 @@ type CartData = {
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+const SHARED_CART_EMAIL = "carrito.asistencia@tiza.education";
 
 const TABS: Array<{ id: TabId; label: string; shortLabel: string; icon: typeof Star }> = [
   { id: "resumen", label: "Resumen", shortLabel: "Inicio", icon: Star },
@@ -105,9 +106,9 @@ const COURSES = [
 ];
 
 const TIER_CONFIG = [
-  { cost: 1 as const, label: "1 ticket", title: "Premios inmediatos", description: "Detalles pequeños para celebrar una semana completa.", accent: "emerald" },
-  { cost: 4 as const, label: "4 tickets", title: "Premios de constancia", description: "Recompensas para cuatro semanas de compromiso.", accent: "sky" },
-  { cost: 8 as const, label: "8 tickets", title: "Grandes premios", description: "La celebración mayor del recorrido de asistencia.", accent: "violet" },
+  { cost: 1 as const, label: "1 ticket", title: "Premios inmediatos", description: "Detalles pequeños para celebrar una semana completa." },
+  { cost: 4 as const, label: "4 tickets", title: "Premios de constancia", description: "Recompensas para cuatro semanas de compromiso." },
+  { cost: 8 as const, label: "8 tickets", title: "Grandes premios", description: "La celebración mayor del recorrido de asistencia." },
 ] as const;
 
 const tierTone = (cost: number) => cost === 1
@@ -139,7 +140,6 @@ function Initials({ student, size = "md" }: { student: Student; size?: "sm" | "m
 }
 
 function LoginPanel({ supabase, onSession }: { supabase: SupabaseClient; onSession: (session: Session) => void }) {
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -148,10 +148,10 @@ function LoginPanel({ supabase, onSession }: { supabase: SupabaseClient; onSessi
     event.preventDefault();
     setBusy(true);
     setError("");
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email: SHARED_CART_EMAIL, password });
     setBusy(false);
     if (signInError || !data.session) {
-      setError(signInError?.message || "No se pudo iniciar sesión");
+      setError(signInError ? "La clave no es correcta. Inténtalo nuevamente." : "No se pudo iniciar sesión");
       return;
     }
     onSession(data.session);
@@ -165,15 +165,12 @@ function LoginPanel({ supabase, onSession }: { supabase: SupabaseClient; onSessi
         </div>
         <div className="flex flex-col justify-center p-6 sm:p-10">
           <span className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-950 text-amber-300 shadow-lg"><Ticket className="h-7 w-7" /></span>
-          <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-amber-600">Tiza Education</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-blue-950">Panel del carrito</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">Ingresa con tu cuenta institucional para entregar tickets, registrar canjes y llevar el inventario.</p>
+          <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-amber-600">Acceso protegido</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-blue-950">Entrar al carrito</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Utiliza la clave compartida del equipo para entregar tickets, registrar canjes y actualizar los premios.</p>
           <form onSubmit={signIn} className="mt-7 space-y-4">
-            <label className="block text-sm font-bold text-slate-700">Correo institucional
-              <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required autoComplete="email" className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600" placeholder="nombre@colegiosanlucas.com" />
-            </label>
-            <label className="block text-sm font-bold text-slate-700">Contraseña
-              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required autoComplete="current-password" className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600" />
+            <label className="block text-sm font-bold text-slate-700">Clave del carrito
+              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required autoFocus autoComplete="current-password" className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600" placeholder="Ingresa la clave compartida" />
             </label>
             {error ? <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</p> : null}
             <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-950 px-4 py-3 font-black text-white shadow-lg hover:bg-blue-900 disabled:opacity-60">
@@ -200,8 +197,8 @@ export function AttendanceCartApp() {
   const [error, setError] = useState(supabase ? "" : "Supabase no está configurado en esta instalación.");
   const [toast, setToast] = useState("");
 
-  const loadData = useCallback(async (activeSession: Session) => {
-    setLoading(true);
+  const loadData = useCallback(async (activeSession: Session, silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const response = await fetch("/api/carrito-asistencia", {
@@ -214,7 +211,7 @@ export function AttendanceCartApp() {
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "No se pudo cargar el carrito");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -240,8 +237,10 @@ export function AttendanceCartApp() {
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  const mutate = async (body: Record<string, unknown>, successMessage: string) => {
+  const mutate = async (body: Record<string, unknown>, successMessage: string, optimisticUpdate?: (current: CartData) => CartData) => {
     if (!session) return false;
+    const previousData = data;
+    if (optimisticUpdate && data) setData(optimisticUpdate(data));
     setLoading(true);
     setError("");
     try {
@@ -252,10 +251,16 @@ export function AttendanceCartApp() {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || "No se pudo guardar");
-      await loadData(session);
       setToast(successMessage);
+      if (optimisticUpdate) {
+        setLoading(false);
+        void loadData(session, true);
+      } else {
+        await loadData(session);
+      }
       return true;
     } catch (mutationError) {
+      if (optimisticUpdate && previousData) setData(previousData);
       setError(mutationError instanceof Error ? mutationError.message : "No se pudo guardar");
       setLoading(false);
       return false;
@@ -290,6 +295,7 @@ export function AttendanceCartApp() {
       </header>
 
       <div className="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-6">
+        {data && activeTab === "resumen" ? <OverviewMetrics data={data} /> : null}
         {activeTab === "resumen" ? (
           <section className={styles.hero}>
             <span className={`${styles.confetti} ${styles.confettiTop}`} aria-hidden="true" />
@@ -309,7 +315,6 @@ export function AttendanceCartApp() {
               <div className={styles.posterFrame}>
                 <Image src="/carrito-asistencia/plot-carrito.png" alt="Afiche del Carrito de la Asistencia" fill priority className="object-cover object-center" sizes="(max-width: 899px) 100vw, 48vw" />
               </div>
-              <div className={styles.floatingTicket}><Ticket className="h-5 w-5" /> ¡Tú sumas!</div>
             </div>
           </section>
         ) : null}
@@ -325,7 +330,7 @@ export function AttendanceCartApp() {
 
         {!data && loading ? <LoadingCards /> : null}
         {data && activeTab === "resumen" ? <Overview data={data} onNavigate={setActiveTab} /> : null}
-        {data && activeTab === "entrega" ? <AwardTickets data={data} onAward={(studentId, note) => mutate({ action: "award_ticket", studentId, note, weekStart: data.currentWeekStart }, "Golden Ticket entregado correctamente")} onUndo={(studentId) => mutate({ action: "undo_award_ticket", studentId, weekStart: data.currentWeekStart }, "Entrega anulada correctamente")} busy={loading} /> : null}
+        {data && activeTab === "entrega" ? <AwardTickets data={data} onAward={(studentId, note) => mutate({ action: "award_ticket", studentId, note, weekStart: data.currentWeekStart }, "Golden Ticket entregado correctamente", (current) => ({ ...current, weeklyAwardedIds: current.weeklyAwardedIds.includes(studentId) ? current.weeklyAwardedIds : [...current.weeklyAwardedIds, studentId], balances: { ...current.balances, [studentId]: (current.balances[studentId] || 0) + 1 } }))} onUndo={(studentId) => mutate({ action: "undo_award_ticket", studentId, weekStart: data.currentWeekStart }, "Entrega anulada correctamente", (current) => ({ ...current, weeklyAwardedIds: current.weeklyAwardedIds.filter((id) => id !== studentId), balances: { ...current.balances, [studentId]: Math.max(0, (current.balances[studentId] || 0) - 1) } }))} busy={loading} /> : null}
         {data && activeTab === "canjes" ? <RedeemRewards data={data} onRedeem={(studentId, rewardId, note) => mutate({ action: "redeem_reward", studentId, rewardId, note }, "Premio cobrado y stock actualizado")} busy={loading} /> : null}
         {data && activeTab === "catastro" ? <Registry data={data} /> : null}
         {data && activeTab === "inventario" ? <Inventory data={data} busy={loading} onCreate={(values) => mutate({ action: "create_reward", ...values }, "Premio agregado al inventario")} onAdjust={(values) => mutate({ action: "adjust_inventory", ...values }, "Inventario actualizado")} /> : null}
@@ -347,25 +352,25 @@ function LoadingCards() {
   return <div className={styles.loadingStage}><div className={styles.loadingTicket}><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-950 text-amber-300"><Ticket className="h-6 w-6" /></span><span className="relative z-10"><strong className="block text-lg font-black">Preparando el carrito</strong><span className="mt-1 block text-xs font-bold text-blue-900/70">Sincronizando nóminas e inventario…</span></span></div></div>;
 }
 
+function OverviewMetrics({ data }: { data: CartData }) {
+  const totalStock = data.rewards.reduce((sum, reward) => sum + reward.stock, 0);
+  const lowStock = data.rewards.filter((reward) => reward.stock <= reward.minimum_stock).length;
+  const today = new Date().toISOString().slice(0, 10);
+  const stats: Array<{ label: string; value: number; icon: LucideIcon }> = [
+    { label: "Tickets esta semana", value: data.weeklyAwardedIds.length, icon: Ticket },
+    { label: "Canjes de hoy", value: data.redemptions.filter((row) => row.created_at.slice(0, 10) === today).length, icon: Gift },
+    { label: "Premios disponibles", value: totalStock, icon: Box },
+    { label: "Por comprar", value: lowStock, icon: ShoppingCart },
+  ];
+  return <section className={styles.metricStrip} aria-label="Resumen del carrito">{stats.map(({ label, value, icon: Icon }) => <article key={label} className={styles.metricItem}><span className={styles.metricIcon}><Icon className="h-4 w-4" /></span><span><strong>{value}</strong><small>{label}</small></span></article>)}</section>;
+}
+
 function Overview({ data, onNavigate }: { data: CartData; onNavigate: (tab: TabId) => void }) {
   const lowStock = data.rewards.filter((reward) => reward.stock <= reward.minimum_stock);
-  const totalStock = data.rewards.reduce((sum, reward) => sum + reward.stock, 0);
-  const today = new Date().toISOString().slice(0, 10);
-  const todayRedemptions = data.redemptions.filter((row) => row.created_at.slice(0, 10) === today).length;
   const awardedSet = new Set(data.weeklyAwardedIds);
   const weeklyProgress = data.students.length ? Math.round((data.weeklyAwardedIds.length / data.students.length) * 100) : 0;
-  const stats: Array<{ label: string; value: number; icon: LucideIcon; tone: string }> = [
-    { label: "Tickets esta semana", value: data.weeklyAwardedIds.length, icon: Ticket, tone: "bg-amber-300 text-blue-950" },
-    { label: "Canjes de hoy", value: todayRedemptions, icon: Gift, tone: "bg-pink-500 text-white" },
-    { label: "Premios disponibles", value: totalStock, icon: Box, tone: "bg-emerald-500 text-white" },
-    { label: "Por comprar", value: lowStock.length, icon: ShoppingCart, tone: lowStock.length ? "bg-rose-500 text-white" : "bg-blue-950 text-white" },
-  ];
   return (
     <div className="space-y-5">
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map(({ label, value, icon: Icon, tone }) => <article key={label} className={styles.statCard}><div className="relative z-10 flex items-start justify-between"><span className={`grid h-11 w-11 place-items-center rounded-2xl shadow-sm ${tone}`}><Icon className="h-5 w-5" /></span><span className="text-[10px] font-black uppercase tracking-wider text-slate-400">En vivo</span></div><p className="relative z-10 mt-4 text-4xl font-black tracking-tight text-blue-950">{value}</p><p className="relative z-10 mt-1 text-xs font-bold text-slate-500">{label}</p></article>)}
-      </section>
-
       <section className="grid gap-5 lg:grid-cols-[1.08fr_0.92fr]">
         <div className={styles.journeyCard}>
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-amber-600">Ruta de esta semana</p><h2 className="mt-1 text-2xl font-black tracking-tight text-blue-950">La asistencia avanza curso a curso</h2><p className="mt-2 text-sm text-slate-500">Semana del {displayWeek(data.currentWeekStart)}</p></div><span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-blue-950 text-amber-300 shadow-lg"><CalendarCheck className="h-6 w-6" /></span></div>
@@ -392,7 +397,6 @@ function Overview({ data, onNavigate }: { data: CartData; onNavigate: (tab: TabI
         </div>
         </div>
       </section>
-      <section><div className="mb-3 flex items-end justify-between"><div><p className="text-xs font-black uppercase tracking-[0.16em] text-amber-600">Tres metas, tres celebraciones</p><h2 className="mt-1 text-xl font-black text-blue-950">Niveles de premios</h2></div><button onClick={() => onNavigate("canjes")} className="text-xs font-black text-blue-900">Ver premios →</button></div><div className="grid gap-3 md:grid-cols-3">{[{ cost: 1, title: "Primera alegría", copy: "Un premio inmediato para celebrar la semana completa.", tone: "bg-gradient-to-br from-emerald-100 to-teal-50 text-emerald-950" }, { cost: 4, title: "Constancia que crece", copy: "Cuatro semanas de compromiso merecen algo especial.", tone: "bg-gradient-to-br from-sky-100 to-blue-50 text-blue-950" }, { cost: 8, title: "Gran celebración", copy: "La meta mayor para quienes sostienen su asistencia.", tone: "bg-gradient-to-br from-violet-100 to-fuchsia-50 text-violet-950" }].map((tier) => <article key={tier.cost} className={`${styles.tierCard} ${tier.tone}`}><div className="flex items-start justify-between"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-xl font-black shadow-sm">{tier.cost}</span><Trophy className="h-6 w-6 opacity-60" /></div><h3 className="mt-4 font-black">{tier.title}</h3><p className="mt-1 text-xs font-semibold leading-5 opacity-70">{tier.copy}</p></article>)}</div></section>
     </div>
   );
 }
