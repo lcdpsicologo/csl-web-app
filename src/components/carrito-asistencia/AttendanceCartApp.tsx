@@ -284,15 +284,15 @@ export function AttendanceCartApp() {
   return (
     <div className={`${styles.page} pb-24 text-slate-900 lg:pb-10`}>
       <header className={`${styles.topBar} sticky top-0 z-40`}>
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <div className="flex items-center gap-3">
-            <Link href="/" prefetch={false} aria-label="Volver a Tiza Education" className="grid h-10 w-10 place-items-center rounded-xl border border-amber-200 bg-white text-blue-950 shadow-sm transition hover:-translate-x-0.5 hover:bg-amber-50"><ArrowLeft className="h-5 w-5" /></Link>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.24em] text-amber-600">Colegio San Lucas</p>
-              <h1 className="text-base font-black text-blue-950 sm:text-lg">Carrito de la Asistencia</h1>
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-2 px-3 py-3 sm:gap-3 sm:px-6">
+          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+            <Link href="/" prefetch={false} aria-label="Volver a Tiza Education" className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-amber-200 bg-white text-blue-950 shadow-sm transition hover:-translate-x-0.5 hover:bg-amber-50"><ArrowLeft className="h-5 w-5" /></Link>
+            <div className="min-w-0">
+              <p className="truncate text-[9px] font-black uppercase tracking-[0.18em] text-amber-600 min-[380px]:text-[10px] min-[380px]:tracking-[0.24em]">Colegio San Lucas</p>
+              <h1 className="truncate text-sm font-black text-blue-950 min-[380px]:text-base sm:text-lg">Carrito de la Asistencia</h1>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <button onClick={() => session && loadData(session)} title="Actualizar" className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-blue-900"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
             <button onClick={signOut} title="Cerrar sesión" className="grid h-10 w-10 place-items-center rounded-xl bg-blue-950 text-white hover:bg-blue-900"><LogOut className="h-4 w-4" /></button>
           </div>
@@ -325,7 +325,7 @@ export function AttendanceCartApp() {
           </section>
         ) : null}
 
-        <nav className={`${styles.desktopNav} hidden lg:grid`}>
+        <nav className={styles.desktopNav}>
           {TABS.map((tab) => {
             const Icon = tab.icon;
             return <button key={tab.id} onClick={() => navigate(tab.id)} className={`${styles.navButton} ${activeTab === tab.id ? styles.navButtonActive : ""}`}><Icon className="h-4 w-4" />{tab.label}</button>;
@@ -345,11 +345,11 @@ export function AttendanceCartApp() {
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-amber-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(8,36,95,0.14)] backdrop-blur-xl lg:hidden">
         {TABS.map((tab) => {
           const Icon = tab.icon;
-          return <button key={tab.id} onClick={() => navigate(tab.id)} className={`flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 text-[10px] font-black ${activeTab === tab.id ? "text-blue-950" : "text-slate-400"}`}><span className={`grid h-8 w-11 place-items-center rounded-full ${activeTab === tab.id ? "bg-amber-300" : ""}`}><Icon className="h-[18px] w-[18px]" /></span>{tab.shortLabel}</button>;
+          return <button key={tab.id} onClick={() => navigate(tab.id)} className={`flex min-h-[68px] flex-col items-center justify-center gap-1 px-1 text-[10px] font-black leading-tight whitespace-nowrap ${activeTab === tab.id ? "text-blue-950" : "text-slate-400"}`}><span className={`grid h-8 w-11 place-items-center rounded-full ${activeTab === tab.id ? "bg-amber-300" : ""}`}><Icon className="h-[18px] w-[18px]" /></span>{tab.shortLabel}</button>;
         })}
       </nav>
 
-      {toast ? <div className="fixed bottom-24 left-1/2 z-[70] flex -translate-x-1/2 items-center gap-2 whitespace-nowrap rounded-full bg-blue-950 px-5 py-3 text-sm font-black text-white shadow-2xl lg:bottom-8"><Check className="h-4 w-4 text-amber-300" />{toast}</div> : null}
+      {toast ? <div className="fixed bottom-24 left-1/2 z-[70] flex max-w-[calc(100vw-24px)] -translate-x-1/2 items-center gap-2 rounded-2xl bg-blue-950 px-5 py-3 text-center text-sm font-black text-white shadow-2xl lg:bottom-8 lg:whitespace-nowrap"><Check className="h-4 w-4 shrink-0 text-amber-300" />{toast}</div> : null}
     </div>
   );
 }

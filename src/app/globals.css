@@ -80,6 +80,15 @@ canvas {
   }
 }
 
+button,
+button *,
+[role="button"],
+[role="button"] * {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
 button {
   cursor: pointer;
   transition: background-color 140ms var(--ease-out-quart),
