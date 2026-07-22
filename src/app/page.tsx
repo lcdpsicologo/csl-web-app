@@ -900,26 +900,26 @@ const courseLivePresentation = (kind: CourseLiveState["kind"]) => {
 };
 
 const firstCycleHeadTeachers: Record<string, { name: string; email: string }> = {
-  [canonicalCourseKey("Prekínder A")]: { name: "Ivonne Espinoza", email: "i.espinoza@colegiosanlucas.com" },
-  [canonicalCourseKey("Prekínder B")]: { name: "Ana Huerta", email: "a.huerta@colegiosanlucas.com" },
-  [canonicalCourseKey("Prekínder C")]: { name: "Fancy Aros", email: "f.aros@colegiosanlucas.com" },
-  [canonicalCourseKey("Kínder A")]: { name: "Alejandra Delgado", email: "a.delgado@colegiosanlucas.com" },
-  [canonicalCourseKey("Kínder B")]: { name: "Josefa Trujillo", email: "j.trujillo@colegiosanlucas.com" },
-  [canonicalCourseKey("Kínder C")]: { name: "Paulina Rojas", email: "paulina.rojas@colegiosanlucas.com" },
-  [canonicalCourseKey("1° Básico A")]: { name: "Paulina Aguilera", email: "p.aguilera@colegiosanlucas.com" },
-  [canonicalCourseKey("1° Básico B")]: { name: "Ilona Leal", email: "i.leal@colegiosanlucas.com" },
-  [canonicalCourseKey("2° Básico A")]: { name: "Viviana Hernández", email: "v.hernandez@colegiosanlucas.com" },
-  [canonicalCourseKey("2° Básico B")]: { name: "Geraldine Parra", email: "g.parra@colegiosanlucas.com" },
-  [canonicalCourseKey("3° Básico A")]: { name: "Camila González", email: "c.gonzalez@colegiosanlucas.com" },
-  [canonicalCourseKey("3° Básico B")]: { name: "Nicole Vásquez", email: "n.vasquez@colegiosanlucas.com" },
-  [canonicalCourseKey("4° Básico A")]: { name: "André Vidal", email: "andre.vidal@colegiosanlucas.com" },
-  [canonicalCourseKey("4° Básico B")]: { name: "Karianny Gómez", email: "k.gomez@colegiosanlucas.com" },
+  [classroomTeamCourseKey("Prekínder A")]: { name: "Ivonne Espinoza", email: "i.espinoza@colegiosanlucas.com" },
+  [classroomTeamCourseKey("Prekínder B")]: { name: "Ana Huerta", email: "a.huerta@colegiosanlucas.com" },
+  [classroomTeamCourseKey("Prekínder C")]: { name: "Fancy Aros", email: "f.aros@colegiosanlucas.com" },
+  [classroomTeamCourseKey("Kínder A")]: { name: "Alejandra Delgado", email: "a.delgado@colegiosanlucas.com" },
+  [classroomTeamCourseKey("Kínder B")]: { name: "Josefa Trujillo", email: "j.trujillo@colegiosanlucas.com" },
+  [classroomTeamCourseKey("Kínder C")]: { name: "Paulina Rojas", email: "paulina.rojas@colegiosanlucas.com" },
+  [classroomTeamCourseKey("1° Básico A")]: { name: "Paulina Aguilera", email: "p.aguilera@colegiosanlucas.com" },
+  [classroomTeamCourseKey("1° Básico B")]: { name: "Ilona Leal", email: "i.leal@colegiosanlucas.com" },
+  [classroomTeamCourseKey("2° Básico A")]: { name: "Viviana Hernández", email: "v.hernandez@colegiosanlucas.com" },
+  [classroomTeamCourseKey("2° Básico B")]: { name: "Geraldine Parra", email: "g.parra@colegiosanlucas.com" },
+  [classroomTeamCourseKey("3° Básico A")]: { name: "Camila González", email: "c.gonzalez@colegiosanlucas.com" },
+  [classroomTeamCourseKey("3° Básico B")]: { name: "Nicole Vásquez", email: "n.vasquez@colegiosanlucas.com" },
+  [classroomTeamCourseKey("4° Básico A")]: { name: "André Vidal", email: "andre.vidal@colegiosanlucas.com" },
+  [classroomTeamCourseKey("4° Básico B")]: { name: "Karianny Gómez", email: "k.gomez@colegiosanlucas.com" },
 };
 
 const headTeacherForCourse = (course: string) => {
-  const key = canonicalCourseKey(course);
+  const key = classroomTeamCourseKey(course);
   if (firstCycleHeadTeachers[key]) return firstCycleHeadTeachers[key];
-  return STAFF_DIRECTORY.find((member) => member.headship && member.email && canonicalCourseKey(member.headship) === key) || null;
+  return STAFF_DIRECTORY.find((member) => member.headship && classroomTeamCourseKey(member.headship) === key) || null;
 };
 
 // Próxima fecha en que le toca orientación a un curso, después de una fecha dada.
@@ -1422,10 +1422,19 @@ const officialClassroomTeamForCourse = (course: string): ClassroomTeamMember[] =
   const seeds = classroomTeamSeedsByCourse.get(classroomTeamCourseKey(course)) || [];
   const headTeacher = headTeacherForCourse(course);
   return seeds.map((member, index) => {
+    const memberNameParts = normalize(member.name).split(/\s+/).filter(Boolean);
+    const headTeacherNameParts = normalize(headTeacher?.name || "").split(/\s+/).filter(Boolean);
+    const hasMatchingName = normalize(member.name) === normalize(headTeacher?.name || "")
+      || Boolean(
+        memberNameParts.length > 1
+        && headTeacherNameParts.length > 1
+        && memberNameParts[0]?.[0] === headTeacherNameParts[0]?.[0]
+        && memberNameParts.at(-1) === headTeacherNameParts.at(-1),
+      );
     const isHeadTeacher = Boolean(
       headTeacher
       && (
-        normalize(member.name) === normalize(headTeacher.name)
+        hasMatchingName
         || (member.email && headTeacher.email && normalize(member.email) === normalize(headTeacher.email))
       ),
     );
@@ -4329,6 +4338,7 @@ function CourseWorkspaceView({
   const seats = Array.from({ length: capacity }, (_, index) => studentsById.get(seatStudentIds[index] || ""));
   const missingOfficialCourses = officialCourses.filter((course) => !savedByName.has(normalize(course.name))).length;
   const classroomTeam = classroomTeamForCourse(courseName, current?.record);
+  const classroomHeadTeacher = classroomTeam.find((member) => normalize(member.role || "").includes("profesor a jefe"));
   const caseCountByStudent = new Map<string, number>();
   store.cases.forEach((record) => {
     students.forEach((student) => {
@@ -4570,12 +4580,13 @@ function CourseWorkspaceView({
               const active = selectedCourse === course.name;
               const isAnimated = state.kind === "live" || state.kind === "break";
               const studentCount = studentCountByCourse.get(schoolScheduleCourseKey(course.name)) || 0;
+              const teamCount = classroomTeamForCourse(course.name, course.record).length;
               return (
               <button
                 key={course.name}
                 onClick={() => setSelectedCourse(course.name)}
                 aria-pressed={active}
-                className={`group relative min-h-[68px] w-[148px] shrink-0 snap-start overflow-hidden rounded-xl border px-3 py-2.5 text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:w-[164px] ${
+                className={`group relative min-h-[78px] w-[156px] shrink-0 snap-start overflow-hidden rounded-xl border px-3 py-2.5 text-left transition duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:w-[176px] ${
                   active
                     ? "border-blue-300 bg-blue-50/80 text-slate-950 shadow-sm ring-1 ring-blue-100"
                     : "border-slate-200 bg-white text-slate-900 hover:border-slate-300 hover:bg-slate-50"
@@ -4584,7 +4595,7 @@ function CourseWorkspaceView({
                 {active ? <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-full bg-blue-500" /> : null}
                 <span className="flex items-start justify-between gap-2">
                   <span className="truncate text-sm font-bold tracking-tight">{course.name}</span>
-                  <span className="shrink-0 text-[10px] font-semibold text-slate-400">{studentCount}</span>
+                  <span className="shrink-0 rounded-full bg-white/80 px-1.5 py-0.5 text-[9px] font-bold text-slate-500 ring-1 ring-slate-200/70">{teamCount} equipo</span>
                 </span>
                 <span className="mt-1.5 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-slate-500">
                   <span className="relative flex h-2 w-2 shrink-0">
@@ -4595,6 +4606,7 @@ function CourseWorkspaceView({
                   <span aria-hidden="true" className="text-slate-300">·</span>
                   <span className="min-w-0 truncate normal-case tracking-normal text-slate-600" title={state.activity}>{state.activity}</span>
                 </span>
+                <span className="mt-1 block text-[9px] font-semibold text-slate-400">{studentCount} estudiantes</span>
               </button>
               );
             })}
@@ -4626,9 +4638,10 @@ function CourseWorkspaceView({
                     Convivencia: <strong className="font-semibold text-slate-700">{current.convivenciaCoordinator || "Sin asignar"}</strong>
                     {current.convivenciaEmail ? ` · ${current.convivenciaEmail}` : ""}
                   </p>
-                  <div className="mt-3 grid grid-cols-4 gap-2">
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
                     {[
                       ["Estudiantes", students.length],
+                      ["Equipo", classroomTeam.length],
                       ["Casos", cases.length],
                       ["Orientación", orientation.length],
                       ["Bitácoras", logs.length],
@@ -4679,7 +4692,7 @@ function CourseWorkspaceView({
           </section>
 
           <div className="order-2 flex min-w-0 flex-col gap-4 xl:col-span-2 xl:flex-row xl:items-start">
-            <div className="order-1 space-y-4 xl:order-2 xl:w-[340px] xl:shrink-0">
+            <div className="order-1 space-y-4 xl:order-2 xl:w-[420px] xl:shrink-0">
           <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
             <button
               type="button"
@@ -4777,28 +4790,32 @@ function CourseWorkspaceView({
             ) : null}
           </section>
 
-          <section className="rounded-2xl border border-slate-200 bg-white p-4">
+          <section className="overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-sm shadow-blue-100/40">
+            <div className="border-b border-blue-100 bg-gradient-to-br from-blue-50 via-cyan-50/70 to-white p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="flex items-center gap-2 text-lg font-semibold text-slate-950">
-                  <UsersRound className="h-5 w-5 text-blue-600" />
+                  <span className="grid h-9 w-9 place-items-center rounded-lg bg-blue-600 text-white shadow-sm"><UsersRound className="h-4 w-4" /></span>
                   Equipo de aula
                 </h3>
-                <p className="mt-1 text-sm text-slate-600">Profesor/a jefe, asistentes y apoyos del curso. Edita o agrega miembros directamente desde aquí.</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {classroomHeadTeacher ? <><strong className="font-semibold text-slate-800">PJ: {classroomHeadTeacher.name}</strong> · </> : null}
+                  {classroomTeam.length} integrante{classroomTeam.length === 1 ? "" : "s"} en {current.name}
+                </p>
               </div>
               <div className="flex items-center gap-2">
-                <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">{classroomTeam.length} integrante{classroomTeam.length === 1 ? "" : "s"}</span>
                 <button
                   onClick={() => setShowTeamForm((value) => !value)}
-                  className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white"
+                  className="inline-flex min-h-10 items-center gap-1.5 rounded-lg tz-btn-primary px-3 py-2 text-sm font-semibold text-white"
                 >
-                  <Plus className="h-4 w-4" /> Añadir miembro
+                  {showTeamForm ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />} {showTeamForm ? "Cerrar" : "Añadir miembro"}
                 </button>
               </div>
             </div>
+            </div>
 
             {showTeamForm ? (
-              <div className="tz-slide-up mb-4 rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+              <div className="tz-slide-up border-b border-blue-100 bg-blue-50/50 p-4">
                 <div className="grid gap-2 lg:grid-cols-[1fr_240px_1fr_auto]">
                   <input value={teamForm.name} onChange={(event) => setTeamForm((form) => ({ ...form, name: event.target.value }))} placeholder="Nombre completo" className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-500" />
                   <select
@@ -4838,13 +4855,15 @@ function CourseWorkspaceView({
             ) : null}
 
             {classroomTeam.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+              <div className="m-4 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
                 Todavía no hay equipo de aula. Pulsa <strong>Añadir miembro</strong> para empezar.
               </div>
             ) : (
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {classroomTeam.map((member) => (
-                  <article key={member.id} className="tz-card group relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4">
+              <div className="grid gap-2 p-3">
+                {classroomTeam.map((member) => {
+                  const isHeadTeacher = normalize(member.role || "").includes("profesor a jefe");
+                  return (
+                  <article key={member.id} className={`tz-card group relative overflow-hidden rounded-xl border p-3 ${isHeadTeacher ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white"}`}>
                     <div className="flex items-start gap-3">
                       <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br ${avatarTone(member.id)} text-sm font-bold text-white shadow-sm`}>
                         {initialsOf(member.name)}
@@ -4853,12 +4872,14 @@ function CourseWorkspaceView({
                         <input
                           value={member.name}
                           onChange={(event) => updateClassroomTeamMember(member.id, { name: event.target.value })}
-                          className="w-full border-b border-transparent bg-transparent text-sm font-semibold text-slate-950 outline-none transition hover:border-slate-200 focus:border-blue-500"
+                          aria-label={`Nombre de ${member.name}`}
+                          className="w-full border-b border-transparent bg-transparent text-sm font-bold text-slate-950 outline-none transition hover:border-slate-200 focus:border-blue-500"
                         />
                         <select
                           value={allRoles.includes(member.role) ? member.role : member.role}
                           onChange={(event) => updateClassroomTeamMember(member.id, { role: event.target.value })}
-                          className="mt-1 w-full rounded border border-transparent bg-transparent text-xs text-slate-600 outline-none transition hover:border-slate-200 focus:border-blue-500"
+                          aria-label={`Cargo de ${member.name}`}
+                          className={`mt-1 w-full rounded-md border px-1.5 py-1 text-xs font-semibold outline-none transition focus:border-blue-500 ${isHeadTeacher ? "border-blue-100 bg-white text-blue-700" : "border-transparent bg-transparent text-slate-600 hover:border-slate-200"}`}
                         >
                           {!allRoles.includes(member.role) && member.role ? <option value={member.role}>{member.role}</option> : null}
                           {allRoles.map((role) => <option key={role} value={role}>{role}</option>)}
@@ -4867,15 +4888,17 @@ function CourseWorkspaceView({
                           value={member.email}
                           onChange={(event) => updateClassroomTeamMember(member.id, { email: event.target.value })}
                           placeholder="Correo"
-                          className="mt-1 w-full border-b border-transparent bg-transparent text-xs text-slate-500 outline-none transition hover:border-slate-200 focus:border-blue-500"
+                          aria-label={`Correo de ${member.name}`}
+                          className="mt-1.5 w-full border-b border-transparent bg-transparent text-xs text-slate-500 outline-none transition hover:border-slate-200 focus:border-blue-500"
                         />
                       </div>
-                      <button onClick={() => removeClassroomTeamMember(member.id)} className="rounded-md p-1.5 text-red-500 opacity-0 transition group-hover:opacity-100 hover:bg-red-50">
+                      <button aria-label={`Eliminar a ${member.name} del equipo`} onClick={() => removeClassroomTeamMember(member.id)} className="rounded-md p-1.5 text-red-500 opacity-100 transition hover:bg-red-50 sm:opacity-0 sm:group-hover:opacity-100 sm:focus:opacity-100">
                         <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
                   </article>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
