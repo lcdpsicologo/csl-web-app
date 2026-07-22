@@ -64,6 +64,7 @@ import {
   Search,
   Settings,
   ShieldCheck,
+  ShoppingCart,
   Trash2,
   Upload,
   UserRound,
@@ -85,7 +86,7 @@ type EntityId =
   | "personnel"
   | "documents";
 
-type ViewId = "dashboard" | "today" | "triage" | "reports" | "import" | "team" | "games" | "settings" | "pie" | "databases" | EntityId;
+type ViewId = "dashboard" | "today" | "attendanceCart" | "triage" | "reports" | "import" | "team" | "games" | "settings" | "pie" | "databases" | EntityId;
 type SidebarMode = "fixed" | "auto" | "collapsed";
 
 type DataRecord = {
@@ -2543,6 +2544,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "dashboard", label: "Inicio", icon: Home },
   { id: "orientation", label: "Orientación", icon: UsersRound },
   { id: "today", label: "Hoy", icon: CalendarDays },
+  { id: "attendanceCart", label: "Carrito de asistencia", icon: ShoppingCart },
   { id: "triage", label: "Tiza-IA", icon: TizaIaIcon },
   { id: "reports", label: "Reportes", icon: PieChart },
   { id: "games", label: "Juegos Vinculares", icon: Gamepad2 },
@@ -13452,6 +13454,10 @@ export default function TizaEducationApp() {
   const [historyIndex, setHistoryIndex] = useState(0);
   const activeView = viewHistory[historyIndex];
   const navigate = (next: ViewId) => {
+    if (next === "attendanceCart") {
+      window.location.assign("/carrito-asistencia");
+      return;
+    }
     if (next === activeView) return;
     setViewHistory((current) => {
       const truncated = current.slice(0, historyIndex + 1);
@@ -14887,6 +14893,9 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
+    // La navegación hacia el carrito cambia de ruta antes de modificar activeView.
+    // Este retorno conserva el estrechamiento exhaustivo del tipo para TypeScript.
+    if (activeView === "attendanceCart") return null;
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={openNewRecord} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} />;
     if (activeView === "today") return <TodayView store={store} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
