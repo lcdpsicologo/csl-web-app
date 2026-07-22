@@ -24,6 +24,7 @@ import { formatRutValue } from "@/lib/student-identity";
 import { CLASSROOM_TEAMS_BY_COURSE } from "@/lib/classroom-teams";
 import {
   ArrowDownToLine,
+  BarChart3,
   BookOpen,
   BookOpenText,
   Building2,
@@ -6418,11 +6419,10 @@ function OrientationCycleView({
         </div>
         <div className="bg-slate-50/60">
           {/* Replica la caja de las tarjetas (margen lateral + borde transparente + padding) para que las columnas calcen exactas. */}
-          <div className="hidden border border-transparent border-b-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:mx-4 lg:grid lg:grid-cols-[168px_126px_minmax(220px,1fr)_150px_132px_188px] lg:items-center lg:gap-3">
-            <span>Curso</span>
+          <div className="hidden border border-transparent border-b-slate-200 bg-slate-100/80 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:mx-4 lg:grid lg:grid-cols-[184px_132px_minmax(240px,1fr)_200px_180px] lg:items-center lg:gap-4">
+            <span>Curso · Prof. jefe</span>
             <span>Estado</span>
-            <span>Tema / semana</span>
-            <span>Acción</span>
+            <span>Tema y fortaleza</span>
             <span>Material</span>
             <span className="text-right">Acciones</span>
           </div>
@@ -6535,7 +6535,7 @@ function OrientationCycleView({
                 {dateHeader}
               {/* Sin overflow-hidden: recortaba los menús desplegables (Estado, Envío) dentro de la tarjeta. */}
               <article className={`mx-2 mb-2 rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
-                <div className="grid gap-3 px-4 py-3 lg:grid-cols-[168px_126px_minmax(220px,1fr)_150px_132px_188px] lg:items-center">
+                <div className="grid gap-3 px-4 py-3.5 lg:grid-cols-[184px_132px_minmax(240px,1fr)_200px_180px] lg:items-center lg:gap-4">
                   <div>
                     <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Curso</p>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -6584,27 +6584,31 @@ function OrientationCycleView({
                   </div>
 
                   <div className="min-w-0">
+                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Tema y fortaleza</p>
                     <p className="line-clamp-1 text-sm font-bold text-slate-950">{displayTitle}</p>
-                    <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">{record.week || "Sin semana definida"}</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="inline-flex max-w-full items-center gap-1.5 rounded-md bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-700 ring-1 ring-violet-100" title={rawOrientationAction(record) || getOrientationAction(record)}>
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-400" />
+                        <span className="truncate">{rawOrientationAction(record) || getOrientationAction(record)}</span>
+                      </span>
+                      <span className="truncate text-[11px] font-medium text-slate-400">{record.week || "Sin semana definida"}</span>
+                    </div>
                     {notesPreview ? (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={notesPreview}>
+                      <p className="mt-1 line-clamp-1 text-xs text-amber-800" title={notesPreview}>
                         <span className="font-bold uppercase tracking-wide text-amber-500">Obs</span> {notesPreview}
                       </p>
                     ) : null}
                     {/reprogramad/i.test(shownStatus) && (record.reprogramReason || record.reprogramDate) ? (
-                      <p className="mt-0.5 line-clamp-1 text-xs text-amber-800" title={`${record.reprogramReason || ""}${record.reprogramDate ? ` · Nueva fecha: ${formatOrientationDate(record.reprogramDate)}` : ""}`}>
+                      <p className="mt-1 line-clamp-1 text-xs text-amber-800" title={`${record.reprogramReason || ""}${record.reprogramDate ? ` · Nueva fecha: ${formatOrientationDate(record.reprogramDate)}` : ""}`}>
                         <span className="font-bold uppercase tracking-wide text-amber-500">Motivo</span> {record.reprogramReason || "Sin motivo registrado"}
                         {record.reprogramDate ? <span className="font-semibold"> · Nueva fecha: {formatOrientationDate(record.reprogramDate)}</span> : null}
                       </p>
                     ) : null}
                   </div>
 
-                  <div className="min-w-0">
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Acción</p>
-                    <p className="line-clamp-2 text-xs font-semibold text-slate-700">{rawOrientationAction(record) || getOrientationAction(record)}</p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-1.5">
+                  <div>
+                    <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Material</p>
+                    <div className="flex flex-wrap gap-1.5">
                     {canvaUrl ? (
                       <a href={canvaUrl} target="_blank" rel="noopener noreferrer" title={canvaUrl} className="inline-flex items-center gap-1 rounded-lg bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
                         <FileText className="h-3 w-3" /> Canva <ExternalLink className="h-2.5 w-2.5" />
@@ -6626,6 +6630,7 @@ function OrientationCycleView({
                     ) : (
                       <span title="Sin link de carpeta guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><FolderOpen className="h-3 w-3" /> Carpeta</span>
                     )}
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap justify-start gap-2 lg:justify-end">
@@ -6812,51 +6817,63 @@ function OrientationCycleView({
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 via-white to-white px-5 py-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Mapa de cobertura del ciclo</p>
-            <h2 className="text-lg font-semibold text-slate-950">Sesiones por curso y acción / fortaleza</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Cuántas veces se trabajó cada fortaleza o intervención en cada curso. Total {actionGrandTotal} sesiones registradas.</p>
+            <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-cyan-700"><BarChart3 className="h-3.5 w-3.5" /> Mapa de cobertura del ciclo</p>
+            <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Sesiones por curso y acción / fortaleza</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Cuántas veces se trabajó cada fortaleza o intervención en cada curso. <strong className="font-semibold text-slate-700">{actionGrandTotal} sesiones</strong> registradas en total.</p>
           </div>
-          <div className="flex items-center gap-3 text-[10px] font-semibold text-slate-500">
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-white ring-1 ring-slate-200" /> 0</span>
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-amber-50 ring-1 ring-amber-100" /> bajo</span>
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-emerald-100" /> medio</span>
-            <span className="inline-flex items-center gap-1"><span className="h-3 w-3 rounded bg-emerald-200" /> alto</span>
+          <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">
+            <span>Menos</span>
+            <span className="h-3 w-3 rounded-full bg-white ring-1 ring-slate-200" />
+            <span className="h-3 w-3 rounded-full bg-amber-100" />
+            <span className="h-3 w-3 rounded-full bg-emerald-100" />
+            <span className="h-3 w-3 rounded-full bg-emerald-300" />
+            <span>Más</span>
           </div>
         </header>
-        <div className="tz-contained-x">
-          <table className="min-w-[1040px] w-full border-collapse text-sm">
+        <div className="tz-contained-x tz-thin-scroll p-3">
+          <table className="min-w-[1040px] w-full border-separate border-spacing-0 text-sm">
             <thead>
-              <tr className="border-b border-slate-200 bg-slate-100/80 text-slate-600">
-                <th className="sticky left-0 z-10 min-w-36 border-r border-slate-200 bg-slate-100 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide">Curso</th>
+              <tr>
+                <th className="sticky left-0 z-10 min-w-40 rounded-tl-xl border-b-2 border-slate-200 bg-slate-50 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</th>
                 {visibleActionColumns.map((action) => (
-                  <th key={action} className="min-w-24 border-r border-slate-200 px-2 py-3 text-center text-[11px] font-bold leading-tight">{action}</th>
+                  <th key={action} className="min-w-24 border-b-2 border-slate-200 bg-slate-50 px-2 py-3 text-center text-[11px] font-bold leading-tight text-slate-500">{action}</th>
                 ))}
-                <th className="min-w-16 bg-slate-200/70 px-2 py-3 text-center text-[11px] font-bold uppercase tracking-wide">Total</th>
+                <th className="min-w-16 rounded-tr-xl border-b-2 border-cyan-200 bg-cyan-50 px-2 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-cyan-700">Total</th>
               </tr>
             </thead>
             <tbody>
               {owner.courses.map((course) => {
                 const total = courseTotal(course);
                 return (
-                  <tr key={course} className="border-b border-slate-100 hover:bg-blue-50/20">
-                    <th className="sticky left-0 z-10 border-r border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800">{course}</th>
+                  <tr key={course} className="group">
+                    <th className="sticky left-0 z-10 border-b border-slate-100 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 transition group-hover:bg-cyan-50/50">{course}</th>
                     {visibleActionColumns.map((action) => {
                       const count = ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length;
-                      return <td key={`${course}-${action}`} className={`border-r border-slate-100 px-2 py-2 text-center text-sm font-bold tabular-nums ${actionCellTone(count)}`}>{count || ""}</td>;
+                      return (
+                        <td key={`${course}-${action}`} className="border-b border-slate-100 px-1.5 py-1.5 text-center transition group-hover:bg-cyan-50/20">
+                          {count > 0 ? (
+                            <span className={`inline-flex h-7 min-w-[28px] items-center justify-center rounded-lg px-1.5 text-sm font-bold tabular-nums ring-1 ring-inset ${actionCellTone(count)}`}>{count}</span>
+                          ) : (
+                            <span className="text-slate-200">·</span>
+                          )}
+                        </td>
+                      );
                     })}
-                    <td className={`px-2 py-2 text-center text-sm font-extrabold tabular-nums ${total > 0 ? "bg-cyan-50 text-cyan-900" : "bg-slate-50 text-slate-300"}`}>{total}</td>
+                    <td className="border-b border-slate-100 px-2 py-1.5 text-center transition group-hover:bg-cyan-50/20">
+                      <span className={`inline-flex h-7 min-w-[32px] items-center justify-center rounded-lg px-2 text-sm font-extrabold tabular-nums ${total > 0 ? "bg-cyan-100 text-cyan-800 ring-1 ring-inset ring-cyan-200" : "text-slate-300"}`}>{total}</span>
+                    </td>
                   </tr>
                 );
               })}
-              <tr className="border-t-2 border-slate-300 bg-slate-50 font-bold">
-                <th className="sticky left-0 z-10 border-r border-slate-200 bg-slate-100 px-3 py-2 text-left text-xs font-extrabold uppercase text-slate-700">Total ciclo</th>
+              <tr>
+                <th className="sticky left-0 z-10 rounded-bl-xl bg-slate-900 px-3 py-2.5 text-left text-xs font-extrabold uppercase tracking-wide text-white">Total ciclo</th>
                 {visibleActionColumns.map((action) => {
                   const t = ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length;
-                  return <td key={`total-${action}`} className="border-r border-slate-200 px-2 py-2 text-center text-sm font-extrabold tabular-nums text-slate-800">{t || ""}</td>;
+                  return <td key={`total-${action}`} className="bg-slate-900 px-2 py-2.5 text-center text-sm font-extrabold tabular-nums text-white">{t || <span className="text-white/25">·</span>}</td>;
                 })}
-                <td className="bg-cyan-700 px-2 py-2 text-center text-sm font-extrabold tabular-nums text-white">{actionGrandTotal}</td>
+                <td className="rounded-br-xl bg-cyan-600 px-2 py-2.5 text-center text-sm font-extrabold tabular-nums text-white">{actionGrandTotal}</td>
               </tr>
             </tbody>
           </table>
