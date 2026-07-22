@@ -235,6 +235,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true });
     }
 
+    if (action === "undo_award_ticket") {
+      const studentId = String(body.studentId || "");
+      const weekStart = /^\d{4}-\d{2}-\d{2}$/.test(String(body.weekStart || ""))
+        ? String(body.weekStart)
+        : mondayIso();
+      const student = await loadStudent(admin, institutionId, studentId);
+      if (!student) return NextResponse.json({ error: "Estudiante no válido para esta dinámica" }, { status: 400 });
+
+      const [{ data: award, error: awardError }, { data: ledger, error: ledgerError }] = await Promise.all([
+        admin.from("attendance_cart_ticket_ledger")
+          .select("id")
+          .eq("institution_id", institutionId)
+          .eq("student_record_id", studentId)
+          .eq("week_start", weekStart)
+          .eq("kind", "award")
+          .maybeSingle(),
+        admin.from("attendance_cart_ticket_ledger")
+          .select("delta")
+          .eq("institution_id", institutionId)
+          .eq("student_record_id", studentId),
+      ]);
+      if (awardError) throw awardError;
+      if (ledgerError) throw ledgerError;
+      if (!award) return NextResponse.json({ error: "Este ticket ya no está registrado" }, { status: 404 });
+
+      const balance = (ledger || []).reduce((sum, row) => sum + Number(row.delta || 0), 0);
+      if (balance < 1) {
+        return NextResponse.json({ error: "No se puede deshacer porque ese ticket ya fue utilizado en un canje" }, { status: 409 });
+      }
+
+      const { error: deleteError } = await admin.from("attendance_cart_ticket_ledger")
+        .delete()
+        .eq("id", award.id)
+        .eq("institution_id", institutionId);
+      if (deleteError) throw deleteError;
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "redeem_reward") {
       const student = await loadStudent(admin, institutionId, String(body.studentId || ""));
       if (!student) return NextResponse.json({ error: "Estudiante no válido para esta dinámica" }, { status: 400 });
