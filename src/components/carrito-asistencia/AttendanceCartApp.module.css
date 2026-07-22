@@ -54,6 +54,18 @@
   display: block;
 }
 
+.mobileQuickActions {
+  display: none;
+}
+
+.mobileTools {
+  background: #fffbeb;
+}
+
+.mobileTierTabs {
+  display: none;
+}
+
 .metricItem strong {
   color: #08245f;
   font-size: 20px;
@@ -519,6 +531,10 @@
 }
 
 @media (max-width: 639px) {
+  .topBar {
+    box-shadow: 0 5px 18px rgb(8 36 95 / 7%);
+  }
+
   .metricStrip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     margin-inline: 2px;
@@ -536,31 +552,102 @@
     border-top: 1px solid rgb(8 36 95 / 10%);
   }
 
+  .mobileQuickActions {
+    display: grid;
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+
+  .mobileQuickActions button {
+    display: flex;
+    min-height: 48px;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid rgb(8 36 95 / 10%);
+    border-radius: 14px;
+    background: rgb(255 255 255 / 82%);
+    padding: 0 14px;
+    color: #08245f;
+    font-size: 12px;
+    font-weight: 900;
+    box-shadow: 0 5px 14px rgb(8 36 95 / 5%);
+  }
+
+  .mobileQuickActions button:first-child {
+    border-color: #f5c531;
+    background: linear-gradient(135deg, #fff5bd, #ffe16a);
+  }
+
+  .mobileTools {
+    position: sticky;
+    top: 65px;
+    z-index: 25;
+    box-shadow: 0 10px 20px rgb(8 36 95 / 8%);
+  }
+
+  .mobileTierTabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    margin: 14px 0 4px;
+    border-radius: 14px;
+    background: #eef2f7;
+    padding: 4px;
+  }
+
+  .mobileTierTabs button {
+    min-height: 40px;
+    border-radius: 10px;
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .mobileTierTabs .mobileTierTabActive {
+    background: white;
+    color: #08245f;
+    box-shadow: 0 3px 10px rgb(8 36 95 / 10%);
+  }
+
+  .mobileTierSection {
+    display: none;
+  }
+
+  .mobileTierSectionActive {
+    display: block;
+  }
+
   .hero {
     border-radius: 26px;
+    min-height: auto;
   }
 
   .heroCopy {
-    padding: 28px 20px 18px;
+    padding: 24px 18px;
   }
 
   .heroTitle {
-    font-size: 2.7rem;
+    margin-top: 13px;
+    font-size: 2.25rem;
+    line-height: .95;
+  }
+
+  .heroSubtitle {
+    margin-top: 12px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .heroActions {
+    display: none;
+  }
+
+  .tierRibbon {
+    margin-top: 14px;
   }
 
   .heroArt {
-    min-height: 260px;
-  }
-
-  .posterFrame {
-    inset: 4px 14px 18px;
-    border-width: 4px;
-    border-radius: 22px;
-  }
-
-  .floatingTicket {
-    right: 6px;
-    bottom: 8px;
+    display: none;
   }
 
   .confettiTop {
