@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { createClient, type Session, type SupabaseClient } from "@supabase/supabase-js";
 import {
   ArrowRight,
@@ -10,6 +10,7 @@ import {
   BadgeCheck,
   Box,
   CalendarCheck,
+  Camera,
   Check,
   ChevronRight,
   ClipboardList,
@@ -17,12 +18,14 @@ import {
   Gift,
   History,
   LogOut,
+  LoaderCircle,
   Minus,
   PackagePlus,
   PartyPopper,
   Plus,
   RefreshCw,
   Search,
+  Sparkles,
   ShoppingCart,
   Star,
   Ticket,
@@ -51,6 +54,18 @@ type Reward = {
   minimum_stock: number;
   active: boolean;
   stock: number;
+};
+
+type ScannedInventoryItem = {
+  clientId: string;
+  selected: boolean;
+  name: string;
+  description: string;
+  quantity: number;
+  ticketCost: 1 | 4 | 8;
+  minimumStock: number;
+  existingRewardId: string;
+  confidence: number;
 };
 
 type Redemption = {
@@ -128,6 +143,25 @@ const displayWeek = (weekStart: string) => {
   const end = new Date(start);
   end.setDate(end.getDate() + 4);
   return `${start.toLocaleDateString("es-CL", { day: "numeric", month: "short" })}–${end.toLocaleDateString("es-CL", { day: "numeric", month: "short" })}`;
+};
+
+const prepareInventoryPhoto = async (file: File) => {
+  if (!file.type.startsWith("image/")) throw new Error("Selecciona una imagen válida");
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+    if (blob) return new File([blob], "inventario.jpg", { type: "image/jpeg" });
+  } catch {
+    // Some older browsers cannot decode every phone format. Use the original below.
+  }
+  if (file.size > 8 * 1024 * 1024) throw new Error("La foto es demasiado pesada. Intenta tomarla nuevamente.");
+  return file;
 };
 
 function Initials({ student, size = "md" }: { student: Student; size?: "sm" | "md" }) {
@@ -339,7 +373,7 @@ export function AttendanceCartApp() {
         {data && activeTab === "entrega" ? <AwardTickets data={data} onAward={(studentId, note) => mutate({ action: "award_ticket", studentId, note, weekStart: data.currentWeekStart }, "Golden Ticket entregado correctamente", (current) => ({ ...current, weeklyAwardedIds: current.weeklyAwardedIds.includes(studentId) ? current.weeklyAwardedIds : [...current.weeklyAwardedIds, studentId], balances: { ...current.balances, [studentId]: (current.balances[studentId] || 0) + 1 } }))} onUndo={(studentId) => mutate({ action: "undo_award_ticket", studentId, weekStart: data.currentWeekStart }, "Entrega anulada correctamente", (current) => ({ ...current, weeklyAwardedIds: current.weeklyAwardedIds.filter((id) => id !== studentId), balances: { ...current.balances, [studentId]: Math.max(0, (current.balances[studentId] || 0) - 1) } }))} busy={loading} /> : null}
         {data && activeTab === "canjes" ? <RedeemRewards data={data} onRedeem={(studentId, rewardId, note) => mutate({ action: "redeem_reward", studentId, rewardId, note }, "Premio cobrado y stock actualizado")} busy={loading} /> : null}
         {data && activeTab === "catastro" ? <Registry data={data} /> : null}
-        {data && activeTab === "inventario" ? <Inventory data={data} busy={loading} onCreate={(values) => mutate({ action: "create_reward", ...values }, "Premio agregado al inventario")} onAdjust={(values) => mutate({ action: "adjust_inventory", ...values }, "Inventario actualizado")} /> : null}
+        {data && activeTab === "inventario" ? <Inventory data={data} accessToken={session.access_token} busy={loading} onCreate={(values) => mutate({ action: "create_reward", ...values }, "Premio agregado al inventario")} onAdjust={(values) => mutate({ action: "adjust_inventory", ...values }, "Inventario actualizado")} onApplyScan={(items) => mutate({ action: "create_rewards_batch", items }, "Inventario actualizado desde la foto")} /> : null}
       </div>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 border-t border-amber-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-10px_30px_rgba(8,36,95,0.14)] backdrop-blur-xl lg:hidden">
@@ -489,12 +523,20 @@ function Registry({ data }: { data: CartData }) {
   return <section className={`${styles.panel} overflow-hidden`}><div className={`${styles.sectionBanner} flex flex-col gap-4 px-5 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-7`}><div><span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300"><ClipboardList className="h-3.5 w-3.5" /> Historial auditable</span><h2 className="mt-3 text-3xl font-black tracking-tight">Catastro de cobros</h2><p className="mt-1 text-sm text-blue-100">{rows.length} canjes encontrados · datos listos para compartir</p></div><button onClick={exportCsv} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-blue-950 shadow-lg"><Download className="h-4 w-4" />Exportar catastro</button></div><div className="grid gap-3 border-b border-slate-100 bg-amber-50 p-4 sm:grid-cols-2"><select value={course} onChange={(event) => setCourse(event.target.value)} className="rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm font-bold"><option>Todos</option>{COURSES.map((item) => <option key={item}>{item}</option>)}</select><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar estudiante o premio" className="w-full rounded-xl border border-amber-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none" /></label></div><div className="divide-y divide-slate-100">{rows.map((row) => <article key={row.id} className="grid gap-3 px-4 py-4 transition hover:bg-amber-50/50 sm:grid-cols-[1.2fr_1fr_0.8fr] sm:items-center sm:px-6"><div><strong className="block text-sm text-slate-900">{row.student_name}</strong><span className="text-xs text-slate-500">{row.course} · {formatDateTime(row.created_at)}</span></div><div><strong className="block text-sm text-blue-950">{row.reward_name}</strong><span className="text-xs text-slate-500">{row.tickets_spent} tickets utilizados</span></div><div className="sm:text-right"><span className="text-xs font-bold text-slate-700">{row.actor_name}</span>{row.note ? <p className="mt-1 text-xs text-slate-400">{row.note}</p> : null}</div></article>)}{!rows.length ? <div className="p-12 text-center"><span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-blue-50 text-blue-900"><History className="h-8 w-8" /></span><p className="mt-4 font-black text-blue-950">El primer canje aparecerá aquí</p><p className="mt-1 text-sm font-semibold text-slate-500">Podrás ver quién cobró, qué premio eligió y cuándo.</p></div> : null}</div></section>;
 }
 
-function Inventory({ data, busy, onCreate, onAdjust }: { data: CartData; busy: boolean; onCreate: (values: Record<string, unknown>) => Promise<boolean>; onAdjust: (values: Record<string, unknown>) => Promise<boolean> }) {
+function Inventory({ data, accessToken, busy, onCreate, onAdjust, onApplyScan }: { data: CartData; accessToken: string; busy: boolean; onCreate: (values: Record<string, unknown>) => Promise<boolean>; onAdjust: (values: Record<string, unknown>) => Promise<boolean>; onApplyScan: (items: ScannedInventoryItem[]) => Promise<boolean> }) {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", ticketCost: 1, initialStock: 0, minimumStock: 3 });
   const [selectedTier, setSelectedTier] = useState<1 | 4 | 8>(1);
   const [adjusting, setAdjusting] = useState<Reward | null>(null);
   const [adjustment, setAdjustment] = useState({ delta: 1, kind: "purchase", note: "" });
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanLoading, setScanLoading] = useState(false);
+  const [scanSaving, setScanSaving] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const [scanNotes, setScanNotes] = useState("");
+  const [scanItems, setScanItems] = useState<ScannedInventoryItem[]>([]);
+  const [scanPreview, setScanPreview] = useState("");
   const lowStock = data.rewards.filter((reward) => reward.stock <= reward.minimum_stock);
   const create = async (event: FormEvent) => { event.preventDefault(); if (await onCreate(form)) { setForm({ name: "", description: "", ticketCost: 1, initialStock: 0, minimumStock: 3 }); setShowCreate(false); } };
   const adjust = async (event: FormEvent) => { event.preventDefault(); if (!adjusting) return; const signedDelta = adjustment.kind === "loss" ? -Math.abs(adjustment.delta) : adjustment.delta; if (await onAdjust({ rewardId: adjusting.id, ...adjustment, delta: signedDelta })) setAdjusting(null); };
@@ -504,12 +546,49 @@ function Inventory({ data, busy, onCreate, onAdjust }: { data: CartData; busy: b
     setShowCreate(true);
     window.requestAnimationFrame(() => document.getElementById("nuevo-premio")?.scrollIntoView({ behavior: "smooth", block: "center" }));
   };
-  return <div className="space-y-5"><section className={`${styles.panel} overflow-hidden`}><div className={`${styles.sectionBanner} flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-7`}><div><span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300"><Box className="h-3.5 w-3.5" /> Control del carrito</span><h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">Inventario de premios</h2><p className="mt-1 text-xs text-blue-100 sm:text-sm">{lowStock.length ? `${lowStock.length} productos necesitan reposición` : "Todo listo para la próxima vuelta del carrito"}</p></div><button onClick={() => showCreate ? setShowCreate(false) : openCreate(selectedTier)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 text-sm font-black text-blue-950 shadow-lg"><PackagePlus className="h-4 w-4" />{showCreate ? "Cerrar formulario" : "Agregar premio"}</button></div><div className="p-3 sm:p-6">
+  useEffect(() => () => { if (scanPreview) URL.revokeObjectURL(scanPreview); }, [scanPreview]);
+  const updateScanItem = (clientId: string, patch: Partial<ScannedInventoryItem>) => setScanItems((current) => current.map((item) => item.clientId === clientId ? { ...item, ...patch } : item));
+  const analyzePhoto = async (file?: File) => {
+    if (!file) return;
+    setScanOpen(true);
+    setScanLoading(true);
+    setScanError("");
+    setScanNotes("");
+    setScanItems([]);
+    try {
+      const prepared = await prepareInventoryPhoto(file);
+      setScanPreview((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(prepared); });
+      const formData = new FormData();
+      formData.append("image", prepared);
+      formData.append("existingRewards", JSON.stringify(data.rewards.map((reward) => ({ id: reward.id, name: reward.name, ticketCost: reward.ticket_cost }))));
+      const response = await fetch("/api/carrito-asistencia/analyze-image", { method: "POST", headers: { authorization: `Bearer ${accessToken}` }, body: formData });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || "No se pudo analizar la foto");
+      const proposals = Array.isArray(payload.items) ? payload.items : [];
+      setScanItems(proposals.map((item: Omit<ScannedInventoryItem, "clientId" | "selected">, index: number) => ({ ...item, selected: true, clientId: `${Date.now()}-${index}` })));
+      setScanNotes(String(payload.notes || ""));
+    } catch (photoError) {
+      setScanError(photoError instanceof Error ? photoError.message : "No se pudo analizar la foto");
+    } finally {
+      setScanLoading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+  const saveScan = async () => {
+    const selected = scanItems.filter((item) => item.selected && item.name.trim() && item.quantity > 0);
+    if (!selected.length) { setScanError("Selecciona al menos un objeto para guardar."); return; }
+    setScanSaving(true);
+    setScanError("");
+    if (await onApplyScan(selected)) setScanOpen(false);
+    setScanSaving(false);
+  };
+  return <div className="space-y-5"><section className={`${styles.panel} overflow-hidden`}><div className={`${styles.sectionBanner} flex flex-col gap-4 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7 sm:py-7`}><div><span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300"><Box className="h-3.5 w-3.5" /> Control del carrito</span><h2 className="mt-3 text-2xl font-black tracking-tight sm:text-3xl">Inventario de premios</h2><p className="mt-1 text-xs text-blue-100 sm:text-sm">{lowStock.length ? `${lowStock.length} productos necesitan reposición` : "Todo listo para la próxima vuelta del carrito"}</p></div><div className="grid grid-cols-2 gap-2 sm:flex"><input ref={fileInputRef} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(event) => void analyzePhoto(event.target.files?.[0])} /><button onClick={() => fileInputRef.current?.click()} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/25 bg-white/10 px-3 text-xs font-black text-white shadow-lg backdrop-blur-sm sm:px-4 sm:text-sm"><Camera className="h-4 w-4" />Escanear foto</button><button onClick={() => showCreate ? setShowCreate(false) : openCreate(selectedTier)} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-amber-300 px-3 text-xs font-black text-blue-950 shadow-lg sm:px-4 sm:text-sm"><PackagePlus className="h-4 w-4" />{showCreate ? "Cerrar" : "Agregar premio"}</button></div></div><div className="p-3 sm:p-6">
         <div className={styles.mobileTierTabs}>{TIER_CONFIG.map((tier) => <button key={tier.cost} onClick={() => setSelectedTier(tier.cost)} className={selectedTier === tier.cost ? styles.mobileTierTabActive : ""}>{tier.label}</button>)}</div>
         {showCreate ? <form id="nuevo-premio" onSubmit={create} className="mt-4 grid gap-3 rounded-2xl border-2 border-amber-200 bg-amber-50 p-4 sm:grid-cols-2"><label className="text-xs font-black text-slate-600">Nombre del premio<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required className="mt-1.5 min-h-12 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none" placeholder="Ej. Set de stickers" /></label><label className="text-xs font-black text-slate-600">Descripción<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className="mt-1.5 min-h-12 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm outline-none" placeholder="Opcional" /></label><label className="text-xs font-black text-slate-600">Tier<select value={form.ticketCost} onChange={(event) => { const cost = Number(event.target.value) as 1 | 4 | 8; setForm({ ...form, ticketCost: cost }); setSelectedTier(cost); }} className="mt-1.5 min-h-12 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm"><option value={1}>1 ticket</option><option value={4}>4 tickets</option><option value={8}>8 tickets</option></select></label><div className="grid grid-cols-2 gap-3"><label className="text-xs font-black text-slate-600">Stock inicial<input value={form.initialStock} onChange={(event) => setForm({ ...form, initialStock: Number(event.target.value) })} type="number" min="0" className="mt-1.5 min-h-12 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm" /></label><label className="text-xs font-black text-slate-600">Alerta bajo<input value={form.minimumStock} onChange={(event) => setForm({ ...form, minimumStock: Number(event.target.value) })} type="number" min="0" className="mt-1.5 min-h-12 w-full rounded-xl border border-amber-200 bg-white px-3 text-sm" /></label></div><div className="flex gap-2 sm:col-span-2"><button disabled={busy} className="min-h-12 flex-1 rounded-xl bg-blue-950 px-4 text-sm font-black text-white disabled:opacity-50">Guardar premio</button><button type="button" onClick={() => setShowCreate(false)} className="min-h-12 rounded-xl border border-slate-200 bg-white px-4 text-sm font-black text-slate-600">Cancelar</button></div></form> : null}
         <div className="mt-4 space-y-5">{TIER_CONFIG.map((tier) => { const rewards = data.rewards.filter((reward) => reward.ticket_cost === tier.cost); return <section key={tier.cost} className={`${styles.mobileTierSection} ${selectedTier === tier.cost ? styles.mobileTierSectionActive : ""} overflow-hidden rounded-2xl border-2 ${tier.cost === 1 ? "border-emerald-200 bg-emerald-50/50" : tier.cost === 4 ? "border-sky-200 bg-sky-50/50" : "border-violet-200 bg-violet-50/50"}`}><div className="flex flex-col gap-3 border-b border-white bg-white/75 px-4 py-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3"><span className={`grid h-11 w-11 place-items-center rounded-xl border bg-white text-lg font-black ${tierTone(tier.cost)}`}>{tier.cost}</span><div><h3 className="font-black text-blue-950">{tier.title}</h3><p className="text-xs text-slate-500">{tier.description}</p></div></div><button onClick={() => openCreate(tier.cost)} className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl bg-blue-950 px-3 text-xs font-black text-white"><Plus className="h-3.5 w-3.5" />Añadir premio de {tier.label}</button></div><div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-3">{rewards.map((reward) => { const low = reward.stock <= reward.minimum_stock; return <article key={reward.id} className={`rounded-xl border bg-white p-3 shadow-sm ${low ? "border-rose-200" : "border-slate-100"}`}><div className="flex items-start justify-between gap-2"><h4 className="text-sm font-black text-blue-950">{reward.name}</h4><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-black ${low ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700"}`}>{low ? "Comprar" : "Disponible"}</span></div>{reward.description ? <p className="mt-1 text-[11px] text-slate-500">{reward.description}</p> : null}<div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><span className="text-2xl font-black text-slate-950">{reward.stock}</span><span className="ml-1 text-[11px] font-bold text-slate-500">unidades</span><p className="text-[10px] text-slate-400">Alerta en {reward.minimum_stock}</p></div><button onClick={() => { setAdjusting(reward); setAdjustment({ delta: 1, kind: "purchase", note: "" }); }} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-50 px-3 text-xs font-black text-blue-950 ring-1 ring-blue-100 sm:h-9 sm:min-h-0 sm:w-9 sm:px-0" aria-label={`Actualizar stock de ${reward.name}`}><Plus className="h-4 w-4" /><span className="sm:hidden">Actualizar stock</span></button></div></article>; })}{!rewards.length ? <div className="col-span-full rounded-xl border border-dashed border-slate-200 bg-white/70 p-6 text-center"><Gift className="mx-auto h-6 w-6 text-slate-300" /><p className="mt-2 text-xs font-semibold text-slate-500">No hay premios registrados en este tier.</p></div> : null}</div></section>; })}</div>
       </div></section>
       <section className={`${styles.panel} overflow-hidden`}><div className="border-b border-slate-100 px-5 py-4"><h3 className="font-black text-blue-950">Últimos movimientos</h3><p className="mt-1 text-xs text-slate-500">Compras, entregas y ajustes quedan registrados aquí.</p></div><div className="divide-y divide-slate-100">{data.inventoryMovements.slice(0, 20).map((row) => { const reward = data.rewards.find((item) => item.id === row.reward_id); return <div key={row.id} className="flex items-center gap-3 px-5 py-3"><span className={`grid h-9 w-9 place-items-center rounded-full ${row.delta > 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>{row.delta > 0 ? <Plus className="h-4 w-4" /> : <Minus className="h-4 w-4" />}</span><div className="flex-1"><strong className="block text-sm">{reward?.name || "Premio"}</strong><span className="text-xs text-slate-500">{formatDateTime(row.created_at)} · {row.actor_name}{row.note ? ` · ${row.note}` : ""}</span></div><span className={`font-black ${row.delta > 0 ? "text-emerald-700" : "text-rose-700"}`}>{row.delta > 0 ? "+" : ""}{row.delta}</span></div>; })}{!data.inventoryMovements.length ? <p className="p-8 text-center text-sm text-slate-500">Sin movimientos todavía.</p> : null}</div></section>
+      {scanOpen ? <div className="fixed inset-0 z-[90] grid place-items-end bg-slate-950/55 p-0 backdrop-blur-sm sm:place-items-center sm:p-4" onClick={() => !scanSaving && setScanOpen(false)}><section role="dialog" aria-modal="true" aria-labelledby="scan-title" onClick={(event) => event.stopPropagation()} className="flex max-h-[94dvh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[28px] bg-slate-50 shadow-2xl sm:max-h-[90vh] sm:rounded-[28px]"><header className="flex items-start justify-between gap-3 border-b border-slate-200 bg-white px-4 py-4 sm:px-6"><div className="flex items-center gap-3"><span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-amber-300 to-amber-400 text-blue-950 shadow-sm"><Sparkles className="h-5 w-5" /></span><div><p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-600">Inventario con IA</p><h3 id="scan-title" className="text-lg font-black text-blue-950 sm:text-xl">Revisa lo detectado</h3><p className="text-xs text-slate-500">Nada se guarda hasta que confirmes.</p></div></div><button disabled={scanSaving} onClick={() => setScanOpen(false)} className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600"><X className="h-4 w-4" /></button></header><div className="overflow-y-auto overscroll-contain p-3 sm:p-6"><div className="grid gap-4 md:grid-cols-[220px_1fr]"><div><div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-slate-200">{scanPreview ? <Image src={scanPreview} alt="Foto del inventario por analizar" fill unoptimized className="object-cover" /> : <Camera className="absolute left-1/2 top-1/2 h-9 w-9 -translate-x-1/2 -translate-y-1/2 text-slate-400" />}{scanLoading ? <div className="absolute inset-0 grid place-items-center bg-blue-950/70 text-center text-white"><span><LoaderCircle className="mx-auto h-7 w-7 animate-spin text-amber-300" /><strong className="mt-2 block text-sm">Contando premios…</strong><small className="mt-1 block text-blue-100">Puede tardar unos segundos</small></span></div> : null}</div><button disabled={scanLoading || scanSaving} onClick={() => fileInputRef.current?.click()} className="mt-2 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-blue-950 disabled:opacity-50"><Camera className="h-4 w-4" />Tomar otra foto</button>{scanNotes ? <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs leading-5 text-amber-900"><strong className="block">Observación de la IA</strong>{scanNotes}</p> : null}</div><div className="min-w-0">{scanError ? <p role="alert" className="mb-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700">{scanError}</p> : null}{!scanLoading && !scanItems.length && !scanError ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-8 text-center"><Box className="mx-auto h-8 w-8 text-slate-300" /><p className="mt-3 text-sm font-black text-blue-950">No se reconocieron premios</p><p className="mt-1 text-xs text-slate-500">Prueba con mejor luz y todos los objetos visibles.</p></div> : null}<div className="space-y-3">{scanItems.map((item, index) => { const matchedReward = data.rewards.find((reward) => reward.id === item.existingRewardId); return <article key={item.clientId} className={`rounded-2xl border bg-white p-3 transition ${item.selected ? "border-amber-300 shadow-sm" : "border-slate-200 opacity-60"}`}><div className="flex items-start gap-3"><label className="mt-1 grid h-6 w-6 shrink-0 place-items-center"><input type="checkbox" checked={item.selected} onChange={(event) => updateScanItem(item.clientId, { selected: event.target.checked })} className="h-5 w-5 accent-blue-950" aria-label={`Incluir objeto ${index + 1}`} /></label><div className="min-w-0 flex-1"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><span className={`w-fit rounded-full px-2 py-1 text-[10px] font-black ${matchedReward ? "bg-emerald-100 text-emerald-800" : "bg-blue-50 text-blue-800"}`}>{matchedReward ? `Reposición: ${matchedReward.name}` : "Premio nuevo"}</span><span className="text-[10px] font-bold text-slate-400">Confianza IA: {Math.round(item.confidence * 100)}%</span></div><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_90px_110px]"><label className="text-[10px] font-black uppercase tracking-wide text-slate-500">Nombre<input value={item.name} onChange={(event) => updateScanItem(item.clientId, { name: event.target.value })} disabled={!item.selected} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-bold text-slate-900 outline-none focus:border-blue-600" /></label><label className="text-[10px] font-black uppercase tracking-wide text-slate-500">Cantidad<input value={item.quantity} onChange={(event) => updateScanItem(item.clientId, { quantity: Math.max(1, Number(event.target.value)) })} disabled={!item.selected} type="number" min="1" max="999" className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm font-black outline-none focus:border-blue-600" /></label><label className="text-[10px] font-black uppercase tracking-wide text-slate-500">Tier<select value={item.ticketCost} onChange={(event) => updateScanItem(item.clientId, { ticketCost: Number(event.target.value) as 1 | 4 | 8 })} disabled={!item.selected || Boolean(matchedReward)} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-bold"><option value={1}>1 ticket</option><option value={4}>4 tickets</option><option value={8}>8 tickets</option></select></label></div><div className="mt-3 grid gap-3 sm:grid-cols-[1fr_155px]"><label className="text-[10px] font-black uppercase tracking-wide text-slate-500">Descripción<input value={item.description} onChange={(event) => updateScanItem(item.clientId, { description: event.target.value })} disabled={!item.selected} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 px-3 text-sm outline-none focus:border-blue-600" placeholder="Opcional" /></label><label className="text-[10px] font-black uppercase tracking-wide text-slate-500">Guardar como<select value={item.existingRewardId} onChange={(event) => { const reward = data.rewards.find((entry) => entry.id === event.target.value); updateScanItem(item.clientId, { existingRewardId: event.target.value, ...(reward ? { name: reward.name, ticketCost: reward.ticket_cost } : {}) }); }} disabled={!item.selected} className="mt-1 min-h-11 w-full rounded-xl border border-slate-200 bg-white px-2 text-xs font-bold"><option value="">Premio nuevo</option>{data.rewards.map((reward) => <option key={reward.id} value={reward.id}>Reponer {reward.name}</option>)}</select></label></div>{!matchedReward ? <label className="mt-3 block text-[10px] font-black uppercase tracking-wide text-slate-500">Avisar cuando queden<input value={item.minimumStock} onChange={(event) => updateScanItem(item.clientId, { minimumStock: Math.max(0, Number(event.target.value)) })} disabled={!item.selected} type="number" min="0" className="ml-2 h-9 w-20 rounded-lg border border-slate-200 px-2 text-sm" /></label> : null}</div></div></article>; })}</div></div></div></div><footer className="border-t border-slate-200 bg-white px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom))] sm:flex sm:items-center sm:justify-between sm:px-6 sm:pb-3"><p className="mb-2 text-center text-xs font-semibold text-slate-500 sm:mb-0 sm:text-left">{scanItems.filter((item) => item.selected).length} grupos seleccionados · revisa el conteo</p><button disabled={scanLoading || scanSaving || !scanItems.some((item) => item.selected)} onClick={() => void saveScan()} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-blue-950 px-5 text-sm font-black text-white shadow-lg disabled:opacity-40 sm:w-auto">{scanSaving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-amber-300" />}{scanSaving ? "Guardando…" : "Añadir al inventario"}</button></footer></section></div> : null}
       {adjusting ? <div className="fixed inset-0 z-[80] grid place-items-end bg-slate-950/45 p-3 backdrop-blur-sm sm:place-items-center" onClick={() => setAdjusting(null)}><form onSubmit={adjust} onClick={(event) => event.stopPropagation()} className="w-full max-w-md rounded-3xl bg-white p-5 shadow-2xl"><div className="flex items-start justify-between"><div><p className="text-xs font-black uppercase tracking-wider text-amber-600">Actualizar stock</p><h3 className="mt-1 text-xl font-black text-blue-950">{adjusting.name}</h3><p className="text-sm text-slate-500">Stock actual: {adjusting.stock}</p></div><button type="button" onClick={() => setAdjusting(null)} className="grid h-9 w-9 place-items-center rounded-full bg-slate-100"><X className="h-4 w-4" /></button></div><div className="mt-5 grid grid-cols-2 gap-3"><label className="text-xs font-black text-slate-600">Movimiento<select value={adjustment.kind} onChange={(event) => setAdjustment({ ...adjustment, kind: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm"><option value="purchase">Compra / reposición</option><option value="loss">Pérdida o daño</option><option value="adjustment">Ajuste manual</option></select></label><label className="text-xs font-black text-slate-600">Cantidad<input value={adjustment.delta} onChange={(event) => setAdjustment({ ...adjustment, delta: Math.max(1, Number(event.target.value)) })} type="number" min="1" required className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" /></label></div><label className="mt-3 block text-xs font-black text-slate-600">Nota<input value={adjustment.note} onChange={(event) => setAdjustment({ ...adjustment, note: event.target.value })} className="mt-1.5 w-full rounded-xl border border-slate-200 px-3 py-3 text-sm" placeholder="Ej. Compra del 22 de julio" /></label><button disabled={busy} className="mt-5 w-full rounded-xl bg-blue-950 px-4 py-3 font-black text-white disabled:opacity-50">Guardar movimiento</button></form></div> : null}
     </div>;
 }

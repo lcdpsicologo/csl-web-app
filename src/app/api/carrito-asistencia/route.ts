@@ -320,6 +320,69 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: true, rewardId: reward.id });
     }
 
+    if (action === "create_rewards_batch") {
+      const rawItems = Array.isArray(body.items) ? body.items.slice(0, 20) : [];
+      const items = rawItems.flatMap((raw) => {
+        const item = raw as Record<string, unknown>;
+        const name = String(item.name || "").trim().slice(0, 100);
+        const ticketCost = Number(item.ticketCost);
+        const quantity = Math.floor(Number(item.quantity));
+        if (!name || ![1, 4, 8].includes(ticketCost) || !Number.isFinite(quantity) || quantity < 1 || quantity > 999) return [];
+        return [{
+          name,
+          description: String(item.description || "").trim().slice(0, 300),
+          ticketCost,
+          quantity,
+          minimumStock: Math.min(999, Math.max(0, Math.floor(Number(item.minimumStock) || 0))),
+          existingRewardId: String(item.existingRewardId || ""),
+        }];
+      });
+      if (!items.length || items.length !== rawItems.length) {
+        return NextResponse.json({ error: "Revisa los premios detectados y sus cantidades" }, { status: 400 });
+      }
+
+      const requestedIds = [...new Set(items.map((item) => item.existingRewardId).filter(Boolean))];
+      const { data: existingRewards, error: existingError } = requestedIds.length
+        ? await admin.from("attendance_cart_rewards").select("id").eq("institution_id", institutionId).in("id", requestedIds)
+        : { data: [], error: null };
+      if (existingError) throw existingError;
+      const allowedIds = new Set((existingRewards || []).map((reward) => reward.id));
+      if (requestedIds.some((id) => !allowedIds.has(id))) {
+        return NextResponse.json({ error: "Uno de los premios existentes ya no está disponible" }, { status: 409 });
+      }
+
+      let created = 0;
+      let replenished = 0;
+      for (const item of items) {
+        let rewardId = item.existingRewardId;
+        if (!rewardId) {
+          const { data: reward, error: rewardError } = await admin.from("attendance_cart_rewards").insert({
+            institution_id: institutionId,
+            name: item.name,
+            description: item.description,
+            ticket_cost: item.ticketCost,
+            minimum_stock: item.minimumStock,
+            created_by: auth.user.id,
+          }).select("id").single();
+          if (rewardError) throw rewardError;
+          rewardId = reward.id;
+          created += 1;
+        } else {
+          replenished += 1;
+        }
+        const { error: inventoryError } = await admin.from("attendance_cart_inventory_ledger").insert({
+          institution_id: institutionId,
+          reward_id: rewardId,
+          delta: item.quantity,
+          kind: item.existingRewardId ? "purchase" : "initial",
+          note: "Ingreso registrado desde foto con IA",
+          created_by: auth.user.id,
+        });
+        if (inventoryError) throw inventoryError;
+      }
+      return NextResponse.json({ ok: true, created, replenished, total: items.length });
+    }
+
     if (action === "adjust_inventory") {
       const rewardId = String(body.rewardId || "");
       const delta = Math.trunc(Number(body.delta));

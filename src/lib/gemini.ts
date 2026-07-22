@@ -25,12 +25,14 @@ const SAFETY = [
 export async function callGemini({
   systemPrompt,
   userPrompt,
+  inlineParts = [],
   apiKey,
   maxOutputTokens = 4096,
   perAttemptTimeoutMs = 25_000,
 }: {
   systemPrompt: string;
   userPrompt: string;
+  inlineParts?: Array<{ inline_data: { mime_type: string; data: string } }>;
   apiKey: string;
   maxOutputTokens?: number;
   perAttemptTimeoutMs?: number;
@@ -39,7 +41,7 @@ export async function callGemini({
 
   const body = {
     systemInstruction: { parts: [{ text: systemPrompt }] },
-    contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+    contents: [{ role: "user", parts: [{ text: userPrompt }, ...inlineParts] }],
     generationConfig: {
       temperature: 0.2,
       responseMimeType: "application/json",
