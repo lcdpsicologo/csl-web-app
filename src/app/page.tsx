@@ -43,6 +43,8 @@ import {
   Clock,
   ClipboardList,
   Database,
+  Eye,
+  EyeOff,
   ExternalLink,
   FileSpreadsheet,
   FileText,
@@ -11609,12 +11611,16 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
   const [school, setSchool] = useState("Colegio San Lucas de Lo Espejo");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   const submit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError("");
+    setNotice("");
     setSubmitting(true);
     try {
       await onSignIn(email, password);
@@ -11622,6 +11628,32 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
       setError(err instanceof Error ? err.message : "No se pudo iniciar sesion.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Envía el correo de restablecimiento de Supabase; vuelve a la misma página.
+  const requestPasswordReset = async () => {
+    setError("");
+    setNotice("");
+    if (!email.trim()) {
+      setError("Escribe tu correo institucional para enviarte el enlace de recuperación.");
+      return;
+    }
+    if (!supabaseAuth) {
+      setError("El inicio de sesión no está configurado en este entorno.");
+      return;
+    }
+    setResetting(true);
+    try {
+      const { error: resetError } = await supabaseAuth.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: typeof window !== "undefined" ? window.location.origin : undefined,
+      });
+      if (resetError) throw resetError;
+      setNotice(`Te enviamos un enlace a ${email.trim()} para crear una contraseña nueva. Revisa tu correo (y la carpeta de spam).`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo enviar el correo de recuperación.");
+    } finally {
+      setResetting(false);
     }
   };
 
@@ -11689,19 +11721,39 @@ function LoginScreen({ onSignIn }: { onSignIn: (email: string, password: string)
               <label className="block">
                 <span className="text-sm font-semibold text-slate-700">Contrasena</span>
                 <div className="mt-2 flex items-center gap-3 rounded-md border border-slate-300 px-3 py-2.5 focus-within:border-slate-900">
-                  <Lock className="h-4 w-4 text-slate-400" />
+                  <Lock className="h-4 w-4 shrink-0 text-slate-400" />
                   <input
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
-                    type="password"
+                    type={showPassword ? "text" : "password"}
                     autoComplete="current-password"
                     required
                     className="w-full bg-transparent text-sm outline-none"
                     placeholder="Tu contrasena"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((value) => !value)}
+                    title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                    className="shrink-0 rounded p-0.5 text-slate-400 transition hover:text-slate-700"
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </label>
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={requestPasswordReset}
+                  disabled={resetting}
+                  className="text-xs font-semibold text-slate-500 underline-offset-2 transition hover:text-slate-900 hover:underline disabled:opacity-60"
+                >
+                  {resetting ? "Enviando enlace..." : "¿Olvidaste tu contraseña?"}
+                </button>
+              </div>
               {error ? <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
+              {notice ? <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">{notice}</p> : null}
               <button
                 type="submit"
                 disabled={submitting}
