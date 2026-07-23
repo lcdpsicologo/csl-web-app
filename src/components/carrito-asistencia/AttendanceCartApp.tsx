@@ -197,17 +197,18 @@ function LoginPanel({ supabase, onSession }: { supabase: SupabaseClient; onSessi
   };
 
   return (
-    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-[#f6f9ff] px-3 py-4 sm:px-6 sm:py-8">
+    <main className="relative grid min-h-screen place-items-center overflow-x-hidden bg-[#f6f9ff] px-3 py-4 sm:px-6 sm:py-8">
       <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl" />
       <div className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-sky-300/25 blur-3xl" />
       <div className="relative grid w-full max-w-4xl overflow-hidden rounded-[30px] border border-white bg-white shadow-[0_28px_90px_rgba(8,36,95,0.18)] lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="relative min-h-[205px] overflow-hidden bg-amber-300 sm:min-h-[260px] lg:min-h-[560px]">
-          <Image src="/carrito-asistencia/plot-carrito.png" alt="Carrito de la Asistencia del Colegio San Lucas" fill priority className="object-cover object-center" sizes="(max-width: 1024px) 100vw, 52vw" />
-          <div className="absolute inset-0 bg-gradient-to-t from-blue-950/90 via-blue-950/5 to-transparent" />
-          <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-7">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] backdrop-blur-md"><Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> Cada día cuenta</span>
-            <h2 className="mt-3 max-w-sm text-2xl font-black leading-tight sm:text-3xl">Premiamos la asistencia y la constancia</h2>
-            <p className="mt-2 hidden max-w-sm text-xs leading-5 text-blue-100 sm:block">Prekínder, Kínder y Primero Básico · Colegio San Lucas</p>
+        <div className="flex flex-col bg-[linear-gradient(145deg,#ffe171_0%,#ffc72c_48%,#ffb915_100%)] p-3 sm:p-5 lg:min-h-[560px] lg:justify-center">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[22px] border-4 border-white bg-[#fffaf0] shadow-[0_18px_45px_rgba(8,36,95,0.22)]">
+            <Image src="/carrito-asistencia/plot-carrito.png" alt="Afiche completo del Carrito de la Asistencia del Colegio San Lucas" fill priority className="object-contain" sizes="(max-width: 1024px) 100vw, 52vw" />
+          </div>
+          <div className="mt-3 rounded-[20px] bg-blue-950 px-4 py-4 text-white shadow-lg sm:px-5 sm:py-5">
+            <div className="flex items-center justify-between gap-3"><span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.14em]"><Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> Cada día cuenta</span><span className="text-[9px] font-black uppercase tracking-wide text-amber-300">Colegio San Lucas</span></div>
+            <h2 className="mt-3 text-xl font-black leading-tight sm:text-2xl">Premiamos la asistencia y la constancia</h2>
+            <p className="mt-2 hidden text-xs leading-5 text-blue-100 sm:block">Prekínder, Kínder y Primero Básico</p>
           </div>
         </div>
         <div className="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
