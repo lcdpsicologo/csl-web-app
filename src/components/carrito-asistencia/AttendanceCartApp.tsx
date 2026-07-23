@@ -15,6 +15,8 @@ import {
   ChevronRight,
   ClipboardList,
   Download,
+  Eye,
+  EyeOff,
   Gift,
   History,
   LogOut,
@@ -25,6 +27,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   ShoppingCart,
   Star,
@@ -79,6 +82,7 @@ type Redemption = {
   note: string;
   actor_name: string;
   created_at: string;
+  reversed: boolean;
 };
 
 type InventoryMovement = {
@@ -175,6 +179,7 @@ function Initials({ student, size = "md" }: { student: Student; size?: "sm" | "m
 
 function LoginPanel({ supabase, onSession }: { supabase: SupabaseClient; onSession: (session: Session) => void }) {
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -192,27 +197,35 @@ function LoginPanel({ supabase, onSession }: { supabase: SupabaseClient; onSessi
   };
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#fff8c8_0%,#fffdf4_46%,#eaf3ff_100%)] px-3 py-4 sm:px-4 sm:py-12">
-      <div className="mx-auto grid max-w-5xl overflow-hidden rounded-[32px] border border-amber-200 bg-white shadow-2xl shadow-blue-950/15 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="relative min-h-[175px] bg-amber-300 sm:min-h-[320px] lg:min-h-[620px]">
-          <Image src="/carrito-asistencia/flyer-asistencia.png" alt="Flyer del Carrito de la Asistencia" fill priority className="object-cover object-top" sizes="(max-width: 1024px) 100vw, 60vw" />
+    <main className="relative grid min-h-screen place-items-center overflow-hidden bg-[#f6f9ff] px-3 py-4 sm:px-6 sm:py-8">
+      <div className="absolute -left-24 -top-24 h-72 w-72 rounded-full bg-amber-300/30 blur-3xl" />
+      <div className="absolute -bottom-32 -right-20 h-96 w-96 rounded-full bg-sky-300/25 blur-3xl" />
+      <div className="relative grid w-full max-w-4xl overflow-hidden rounded-[30px] border border-white bg-white shadow-[0_28px_90px_rgba(8,36,95,0.18)] lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="relative min-h-[205px] overflow-hidden bg-amber-300 sm:min-h-[260px] lg:min-h-[560px]">
+          <Image src="/carrito-asistencia/plot-carrito.png" alt="Carrito de la Asistencia del Colegio San Lucas" fill priority className="object-cover object-center" sizes="(max-width: 1024px) 100vw, 52vw" />
+          <div className="absolute inset-0 bg-gradient-to-t from-blue-950/90 via-blue-950/5 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 p-5 text-white sm:p-7">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/15 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] backdrop-blur-md"><Star className="h-3.5 w-3.5 fill-amber-300 text-amber-300" /> Cada día cuenta</span>
+            <h2 className="mt-3 max-w-sm text-2xl font-black leading-tight sm:text-3xl">Premiamos la asistencia y la constancia</h2>
+            <p className="mt-2 hidden max-w-sm text-xs leading-5 text-blue-100 sm:block">Prekínder, Kínder y Primero Básico · Colegio San Lucas</p>
+          </div>
         </div>
-        <div className="flex flex-col justify-center p-5 sm:p-10">
-          <span className="grid h-14 w-14 place-items-center rounded-2xl bg-blue-950 text-amber-300 shadow-lg"><Ticket className="h-7 w-7" /></span>
-          <p className="mt-6 text-xs font-black uppercase tracking-[0.22em] text-amber-600">Acceso protegido</p>
-          <h1 className="mt-2 text-3xl font-black tracking-tight text-blue-950">Entrar al carrito</h1>
-          <p className="mt-3 text-sm leading-6 text-slate-600">Utiliza la clave compartida del equipo para entregar tickets, registrar canjes y actualizar los premios.</p>
-          <form onSubmit={signIn} className="mt-7 space-y-4">
-            <label className="block text-sm font-bold text-slate-700">Clave del carrito
-              <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required autoFocus autoComplete="current-password" className="mt-1.5 w-full rounded-xl border border-slate-200 px-4 py-3 outline-none focus:border-blue-600" placeholder="Ingresa la clave compartida" />
-            </label>
-            {error ? <p role="alert" className="rounded-xl bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700">{error}</p> : null}
-            <button disabled={busy} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-950 px-4 py-3 font-black text-white shadow-lg hover:bg-blue-900 disabled:opacity-60">
-              {busy ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
-              {busy ? "Ingresando…" : "Ingresar al carrito"}
+        <div className="flex flex-col justify-center p-5 sm:p-8 lg:p-10">
+          <div className="flex items-center justify-between gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-blue-950 text-amber-300 shadow-lg shadow-blue-950/20"><Ticket className="h-6 w-6" /></span><span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-[10px] font-black text-emerald-700"><ShieldCheck className="h-3.5 w-3.5" /> Acceso del equipo</span></div>
+          <p className="mt-5 text-[10px] font-black uppercase tracking-[0.22em] text-amber-600">Carrito de la Asistencia</p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight text-blue-950 sm:text-4xl">¡Bienvenida!</h1>
+          <p className="mt-3 text-sm leading-6 text-slate-600">Ingresa la clave compartida para registrar tickets, canjes e inventario.</p>
+          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-[10px] font-black text-blue-950"><span className="rounded-xl bg-amber-50 px-2 py-2">Tickets</span><span className="rounded-xl bg-pink-50 px-2 py-2">Canjes</span><span className="rounded-xl bg-sky-50 px-2 py-2">Stock</span></div>
+          <form onSubmit={signIn} className="mt-6 space-y-4">
+            <div><label htmlFor="cart-password" className="block text-xs font-black uppercase tracking-wide text-slate-600">Clave del carrito</label><div className="relative mt-1.5"><input id="cart-password" value={password} onChange={(event) => setPassword(event.target.value)} type={showPassword ? "text" : "password"} required autoFocus autoComplete="current-password" className="min-h-13 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 pr-12 text-base font-bold text-blue-950 outline-none transition focus:border-blue-700 focus:bg-white focus:ring-4 focus:ring-blue-100" placeholder="Ingresa la clave compartida" /><button type="button" onClick={() => setShowPassword((visible) => !visible)} className="absolute right-1.5 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-xl text-slate-400 hover:bg-white hover:text-blue-950" aria-label={showPassword ? "Ocultar clave" : "Mostrar clave"}>{showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}</button></div></div>
+            {error ? <p role="alert" className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2.5 text-xs font-bold text-rose-700">{error}</p> : null}
+            <button disabled={busy} className="flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl bg-blue-950 px-4 font-black text-white shadow-lg shadow-blue-950/20 transition hover:-translate-y-0.5 hover:bg-blue-900 disabled:translate-y-0 disabled:opacity-60">
+              {busy ? <RefreshCw className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4 text-amber-300" />}
+              {busy ? "Ingresando…" : "Entrar al carrito"}
             </button>
           </form>
-          <Link href="/" prefetch={false} className="mt-5 inline-flex items-center justify-center gap-2 text-sm font-bold text-slate-500 hover:text-blue-900"><ArrowLeft className="h-4 w-4" />Volver a Tiza Education</Link>
+          <p className="mt-4 text-center text-[10px] font-semibold text-slate-400">Uso exclusivo del equipo del Colegio San Lucas</p>
+          <Link href="/" prefetch={false} className="mt-4 inline-flex items-center justify-center gap-2 text-xs font-bold text-slate-500 hover:text-blue-900"><ArrowLeft className="h-4 w-4" />Volver a Tiza Education</Link>
         </div>
       </div>
     </main>
@@ -372,7 +385,7 @@ export function AttendanceCartApp() {
         {data && activeTab === "resumen" ? <Overview data={data} onNavigate={navigate} /> : null}
         {data && activeTab === "entrega" ? <AwardTickets data={data} onAward={(studentId, note) => mutate({ action: "award_ticket", studentId, note, weekStart: data.currentWeekStart }, "Golden Ticket entregado correctamente", (current) => ({ ...current, weeklyAwardedIds: current.weeklyAwardedIds.includes(studentId) ? current.weeklyAwardedIds : [...current.weeklyAwardedIds, studentId], balances: { ...current.balances, [studentId]: (current.balances[studentId] || 0) + 1 } }))} onUndo={(studentId) => mutate({ action: "undo_award_ticket", studentId, weekStart: data.currentWeekStart }, "Entrega anulada correctamente", (current) => ({ ...current, weeklyAwardedIds: current.weeklyAwardedIds.filter((id) => id !== studentId), balances: { ...current.balances, [studentId]: Math.max(0, (current.balances[studentId] || 0) - 1) } }))} busy={loading} /> : null}
         {data && activeTab === "canjes" ? <RedeemRewards data={data} onRedeem={(studentId, rewardId, note) => mutate({ action: "redeem_reward", studentId, rewardId, note }, "Premio cobrado y stock actualizado")} busy={loading} /> : null}
-        {data && activeTab === "catastro" ? <Registry data={data} /> : null}
+        {data && activeTab === "catastro" ? <Registry data={data} busy={loading} onUndo={(redemption) => mutate({ action: "undo_redemption", redemptionId: redemption.id }, "Canje anulado: tickets y premio restituidos", (current) => ({ ...current, balances: { ...current.balances, [redemption.student_record_id]: (current.balances[redemption.student_record_id] || 0) + redemption.tickets_spent }, rewards: current.rewards.map((reward) => reward.id === redemption.reward_id ? { ...reward, stock: reward.stock + 1 } : reward), redemptions: current.redemptions.map((row) => row.id === redemption.id ? { ...row, reversed: true } : row) }))} /> : null}
         {data && activeTab === "inventario" ? <Inventory data={data} accessToken={session.access_token} busy={loading} onCreate={(values) => mutate({ action: "create_reward", ...values }, "Premio agregado al inventario")} onAdjust={(values) => mutate({ action: "adjust_inventory", ...values }, "Inventario actualizado")} onApplyScan={(items) => mutate({ action: "create_rewards_batch", items }, "Inventario actualizado desde la foto")} /> : null}
       </div>
 
@@ -398,7 +411,7 @@ function OverviewMetrics({ data }: { data: CartData }) {
   const today = new Date().toISOString().slice(0, 10);
   const stats: Array<{ label: string; value: number; icon: LucideIcon }> = [
     { label: "Tickets esta semana", value: data.weeklyAwardedIds.length, icon: Ticket },
-    { label: "Canjes de hoy", value: data.redemptions.filter((row) => row.created_at.slice(0, 10) === today).length, icon: Gift },
+    { label: "Canjes de hoy", value: data.redemptions.filter((row) => !row.reversed && row.created_at.slice(0, 10) === today).length, icon: Gift },
     { label: "Premios disponibles", value: totalStock, icon: Box },
     { label: "Por comprar", value: lowStock, icon: ShoppingCart },
   ];
@@ -506,12 +519,13 @@ function RedeemRewards({ data, onRedeem, busy }: { data: CartData; onRedeem: (st
   );
 }
 
-function Registry({ data }: { data: CartData }) {
+function Registry({ data, busy, onUndo }: { data: CartData; busy: boolean; onUndo: (redemption: Redemption) => Promise<boolean> }) {
   const [course, setCourse] = useState("Todos");
   const [query, setQuery] = useState("");
   const rows = data.redemptions.filter((row) => (course === "Todos" || row.course === course) && `${row.student_name} ${row.reward_name}`.toLowerCase().includes(query.toLowerCase()));
+  const activeRows = rows.filter((row) => !row.reversed);
   const exportCsv = () => {
-    const values = [["Fecha", "Estudiante", "Curso", "Premio", "Tickets", "Responsable", "Observación"], ...rows.map((row) => [formatDateTime(row.created_at), row.student_name, row.course, row.reward_name, row.tickets_spent, row.actor_name, row.note])];
+    const values = [["Fecha", "Estudiante", "Curso", "Premio", "Tickets", "Estado", "Responsable", "Observación"], ...rows.map((row) => [formatDateTime(row.created_at), row.student_name, row.course, row.reward_name, row.tickets_spent, row.reversed ? "Anulado" : "Vigente", row.actor_name, row.note])];
     const csv = values.map((line) => line.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(";")).join("\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
     const anchor = document.createElement("a");
@@ -520,7 +534,15 @@ function Registry({ data }: { data: CartData }) {
     anchor.click();
     URL.revokeObjectURL(url);
   };
-  return <section className={`${styles.panel} overflow-hidden`}><div className={`${styles.sectionBanner} flex flex-col gap-4 px-5 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-7`}><div><span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300"><ClipboardList className="h-3.5 w-3.5" /> Historial auditable</span><h2 className="mt-3 text-3xl font-black tracking-tight">Catastro de cobros</h2><p className="mt-1 text-sm text-blue-100">{rows.length} canjes encontrados · datos listos para compartir</p></div><button onClick={exportCsv} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-blue-950 shadow-lg"><Download className="h-4 w-4" />Exportar catastro</button></div><div className="grid gap-3 border-b border-slate-100 bg-amber-50 p-4 sm:grid-cols-2"><select value={course} onChange={(event) => setCourse(event.target.value)} className="rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm font-bold"><option>Todos</option>{COURSES.map((item) => <option key={item}>{item}</option>)}</select><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar estudiante o premio" className="w-full rounded-xl border border-amber-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none" /></label></div><div className="divide-y divide-slate-100">{rows.map((row) => <article key={row.id} className="grid gap-3 px-4 py-4 transition hover:bg-amber-50/50 sm:grid-cols-[1.2fr_1fr_0.8fr] sm:items-center sm:px-6"><div><strong className="block text-sm text-slate-900">{row.student_name}</strong><span className="text-xs text-slate-500">{row.course} · {formatDateTime(row.created_at)}</span></div><div><strong className="block text-sm text-blue-950">{row.reward_name}</strong><span className="text-xs text-slate-500">{row.tickets_spent} tickets utilizados</span></div><div className="sm:text-right"><span className="text-xs font-bold text-slate-700">{row.actor_name}</span>{row.note ? <p className="mt-1 text-xs text-slate-400">{row.note}</p> : null}</div></article>)}{!rows.length ? <div className="p-12 text-center"><span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-blue-50 text-blue-900"><History className="h-8 w-8" /></span><p className="mt-4 font-black text-blue-950">El primer canje aparecerá aquí</p><p className="mt-1 text-sm font-semibold text-slate-500">Podrás ver quién cobró, qué premio eligió y cuándo.</p></div> : null}</div></section>;
+  const undo = (row: Redemption) => {
+    const confirmed = window.confirm(`¿Anular el canje de ${row.student_name}?\n\nSe devolverán ${row.tickets_spent} tickets a su saldo y 1 unidad de “${row.reward_name}” al inventario. Confirma que el premio físico fue devuelto.`);
+    if (confirmed) void onUndo(row);
+  };
+  return <section className={`${styles.panel} overflow-hidden`}>
+    <div className={`${styles.sectionBanner} flex flex-col gap-4 px-5 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-7`}><div><span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-300"><ClipboardList className="h-3.5 w-3.5" /> Historial auditable</span><h2 className="mt-3 text-3xl font-black tracking-tight">Catastro de canjes</h2><p className="mt-1 text-sm text-blue-100">{activeRows.length} vigentes · {rows.length - activeRows.length} anulados</p></div><button onClick={exportCsv} className="inline-flex items-center justify-center gap-2 rounded-xl bg-amber-300 px-4 py-3 text-sm font-black text-blue-950 shadow-lg"><Download className="h-4 w-4" />Exportar catastro</button></div>
+    <div className="grid gap-3 border-b border-slate-100 bg-amber-50 p-4 sm:grid-cols-2"><select value={course} onChange={(event) => setCourse(event.target.value)} className="rounded-xl border border-amber-200 bg-white px-3 py-2.5 text-sm font-bold"><option>Todos</option>{COURSES.map((item) => <option key={item}>{item}</option>)}</select><label className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar estudiante o premio" className="w-full rounded-xl border border-amber-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none" /></label></div>
+    <div className="divide-y divide-slate-100">{rows.map((row) => <article key={row.id} className={`grid gap-3 px-4 py-4 transition sm:grid-cols-[1.1fr_0.9fr_1fr] sm:items-center sm:px-6 ${row.reversed ? "bg-slate-50 opacity-70" : "hover:bg-amber-50/50"}`}><div><div className="flex items-center gap-2"><strong className="block text-sm text-slate-900">{row.student_name}</strong><span className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase ${row.reversed ? "bg-slate-200 text-slate-600" : "bg-emerald-100 text-emerald-700"}`}>{row.reversed ? "Anulado" : "Vigente"}</span></div><span className="text-xs text-slate-500">{row.course} · {formatDateTime(row.created_at)}</span></div><div><strong className={`block text-sm text-blue-950 ${row.reversed ? "line-through" : ""}`}>{row.reward_name}</strong><span className="text-xs text-slate-500">{row.tickets_spent} {row.tickets_spent === 1 ? "ticket utilizado" : "tickets utilizados"}</span></div><div className="flex items-center justify-between gap-3 sm:justify-end"><span className="text-xs font-bold text-slate-600">{row.actor_name}</span>{row.reversed ? <span className="inline-flex min-h-9 items-center gap-1 text-[10px] font-black text-slate-500"><Undo2 className="h-3.5 w-3.5" />Saldo y stock restituidos</span> : <button disabled={busy} onClick={() => undo(row)} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 text-[11px] font-black text-rose-700 hover:bg-rose-100 disabled:opacity-50"><Undo2 className="h-3.5 w-3.5" />Deshacer canje</button>}</div>{row.note ? <p className="text-xs text-slate-400 sm:col-span-3">Observación: {row.note}</p> : null}</article>)}{!rows.length ? <div className="p-12 text-center"><span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-blue-50 text-blue-900"><History className="h-8 w-8" /></span><p className="mt-4 font-black text-blue-950">El primer canje aparecerá aquí</p><p className="mt-1 text-sm font-semibold text-slate-500">Podrás ver quién cobró, qué premio eligió y cuándo.</p></div> : null}</div>
+  </section>;
 }
 
 function Inventory({ data, accessToken, busy, onCreate, onAdjust, onApplyScan }: { data: CartData; accessToken: string; busy: boolean; onCreate: (values: Record<string, unknown>) => Promise<boolean>; onAdjust: (values: Record<string, unknown>) => Promise<boolean>; onApplyScan: (items: ScannedInventoryItem[]) => Promise<boolean> }) {

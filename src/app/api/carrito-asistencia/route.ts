@@ -134,8 +134,8 @@ export async function GET(request: Request) {
     const [studentsResult, rewardsResult, ticketsResult, inventoryResult, redemptionsResult, profilesResult] = await Promise.all([
       admin.from("app_records").select("record_id, data").eq("institution_id", institutionId).eq("entity", "students"),
       admin.from("attendance_cart_rewards").select("id, name, description, ticket_cost, minimum_stock, active, created_at").eq("institution_id", institutionId).order("ticket_cost").order("name"),
-      admin.from("attendance_cart_ticket_ledger").select("id, student_record_id, student_name, course, delta, kind, week_start, note, created_by, created_at").eq("institution_id", institutionId).order("created_at", { ascending: false }).limit(2000),
-      admin.from("attendance_cart_inventory_ledger").select("id, reward_id, delta, kind, note, created_by, created_at").eq("institution_id", institutionId).order("created_at", { ascending: false }).limit(2000),
+      admin.from("attendance_cart_ticket_ledger").select("id, student_record_id, student_name, course, delta, kind, week_start, redemption_id, note, created_by, created_at").eq("institution_id", institutionId).order("created_at", { ascending: false }).limit(2000),
+      admin.from("attendance_cart_inventory_ledger").select("id, reward_id, delta, kind, redemption_id, note, created_by, created_at").eq("institution_id", institutionId).order("created_at", { ascending: false }).limit(2000),
       admin.from("attendance_cart_redemptions").select("id, student_record_id, student_name, course, reward_id, reward_name, tickets_spent, note, created_by, created_at").eq("institution_id", institutionId).order("created_at", { ascending: false }).limit(1000),
       admin.from("profiles").select("id, full_name").eq("institution_id", institutionId),
     ]);
@@ -167,6 +167,12 @@ export async function GET(request: Request) {
     const weeklyAwardedIds = (ticketsResult.data || [])
       .filter((row) => row.kind === "award" && row.week_start === mondayIso())
       .map((row) => row.student_record_id);
+    const ticketReversalIds = new Set((ticketsResult.data || [])
+      .filter((row) => row.kind === "adjustment" && Number(row.delta) > 0 && row.redemption_id)
+      .map((row) => row.redemption_id));
+    const inventoryReversalIds = new Set((inventoryResult.data || [])
+      .filter((row) => row.kind === "adjustment" && Number(row.delta) > 0 && row.redemption_id)
+      .map((row) => row.redemption_id));
 
     return NextResponse.json({
       students,
@@ -175,6 +181,7 @@ export async function GET(request: Request) {
       weeklyAwardedIds,
       redemptions: (redemptionsResult.data || []).map((row) => ({
         ...row,
+        reversed: ticketReversalIds.has(row.id) && inventoryReversalIds.has(row.id),
         actor_name: actorNames[row.created_by || ""] || "Colega",
       })),
       inventoryMovements: (inventoryResult.data || []).slice(0, 100).map((row) => ({
@@ -287,6 +294,65 @@ export async function POST(request: Request) {
       });
       if (error) throw error;
       return NextResponse.json({ ok: true, redemptionId: data });
+    }
+
+    if (action === "undo_redemption") {
+      const redemptionId = String(body.redemptionId || "");
+      const { data: redemption, error: redemptionError } = await admin.from("attendance_cart_redemptions")
+        .select("id, student_record_id, student_name, course, reward_id, reward_name, tickets_spent")
+        .eq("id", redemptionId)
+        .eq("institution_id", institutionId)
+        .maybeSingle();
+      if (redemptionError) throw redemptionError;
+      if (!redemption) return NextResponse.json({ error: "Canje no encontrado" }, { status: 404 });
+
+      const [{ data: ticketRows, error: ticketRowsError }, { data: inventoryRows, error: inventoryRowsError }] = await Promise.all([
+        admin.from("attendance_cart_ticket_ledger").select("id, delta, kind").eq("institution_id", institutionId).eq("redemption_id", redemptionId),
+        admin.from("attendance_cart_inventory_ledger").select("id, delta, kind").eq("institution_id", institutionId).eq("redemption_id", redemptionId),
+      ]);
+      if (ticketRowsError) throw ticketRowsError;
+      if (inventoryRowsError) throw inventoryRowsError;
+      const ticketAlreadyRestored = (ticketRows || []).some((row) => row.kind === "adjustment" && Number(row.delta) === Number(redemption.tickets_spent));
+      const stockAlreadyRestored = (inventoryRows || []).some((row) => row.kind === "adjustment" && Number(row.delta) === 1);
+      if (ticketAlreadyRestored && stockAlreadyRestored) {
+        return NextResponse.json({ error: "Este canje ya fue anulado" }, { status: 409 });
+      }
+
+      let insertedTicketReversalId = "";
+      if (!ticketAlreadyRestored) {
+        const { data: ticketReversal, error: ticketReversalError } = await admin.from("attendance_cart_ticket_ledger").insert({
+          institution_id: institutionId,
+          student_record_id: redemption.student_record_id,
+          student_name: redemption.student_name,
+          course: redemption.course,
+          delta: Number(redemption.tickets_spent),
+          kind: "adjustment",
+          redemption_id: redemption.id,
+          note: `Anulación de canje · ${redemption.reward_name}`,
+          created_by: auth.user.id,
+        }).select("id").single();
+        if (ticketReversalError) throw ticketReversalError;
+        insertedTicketReversalId = ticketReversal.id;
+      }
+
+      if (!stockAlreadyRestored) {
+        const { error: stockReversalError } = await admin.from("attendance_cart_inventory_ledger").insert({
+          institution_id: institutionId,
+          reward_id: redemption.reward_id,
+          delta: 1,
+          kind: "adjustment",
+          redemption_id: redemption.id,
+          note: `Anulación de canje · ${redemption.student_name}`,
+          created_by: auth.user.id,
+        });
+        if (stockReversalError) {
+          if (insertedTicketReversalId) {
+            await admin.from("attendance_cart_ticket_ledger").delete().eq("id", insertedTicketReversalId).eq("institution_id", institutionId);
+          }
+          throw stockReversalError;
+        }
+      }
+      return NextResponse.json({ ok: true });
     }
 
     if (action === "create_reward") {
