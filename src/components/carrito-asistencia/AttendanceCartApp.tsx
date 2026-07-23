@@ -27,6 +27,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Share2,
   ShieldCheck,
   Sparkles,
   ShoppingCart,
@@ -324,6 +325,29 @@ export function AttendanceCartApp() {
     setSession(null);
   };
 
+  const shareAccess = async () => {
+    setError("");
+    try {
+      const response = await fetch("/api/carrito-asistencia/share", {
+        headers: { authorization: `Bearer ${session.access_token}` },
+        cache: "no-store",
+      });
+      const payload = await response.json() as { error?: string; title?: string; text?: string; clipboardText?: string; url?: string };
+      if (!response.ok || !payload.text || !payload.url) throw new Error(payload.error || "No se pudo preparar el acceso");
+
+      if (navigator.share) {
+        await navigator.share({ title: payload.title, text: payload.text, url: payload.url });
+        setToast("Acceso compartido correctamente");
+      } else {
+        await navigator.clipboard.writeText(payload.clipboardText || `${payload.text}\n\nEnlace: ${payload.url}`);
+        setToast("Enlace y clave copiados");
+      }
+    } catch (shareError) {
+      if (shareError instanceof DOMException && shareError.name === "AbortError") return;
+      setError(shareError instanceof Error ? shareError.message : "No se pudo compartir el acceso");
+    }
+  };
+
   const navigate = (tab: TabId) => {
     setActiveTab(tab);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -341,6 +365,7 @@ export function AttendanceCartApp() {
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            <button onClick={() => void shareAccess()} title="Compartir acceso" aria-label="Compartir acceso" className="inline-flex h-10 w-10 items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-0 text-amber-800 transition hover:bg-amber-100 sm:w-auto sm:px-3"><Share2 className="h-4 w-4" /><span className="hidden text-xs font-black sm:inline">Compartir acceso</span></button>
             <button onClick={() => session && loadData(session)} title="Actualizar" className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:text-blue-900"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /></button>
             <button onClick={signOut} title="Cerrar sesión" className="grid h-10 w-10 place-items-center rounded-xl bg-blue-950 text-white hover:bg-blue-900"><LogOut className="h-4 w-4" /></button>
           </div>
