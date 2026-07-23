@@ -173,6 +173,10 @@ export async function GET(request: Request) {
     const inventoryReversalIds = new Set((inventoryResult.data || [])
       .filter((row) => row.kind === "adjustment" && Number(row.delta) > 0 && row.redemption_id)
       .map((row) => row.redemption_id));
+    const reversedInventoryMovementIds = new Set((inventoryResult.data || [])
+      .map((row) => String(row.note || "").match(/^ANULA_MOVIMIENTO:([0-9a-f-]{36})$/i)?.[1])
+      .filter(Boolean));
+    const rewardNames = Object.fromEntries((rewardsResult.data || []).map((reward) => [reward.id, reward.name]));
 
     return NextResponse.json({
       students,
@@ -186,7 +190,11 @@ export async function GET(request: Request) {
       })),
       inventoryMovements: (inventoryResult.data || []).slice(0, 100).map((row) => ({
         ...row,
+        note: /^ANULA_MOVIMIENTO:[0-9a-f-]{36}$/i.test(String(row.note || "")) ? "Anulación de movimiento de inventario" : row.note,
         actor_name: actorNames[row.created_by || ""] || "Colega",
+        reward_name: rewardNames[row.reward_id] || "Premio",
+        reversed: reversedInventoryMovementIds.has(row.id),
+        is_reversal: /^ANULA_MOVIMIENTO:[0-9a-f-]{36}$/i.test(String(row.note || "")),
       })),
       currentWeekStart: mondayIso(),
       user: { email: auth.user.email || "", id: auth.user.id },
@@ -361,7 +369,7 @@ export async function POST(request: Request) {
       const initialStock = Math.max(0, Math.floor(Number(body.initialStock) || 0));
       const minimumStock = Math.max(0, Math.floor(Number(body.minimumStock) || 0));
       if (!name || ![1, 4, 8].includes(ticketCost)) {
-        return NextResponse.json({ error: "Completa el nombre y selecciona un tier válido" }, { status: 400 });
+        return NextResponse.json({ error: "Completa el nombre y selecciona una categoría válida" }, { status: 400 });
       }
       const { data: reward, error: rewardError } = await admin.from("attendance_cart_rewards").insert({
         institution_id: institutionId,
@@ -472,6 +480,71 @@ export async function POST(request: Request) {
         created_by: auth.user.id,
       });
       if (error) throw error;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "undo_inventory_movement") {
+      const movementId = String(body.movementId || "");
+      const { data: movement, error: movementError } = await admin.from("attendance_cart_inventory_ledger")
+        .select("id, reward_id, delta, kind, redemption_id, note")
+        .eq("id", movementId)
+        .eq("institution_id", institutionId)
+        .maybeSingle();
+      if (movementError) throw movementError;
+      if (!movement) return NextResponse.json({ error: "Movimiento no encontrado" }, { status: 404 });
+      if (movement.kind === "redemption" || movement.redemption_id) {
+        return NextResponse.json({ error: "Para devolver este stock, deshaz el canje desde Catastro" }, { status: 409 });
+      }
+      if (/^ANULA_MOVIMIENTO:[0-9a-f-]{36}$/i.test(String(movement.note || ""))) {
+        return NextResponse.json({ error: "No se puede deshacer una anulación" }, { status: 409 });
+      }
+
+      const reversalNote = `ANULA_MOVIMIENTO:${movement.id}`;
+
+      const [{ data: existingReversal, error: reversalError }, { data: rewardLedger, error: ledgerError }] = await Promise.all([
+        admin.from("attendance_cart_inventory_ledger")
+          .select("id")
+          .eq("institution_id", institutionId)
+          .eq("note", reversalNote)
+          .maybeSingle(),
+        admin.from("attendance_cart_inventory_ledger")
+          .select("delta")
+          .eq("institution_id", institutionId)
+          .eq("reward_id", movement.reward_id),
+      ]);
+      if (reversalError) throw reversalError;
+      if (ledgerError) throw ledgerError;
+      if (existingReversal) return NextResponse.json({ error: "Este movimiento ya fue anulado" }, { status: 409 });
+
+      const currentStock = (rewardLedger || []).reduce((sum, row) => sum + Number(row.delta || 0), 0);
+      const reversedStock = currentStock - Number(movement.delta);
+      if (reversedStock < 0) {
+        return NextResponse.json({ error: "No se puede deshacer porque parte de ese stock ya fue utilizado" }, { status: 409 });
+      }
+
+      const { error: insertError } = await admin.from("attendance_cart_inventory_ledger").insert({
+        institution_id: institutionId,
+        reward_id: movement.reward_id,
+        delta: -Number(movement.delta),
+        kind: "adjustment",
+        note: reversalNote,
+        created_by: auth.user.id,
+      });
+      if (insertError) throw insertError;
+      return NextResponse.json({ ok: true });
+    }
+
+    if (action === "set_reward_active") {
+      const rewardId = String(body.rewardId || "");
+      const active = body.active === true;
+      const { data: reward, error: rewardError } = await admin.from("attendance_cart_rewards")
+        .update({ active })
+        .eq("id", rewardId)
+        .eq("institution_id", institutionId)
+        .select("id")
+        .maybeSingle();
+      if (rewardError) throw rewardError;
+      if (!reward) return NextResponse.json({ error: "Premio no encontrado" }, { status: 404 });
       return NextResponse.json({ ok: true });
     }
 
