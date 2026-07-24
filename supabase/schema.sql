@@ -30,7 +30,10 @@ create table if not exists public.app_records (
       'protocols',
       'orientation',
       'workshops',
-      'documents'
+      'personnel',
+      'documents',
+      'meetings',
+      'settings'
     )
   ),
   record_id text not null,

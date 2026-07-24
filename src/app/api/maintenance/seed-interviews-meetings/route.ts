@@ -36,23 +36,33 @@ export async function POST(request: Request) {
     if (institutionError) throw institutionError;
     if (!institution?.id) return NextResponse.json({ error: "Institution not found" }, { status: 404 });
 
-    const rows = [
-      ...SEED_INTERVIEWS.map((record) => ({ entity: "interviews", record_id: record.id, data: sanitize(record), created_at: record.createdAt, updated_at: record.updatedAt })),
-      ...SEED_MEETINGS.map((record) => ({ entity: "meetings", record_id: record.id, data: sanitize(record), created_at: record.createdAt, updated_at: record.updatedAt })),
-    ].map((row) => ({ institution_id: institution.id, ...row }));
+    // Carga cada entidad por separado para que las entrevistas entren aunque
+    // la restricción de la base aún no permita "meetings".
+    const loadEntity = async (entity: string, records: SeedRecord[]) => {
+      const rows = records.map((record) => ({
+        institution_id: institution.id,
+        entity,
+        record_id: record.id,
+        data: sanitize(record),
+        created_at: record.createdAt,
+        updated_at: record.updatedAt,
+      }));
+      for (let i = 0; i < rows.length; i += 100) {
+        const { error } = await supabase
+          .from("app_records")
+          .upsert(rows.slice(i, i + 100), { onConflict: "institution_id,entity,record_id" });
+        if (error) return { ok: false as const, error: error.message, details: error.details || error.hint || null };
+      }
+      return { ok: true as const, count: rows.length };
+    };
 
-    for (let i = 0; i < rows.length; i += 100) {
-      const { error } = await supabase
-        .from("app_records")
-        .upsert(rows.slice(i, i + 100), { onConflict: "institution_id,entity,record_id" });
-      if (error) throw error;
-    }
+    const interviewsResult = await loadEntity("interviews", SEED_INTERVIEWS);
+    const meetingsResult = await loadEntity("meetings", SEED_MEETINGS);
 
     return NextResponse.json({
-      ok: true,
-      interviews: SEED_INTERVIEWS.length,
-      meetings: SEED_MEETINGS.length,
-      upserted: rows.length,
+      ok: interviewsResult.ok && meetingsResult.ok,
+      interviews: interviewsResult,
+      meetings: meetingsResult,
     });
   } catch (error) {
     console.error("Seed interviews/meetings failed", error);
