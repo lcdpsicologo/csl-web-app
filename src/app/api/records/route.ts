@@ -18,7 +18,8 @@ type EntityId =
   | "orientation"
   | "workshops"
   | "personnel"
-  | "documents";
+  | "documents"
+  | "meetings";
 
 type DataRecord = {
   id: string;
@@ -48,6 +49,7 @@ const ENTITY_IDS: EntityId[] = [
   "workshops",
   "personnel",
   "documents",
+  "meetings",
 ];
 
 const normalizeSupabaseUrl = (url: string) => url.replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/$/, "");
@@ -63,6 +65,7 @@ const emptyStore = (): DataStore => ({
   workshops: [],
   personnel: [],
   documents: [],
+  meetings: [],
 });
 
 const stableRecordId = (entity: EntityId, record: DataRecord, index: number) => {

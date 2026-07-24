@@ -57,6 +57,7 @@ import {
   LogOut,
   Mail,
   MessageSquareText,
+  NotebookPen,
   Pencil,
   Plus,
   QrCode,
@@ -86,7 +87,8 @@ type EntityId =
   | "orientation"
   | "workshops"
   | "personnel"
-  | "documents";
+  | "documents"
+  | "meetings";
 
 type ViewId = "dashboard" | "today" | "attendanceCart" | "triage" | "reports" | "import" | "team" | "games" | "settings" | "pie" | "databases" | EntityId;
 type SidebarMode = "fixed" | "auto" | "collapsed";
@@ -2526,6 +2528,28 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "notes", label: "Notas", type: "textarea", aliases: ["notas", "observaciones"] },
     ],
   },
+  meetings: {
+    id: "meetings",
+    label: "Reuniones",
+    singular: "reunión",
+    icon: UsersRound,
+    description: "Reuniones de Gestión Pedagógica (GP) y otras: participantes, temas tratados, acuerdos y compromisos. Puedes adjuntar el acta escaneada por enlace.",
+    fields: [
+      { key: "date", label: "Fecha", type: "date", required: true, aliases: ["fecha", "date", "dia"] },
+      { key: "meetingType", label: "Tipo de reunión", type: "select", options: ["GP (Gestión Pedagógica)", "Consejo de profesores", "Equipo de aula", "Dupla psicosocial", "Convivencia", "PIE", "Apoderados", "Coordinación", "Otra"], aliases: ["tipo", "categoria", "gp", "reunion"] },
+      { key: "title", label: "Tema / motivo", required: true, aliases: ["tema", "motivo", "asunto", "titulo", "nombre"] },
+      { key: "cycle", label: "Ciclo / curso", aliases: ["ciclo", "curso", "nivel", "grupo"] },
+      { key: "leader", label: "Dirige / responsable", aliases: ["dirige", "responsable", "convoca", "lider", "coordina"] },
+      { key: "attendees", label: "Participantes / asistentes", type: "textarea", aliases: ["participantes", "asistentes", "presentes", "convocados"] },
+      { key: "topics", label: "Temas tratados / desarrollo", type: "textarea", aliases: ["temas", "desarrollo", "tabla", "puntos", "acta", "contenido"] },
+      { key: "agreements", label: "Acuerdos", type: "textarea", aliases: ["acuerdos", "conclusiones", "decisiones"] },
+      { key: "commitments", label: "Compromisos / próximos pasos", type: "textarea", aliases: ["compromisos", "tareas", "responsables", "proximos pasos", "pendientes"] },
+      { key: "relatedStudents", label: "Estudiantes mencionados", aliases: ["estudiantes", "alumnos", "casos", "mencionados"] },
+      { key: "fileLink", label: "Acta / enlace (Drive)", aliases: ["acta", "enlace", "link", "drive", "documento", "escaneo", "pdf"] },
+      { key: "nextDate", label: "Próxima reunión", type: "date", aliases: ["proxima", "siguiente", "nueva fecha"] },
+      { key: "notes", label: "Observaciones", type: "textarea", aliases: ["observaciones", "notas", "comentarios"] },
+    ],
+  },
 };
 
 // Ícono propio de Tiza-IA: una tiza inclinada dejando un trazo punteado.
@@ -2566,6 +2590,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "cases", label: "Casos", icon: FileText },
   { id: "logs", label: "Bitácoras", icon: ClipboardList },
   { id: "interviews", label: "Entrevistas", icon: MessageSquareText },
+  { id: "meetings", label: "Reuniones", icon: NotebookPen },
   { id: "protocols", label: "Protocolos", icon: ShieldCheck },
   { id: "workshops", label: "Talleres", icon: GraduationCap },
   { id: "documents", label: "Documentos", icon: FolderOpen },
@@ -2613,6 +2638,7 @@ const emptyStore = (): DataStore => ({
   workshops: [],
   personnel: officialPersonnelRecords,
   documents: [],
+  meetings: [],
 });
 
 const diffStores = (previous: DataStore, next: DataStore): EntityDelta[] =>
@@ -7661,7 +7687,7 @@ function LinkedRecordList({ title, records, emptyText, kinds, onSelect }: { titl
   );
 }
 
-type QuickAddKind = "cases" | "interviews" | "logs" | "documents" | "protocols";
+type QuickAddKind = "cases" | "interviews" | "logs" | "documents" | "protocols" | "meetings";
 
 function CaseWithInterventions({
   caseRecord,
@@ -7844,7 +7870,7 @@ function StudentDetailDialog({
   focusField?: string;
   currentUserName?: string;
 }) {
-  const [activeTab, setActiveTab] = useState<"resumen" | "familia" | "casos" | "entrevistas" | "bitacoras" | "documentos">("resumen");
+  const [activeTab, setActiveTab] = useState<"resumen" | "familia" | "casos" | "entrevistas" | "reuniones" | "bitacoras" | "documentos">("resumen");
   const [highlightField, setHighlightField] = useState<string>("");
   const [photoPreviewOpen, setPhotoPreviewOpen] = useState(false);
   const fieldRefs = React.useRef<Record<string, HTMLTextAreaElement | HTMLInputElement | null>>({});
@@ -7891,16 +7917,18 @@ function StudentDetailDialog({
   const courseCases = store.cases.filter((record) => !studentMatches(record, student) && courseMatches(record, student.course || ""));
   const logs = store.logs.filter((record) => studentMatches(record, student));
   const interviews = store.interviews.filter((record) => studentMatches(record, student));
+  const meetings = store.meetings.filter((record) => studentMatches(record, student) || normalize(record.relatedStudents || "").includes(normalize(student.fullName || "")));
   const protocols = store.protocols.filter((record) => studentMatches(record, student));
   const documents = store.documents.filter((record) => studentMatches(record, student) || normalize(record.relatedTo || "").includes(normalize(student.fullName || "")));
-  const timeline = [...cases, ...logs, ...interviews, ...protocols, ...documents].sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+  const timeline = [...cases, ...logs, ...interviews, ...meetings, ...protocols, ...documents].sort((a, b) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
   const timelineKinds: Record<string, string> = {};
   cases.forEach((record) => { timelineKinds[record.id] = "Caso"; });
   interviews.forEach((record) => { timelineKinds[record.id] = "Entrevista"; });
+  meetings.forEach((record) => { timelineKinds[record.id] = "Reunión"; });
   logs.forEach((record) => { timelineKinds[record.id] = "Bitácora"; });
   protocols.forEach((record) => { timelineKinds[record.id] = "Protocolo"; });
   documents.forEach((record) => { timelineKinds[record.id] = "Documento"; });
-  const kindToTab: Record<string, typeof activeTab> = { Caso: "casos", Entrevista: "entrevistas", Bitácora: "bitacoras", Protocolo: "documentos", Documento: "documentos" };
+  const kindToTab: Record<string, typeof activeTab> = { Caso: "casos", Entrevista: "entrevistas", "Reunión": "reuniones", Bitácora: "bitacoras", Protocolo: "documentos", Documento: "documentos" };
   const openCases = cases.filter((record) => !/cerrad/i.test(record.status || "")).length;
   const editingMember = genogram.find((member) => member.id === editingMemberId);
 
@@ -7968,6 +7996,7 @@ function StudentDetailDialog({
     if (kind === "logs") setQuickAddForm({ date: today, ...baseLink, type: "Seguimiento", description: "", agreements: "" });
     if (kind === "documents") setQuickAddForm({ title: "", folder: "", confidentiality: "Interno", relatedTo: baseLink.student, url: "", notes: "" });
     if (kind === "protocols") setQuickAddForm({ title: "", student: baseLink.student, status: "Activado", dueDate: today, responsible: "", notes: "" });
+    if (kind === "meetings") setQuickAddForm({ date: today, meetingType: "GP (Gestión Pedagógica)", title: "", cycle: baseLink.course, leader: "", attendees: "", topics: "", agreements: "", commitments: "", relatedStudents: baseLink.student, fileLink: "", notes: "" });
   };
 
   const submitQuickAdd = () => {
@@ -7986,6 +8015,7 @@ function StudentDetailDialog({
     { id: "familia", label: "Familia", icon: UsersRound, badge: genogram.length || undefined },
     { id: "casos", label: "Casos", icon: FileText, badge: cases.length || undefined },
     { id: "entrevistas", label: "Entrevistas", icon: MessageSquareText, badge: interviews.length || undefined },
+    { id: "reuniones", label: "Reuniones", icon: NotebookPen, badge: meetings.length || undefined },
     { id: "bitacoras", label: "Bitácoras", icon: ClipboardList, badge: logs.length || undefined },
     { id: "documentos", label: "Documentos", icon: FolderOpen, badge: (documents.length || 0) + (protocols.length || 0) || undefined },
   ];
@@ -8027,6 +8057,18 @@ function StudentDetailDialog({
         { key: "responsible", label: "Responsable" },
         { key: "notes", label: "Notas", type: "textarea", full: true },
       ];
+      if (quickAddOpen === "meetings") return [
+        { key: "date", label: "Fecha", type: "date", required: true },
+        { key: "meetingType", label: "Tipo de reunión", type: "select", options: ["GP (Gestión Pedagógica)", "Consejo de profesores", "Equipo de aula", "Dupla psicosocial", "Convivencia", "PIE", "Apoderados", "Coordinación", "Otra"] },
+        { key: "title", label: "Tema / motivo", required: true, full: true },
+        { key: "cycle", label: "Ciclo / curso" },
+        { key: "leader", label: "Dirige / responsable" },
+        { key: "attendees", label: "Participantes / asistentes", type: "textarea", full: true },
+        { key: "topics", label: "Temas tratados / desarrollo", type: "textarea", full: true },
+        { key: "agreements", label: "Acuerdos", type: "textarea", full: true },
+        { key: "commitments", label: "Compromisos / próximos pasos", type: "textarea", full: true },
+        { key: "fileLink", label: "Acta / enlace (Drive)", full: true },
+      ];
       return [];
     })();
     const titles: Record<QuickAddKind, string> = {
@@ -8035,6 +8077,7 @@ function StudentDetailDialog({
       logs: "Nueva bitácora",
       documents: "Nuevo documento",
       protocols: "Nuevo protocolo",
+      meetings: "Nueva reunión",
     };
     return (
       <div className="tz-slide-up rounded-xl border border-blue-200 bg-blue-50/60 p-4">
@@ -8086,9 +8129,11 @@ function StudentDetailDialog({
 
   return (
     <>
-    <div className="tz-backdrop fixed inset-0 z-50 grid bg-slate-950/45 p-4 backdrop-blur-sm" onClick={onClose}>
+    <div className="tz-backdrop fixed inset-0 z-50 grid bg-slate-950/45 p-0 backdrop-blur-sm sm:p-4" onClick={onClose}>
+      {/* Altura fija (no max-h): el modal mantiene el mismo tamaño y solo el
+          cuerpo hace scroll, así no cambia al abrir subpaneles como entrevistas. */}
       <div
-        className="tz-pop tz-print-root m-auto flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl"
+        className="tz-pop tz-print-root m-auto flex h-[100dvh] w-full max-w-5xl flex-col overflow-hidden border-slate-200 bg-white shadow-2xl sm:h-[92vh] sm:rounded-2xl sm:border"
         onClick={(event) => event.stopPropagation()}
       >
         <header className="relative">
@@ -8287,6 +8332,7 @@ function StudentDetailDialog({
                     {([
                       ["cases", "Caso", FileText],
                       ["interviews", "Entrevista", MessageSquareText],
+                      ["meetings", "Reunión", NotebookPen],
                       ["logs", "Bitácora", ClipboardList],
                       ["documents", "Documento", FolderOpen],
                       ["protocols", "Protocolo", ShieldCheck],
@@ -8434,7 +8480,19 @@ function StudentDetailDialog({
                 </button>
               </div>
               {quickAddOpen === "interviews" ? renderQuickAddForm() : null}
-              <LinkedRecordList title={`Entrevistas y reuniones (${interviews.length})`} records={interviews} emptyText="No hay entrevistas vinculadas." />
+              <LinkedRecordList title={`Entrevistas (${interviews.length})`} records={interviews} emptyText="No hay entrevistas vinculadas." />
+            </div>
+          ) : null}
+
+          {activeTab === "reuniones" ? (
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <button onClick={() => openQuickAdd("meetings")} className="inline-flex items-center gap-1.5 rounded-md tz-btn-primary px-3 py-2 text-sm font-semibold text-white">
+                  <Plus className="h-4 w-4" /> Nueva reunión
+                </button>
+              </div>
+              {quickAddOpen === "meetings" ? renderQuickAddForm() : null}
+              <LinkedRecordList title={`Reuniones donde se menciona (${meetings.length})`} records={meetings} emptyText="Este estudiante no aparece en ninguna reunión registrada." />
             </div>
           ) : null}
 
