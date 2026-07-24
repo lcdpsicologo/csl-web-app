@@ -26,31 +26,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase service credentials are not configured" }, { status: 503 });
   }
 
-  const supabase = createClient(normalizeSupabaseUrl(rawUrl), serviceRole, { auth: { persistSession: false } });
-  const { data: institution, error: institutionError } = await supabase
-    .from("institutions")
-    .select("id")
-    .eq("slug", "colegio-san-lucas")
-    .maybeSingle();
-  if (institutionError) throw institutionError;
-  if (!institution?.id) return NextResponse.json({ error: "Institution not found" }, { status: 404 });
+  try {
+    const supabase = createClient(normalizeSupabaseUrl(rawUrl), serviceRole, { auth: { persistSession: false } });
+    const { data: institution, error: institutionError } = await supabase
+      .from("institutions")
+      .select("id")
+      .eq("slug", "colegio-san-lucas")
+      .maybeSingle();
+    if (institutionError) throw institutionError;
+    if (!institution?.id) return NextResponse.json({ error: "Institution not found" }, { status: 404 });
 
-  const rows = [
-    ...SEED_INTERVIEWS.map((record) => ({ entity: "interviews", record_id: record.id, data: sanitize(record), created_at: record.createdAt, updated_at: record.updatedAt })),
-    ...SEED_MEETINGS.map((record) => ({ entity: "meetings", record_id: record.id, data: sanitize(record), created_at: record.createdAt, updated_at: record.updatedAt })),
-  ].map((row) => ({ institution_id: institution.id, ...row }));
+    const rows = [
+      ...SEED_INTERVIEWS.map((record) => ({ entity: "interviews", record_id: record.id, data: sanitize(record), created_at: record.createdAt, updated_at: record.updatedAt })),
+      ...SEED_MEETINGS.map((record) => ({ entity: "meetings", record_id: record.id, data: sanitize(record), created_at: record.createdAt, updated_at: record.updatedAt })),
+    ].map((row) => ({ institution_id: institution.id, ...row }));
 
-  for (let i = 0; i < rows.length; i += 100) {
-    const { error } = await supabase
-      .from("app_records")
-      .upsert(rows.slice(i, i + 100), { onConflict: "institution_id,entity,record_id" });
-    if (error) throw error;
+    for (let i = 0; i < rows.length; i += 100) {
+      const { error } = await supabase
+        .from("app_records")
+        .upsert(rows.slice(i, i + 100), { onConflict: "institution_id,entity,record_id" });
+      if (error) throw error;
+    }
+
+    return NextResponse.json({
+      ok: true,
+      interviews: SEED_INTERVIEWS.length,
+      meetings: SEED_MEETINGS.length,
+      upserted: rows.length,
+    });
+  } catch (error) {
+    console.error("Seed interviews/meetings failed", error);
+    return NextResponse.json({
+      error: error instanceof Error ? error.message : String(error),
+      details: (error as { details?: string; hint?: string })?.details || (error as { hint?: string })?.hint || null,
+    }, { status: 500 });
   }
-
-  return NextResponse.json({
-    ok: true,
-    interviews: SEED_INTERVIEWS.length,
-    meetings: SEED_MEETINGS.length,
-    upserted: rows.length,
-  });
 }
