@@ -2766,7 +2766,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
     description: "Reuniones de Gestión Pedagógica (GP) y otras: participantes, temas tratados, acuerdos y compromisos. Puedes adjuntar el acta escaneada por enlace.",
     fields: [
       { key: "date", label: "Fecha", type: "date", required: true, aliases: ["fecha", "date", "dia"] },
-      { key: "meetingType", label: "Tipo de reunión", type: "select", options: ["GP (Gestión Pedagógica)", "Consejo de profesores", "Equipo de aula", "Dupla psicosocial", "Convivencia", "PIE", "Apoderados", "Coordinación", "Otra"], aliases: ["tipo", "categoria", "gp", "reunion"] },
+      { key: "meetingType", label: "Tipo de reunión", type: "select", options: ["GP Formativo", "GP Académico", "GP Interdisciplinario", "GP (Gestión Pedagógica)", "Consejo de profesores", "Equipo de aula", "Dupla psicosocial", "Convivencia", "PIE", "Apoderados", "Coordinación", "Otra"], aliases: ["tipo", "categoria", "gp", "reunion"] },
       { key: "title", label: "Tema / motivo", required: true, aliases: ["tema", "motivo", "asunto", "titulo", "nombre"] },
       { key: "cycle", label: "Ciclo / curso", aliases: ["ciclo", "curso", "nivel", "grupo"] },
       { key: "leader", label: "Dirige / responsable", aliases: ["dirige", "responsable", "convoca", "lider", "coordina"] },
@@ -8973,7 +8973,7 @@ function StudentDetailDialog({
       ];
       if (quickAddOpen === "meetings") return [
         { key: "date", label: "Fecha", type: "date", required: true },
-        { key: "meetingType", label: "Tipo de reunión", type: "select", options: ["GP (Gestión Pedagógica)", "Consejo de profesores", "Equipo de aula", "Dupla psicosocial", "Convivencia", "PIE", "Apoderados", "Coordinación", "Otra"] },
+        { key: "meetingType", label: "Tipo de reunión", type: "select", options: ["GP Formativo", "GP Académico", "GP Interdisciplinario", "GP (Gestión Pedagógica)", "Consejo de profesores", "Equipo de aula", "Dupla psicosocial", "Convivencia", "PIE", "Apoderados", "Coordinación", "Otra"] },
         { key: "title", label: "Tema / motivo", required: true, full: true },
         { key: "cycle", label: "Ciclo / curso" },
         { key: "leader", label: "Dirige / responsable" },
