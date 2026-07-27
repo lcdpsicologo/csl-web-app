@@ -2078,6 +2078,40 @@ function OrientationFeedbackModal({
   // Vista previa del correo renderizada: respaldo cuando el portapapeles del
   // celular no conserva el formato (se copia a mano desde aquí).
   const [previewHtml, setPreviewHtml] = useState("");
+
+  // El portapapeles de Android no conserva el formato al pegar en Gmail, así que
+  // la vía fiel al diseño es un PDF: se imprime el correo desde un iframe y el
+  // sistema ofrece "Guardar como PDF" para adjuntarlo al correo.
+  const printFeedbackPdf = () => {
+    if (!feedbackComplete) {
+      setEmailState("error");
+      setEmailHint("Completa todos los indicadores Sí/No antes de generar el PDF.");
+      return;
+    }
+    lastAutoSavedRef.current = JSON.stringify(data);
+    onAutoSave(data);
+    const title = `Feedback ${record.course || ""} ${record.date || ""}`.replace(/\s+/g, " ").trim();
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(frame);
+    const doc = frame.contentWindow?.document;
+    if (!doc) { frame.remove(); return; }
+    doc.open();
+    doc.write(`<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title><style>@page{margin:12mm}body{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}</style></head><body>${classFeedbackEmailHtml(record, emailFeedbackData)}</body></html>`);
+    doc.close();
+    const run = () => {
+      frame.contentWindow?.focus();
+      frame.contentWindow?.print();
+      window.setTimeout(() => frame.remove(), 2000);
+    };
+    if (doc.readyState === "complete") run();
+    else frame.onload = run;
+    setEmailState("idle");
+    setEmailHint("Elige “Guardar como PDF” y luego adjúntalo en Gmail: el diseño se mantiene igual en cualquier teléfono.");
+    window.setTimeout(() => setEmailHint(""), 12000);
+  };
+
   const openFeedbackInGmail = async () => {
     if (!feedbackComplete) {
       setEmailState("error");
@@ -2305,6 +2339,13 @@ function OrientationFeedbackModal({
               className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
             >
               <FileText className="h-4 w-4" /> {previewHtml ? "Ocultar diseño" : "Ver diseño"}
+            </button>
+            <button
+              onClick={printFeedbackPdf}
+              title="Genera el PDF con el diseño intacto para adjuntarlo al correo (recomendado en celular)"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100"
+            >
+              <Printer className="h-4 w-4" /> PDF
             </button>
           </div>
           <div className="contents sm:flex sm:gap-2">
