@@ -5464,6 +5464,10 @@ function OrientationCycleView({
   const openWeekCreatorForKey = (weekKey: string) => {
     setWeekCreatorWeek(planWeekForWeekKey(weekKey));
     setWeekCreatorOpen(true);
+    // El panel vive arriba de la bitácora: al abrirlo desde una semana lejana, subimos hasta él.
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => document.getElementById("registro-rapido")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    }
   };
 
   const effectiveCreatorWeek = weekCreatorWeek || defaultOrientationWeek;
@@ -6279,7 +6283,7 @@ function OrientationCycleView({
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Horario semanal de {owner.name}</p>
-          <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Crear clases desde el horario</h2>
+          <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Crear la semana con la columna vertebral</h2>
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán solo los cursos que todavía no tengan una clase registrada en su fecha correspondiente. Cada curso parte con su clase sugerida de la columna vertebral; después podrás editar tema, fortaleza y enlaces desde la bitácora.</p>
         </div>
         <div className="w-full sm:w-72">
@@ -6604,13 +6608,26 @@ function OrientationCycleView({
                 <p className="mt-0.5 text-xs font-medium text-slate-500">{owner.name} · clases, estados, materiales y acuerdos por curso.</p>
               </div>
             </div>
-            <button
-              onClick={() => { setQuickFormAttempted(false); setQuickFormExpanded(true); }}
-              title="Añadir una clase, intervención, material o planificación a la bitácora"
-              className="tz-press inline-flex shrink-0 items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg"
-            >
-              <Plus className="h-4 w-4" /> Nuevo registro
-            </button>
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <button
+                onClick={() => {
+                  if (weekCreatorOpen) { setWeekCreatorOpen(false); return; }
+                  setWeekCreatorWeek(defaultOrientationWeek);
+                  setWeekCreatorOpen(true);
+                }}
+                title="Crear de una vez todas las clases de la semana, cada curso con su clase de la columna vertebral"
+                className={`tz-press inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold shadow-sm transition ${weekCreatorOpen ? "border-cyan-700 bg-cyan-700 text-white" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
+              >
+                <CalendarDays className="h-4 w-4" /> Preparar semana
+              </button>
+              <button
+                onClick={() => { setQuickFormAttempted(false); setQuickFormExpanded(true); }}
+                title="Añadir una clase, intervención, material o planificación a la bitácora"
+                className="tz-press inline-flex items-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-md transition hover:-translate-y-0.5 hover:bg-slate-800 hover:shadow-lg"
+              >
+                <Plus className="h-4 w-4" /> Nuevo registro
+              </button>
+            </div>
           </div>
           <div className="grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
             {periodFilters.map((period) => {
@@ -6717,6 +6734,7 @@ function OrientationCycleView({
             </p>
           </div>
         </div>
+        {weekCreatorOpen ? <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-5">{weekCreatorPanel}</div> : null}
         <div className="bg-slate-50/60">
           {/* Replica la caja de las tarjetas (margen lateral + borde transparente + padding) para que las columnas calcen exactas. */}
           <div className="hidden border border-transparent border-b-slate-200 bg-slate-100/80 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:mx-4 lg:grid lg:grid-cols-[184px_132px_minmax(240px,1fr)_200px_180px] lg:items-center lg:gap-4">
@@ -6831,8 +6849,7 @@ function OrientationCycleView({
               <React.Fragment key={record.id}>
                 {monthHeader}
                 {weekHeader}
-                {weekCreatorForThisWeek ? <div className="px-2 pb-3 sm:px-3 lg:px-4">{weekCreatorPanel}</div> : null}
-                {dateHeader}
+                                {dateHeader}
               {/* Sin overflow-hidden: recortaba los menús desplegables (Estado, Envío) dentro de la tarjeta. */}
               <article className={`mx-2 mb-2 rounded-lg border border-slate-200/90 shadow-sm transition hover:shadow-md sm:mx-3 lg:mx-4 ${rowTone(shownStatus)} ${expanded ? "ring-2 ring-blue-200" : ""}`}>
                 <div className="grid gap-3 px-4 py-3.5 lg:grid-cols-[184px_132px_minmax(240px,1fr)_200px_180px] lg:items-center lg:gap-4">
