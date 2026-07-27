@@ -1807,6 +1807,53 @@ const feedbackSectionCard = (number: string, eyebrow: string, title: string, acc
 const isMobileDevice = () =>
   typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
+// Copia el correo con formato. La API moderna falla en varios navegadores
+// móviles, así que hay un respaldo con execCommand sobre un nodo editable
+// oculto, que es lo que sí reconoce Gmail de Android al pegar.
+const copyRichEmailSync = (html: string) => {
+  try {
+    const holder = document.createElement("div");
+    holder.setAttribute("contenteditable", "true");
+    holder.innerHTML = html;
+    // Fuera de pantalla pero seleccionable: display:none impediría copiar.
+    holder.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;white-space:pre-wrap;";
+    document.body.appendChild(holder);
+    const range = document.createRange();
+    range.selectNodeContents(holder);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    const copied = document.execCommand("copy");
+    selection?.removeAllRanges();
+    document.body.removeChild(holder);
+    return copied;
+  } catch {
+    return false;
+  }
+};
+
+const copyRichEmail = async (html: string, plain: string) => {
+  // Primero el camino síncrono: execCommand exige el gesto del usuario todavía
+  // vigente, y cualquier await previo lo consume. Es además el formato que
+  // Gmail de Android reconoce al pegar.
+  if (copyRichEmailSync(html)) return true;
+  try {
+    const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
+    if (navigator.clipboard && ClipboardItemCtor) {
+      await navigator.clipboard.write([
+        new ClipboardItemCtor({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([plain], { type: "text/plain" }),
+        }),
+      ]);
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+};
+
 const openMailCompose = ({ to, subject, body }: { to: string; subject: string; body?: string }) => {
   if (isMobileDevice()) {
     const query = [`subject=${encodeURIComponent(subject)}`, body ? `body=${encodeURIComponent(body)}` : ""]
@@ -2043,23 +2090,11 @@ function OrientationFeedbackModal({
     const subject = `Feedback de clase de Orientación · ${record.course || "Sin curso"}${record.date ? ` · ${record.date}` : ""}`;
     const html = classFeedbackEmailHtml(record, emailFeedbackData);
     const plain = classFeedbackSummaryText(record, emailFeedbackData);
-    let richCopied = false;
-    try {
-      const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
-      if (navigator.clipboard && ClipboardItemCtor) {
-        await navigator.clipboard.write([
-          new ClipboardItemCtor({
-            "text/html": new Blob([html], { type: "text/html" }),
-            "text/plain": new Blob([plain], { type: "text/plain" }),
-          }),
-        ]);
-        richCopied = true;
-      }
-    } catch {
-      richCopied = false;
-    }
+    const richCopied = await copyRichEmail(html, plain);
     // Con formato copiado: Gmail se abre vacío y la profesora pega el correo con colores.
     // Sin permiso de portapapeles: se abre con el texto plano como respaldo.
+    // En móvil se espera un instante: cambiar de app corta el copiado en curso.
+    if (richCopied && isMobileDevice()) await new Promise((resolve) => window.setTimeout(resolve, 400));
     openMailCompose({ to: teacherEmail, subject, body: richCopied ? undefined : plain });
     setEmailState("idle");
     setEmailHint(richCopied
@@ -6074,22 +6109,10 @@ function OrientationCycleView({
     const html = orientationWeekEmailHtml(payload);
     const plain = orientationWeekEmailText(payload);
 
-    let richCopied = false;
-    try {
-      const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
-      if (navigator.clipboard && ClipboardItemCtor) {
-        await navigator.clipboard.write([
-          new ClipboardItemCtor({
-            "text/html": new Blob([html], { type: "text/html" }),
-            "text/plain": new Blob([plain], { type: "text/plain" }),
-          }),
-        ]);
-        richCopied = true;
-      }
-    } catch {
-      richCopied = false;
-    }
+    const richCopied = await copyRichEmail(html, plain);
     // Con el correo copiado, Gmail se abre vacío y se pega con formato; si no, va el texto plano.
+    // En móvil se espera un instante: cambiar de app corta el copiado en curso.
+    if (richCopied && isMobileDevice()) await new Promise((resolve) => window.setTimeout(resolve, 400));
     const subject = `Clases de Orientación · ${weekLabel}${planWeek ? ` (${planWeek})` : ""}`;
     openMailCompose({ to: recipients.join(","), subject, body: richCopied ? undefined : plain });
     setWeekEmailHint({ weekKey, mode: richCopied ? "copied" : "plain" });
