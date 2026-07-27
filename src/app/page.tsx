@@ -258,13 +258,39 @@ const compactAttachmentsForLocalBackup = (value: string) => {
 // Supabase es la fuente principal. El respaldo del navegador conserva los
 // registros, pero excluye medios pesados y URLs temporales que pueden superar
 // rapidamente la cuota de localStorage y derribar la interfaz.
+const compressImageBase64 = (file: File, maxWidth = 360, quality = 0.8): Promise<string> =>
+  new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new window.Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const scale = maxWidth / Math.max(img.width, img.height);
+        const width = scale < 1 ? Math.round(img.width * scale) : img.width;
+        const height = scale < 1 ? Math.round(img.height * scale) : img.height;
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL("image/jpeg", quality));
+        } else {
+          resolve(String(e.target?.result || ""));
+        }
+      };
+      img.onerror = () => resolve(String(e.target?.result || ""));
+      img.src = String(e.target?.result || "");
+    };
+    reader.onerror = () => resolve("");
+    reader.readAsDataURL(file);
+  });
+
 const compactStoreForLocalBackup = (source: DataStore): DataStore =>
   Object.fromEntries(
     ENTITY_IDS.map((entity) => [
       entity,
       (source[entity] || []).map((record) => {
         const compact = { ...record };
-        if (entity === "students") delete compact.profilePhoto;
         if (entity === "workshops" && compact.attachments) {
           compact.attachments = compactAttachmentsForLocalBackup(compact.attachments);
         }
@@ -9351,14 +9377,13 @@ function StudentDetailDialog({
     }
   };
 
-  const handlePhoto = (file: File | undefined) => {
+  const handlePhoto = async (file: File | undefined) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      onUpdateStudent(student.id, { profilePhoto: String(reader.result || "") });
+    const compressed = await compressImageBase64(file, 360, 0.8);
+    if (compressed) {
+      onUpdateStudent(student.id, { profilePhoto: compressed });
       setPhotoPreviewOpen(true);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const openQuickAdd = (kind: QuickAddKind) => {
@@ -16763,15 +16788,34 @@ export default function TizaEducationApp() {
       setRemoteError("");
       try {
         for (const delta of deltas) {
-          const batchCount = Math.max(
-            Math.ceil(delta.records.length / 100),
-            Math.ceil(delta.recordIds.length / 250),
-          );
-          for (let batchIndex = 0; batchIndex < batchCount; batchIndex += 1) {
+          const recordBatches: DataRecord[][] = [];
+          let currentBatch: DataRecord[] = [];
+          let currentBatchBytes = 0;
+
+          for (const record of delta.records) {
+            const recordBytes = new TextEncoder().encode(JSON.stringify(record)).byteLength;
+            if (currentBatch.length > 0 && (currentBatchBytes + recordBytes > 300 * 1024 || currentBatch.length >= 50)) {
+              recordBatches.push(currentBatch);
+              currentBatch = [];
+              currentBatchBytes = 0;
+            }
+            currentBatch.push(record);
+            currentBatchBytes += recordBytes;
+          }
+          if (currentBatch.length > 0) {
+            recordBatches.push(currentBatch);
+          }
+          if (recordBatches.length === 0 && delta.recordIds.length > 0) {
+            recordBatches.push([]);
+          }
+
+          for (let bIdx = 0; bIdx < recordBatches.length; bIdx += 1) {
+            const batchRecords = recordBatches[bIdx];
+            const batchRecordIds = bIdx === 0 ? delta.recordIds : [];
             const body = JSON.stringify({
               entity: delta.entity,
-              records: delta.records.slice(batchIndex * 100, (batchIndex + 1) * 100),
-              recordIds: delta.recordIds.slice(batchIndex * 250, (batchIndex + 1) * 250),
+              records: batchRecords,
+              recordIds: batchRecordIds,
             });
             let lastError = "No se pudieron guardar los cambios.";
             let saved = false;
