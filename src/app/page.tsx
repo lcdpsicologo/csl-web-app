@@ -12488,8 +12488,71 @@ function MeetingsAndInterviewsView({
     return `${typeTag}${firstLine ? ` · ${firstLine.slice(0, 75)}...` : ""}`;
   };
 
+  const parseStructuredInterviewText = (rawText: string | undefined) => {
+    if (!rawText) return { isStructured: false, cleanBody: "" };
+    const text = rawText.trim();
+
+    const isFormTemplate =
+      text.includes("Motivo de entrevista") ||
+      text.includes("Aspectos a tratar") ||
+      text.includes("Nombre entrevistador") ||
+      text.includes("Nombre Alumno") ||
+      text.includes("ENTREVISTA ALUMNO");
+
+    if (!isFormTemplate) return { isStructured: false, cleanBody: text };
+
+    const extractVal = (pattern: RegExp) => {
+      const m = text.match(pattern);
+      return m ? m[1].trim() : undefined;
+    };
+
+    const alumnoName = extractVal(/Nombre Alumno\s*\n+([^\n]+)/i);
+    const run = extractVal(/(?:RUN:?\s*\n*)?([0-9\.\-kK]{7,12})/i);
+    const entrevistador = extractVal(/Nombre entrevistador\s*\n+([^\n]+)/i);
+    const curso = extractVal(/Curso\s*\n+([^\n]+)/i);
+    const hora = extractVal(/Hora\s*\n+([^\n]+)/i);
+    const fecha = extractVal(/Fecha\s*\n+([^\n]+)/i);
+    const acompaniantes = extractVal(/Acompañan en la entrevista\s*\n+([^\n]+)/i);
+
+    // Extract Motivo
+    const motivoMatch = text.match(/Motivo de entrevista\s*\n+([\s\S]*?)(?=Aspectos a tratar|Acuerdos|Compromisos|$)/i);
+    const motivo = motivoMatch ? motivoMatch[1].trim() : undefined;
+
+    // Extract Aspectos
+    const aspectosMatch = text.match(/Aspectos a tratar(?: con el alumno)?\s*\n+([\s\S]*?)(?=Acuerdos|Compromisos|$)/i);
+    const aspectos = aspectosMatch ? aspectosMatch[1].trim() : undefined;
+
+    // Extract Acuerdos if present in text
+    const acuerdosMatch = text.match(/Acuerdos(?: y compromisos)?\s*\n+([\s\S]*?)$/i);
+    const acuerdosText = acuerdosMatch ? acuerdosMatch[1].trim() : undefined;
+
+    const hasExtractedSections = Boolean(motivo || aspectos || hora || entrevistador || run);
+
+    // Build a concise clean summary for collapsed preview
+    const cleanBodyParts = [motivo, aspectos, acuerdosText].filter(Boolean);
+    const cleanBody = cleanBodyParts.length > 0 ? cleanBodyParts.join("\n\n") : text;
+
+    return {
+      isStructured: hasExtractedSections,
+      alumnoName,
+      run,
+      entrevistador,
+      curso,
+      hora,
+      fecha,
+      acompaniantes,
+      motivo,
+      aspectos,
+      acuerdosText,
+      cleanBody,
+    };
+  };
+
   const cleanRecordBodyText = (rawText: string | undefined): string => {
     if (!rawText) return "";
+    const parsed = parseStructuredInterviewText(rawText);
+    if (parsed.isStructured) return parsed.cleanBody;
+
     let text = rawText.trim();
     if (text.includes("ENTREVISTA ALUMNO") || text.includes("DIRECCIÓN") || text.includes("COORDINACIÓN CICLO")) {
       const lines = text.split("\n").map((l) => l.trim());
@@ -13407,35 +13470,103 @@ function MeetingsAndInterviewsView({
                               )}
                             </div>
 
-                            {/* Text Body: Collapsed Preview vs Expanded Full View */}
+                            {/* Text Body: Collapsed Preview vs Expanded Structured Executive View */}
                             {bodyText && (
                               isExpanded ? (
-                                <div className="mt-3 text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80 whitespace-pre-wrap font-normal animate-fadeIn">
-                                  {bodyText}
+                                <div className="mt-3 space-y-3 animate-fadeIn">
+                                  {/* Executive Metadata Grid if structured form */}
+                                  {(() => {
+                                    const parsed = parseStructuredInterviewText(rec.topics || rec.detail || rec.reason || rec.title);
+                                    if (parsed.isStructured) {
+                                      return (
+                                        <>
+                                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 text-xs">
+                                            <div>
+                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Hora</span>
+                                              <span className="font-semibold text-slate-800">{parsed.hora || "No especificada"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Entrevistador</span>
+                                              <span className="font-semibold text-slate-800">{parsed.entrevistador || rec.leader || rec.interviewer || "No especificado"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">RUN Estudiante</span>
+                                              <span className="font-mono font-semibold text-slate-800">{parsed.run || "No especificado"}</span>
+                                            </div>
+                                            <div>
+                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Acompañantes</span>
+                                              <span className="font-semibold text-slate-800">{parsed.acompaniantes || "Ninguno"}</span>
+                                            </div>
+                                          </div>
+
+                                          {parsed.motivo && (
+                                            <div className="rounded-xl border-l-4 border-indigo-500 bg-white p-3.5 shadow-xs border-y border-r border-slate-200/70">
+                                              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1 flex items-center gap-1.5">
+                                                📌 Motivo de la Entrevista
+                                              </h4>
+                                              <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.motivo}</p>
+                                            </div>
+                                          )}
+
+                                          {parsed.aspectos && (
+                                            <div className="rounded-xl border-l-4 border-blue-500 bg-white p-3.5 shadow-xs border-y border-r border-slate-200/70">
+                                              <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900 mb-1 flex items-center gap-1.5">
+                                                💬 Aspectos abordados con el estudiante
+                                              </h4>
+                                              <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.aspectos}</p>
+                                            </div>
+                                          )}
+
+                                          {(parsed.acuerdosText || rec.agreements || rec.commitments) && (
+                                            <div className="grid gap-2.5 sm:grid-cols-2">
+                                              {(parsed.acuerdosText || rec.agreements) && (
+                                                <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
+                                                  <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
+                                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{parsed.acuerdosText || rec.agreements}</p>
+                                                </div>
+                                              )}
+                                              {rec.commitments && (
+                                                <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
+                                                  <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
+                                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+                                        </>
+                                      );
+                                    }
+
+                                    return (
+                                      <>
+                                        <div className="text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80 whitespace-pre-wrap font-normal">
+                                          {bodyText}
+                                        </div>
+                                        {(rec.agreements || rec.commitments) && (
+                                          <div className="grid gap-2.5 sm:grid-cols-2">
+                                            {rec.agreements ? (
+                                              <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
+                                                <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
+                                                <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.agreements}</p>
+                                              </div>
+                                            ) : null}
+                                            {rec.commitments ? (
+                                              <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
+                                                <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
+                                                <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
+                                              </div>
+                                            ) : null}
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               ) : (
                                 <p className="mt-2 text-xs leading-relaxed text-slate-600 line-clamp-2 font-normal">
                                   {bodyText}
                                 </p>
                               )
-                            )}
-
-                            {/* Agreements & Commitments Boxes (Shown when expanded or if short) */}
-                            {isExpanded && (rec.agreements || rec.commitments) && (
-                              <div className="mt-3 grid gap-2.5 sm:grid-cols-2 animate-fadeIn">
-                                {rec.agreements ? (
-                                  <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
-                                    <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
-                                    <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.agreements}</p>
-                                  </div>
-                                ) : null}
-                                {rec.commitments ? (
-                                  <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
-                                    <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
-                                    <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
-                                  </div>
-                                ) : null}
-                              </div>
                             )}
 
                             {/* Expand / Minimize Toggle Button */}
@@ -17637,6 +17768,9 @@ export default function TizaEducationApp() {
   };
 
   const retrySynchronization = () => {
+    setRemoteStatus("saving");
+    setRemoteError("");
+    lastSyncedStoreRef.current = emptyStore();
     void saveStoreIncrementally(storeRef.current);
   };
 
