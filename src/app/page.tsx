@@ -2938,7 +2938,7 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "cases", label: "Casos", icon: FileText },
   { id: "logs", label: "Bitácoras", icon: ClipboardList },
   { id: "interviews", label: "Entrevistas", icon: MessageSquareText },
-  { id: "meetings", label: "Reuniones", icon: NotebookPen },
+  { id: "meetings", label: "Reuniones y Entrevistas", icon: NotebookPen },
   { id: "protocols", label: "Protocolos", icon: ShieldCheck },
   { id: "workshops", label: "Talleres", icon: GraduationCap },
   { id: "documents", label: "Documentos", icon: FolderOpen },
@@ -12372,6 +12372,1098 @@ function TeamView({
   );
 }
 
+function MeetingsAndInterviewsView({
+  store,
+  onAddRecord,
+  onUpdateRecord,
+  onDeleteRecord,
+  onOpenStudent,
+  initialTab = "gp",
+}: {
+  store: DataStore;
+  onAddRecord: (entity: EntityId, record: DataRecord) => void;
+  onUpdateRecord: (entity: EntityId, recordId: string, updates: Record<string, string>) => void;
+  onDeleteRecord: (entity: EntityId, id: string) => void;
+  onOpenStudent: (studentId: string) => void;
+  initialTab?: "gp" | "entrevistas_estudiantes" | "entrevistas_apoderados" | "correos" | "todas";
+}) {
+  const [activeTab, setActiveTab] = useState<"gp" | "entrevistas_estudiantes" | "entrevistas_apoderados" | "correos" | "todas">(initialTab);
+  const [gpFilter, setGpFilter] = useState<"todas" | "formativo" | "interdisciplinario" | "tecnico" | "otras">("todas");
+  const [search, setSearch] = useState("");
+  const [courseFilter, setCourseFilter] = useState("todos");
+
+  // Modal State
+  const [modalType, setModalType] = useState<"" | "gp" | "interview">("");
+  const [editingItem, setEditingItem] = useState<{ entity: "meetings" | "interviews"; id: string } | null>(null);
+
+  // Forms
+  const [gpForm, setGpForm] = useState({
+    date: todayIso(),
+    meetingType: "GP Formativo",
+    title: "",
+    cycle: "",
+    leader: "",
+    attendees: "",
+    topics: "",
+    agreements: "",
+    commitments: "",
+    studentId: "",
+    relatedStudents: "",
+    fileLink: "",
+    notes: "",
+  });
+
+  const [interviewForm, setInterviewForm] = useState({
+    date: todayIso(),
+    interviewType: "Entrevista Estudiante",
+    studentId: "",
+    student: "",
+    participant: "",
+    course: "",
+    interviewer: "",
+    reason: "",
+    status: "Realizada",
+    detail: "",
+    agreements: "",
+  });
+
+  const [emailForm, setEmailForm] = useState({
+    date: todayIso(),
+    studentId: "",
+    student: "",
+    title: "",
+    category: "Información de Caso / Convivencia",
+    content: "",
+    sender: "",
+    notes: "",
+  });
+
+  const sortedStudents = useMemo(() => {
+    return [...store.students].sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "es"));
+  }, [store.students]);
+
+  const officialCourses = useMemo(() => {
+    const set = new Set<string>();
+    store.students.forEach((s) => { if (s.course) set.add(s.course); });
+    store.courses.forEach((c) => { if (c.name) set.add(c.name); });
+    return Array.from(set).sort((a, b) => a.localeCompare(b, "es"));
+  }, [store.students, store.courses]);
+
+  // Combine meetings and interviews
+  const allRecords = useMemo(() => {
+    const meetingsList = (store.meetings || []).map((r) => ({ ...r, _entity: "meetings" as const }));
+    const interviewsList = (store.interviews || []).map((r) => ({ ...r, _entity: "interviews" as const }));
+    return [...meetingsList, ...interviewsList].sort((a: any, b: any) =>
+      String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))
+    );
+  }, [store.meetings, store.interviews]);
+
+  const isGpMeeting = (rec: Record<string, any>) => {
+    const type = String(rec.meetingType || rec.category || "").toLowerCase();
+    const title = String(rec.title || rec.reason || "").toLowerCase();
+    return type.includes("gp") || type.includes("gestión") || title.includes("gp") || rec._entity === "meetings";
+  };
+
+  const isStudentInterview = (rec: Record<string, any>) => {
+    const type = String(rec.meetingType || rec.type || "").toLowerCase();
+    return type.includes("estudiante") || (rec._entity === "interviews" && !type.includes("apoderado"));
+  };
+
+  const isParentInterview = (rec: Record<string, any>) => {
+    const type = String(rec.meetingType || rec.type || "").toLowerCase();
+    const participant = String(rec.participant || "").toLowerCase();
+    return type.includes("apoderado") || type.includes("padre") || type.includes("tutor") || participant.includes("apoderad");
+  };
+
+  const isEmailOrInfo = (rec: Record<string, any>) => {
+    const type = String(rec.meetingType || rec.category || "").toLowerCase();
+    const source = String(rec.source || "").toLowerCase();
+    return type.includes("correo") || type.includes("información") || source.includes("email") || rec.category === "Correo";
+  };
+
+  const filteredRecords = useMemo(() => {
+    return allRecords.filter((recItem) => {
+      const rec = recItem as Record<string, any>;
+      // Course filter
+      if (courseFilter !== "todos") {
+        const recCourse = String(rec.course || rec.cycle || "").toLowerCase();
+        if (!recCourse.includes(courseFilter.toLowerCase())) {
+          const linkedStudent = sortedStudents.find((s) => normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || "")));
+          if (!linkedStudent || linkedStudent.course !== courseFilter) return false;
+        }
+      }
+
+      // Search query
+      if (search.trim()) {
+        const q = normalize(search.trim());
+        const blob = normalize(
+          `${rec.title || ""} ${rec.reason || ""} ${rec.topics || ""} ${rec.detail || ""} ${rec.agreements || ""} ${rec.commitments || ""} ${rec.student || ""} ${rec.relatedStudents || ""} ${rec.participant || ""} ${rec.leader || ""} ${rec.interviewer || ""}`
+        );
+        if (!blob.includes(q)) return false;
+      }
+
+      // Active tab filter
+      if (activeTab === "gp") {
+        if (!isGpMeeting(rec) || isEmailOrInfo(rec)) return false;
+        if (gpFilter === "formativo") return normalize(rec.meetingType || "").includes("formativo");
+        if (gpFilter === "interdisciplinario") return normalize(rec.meetingType || "").includes("interdisciplinario");
+        if (gpFilter === "tecnico") return normalize(rec.meetingType || "").includes("tecnico") || normalize(rec.meetingType || "").includes("docente");
+        if (gpFilter === "otras") return !normalize(rec.meetingType || "").includes("formativo") && !normalize(rec.meetingType || "").includes("interdisciplinario") && !normalize(rec.meetingType || "").includes("tecnico");
+        return true;
+      }
+
+      if (activeTab === "entrevistas_estudiantes") {
+        return isStudentInterview(rec) && !isEmailOrInfo(rec);
+      }
+
+      if (activeTab === "entrevistas_apoderados") {
+        return isParentInterview(rec) && !isEmailOrInfo(rec);
+      }
+
+      if (activeTab === "correos") {
+        return isEmailOrInfo(rec);
+      }
+
+      return true;
+    });
+  }, [allRecords, activeTab, gpFilter, search, courseFilter, sortedStudents]);
+
+  const gpCount = useMemo(() => allRecords.filter((r) => isGpMeeting(r) && !isEmailOrInfo(r)).length, [allRecords]);
+  const studentInterviewCount = useMemo(() => allRecords.filter((r) => isStudentInterview(r) && !isEmailOrInfo(r)).length, [allRecords]);
+  const parentInterviewCount = useMemo(() => allRecords.filter((r) => isParentInterview(r) && !isEmailOrInfo(r)).length, [allRecords]);
+  const emailCount = useMemo(() => allRecords.filter((r) => isEmailOrInfo(r)).length, [allRecords]);
+
+  const handleOpenNewGp = () => {
+    setEditingItem(null);
+    setGpForm({
+      date: todayIso(),
+      meetingType: "GP Formativo",
+      title: "",
+      cycle: "",
+      leader: "",
+      attendees: "",
+      topics: "",
+      agreements: "",
+      commitments: "",
+      studentId: "",
+      relatedStudents: "",
+      fileLink: "",
+      notes: "",
+    });
+    setModalType("gp");
+  };
+
+  const handleOpenNewInterview = (type: "Entrevista Estudiante" | "Entrevista Apoderado" = "Entrevista Estudiante") => {
+    setEditingItem(null);
+    setInterviewForm({
+      date: todayIso(),
+      interviewType: type,
+      studentId: "",
+      student: "",
+      participant: "",
+      course: "",
+      interviewer: "",
+      reason: "",
+      status: "Realizada",
+      detail: "",
+      agreements: "",
+    });
+    setModalType("interview");
+  };
+
+  const handleSaveGp = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!gpForm.title.trim()) return;
+    const studentObj = sortedStudents.find((s) => s.id === gpForm.studentId);
+    const studentTag = studentObj ? `${studentObj.fullName}` : gpForm.relatedStudents;
+    const courseTag = studentObj?.course || gpForm.cycle;
+
+    const payload: DataRecord = {
+      id: editingItem?.id || uid(),
+      createdAt: editingItem ? (store.meetings.find((m) => m.id === editingItem.id)?.createdAt || nowIso()) : nowIso(),
+      updatedAt: nowIso(),
+      date: gpForm.date,
+      meetingType: gpForm.meetingType,
+      title: gpForm.title,
+      cycle: courseTag,
+      course: courseTag,
+      leader: gpForm.leader,
+      attendees: gpForm.attendees,
+      topics: gpForm.topics,
+      agreements: gpForm.agreements,
+      commitments: gpForm.commitments,
+      relatedStudents: studentTag,
+      student: studentTag,
+      fileLink: gpForm.fileLink,
+      notes: gpForm.notes,
+    };
+
+    if (editingItem) {
+      onUpdateRecord("meetings", editingItem.id, payload);
+    } else {
+      onAddRecord("meetings", payload);
+    }
+    setModalType("");
+    setEditingItem(null);
+  };
+
+  const handleSaveInterview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!interviewForm.reason.trim()) return;
+    const studentObj = sortedStudents.find((s) => s.id === interviewForm.studentId);
+    const studentTag = studentObj ? `${studentObj.fullName}` : interviewForm.student;
+    const courseTag = studentObj?.course || interviewForm.course;
+
+    const payload: DataRecord = {
+      id: editingItem?.id || uid(),
+      createdAt: editingItem ? (store.interviews.find((i) => i.id === editingItem.id)?.createdAt || nowIso()) : nowIso(),
+      updatedAt: nowIso(),
+      date: interviewForm.date,
+      meetingType: interviewForm.interviewType,
+      participant: interviewForm.participant || (interviewForm.interviewType === "Entrevista Estudiante" ? studentTag : "Apoderado/a"),
+      student: studentTag,
+      course: courseTag,
+      interviewer: interviewForm.interviewer,
+      reason: interviewForm.reason,
+      status: interviewForm.status,
+      detail: interviewForm.detail,
+      agreements: interviewForm.agreements,
+      relatedStudents: studentTag,
+    };
+
+    if (editingItem) {
+      onUpdateRecord("interviews", editingItem.id, payload);
+    } else {
+      onAddRecord("interviews", payload);
+    }
+    setModalType("");
+    setEditingItem(null);
+  };
+
+  const handleSaveQuickEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!emailForm.content.trim() && !emailForm.title.trim()) return;
+    const studentObj = sortedStudents.find((s) => s.id === emailForm.studentId);
+    const studentTag = studentObj ? `${studentObj.fullName}` : emailForm.student;
+    const courseTag = studentObj?.course || "";
+
+    const payload: DataRecord = {
+      id: uid(),
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      date: emailForm.date || todayIso(),
+      meetingType: "Correo / Información",
+      title: emailForm.title || `Correo: ${emailForm.category}`,
+      category: emailForm.category,
+      student: studentTag,
+      course: courseTag,
+      relatedStudents: studentTag,
+      leader: emailForm.sender || "Correo institucional",
+      topics: emailForm.content,
+      detail: emailForm.content,
+      notes: emailForm.notes,
+      source: "Email",
+    };
+
+    onAddRecord("meetings", payload);
+    setEmailForm({
+      date: todayIso(),
+      studentId: "",
+      student: "",
+      title: "",
+      category: "Información de Caso / Convivencia",
+      content: "",
+      sender: "",
+      notes: "",
+    });
+  };
+
+  const handleEditRecord = (recItem: any) => {
+    const rec = recItem as Record<string, any>;
+    setEditingItem({ entity: recItem._entity, id: recItem.id });
+    if (recItem._entity === "meetings") {
+      const studentObj = sortedStudents.find((s) => normalize(rec.relatedStudents || rec.student || "").includes(normalize(s.fullName || "")));
+      setGpForm({
+        date: rec.date || todayIso(),
+        meetingType: rec.meetingType || "GP Formativo",
+        title: rec.title || rec.reason || "",
+        cycle: rec.cycle || rec.course || "",
+        leader: rec.leader || "",
+        attendees: rec.attendees || "",
+        topics: rec.topics || rec.detail || "",
+        agreements: rec.agreements || "",
+        commitments: rec.commitments || "",
+        studentId: studentObj?.id || "",
+        relatedStudents: rec.relatedStudents || rec.student || "",
+        fileLink: rec.fileLink || "",
+        notes: rec.notes || "",
+      });
+      setModalType("gp");
+    } else {
+      const studentObj = sortedStudents.find((s) => normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || "")));
+      setInterviewForm({
+        date: rec.date || todayIso(),
+        interviewType: rec.meetingType || "Entrevista Estudiante",
+        studentId: studentObj?.id || "",
+        student: rec.student || "",
+        participant: rec.participant || "",
+        course: rec.course || "",
+        interviewer: rec.interviewer || "",
+        reason: rec.reason || rec.title || "",
+        status: rec.status || "Realizada",
+        detail: rec.detail || rec.topics || "",
+        agreements: rec.agreements || "",
+      });
+      setModalType("interview");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-indigo-950 p-6 text-white shadow-md">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-400/30">
+              <NotebookPen className="h-5 w-5" />
+            </span>
+            <h1 className="text-2xl font-bold tracking-tight">Reuniones, Entrevistas e Información</h1>
+          </div>
+          <p className="mt-1 text-sm text-slate-300">
+            Gestión Pedagógica (GP), actas de entrevistas a apoderados y alumnos, y respaldo rápido de correos.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={handleOpenNewGp}
+            className="tz-press inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500"
+          >
+            <Plus className="h-4 w-4" /> Nueva Reunión GP
+          </button>
+          <button
+            onClick={() => handleOpenNewInterview("Entrevista Estudiante")}
+            className="tz-press inline-flex items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2.5 text-xs font-bold text-white hover:bg-white/20 ring-1 ring-white/20"
+          >
+            <Plus className="h-4 w-4" /> Nueva Entrevista
+          </button>
+          <button
+            onClick={() => { setActiveTab("correos"); }}
+            className="tz-press inline-flex items-center gap-2 rounded-xl bg-amber-500/20 px-3.5 py-2.5 text-xs font-bold text-amber-200 hover:bg-amber-500/30 ring-1 ring-amber-400/30"
+          >
+            <Mail className="h-4 w-4" /> Pegar Correo
+          </button>
+        </div>
+      </div>
+
+      {/* Counter Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <button
+          onClick={() => setActiveTab("gp")}
+          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "gp" ? "border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
+        >
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Reuniones GP</span>
+          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{gpCount}</span>
+          <span className="mt-1 text-[11px] text-slate-500">Formativo, Interdisciplinario, etc.</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("entrevistas_estudiantes")}
+          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "entrevistas_estudiantes" ? "border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
+        >
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Entrevistas Alumnos</span>
+          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{studentInterviewCount}</span>
+          <span className="mt-1 text-[11px] text-slate-500">Entrevistas directas</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("entrevistas_apoderados")}
+          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "entrevistas_apoderados" ? "border-purple-500 bg-purple-50/50 ring-2 ring-purple-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
+        >
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Entrevistas Apoderados</span>
+          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{parentInterviewCount}</span>
+          <span className="mt-1 text-[11px] text-slate-500">Apoderados y tutores</span>
+        </button>
+        <button
+          onClick={() => setActiveTab("correos")}
+          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "correos" ? "border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
+        >
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Correos / Info</span>
+          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{emailCount}</span>
+          <span className="mt-1 text-[11px] text-slate-500">Respaldos aludidos</span>
+        </button>
+      </div>
+
+      {/* Tab Navigation */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            onClick={() => setActiveTab("gp")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${activeTab === "gp" ? "bg-slate-900 text-white shadow" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"}`}
+          >
+            📌 Reuniones GP ({gpCount})
+          </button>
+          <button
+            onClick={() => setActiveTab("entrevistas_estudiantes")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${activeTab === "entrevistas_estudiantes" ? "bg-slate-900 text-white shadow" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"}`}
+          >
+            🎓 Entrevistas a Estudiantes ({studentInterviewCount})
+          </button>
+          <button
+            onClick={() => setActiveTab("entrevistas_apoderados")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${activeTab === "entrevistas_apoderados" ? "bg-slate-900 text-white shadow" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"}`}
+          >
+            👨‍👩‍👧 Entrevistas a Apoderados ({parentInterviewCount})
+          </button>
+          <button
+            onClick={() => setActiveTab("correos")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${activeTab === "correos" ? "bg-slate-900 text-white shadow" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"}`}
+          >
+            📧 Información y Correos ({emailCount})
+          </button>
+          <button
+            onClick={() => setActiveTab("todas")}
+            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${activeTab === "todas" ? "bg-slate-900 text-white shadow" : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"}`}
+          >
+            📋 Histórico Completo ({allRecords.length})
+          </button>
+        </div>
+
+        {/* Filters & Search */}
+        <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar tema, persona o estudiante..."
+              className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500"
+            />
+          </div>
+          <select
+            value={courseFilter}
+            onChange={(e) => setCourseFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500"
+          >
+            <option value="todos">Todos los cursos</option>
+            {officialCourses.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Sub-filter chips for GP Tab */}
+      {activeTab === "gp" && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl bg-slate-100 p-2 border border-slate-200">
+          <span className="px-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Filtrar Categoría GP:</span>
+          <button
+            onClick={() => setGpFilter("todas")}
+            className={`rounded-lg px-3 py-1 text-xs font-bold transition ${gpFilter === "todas" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-700 hover:bg-slate-200"}`}
+          >
+            Todas las GP
+          </button>
+          <button
+            onClick={() => setGpFilter("formativo")}
+            className={`rounded-lg px-3 py-1 text-xs font-bold transition ${gpFilter === "formativo" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-700 hover:bg-slate-200"}`}
+          >
+            Formativo
+          </button>
+          <button
+            onClick={() => setGpFilter("interdisciplinario")}
+            className={`rounded-lg px-3 py-1 text-xs font-bold transition ${gpFilter === "interdisciplinario" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-700 hover:bg-slate-200"}`}
+          >
+            Interdisciplinario
+          </button>
+          <button
+            onClick={() => setGpFilter("tecnico")}
+            className={`rounded-lg px-3 py-1 text-xs font-bold transition ${gpFilter === "tecnico" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-700 hover:bg-slate-200"}`}
+          >
+            Técnico / Docente
+          </button>
+          <button
+            onClick={() => setGpFilter("otras")}
+            className={`rounded-lg px-3 py-1 text-xs font-bold transition ${gpFilter === "otras" ? "bg-indigo-600 text-white shadow-sm" : "bg-white text-slate-700 hover:bg-slate-200"}`}
+          >
+            Otras Reuniones GP
+          </button>
+        </div>
+      )}
+
+      {/* Quick Paste Email Card inside "Información y Correos" tab */}
+      {activeTab === "correos" && (
+        <form onSubmit={handleSaveQuickEmail} className="rounded-2xl border border-amber-200 bg-amber-50/40 p-5 shadow-sm space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="grid h-8 w-8 place-items-center rounded-lg bg-amber-500 text-white shadow-sm">
+                <Mail className="h-4 w-4" />
+              </span>
+              <div>
+                <h3 className="text-sm font-bold text-amber-950">Ingreso Rápido de Correo o Antecedentes</h3>
+                <p className="text-xs text-amber-800 font-medium">Pega el correo o mensaje recibido y vincúlalo directamente a la ficha del estudiante.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Estudiante aludido *</label>
+              <select
+                value={emailForm.studentId}
+                onChange={(e) => {
+                  const sObj = sortedStudents.find((s) => s.id === e.target.value);
+                  setEmailForm({ ...emailForm, studentId: e.target.value, student: sObj ? sObj.fullName : "" });
+                }}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-amber-500"
+              >
+                <option value="">-- Seleccionar estudiante --</option>
+                {sortedStudents.map((s) => (
+                  <option key={s.id} value={s.id}>{s.fullName} ({s.course || "Sin curso"})</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Asunto / Título</label>
+              <input
+                type="text"
+                value={emailForm.title}
+                onChange={(e) => setEmailForm({ ...emailForm, title: e.target.value })}
+                placeholder="Ej. Caso Convivencia / Notificación Apoderado"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-amber-500"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Categoría</label>
+              <select
+                value={emailForm.category}
+                onChange={(e) => setEmailForm({ ...emailForm, category: e.target.value })}
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-amber-500"
+              >
+                <option value="Información de Caso / Convivencia">Información de Caso / Convivencia</option>
+                <option value="Notificación de Apoderado">Notificación de Apoderado</option>
+                <option value="Informe Externo / Médico">Informe Externo / Médico</option>
+                <option value="Coordinación PIE">Coordinación PIE</option>
+                <option value="Observación de Asistencia / Conducta">Observación de Asistencia / Conducta</option>
+                <option value="Otro Antecedente">Otro Antecedente</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Contenido del correo / Texto *</label>
+            <textarea
+              rows={4}
+              value={emailForm.content}
+              onChange={(e) => setEmailForm({ ...emailForm, content: e.target.value })}
+              placeholder="Pega aquí el texto completo del correo recibido o mensaje..."
+              className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-mono text-slate-800 placeholder-slate-400 outline-none focus:border-amber-500 leading-relaxed"
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-2 pt-1">
+            <div className="flex items-center gap-2">
+              <input
+                type="date"
+                value={emailForm.date}
+                onChange={(e) => setEmailForm({ ...emailForm, date: e.target.value })}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+              />
+              <input
+                type="text"
+                value={emailForm.sender}
+                onChange={(e) => setEmailForm({ ...emailForm, sender: e.target.value })}
+                placeholder="Remitente (opcional)"
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={!emailForm.content.trim() && !emailForm.title.trim()}
+              className="tz-press inline-flex items-center gap-2 rounded-xl bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-amber-500 disabled:opacity-50"
+            >
+              <Check className="h-4 w-4" /> Guardar e Incorporar al Perfil
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Cards List */}
+      {filteredRecords.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <NotebookPen className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
+          <h3 className="mt-3 text-base font-bold text-slate-900">No hay registros en esta sección</h3>
+          <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
+            Aún no se han ingresado reuniones GP, entrevistas o correos con los filtros seleccionados.
+          </p>
+          <div className="mt-5 flex justify-center gap-3">
+            <button onClick={handleOpenNewGp} className="rounded-xl bg-indigo-600 px-4 py-2 text-xs font-bold text-white hover:bg-indigo-500">
+              + Crear Reunión GP
+            </button>
+            <button onClick={() => handleOpenNewInterview("Entrevista Estudiante")} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+              + Crear Entrevista
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {filteredRecords.map((recItem) => {
+            const rec = recItem as Record<string, any> & { _entity: "meetings" | "interviews"; id: string };
+            const isGp = isGpMeeting(rec);
+            const isEmail = isEmailOrInfo(rec);
+
+            // Match student if tagged
+            const studentMatch = sortedStudents.find((s) =>
+              normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || ""))
+            );
+
+            return (
+              <div
+                key={`${rec._entity}-${rec.id}`}
+                className="group relative flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-slate-300 hover:shadow-md transition"
+              >
+                <div>
+                  {/* Top Bar / Badges */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ${
+                      isEmail
+                        ? "bg-amber-100 text-amber-800"
+                        : isGp
+                          ? "bg-indigo-100 text-indigo-800"
+                          : "bg-blue-100 text-blue-800"
+                    }`}>
+                      {isEmail ? <Mail className="h-3 w-3" /> : isGp ? <NotebookPen className="h-3 w-3" /> : <MessageSquareText className="h-3 w-3" />}
+                      {rec.meetingType || rec.category || (isGp ? "Reunión GP" : "Entrevista")}
+                    </span>
+
+                    <span className="text-xs font-semibold text-slate-400">
+                      {rec.date ? new Date(rec.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" }) : "Sin fecha"}
+                    </span>
+                  </div>
+
+                  {/* Title */}
+                  <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-2">
+                    {rec.title || rec.reason || "Registro sin título"}
+                  </h3>
+
+                  {/* Tagged Student Pill */}
+                  {(rec.student || rec.relatedStudents) && (
+                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-slate-400">Estudiante:</span>
+                      {studentMatch ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenStudent(studentMatch.id)}
+                          className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 transition"
+                        >
+                          <UserRound className="h-3 w-3" />
+                          {studentMatch.fullName} ({studentMatch.course || "Sin curso"})
+                        </button>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                          <UserRound className="h-3 w-3 text-slate-400" />
+                          {rec.student || rec.relatedStudents}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Leader / Interviewer / Participant */}
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
+                    {rec.leader || rec.interviewer ? (
+                      <span><strong>Responsable:</strong> {rec.leader || rec.interviewer}</span>
+                    ) : null}
+                    {rec.participant ? (
+                      <span><strong>Participante:</strong> {rec.participant}</span>
+                    ) : null}
+                    {rec.cycle || rec.course ? (
+                      <span><strong>Curso/Ciclo:</strong> {rec.cycle || rec.course}</span>
+                    ) : null}
+                  </div>
+
+                  {/* Main content / Topics / Details */}
+                  {(rec.topics || rec.detail) && (
+                    <div className="mt-3 text-xs leading-relaxed text-slate-700 bg-slate-50/70 rounded-xl p-3 border border-slate-100 line-clamp-4">
+                      {rec.topics || rec.detail}
+                    </div>
+                  )}
+
+                  {/* Agreements & Commitments */}
+                  {(rec.agreements || rec.commitments) && (
+                    <div className="mt-3 space-y-1.5">
+                      {rec.agreements ? (
+                        <div className="text-xs text-emerald-800 bg-emerald-50/60 rounded-xl p-2.5 border border-emerald-100/60">
+                          <strong className="block font-bold text-emerald-900">Acuerdos:</strong>
+                          <p className="mt-0.5 leading-normal">{rec.agreements}</p>
+                        </div>
+                      ) : null}
+                      {rec.commitments ? (
+                        <div className="text-xs text-blue-800 bg-blue-50/60 rounded-xl p-2.5 border border-blue-100/60">
+                          <strong className="block font-bold text-blue-900">Compromisos:</strong>
+                          <p className="mt-0.5 leading-normal">{rec.commitments}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+
+                {/* Bottom Actions Bar */}
+                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
+                  <div className="flex items-center gap-2">
+                    {rec.fileLink ? (
+                      <a
+                        href={rec.fileLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
+                      >
+                        Ver Acta / Drive
+                      </a>
+                    ) : (
+                      <span className="text-[11px] text-slate-400 font-medium">ID: {rec.id.slice(0, 8)}</span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleEditRecord(rec)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                      title="Editar registro"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDeleteRecord(rec._entity, rec.id)}
+                      className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                      title="Eliminar registro"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal GP */}
+      {modalType === "gp" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <NotebookPen className="h-5 w-5 text-indigo-600" />
+                {editingItem ? "Editar Reunión GP" : "Nueva Reunión de Gestión Pedagógica (GP)"}
+              </h2>
+              <button onClick={() => setModalType("")} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveGp} className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Categoría / Tipo GP *</label>
+                  <select
+                    value={gpForm.meetingType}
+                    onChange={(e) => setGpForm({ ...gpForm, meetingType: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-500"
+                  >
+                    <option value="GP Formativo">GP Formativo</option>
+                    <option value="GP Interdisciplinario">GP Interdisciplinario</option>
+                    <option value="GP Técnico / Docente">GP Técnico / Docente</option>
+                    <option value="Equipo de Aula">Equipo de Aula</option>
+                    <option value="Consejo de Profesores">Consejo de Profesores</option>
+                    <option value="Dupla Psicosocial">Dupla Psicosocial</option>
+                    <option value="Coordinación PIE">Coordinación PIE</option>
+                    <option value="Otra Reunión GP">Otra Reunión GP</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Fecha *</label>
+                  <input
+                    type="date"
+                    value={gpForm.date}
+                    onChange={(e) => setGpForm({ ...gpForm, date: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tema / Motivo de la reunión *</label>
+                <input
+                  type="text"
+                  required
+                  value={gpForm.title}
+                  onChange={(e) => setGpForm({ ...gpForm, title: e.target.value })}
+                  placeholder="Ej. Análisis de casos I Ciclo / Plan de apoyo formativo"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Vincular Estudiante aludido (opcional)</label>
+                  <select
+                    value={gpForm.studentId}
+                    onChange={(e) => {
+                      const s = sortedStudents.find((item) => item.id === e.target.value);
+                      setGpForm({ ...gpForm, studentId: e.target.value, relatedStudents: s ? s.fullName : "" });
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-500"
+                  >
+                    <option value="">-- Ninguno o General --</option>
+                    {sortedStudents.map((s) => (
+                      <option key={s.id} value={s.id}>{s.fullName} ({s.course || "Sin curso"})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Dirige / Responsable</label>
+                  <input
+                    type="text"
+                    value={gpForm.leader}
+                    onChange={(e) => setGpForm({ ...gpForm, leader: e.target.value })}
+                    placeholder="Ej. Orientador / Coord. Convivencia"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Participantes / Asistentes</label>
+                <input
+                  type="text"
+                  value={gpForm.attendees}
+                  onChange={(e) => setGpForm({ ...gpForm, attendees: e.target.value })}
+                  placeholder="Docentes de asignatura, psicóloga, educadora PIE..."
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Temas tratados / Desarrollo</label>
+                <textarea
+                  rows={3}
+                  value={gpForm.topics}
+                  onChange={(e) => setGpForm({ ...gpForm, topics: e.target.value })}
+                  placeholder="Aspectos conversados, observaciones del equipo..."
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Acuerdos</label>
+                  <textarea
+                    rows={2}
+                    value={gpForm.agreements}
+                    onChange={(e) => setGpForm({ ...gpForm, agreements: e.target.value })}
+                    placeholder="Conclusiones alcanzadas..."
+                    className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium outline-none focus:border-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Compromisos / Próximos pasos</label>
+                  <textarea
+                    rows={2}
+                    value={gpForm.commitments}
+                    onChange={(e) => setGpForm({ ...gpForm, commitments: e.target.value })}
+                    placeholder="Responsables y fechas de seguimiento..."
+                    className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Enlace a Acta / Documento (Drive / PDF)</label>
+                <input
+                  type="url"
+                  value={gpForm.fileLink}
+                  onChange={(e) => setGpForm({ ...gpForm, fileLink: e.target.value })}
+                  placeholder="https://drive.google.com/..."
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalType("")}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-indigo-600 px-5 py-2 text-xs font-bold text-white shadow hover:bg-indigo-500"
+                >
+                  Guardar Reunión GP
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Entrevista */}
+      {modalType === "interview" && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <MessageSquareText className="h-5 w-5 text-blue-600" />
+                {editingItem ? "Editar Entrevista" : "Nueva Entrevista"}
+              </h2>
+              <button onClick={() => setModalType("")} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveInterview} className="space-y-4">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tipo de Entrevista *</label>
+                  <select
+                    value={interviewForm.interviewType}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, interviewType: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                  >
+                    <option value="Entrevista Estudiante">Entrevista a Estudiante</option>
+                    <option value="Entrevista Apoderado">Entrevista a Apoderado / Tutor</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Fecha *</label>
+                  <input
+                    type="date"
+                    value={interviewForm.date}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, date: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Estudiante vinculado *</label>
+                  <select
+                    value={interviewForm.studentId}
+                    onChange={(e) => {
+                      const s = sortedStudents.find((item) => item.id === e.target.value);
+                      setInterviewForm({
+                        ...interviewForm,
+                        studentId: e.target.value,
+                        student: s ? s.fullName : "",
+                        course: s?.course || interviewForm.course,
+                      });
+                    }}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                  >
+                    <option value="">-- Seleccionar estudiante --</option>
+                    {sortedStudents.map((s) => (
+                      <option key={s.id} value={s.id}>{s.fullName} ({s.course || "Sin curso"})</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Entrevistador/a (Profesional)</label>
+                  <input
+                    type="text"
+                    value={interviewForm.interviewer}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, interviewer: e.target.value })}
+                    placeholder="Ej. Psicólogo / Orientadora"
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Participante entrevistado/a</label>
+                  <input
+                    type="text"
+                    value={interviewForm.participant}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, participant: e.target.value })}
+                    placeholder={interviewForm.interviewType === "Entrevista Estudiante" ? "Nombre del alumno" : "Nombre del apoderado/a"}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Estado</label>
+                  <select
+                    value={interviewForm.status}
+                    onChange={(e) => setInterviewForm({ ...interviewForm, status: e.target.value })}
+                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                  >
+                    <option value="Realizada">Realizada</option>
+                    <option value="Agendada">Agendada</option>
+                    <option value="Reprogramada">Reprogramada</option>
+                    <option value="Cerrada">Cerrada</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Motivo de la entrevista *</label>
+                <input
+                  type="text"
+                  required
+                  value={interviewForm.reason}
+                  onChange={(e) => setInterviewForm({ ...interviewForm, reason: e.target.value })}
+                  placeholder="Ej. Seguimiento conductual / Compromiso de asistencia"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Desarrollo / Observaciones</label>
+                <textarea
+                  rows={3}
+                  value={interviewForm.detail}
+                  onChange={(e) => setInterviewForm({ ...interviewForm, detail: e.target.value })}
+                  placeholder="Detalle de lo conversado durante la entrevista..."
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Acuerdos y Compromisos</label>
+                <textarea
+                  rows={2}
+                  value={interviewForm.agreements}
+                  onChange={(e) => setInterviewForm({ ...interviewForm, agreements: e.target.value })}
+                  placeholder="Acuerdos firmados o pactados..."
+                  className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setModalType("")}
+                  className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-xl bg-blue-600 px-5 py-2 text-xs font-bold text-white shadow hover:bg-blue-500"
+                >
+                  Guardar Entrevista
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function GamesView() {
   const [shareGame, setShareGame] = useState<(typeof games)[number] | null>(null);
   const maletinGames = games.filter((game) => game.collection === "Maletín Viajero");
@@ -16149,6 +17241,18 @@ export default function TizaEducationApp() {
           seeding={teamSeeding}
           seedNotice={teamSeedNotice}
           onSeed={seedTeam}
+        />
+      );
+    }
+    if (activeView === "meetings" || activeView === "interviews") {
+      return (
+        <MeetingsAndInterviewsView
+          store={store}
+          onAddRecord={addRecord}
+          onUpdateRecord={updateRecord}
+          onDeleteRecord={deleteRecord}
+          onOpenStudent={openStudent}
+          initialTab={activeView === "interviews" ? "entrevistas_estudiantes" : "gp"}
         />
       );
     }
