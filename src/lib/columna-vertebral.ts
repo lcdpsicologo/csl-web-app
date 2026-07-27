@@ -95,7 +95,7 @@ export type ColumnaProgress = {
 export const columnaProgress = (
   course: string,
   records: ColumnaRecordLike[],
-  options?: { reserveUpcoming?: boolean },
+  options?: { reserveUpcoming?: boolean; reserveFromDate?: string },
 ): ColumnaProgress | null => {
   const classes = columnaForCourse(course);
   if (!classes) return null;
@@ -119,6 +119,7 @@ export const columnaProgress = (
   if (options?.reserveUpcoming) {
     courseRecords
       .filter((record) => /planificad|pendiente/i.test(record.status || ""))
+      .filter((record) => !options.reserveFromDate || String(record.date || "").slice(0, 10) >= options.reserveFromDate)
       .forEach((record) => {
         const match = matchColumnaRecord(course, record);
         if (match) reserved.add(match.order);
