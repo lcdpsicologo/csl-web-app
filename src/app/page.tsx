@@ -13374,12 +13374,19 @@ function MeetingsAndInterviewsView({
                       return (
                         <div
                           key={`${rec._entity}-${rec.id}`}
-                          className="group relative flex flex-col justify-between w-full rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300 hover:shadow-md transition space-y-3"
+                          className={`group relative flex flex-col justify-between w-full rounded-2xl border border-slate-200/90 bg-white transition shadow-xs hover:border-indigo-300 hover:shadow-md ${
+                            isExpanded ? "p-5 space-y-3" : "px-4 py-3"
+                          }`}
                         >
-                          {/* Top Bar: Badges, Date, Actions */}
-                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
+                          {/* Top Bar: Clickable header to expand/collapse */}
+                          <div
+                            onClick={() => toggleRecordExpanded(rec.id)}
+                            className={`flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none ${
+                              isExpanded ? "border-b border-slate-100 pb-3" : ""
+                            }`}
+                          >
+                            <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
                                 isEmail
                                   ? "bg-amber-100 text-amber-800"
                                   : isGp
@@ -13390,19 +13397,43 @@ function MeetingsAndInterviewsView({
                               </span>
 
                               {rec.date && (
-                                <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
                                   📅 {new Date(rec.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" })}
                                 </span>
                               )}
+
+                              {/* Title inline when collapsed */}
+                              {!isExpanded && (
+                                <span className="text-xs font-bold text-slate-900 truncate max-w-xs sm:max-w-md group-hover:text-indigo-600 transition">
+                                  {cleanTitle}
+                                </span>
+                              )}
+
+                              {/* Tagged Student Badge inline when collapsed */}
+                              {!isExpanded && (rec.student || rec.relatedStudents) && (
+                                studentMatch ? (
+                                  <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-bold text-indigo-700 ring-1 ring-indigo-200">
+                                    <UserRound className="h-3 w-3" />
+                                    {studentMatch.fullName}
+                                  </span>
+                                ) : (
+                                  <span className="hidden md:inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                    <UserRound className="h-3 w-3 text-slate-400" />
+                                    {rec.student || rec.relatedStudents}
+                                  </span>
+                                )
+                              )}
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            {/* Top Right Actions & Top Expand/Minimize Chevron Icon */}
+                            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                               {rec.fileLink && (
                                 <a
                                   href={rec.fileLink}
                                   target="_blank"
                                   rel="noreferrer"
                                   className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition ring-1 ring-indigo-200/60"
+                                  title="Ver Acta en Google Drive"
                                 >
                                   <ExternalLink className="h-3.5 w-3.5" /> Ver Drive
                                 </a>
@@ -13413,7 +13444,7 @@ function MeetingsAndInterviewsView({
                                 className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
                                 title="Editar registro"
                               >
-                                <Pencil className="h-4 w-4" />
+                                <Pencil className="h-3.5 w-3.5" />
                               </button>
                               <button
                                 type="button"
@@ -13421,173 +13452,170 @@ function MeetingsAndInterviewsView({
                                 className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
                                 title="Eliminar registro"
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Trash2 className="h-3.5 w-3.5" />
                               </button>
-                            </div>
-                          </div>
 
-                          {/* Main Content Body */}
-                          <div>
-                            {/* Title & ID */}
-                            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                              <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition">
-                                {cleanTitle}
-                              </h3>
-                              <span className="text-[11px] text-slate-400 font-mono">ID: {rec.id.slice(0, 8)}</span>
-                            </div>
-
-                            {/* Metadata & Tagged Student */}
-                            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 font-medium">
-                              {rec.leader || rec.interviewer ? (
-                                <span><strong>Responsable:</strong> {rec.leader || rec.interviewer}</span>
-                              ) : null}
-                              {rec.participant ? (
-                                <span><strong>Participante:</strong> {rec.participant}</span>
-                              ) : null}
-                              {rec.cycle || rec.course ? (
-                                <span><strong>Curso/Ciclo:</strong> {rec.cycle || rec.course}</span>
-                              ) : null}
-
-                              {(rec.student || rec.relatedStudents) && (
-                                <div className="inline-flex items-center gap-1.5">
-                                  <span className="font-semibold text-slate-400">Estudiante:</span>
-                                  {studentMatch ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => onOpenStudent(studentMatch.id)}
-                                      className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 transition"
-                                    >
-                                      <UserRound className="h-3 w-3" />
-                                      {studentMatch.fullName} ({studentMatch.course || "Sin curso"})
-                                    </button>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                                      <UserRound className="h-3 w-3 text-slate-400" />
-                                      {rec.student || rec.relatedStudents}
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Text Body: Collapsed Preview vs Expanded Structured Executive View */}
-                            {bodyText && (
-                              isExpanded ? (
-                                <div className="mt-3 space-y-3 animate-fadeIn">
-                                  {/* Executive Metadata Grid if structured form */}
-                                  {(() => {
-                                    const parsed = parseStructuredInterviewText(rec.topics || rec.detail || rec.reason || rec.title);
-                                    if (parsed.isStructured) {
-                                      return (
-                                        <>
-                                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 text-xs">
-                                            <div>
-                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Hora</span>
-                                              <span className="font-semibold text-slate-800">{parsed.hora || "No especificada"}</span>
-                                            </div>
-                                            <div>
-                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Entrevistador</span>
-                                              <span className="font-semibold text-slate-800">{parsed.entrevistador || rec.leader || rec.interviewer || "No especificado"}</span>
-                                            </div>
-                                            <div>
-                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">RUN Estudiante</span>
-                                              <span className="font-mono font-semibold text-slate-800">{parsed.run || "No especificado"}</span>
-                                            </div>
-                                            <div>
-                                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Acompañantes</span>
-                                              <span className="font-semibold text-slate-800">{parsed.acompaniantes || "Ninguno"}</span>
-                                            </div>
-                                          </div>
-
-                                          {parsed.motivo && (
-                                            <div className="rounded-xl border-l-4 border-indigo-500 bg-white p-3.5 shadow-xs border-y border-r border-slate-200/70">
-                                              <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1 flex items-center gap-1.5">
-                                                📌 Motivo de la Entrevista
-                                              </h4>
-                                              <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.motivo}</p>
-                                            </div>
-                                          )}
-
-                                          {parsed.aspectos && (
-                                            <div className="rounded-xl border-l-4 border-blue-500 bg-white p-3.5 shadow-xs border-y border-r border-slate-200/70">
-                                              <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900 mb-1 flex items-center gap-1.5">
-                                                💬 Aspectos abordados con el estudiante
-                                              </h4>
-                                              <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.aspectos}</p>
-                                            </div>
-                                          )}
-
-                                          {(parsed.acuerdosText || rec.agreements || rec.commitments) && (
-                                            <div className="grid gap-2.5 sm:grid-cols-2">
-                                              {(parsed.acuerdosText || rec.agreements) && (
-                                                <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
-                                                  <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
-                                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{parsed.acuerdosText || rec.agreements}</p>
-                                                </div>
-                                              )}
-                                              {rec.commitments && (
-                                                <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
-                                                  <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
-                                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
-                                                </div>
-                                              )}
-                                            </div>
-                                          )}
-                                        </>
-                                      );
-                                    }
-
-                                    return (
-                                      <>
-                                        <div className="text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80 whitespace-pre-wrap font-normal">
-                                          {bodyText}
-                                        </div>
-                                        {(rec.agreements || rec.commitments) && (
-                                          <div className="grid gap-2.5 sm:grid-cols-2">
-                                            {rec.agreements ? (
-                                              <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
-                                                <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
-                                                <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.agreements}</p>
-                                              </div>
-                                            ) : null}
-                                            {rec.commitments ? (
-                                              <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
-                                                <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
-                                                <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
-                                              </div>
-                                            ) : null}
-                                          </div>
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-                                </div>
-                              ) : (
-                                <p className="mt-2 text-xs leading-relaxed text-slate-600 line-clamp-2 font-normal">
-                                  {bodyText}
-                                </p>
-                              )
-                            )}
-
-                            {/* Expand / Minimize Toggle Button */}
-                            <div className="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2">
+                              {/* Top Expand/Minimize Toggle Button Icon */}
                               <button
                                 type="button"
                                 onClick={() => toggleRecordExpanded(rec.id)}
-                                className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
+                                className="grid h-7 w-7 place-items-center rounded-lg bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition ml-1"
+                                title={isExpanded ? "Minimizar registro" : "Expandir registro"}
                               >
                                 {isExpanded ? (
-                                  <>
-                                    <ChevronUp className="h-3.5 w-3.5" /> Minimizar detalle
-                                  </>
+                                  <ChevronUp className="h-4 w-4" />
                                 ) : (
-                                  <>
-                                    <ChevronDown className="h-3.5 w-3.5" /> Ver detalle completo
-                                  </>
+                                  <ChevronDown className="h-4 w-4" />
                                 )}
                               </button>
                             </div>
                           </div>
+
+                          {/* Main Content Body (Visible only when expanded) */}
+                          {isExpanded && (
+                            <div className="animate-fadeIn space-y-3">
+                              {/* Title & ID */}
+                              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                                  {cleanTitle}
+                                </h3>
+                                <span className="text-[11px] text-slate-400 font-mono">ID: {rec.id.slice(0, 8)}</span>
+                              </div>
+
+                              {/* Metadata & Tagged Student */}
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 font-medium">
+                                {rec.leader || rec.interviewer ? (
+                                  <span><strong>Responsable:</strong> {rec.leader || rec.interviewer}</span>
+                                ) : null}
+                                {rec.participant ? (
+                                  <span><strong>Participante:</strong> {rec.participant}</span>
+                                ) : null}
+                                {rec.cycle || rec.course ? (
+                                  <span><strong>Curso/Ciclo:</strong> {rec.cycle || rec.course}</span>
+                                ) : null}
+
+                                {(rec.student || rec.relatedStudents) && (
+                                  <div className="inline-flex items-center gap-1.5">
+                                    <span className="font-semibold text-slate-400">Estudiante:</span>
+                                    {studentMatch ? (
+                                      <button
+                                        type="button"
+                                        onClick={() => onOpenStudent(studentMatch.id)}
+                                        className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 transition"
+                                      >
+                                        <UserRound className="h-3 w-3" />
+                                        {studentMatch.fullName} ({studentMatch.course || "Sin curso"})
+                                      </button>
+                                    ) : (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                                        <UserRound className="h-3 w-3 text-slate-400" />
+                                        {rec.student || rec.relatedStudents}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Structured Executive Body */}
+                              {bodyText && (() => {
+                                const parsed = parseStructuredInterviewText(rec.topics || rec.detail || rec.reason || rec.title);
+                                if (parsed.isStructured) {
+                                  return (
+                                    <>
+                                      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 text-xs">
+                                        <div>
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Hora</span>
+                                          <span className="font-semibold text-slate-800">{parsed.hora || "No especificada"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Entrevistador</span>
+                                          <span className="font-semibold text-slate-800">{parsed.entrevistador || rec.leader || rec.interviewer || "No especificado"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">RUN Estudiante</span>
+                                          <span className="font-mono font-semibold text-slate-800">{parsed.run || "No especificado"}</span>
+                                        </div>
+                                        <div>
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Acompañantes</span>
+                                          <span className="font-semibold text-slate-800">{parsed.acompaniantes || "Ninguno"}</span>
+                                        </div>
+                                      </div>
+
+                                      {parsed.motivo && (
+                                        <div className="rounded-xl border-l-4 border-indigo-500 bg-white p-3.5 shadow-xs border-y border-r border-slate-200/70">
+                                          <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-900 mb-1 flex items-center gap-1.5">
+                                            📌 Motivo de la Entrevista
+                                          </h4>
+                                          <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.motivo}</p>
+                                        </div>
+                                      )}
+
+                                      {parsed.aspectos && (
+                                        <div className="rounded-xl border-l-4 border-blue-500 bg-white p-3.5 shadow-xs border-y border-r border-slate-200/70">
+                                          <h4 className="text-xs font-bold uppercase tracking-wider text-blue-900 mb-1 flex items-center gap-1.5">
+                                            💬 Aspectos abordados con el estudiante
+                                          </h4>
+                                          <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.aspectos}</p>
+                                        </div>
+                                      )}
+
+                                      {(parsed.acuerdosText || rec.agreements || rec.commitments) && (
+                                        <div className="grid gap-2.5 sm:grid-cols-2">
+                                          {(parsed.acuerdosText || rec.agreements) && (
+                                            <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
+                                              <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
+                                              <p className="leading-relaxed whitespace-pre-wrap font-normal">{parsed.acuerdosText || rec.agreements}</p>
+                                            </div>
+                                          )}
+                                          {rec.commitments && (
+                                            <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
+                                              <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
+                                              <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </>
+                                  );
+                                }
+
+                                return (
+                                  <>
+                                    <div className="text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80 whitespace-pre-wrap font-normal">
+                                      {bodyText}
+                                    </div>
+                                    {(rec.agreements || rec.commitments) && (
+                                      <div className="grid gap-2.5 sm:grid-cols-2">
+                                        {rec.agreements ? (
+                                          <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
+                                            <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
+                                            <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.agreements}</p>
+                                          </div>
+                                        ) : null}
+                                        {rec.commitments ? (
+                                          <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
+                                            <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
+                                            <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
+                                          </div>
+                                        ) : null}
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
+
+                              {/* Bottom Minimizar button when expanded */}
+                              <div className="border-t border-slate-100 pt-2 flex items-center justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRecordExpanded(rec.id)}
+                                  className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-700 transition"
+                                >
+                                  <ChevronUp className="h-3.5 w-3.5" /> Minimizar detalle
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
