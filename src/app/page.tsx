@@ -737,10 +737,11 @@ const orientationConfigForDate = (dateISO: string) =>
 
 const orientationWeekNumber = (week: string) => week.match(/Semana\s+(\d+)/i)?.[1] || "";
 
-// Profesor/a jefe de un curso según la nómina (los horarios usan "PRIMERO BÁSICO A", la app "1° Básico A").
-const canonicalCourseKey = (value: string) =>
-  normalize(value)
-    .replace(/pkekinder/g, "prekinder")
+const canonicalCourseKey = (value: string | undefined): string => {
+  if (!value) return "";
+  let s = normalize(value).toLowerCase().trim();
+
+  s = s
     .replace(/\bprimero\b/g, "1")
     .replace(/\bsegundo\b/g, "2")
     .replace(/\btercero\b/g, "3")
@@ -749,9 +750,28 @@ const canonicalCourseKey = (value: string) =>
     .replace(/\bsexto\b/g, "6")
     .replace(/\bseptimo\b/g, "7")
     .replace(/\boctavo\b/g, "8")
-    .replace(/°/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
+    .replace(/(\d+)(st|nd|rd|th|ro|er|era|do|to|vo|mo|no|°|º|\^)/gi, "$1");
+
+  s = s
+    .replace(/\bpre\s*kinder\b/gi, "prekinder")
+    .replace(/\bpre-kinder\b/gi, "prekinder")
+    .replace(/\bpk\s*([a-z])\b/gi, "prekinder $1")
+    .replace(/\bpk([a-z])\b/gi, "prekinder $1");
+
+  s = s
+    .replace(/\bkinder\b/gi, "kinder")
+    .replace(/\bk\s*([a-z])\b/gi, "kinder $1")
+    .replace(/\bk([a-z])\b/gi, "kinder $1");
+
+  s = s
+    .replace(/\biv\s+medio\b/gi, "4 medio")
+    .replace(/\biii\s+medio\b/gi, "3 medio")
+    .replace(/\bii\s+medio\b/gi, "2 medio")
+    .replace(/\bi\s+medio\b/gi, "1 medio");
+
+  s = s.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
+  return s;
+};
 
 // Los archivos de horario nombran los cursos con palabras completas
 // ("PRIMERO MEDIO A"), mientras la interfaz usa "I° Medio A". Esta clave
@@ -1421,8 +1441,26 @@ const buildDataContext = (store: DataStore): string => {
   return lines.join("\n");
 };
 
-const courseMatches = (record: DataRecord, courseName: string) =>
-  Object.values(record).some((value) => normalize(String(value)) === normalize(courseName) || normalize(String(value)).includes(normalize(courseName)));
+
+
+const isCourseMatch = (courseA: string | undefined, courseB: string | undefined): boolean => {
+  if (!courseA || !courseB) return false;
+  if (courseA === courseB) return true;
+  const keyA = canonicalCourseKey(courseA);
+  const keyB = canonicalCourseKey(courseB);
+  if (!keyA || !keyB) return false;
+  if (keyA === keyB) return true;
+  if (keyA.includes(keyB) || keyB.includes(keyA)) return true;
+  return false;
+};
+
+const courseMatches = (record: DataRecord, courseName: string) => {
+  if (!courseName) return false;
+  return Object.values(record).some((value) => {
+    const valStr = String(value || "");
+    return isCourseMatch(valStr, courseName) || normalize(valStr).includes(normalize(courseName));
+  });
+};
 
 const studentMatches = (record: DataRecord, student: DataRecord) => {
   const studentName = normalize(student.fullName || "");
@@ -12486,11 +12524,13 @@ function MeetingsAndInterviewsView({
       const rec = recItem as Record<string, any>;
       // Course filter
       if (courseFilter !== "todos") {
-        const recCourse = String(rec.course || rec.cycle || "").toLowerCase();
-        if (!recCourse.includes(courseFilter.toLowerCase())) {
-          const linkedStudent = sortedStudents.find((s) => normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || "")));
-          if (!linkedStudent || linkedStudent.course !== courseFilter) return false;
-        }
+        const recCourse = String(rec.course || rec.cycle || rec.title || rec.reason || "");
+        const linkedStudent = sortedStudents.find((s) => normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || "")));
+
+        const matchesDirectly = isCourseMatch(recCourse, courseFilter);
+        const matchesStudentCourse = Boolean(linkedStudent && isCourseMatch(linkedStudent.course, courseFilter));
+
+        if (!matchesDirectly && !matchesStudentCourse) return false;
       }
 
       // Search query
