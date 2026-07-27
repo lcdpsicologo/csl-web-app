@@ -42,6 +42,7 @@ import {
   Tag,
   Check,
   ChevronDown,
+  ChevronUp,
   Clock,
   ClipboardList,
   Database,
@@ -12445,12 +12446,63 @@ function MeetingsAndInterviewsView({
   // UI View States
   const [showStatsPanel, setShowStatsPanel] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
+  const [expandedRecordIds, setExpandedRecordIds] = useState<string[]>([]);
   const [deleteCandidateItem, setDeleteCandidateItem] = useState<{ entity: EntityId; id: string; title: string } | null>(null);
 
   const toggleCategoryCollapse = (catId: string) => {
     setCollapsedCategories((current) =>
       current.includes(catId) ? current.filter((id) => id !== catId) : [...current, catId]
     );
+  };
+
+  const toggleRecordExpanded = (recId: string) => {
+    setExpandedRecordIds((current) =>
+      current.includes(recId) ? current.filter((id) => id !== recId) : [...current, recId]
+    );
+  };
+
+  const getCleanRecordTitle = (rec: Record<string, any>): string => {
+    const explicitTitle = (rec.title || "").trim();
+    if (explicitTitle && explicitTitle.length < 90 && !explicitTitle.includes("\n")) {
+      return explicitTitle;
+    }
+    const explicitReason = (rec.reason || "").trim();
+    if (explicitReason && explicitReason.length < 90 && !explicitReason.includes("\n")) {
+      return explicitReason;
+    }
+
+    const typeTag = rec.meetingType || rec.category || (isGpMeeting(rec) ? "Reunión GP" : "Entrevista");
+    const studentTag = rec.student || rec.relatedStudents || "";
+    const courseTag = rec.course || rec.cycle || "";
+
+    if (studentTag) {
+      return `${typeTag} · ${studentTag}${courseTag ? ` (${courseTag})` : ""}`;
+    }
+    if (courseTag) {
+      return `${typeTag} · ${courseTag}`;
+    }
+
+    const rawText = explicitTitle || explicitReason || "";
+    const firstLine = rawText.split("\n")[0].trim();
+    if (firstLine.length > 5 && firstLine.length <= 85) return firstLine;
+    return `${typeTag}${firstLine ? ` · ${firstLine.slice(0, 75)}...` : ""}`;
+  };
+
+  const cleanRecordBodyText = (rawText: string | undefined): string => {
+    if (!rawText) return "";
+    let text = rawText.trim();
+    if (text.includes("ENTREVISTA ALUMNO") || text.includes("DIRECCIÓN") || text.includes("COORDINACIÓN CICLO")) {
+      const lines = text.split("\n").map((l) => l.trim());
+      const cleanLines = lines.filter((line) => {
+        if (!line) return false;
+        if (line.match(/^(ENTREVISTA ALUMNO|DIRECCIÓN|COORDINACIÓN CICLO|CONVIVENCIA ESCOLAR|INSPECTORÍA|PROFESOR JEFE|PROFESOR ASIGNATURA|EQUIPO D\. ESTUDIANTE|PIE|PASTORAL|OTRO|Orientador primer ciclo|RUN:)$/i)) {
+          return false;
+        }
+        return true;
+      });
+      text = cleanLines.join("\n");
+    }
+    return text.trim();
   };
 
   // Modal State
@@ -13044,6 +13096,17 @@ function MeetingsAndInterviewsView({
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (expandedRecordIds.length > 0) setExpandedRecordIds([]);
+              else setExpandedRecordIds(filteredRecords.map((r: any) => r.id));
+            }}
+            className="tz-press rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+          >
+            {expandedRecordIds.length > 0 ? "Minimizar todos" : "Expandir todos"}
+          </button>
         </div>
       </div>
 
@@ -13237,6 +13300,10 @@ function MeetingsAndInterviewsView({
                       const isGp = isGpMeeting(rec);
                       const isEmail = isEmailOrInfo(rec);
 
+                      const isExpanded = expandedRecordIds.includes(rec.id);
+                      const cleanTitle = getCleanRecordTitle(rec);
+                      const bodyText = cleanRecordBodyText(rec.topics || rec.detail || rec.reason || rec.title);
+
                       const studentMatch = sortedStudents.find((s) =>
                         normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || ""))
                       );
@@ -13287,7 +13354,7 @@ function MeetingsAndInterviewsView({
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setDeleteCandidateItem({ entity: rec._entity, id: rec.id, title: rec.title || rec.reason || "Este registro" })}
+                                onClick={() => setDeleteCandidateItem({ entity: rec._entity, id: rec.id, title: cleanTitle })}
                                 className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
                                 title="Eliminar registro"
                               >
@@ -13300,8 +13367,8 @@ function MeetingsAndInterviewsView({
                           <div>
                             {/* Title & ID */}
                             <div className="flex flex-wrap items-baseline justify-between gap-2">
-                              <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition">
-                                {rec.title || rec.reason || "Registro sin título"}
+                              <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                                {cleanTitle}
                               </h3>
                               <span className="text-[11px] text-slate-400 font-mono">ID: {rec.id.slice(0, 8)}</span>
                             </div>
@@ -13340,30 +13407,55 @@ function MeetingsAndInterviewsView({
                               )}
                             </div>
 
-                            {/* Topics / Content Text Box */}
-                            {(rec.topics || rec.detail) && (
-                              <div className="mt-3 text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80 whitespace-pre-wrap">
-                                {rec.topics || rec.detail}
-                              </div>
+                            {/* Text Body: Collapsed Preview vs Expanded Full View */}
+                            {bodyText && (
+                              isExpanded ? (
+                                <div className="mt-3 text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80 whitespace-pre-wrap font-normal animate-fadeIn">
+                                  {bodyText}
+                                </div>
+                              ) : (
+                                <p className="mt-2 text-xs leading-relaxed text-slate-600 line-clamp-2 font-normal">
+                                  {bodyText}
+                                </p>
+                              )
                             )}
 
-                            {/* Agreements & Commitments Boxes */}
-                            {(rec.agreements || rec.commitments) && (
-                              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                            {/* Agreements & Commitments Boxes (Shown when expanded or if short) */}
+                            {isExpanded && (rec.agreements || rec.commitments) && (
+                              <div className="mt-3 grid gap-2.5 sm:grid-cols-2 animate-fadeIn">
                                 {rec.agreements ? (
                                   <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
                                     <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
-                                    <p className="leading-relaxed whitespace-pre-wrap">{rec.agreements}</p>
+                                    <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.agreements}</p>
                                   </div>
                                 ) : null}
                                 {rec.commitments ? (
                                   <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
                                     <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
-                                    <p className="leading-relaxed whitespace-pre-wrap">{rec.commitments}</p>
+                                    <p className="leading-relaxed whitespace-pre-wrap font-normal">{rec.commitments}</p>
                                   </div>
                                 ) : null}
                               </div>
                             )}
+
+                            {/* Expand / Minimize Toggle Button */}
+                            <div className="mt-2.5 flex items-center justify-between border-t border-slate-100 pt-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleRecordExpanded(rec.id)}
+                                className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 transition"
+                              >
+                                {isExpanded ? (
+                                  <>
+                                    <ChevronUp className="h-3.5 w-3.5" /> Minimizar detalle
+                                  </>
+                                ) : (
+                                  <>
+                                    <ChevronDown className="h-3.5 w-3.5" /> Ver detalle completo
+                                  </>
+                                )}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
