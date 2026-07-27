@@ -741,6 +741,7 @@ const canonicalCourseKey = (value: string | undefined): string => {
   if (!value) return "";
   let s = normalize(value).toLowerCase().trim();
 
+  // Words & Ordinals
   s = s
     .replace(/\bprimero\b/g, "1")
     .replace(/\bsegundo\b/g, "2")
@@ -752,22 +753,34 @@ const canonicalCourseKey = (value: string | undefined): string => {
     .replace(/\boctavo\b/g, "8")
     .replace(/(\d+)(st|nd|rd|th|ro|er|era|do|to|vo|mo|no|°|º|\^)/gi, "$1");
 
+  // Kindergarten & Prekinder
   s = s
     .replace(/\bpre\s*kinder\b/gi, "prekinder")
     .replace(/\bpre-kinder\b/gi, "prekinder")
-    .replace(/\bpk\s*([a-z])\b/gi, "prekinder $1")
-    .replace(/\bpk([a-z])\b/gi, "prekinder $1");
-
-  s = s
+    .replace(/\bpk\s*([a-c])\b/gi, "prekinder $1")
+    .replace(/\bpk([a-c])\b/gi, "prekinder $1")
     .replace(/\bkinder\b/gi, "kinder")
-    .replace(/\bk\s*([a-z])\b/gi, "kinder $1")
-    .replace(/\bk([a-z])\b/gi, "kinder $1");
+    .replace(/\bk\s*([a-c])\b/gi, "kinder $1")
+    .replace(/\bk([a-c])\b/gi, "kinder $1");
 
+  // Roman numerals for media (IV°A, III°B, II°A, I°B)
   s = s
-    .replace(/\biv\s+medio\b/gi, "4 medio")
-    .replace(/\biii\s+medio\b/gi, "3 medio")
-    .replace(/\bii\s+medio\b/gi, "2 medio")
-    .replace(/\bi\s+medio\b/gi, "1 medio");
+    .replace(/\biv\s*°?\s*medio\s*([a-c])?\b/gi, "4 medio $1")
+    .replace(/\biii\s*°?\s*medio\s*([a-c])?\b/gi, "3 medio $1")
+    .replace(/\bii\s*°?\s*medio\s*([a-c])?\b/gi, "2 medio $1")
+    .replace(/\bi\s*°?\s*medio\s*([a-c])?\b/gi, "1 medio $1")
+    .replace(/\biv\s*°?\s*([a-c])\b/gi, "4 medio $1")
+    .replace(/\biii\s*°?\s*([a-c])\b/gi, "3 medio $1")
+    .replace(/\bii\s*°?\s*([a-c])\b/gi, "2 medio $1")
+    .replace(/\bi\s*°?\s*([a-c])\b/gi, "1 medio $1");
+
+  // Short media notation: 1MA, 2MB, 3MA, 4MB
+  s = s.replace(/\b([1-4])\s*m\s*([a-c])\b/gi, "$1 medio $2");
+
+  // Short basic notation: 1A, 1 A, 1°A -> 1 basico a (only if not already containing medio)
+  if (!s.includes("medio")) {
+    s = s.replace(/\b([1-8])\s*([a-c])\b/gi, "$1 basico $2");
+  }
 
   s = s.replace(/[^a-z0-9\s]/gi, " ").replace(/\s+/g, " ").trim();
   return s;
@@ -10361,7 +10374,7 @@ function PieWorkspaceView({
   const displayedStudents = useMemo(() => {
     return (selectedCourse === "all"
       ? studentsMatchingNonCourseFilters
-      : studentsMatchingNonCourseFilters.filter((s) => s.course === selectedCourse)
+      : studentsMatchingNonCourseFilters.filter((s) => isCourseMatch(s.course, selectedCourse))
     ).slice().sort((a, b) => (a.fullName || "").localeCompare(b.fullName || "", "es"));
   }, [selectedCourse, studentsMatchingNonCourseFilters]);
 
