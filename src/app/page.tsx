@@ -1562,6 +1562,9 @@ const isPlaceholderOrientationText = (value: string | undefined) => {
 
 const isGenericOrientationTopic = (value: string | undefined) => /^sesion\s+\d+$/i.test(normalize(value || ""));
 
+// Un link (Canva, Drive, Docs…) nunca sirve como título legible de la clase.
+const isLinkLikeText = (value: string | undefined) => /^(https?:\/\/|www\.)/i.test(String(value || "").trim());
+
 // Agrupa clases por taller: un mismo taller se dicta en varios cursos y
 // comparte materiales (Canva, planificación y carpeta). Los grupos con clases
 // sin Canva van primero; luego por fecha.
@@ -2453,15 +2456,19 @@ const hasOrientationRecordContent = (record: DataRecord | Record<string, string>
   (record.canvaLink || record.evidence || record.planificacion || record.folderLink || record.teacherLink || meaningfulOrientationNotes(record as DataRecord) || "").trim(),
 );
 
+// El título de la clase es siempre el campo "Tema / comentario". Solo cuando el
+// tema falta o es genérico ("Sesión 1") se recurre a las observaciones o al
+// nombre de la planificación; nunca a un link, que antes se colaba como título.
 const getOrientationDisplayTitle = (record: DataRecord | Record<string, string>) => {
-  const primary = [record.planificacion, meaningfulOrientationNotes(record as DataRecord)]
-    .map((value) => String(value || "").trim())
-    .find((value) => value && !isPlaceholderOrientationText(value));
-  if (primary) return primary;
-
   const topic = String(record.topic || "").trim();
-  if (topic && !isPlaceholderOrientationText(topic) && !isGenericOrientationTopic(topic)) return topic;
-  if (topic && !isPlaceholderOrientationText(topic)) return topic;
+  const usableTopic = topic && !isPlaceholderOrientationText(topic) ? topic : "";
+  if (usableTopic && !isGenericOrientationTopic(usableTopic)) return usableTopic;
+
+  const descriptive = [meaningfulOrientationNotes(record as DataRecord), record.planificacion]
+    .map((value) => String(value || "").trim())
+    .find((value) => value && !isPlaceholderOrientationText(value) && !isLinkLikeText(value));
+  if (descriptive) return descriptive;
+  if (usableTopic) return usableTopic;
 
   const action = String(record.axis || record.characterStrength || record.classType || "").trim();
   return action && !isPlaceholderOrientationText(action) ? action : "Sin tema definido";
