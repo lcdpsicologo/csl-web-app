@@ -5331,6 +5331,9 @@ function OrientationCycleView({
   // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
   const [quickFormExpanded, setQuickFormExpanded] = useState(Boolean(createRequest));
   const [quickTopicCustom, setQuickTopicCustom] = useState(false);
+  // Borradores de links de Canva por taller (clave: tema normalizado) para
+  // distribuirlos de una vez a todos los cursos que comparten la misma clase.
+  const [materialDrafts, setMaterialDrafts] = useState<Record<string, string>>({});
   const [quickFormAttempted, setQuickFormAttempted] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
@@ -5524,6 +5527,49 @@ function OrientationCycleView({
   const creatorSuggestions = useMemo(() => new Map(
     creatorSlots.map(({ slot }) => [slot.course, columnaProgress(slot.course, ownerClasses, { reserveUpcoming: true })?.next || null] as const),
   ), [creatorSlots, ownerClasses]);
+  // Clases ya creadas de la semana seleccionada, agrupadas por taller: un mismo
+  // taller suele repetirse en varios cursos y comparte el mismo Canva.
+  const creatorWeekClasses = useMemo(() => creatorRange
+    ? ownerStoredClasses.filter((record) => {
+        const date = (record.date || "").slice(0, 10);
+        return date >= creatorRange.start && date <= creatorRange.end;
+      })
+    : [], [creatorRange, ownerStoredClasses]);
+  const creatorTopicGroups = useMemo(() => {
+    const groups = new Map<string, { title: string; records: DataRecord[] }>();
+    creatorWeekClasses.forEach((record) => {
+      const title = (record.topic || "").trim();
+      if (!title || isPlaceholderOrientationText(title)) return;
+      const key = normalize(title);
+      const group = groups.get(key) || { title, records: [] };
+      group.records.push(record);
+      groups.set(key, group);
+    });
+    return Array.from(groups.entries())
+      .map(([key, group]) => ({
+        key,
+        title: group.title,
+        records: group.records.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.course || "").localeCompare(String(b.course || ""), "es")),
+      }))
+      .sort((a, b) => String(a.records[0]?.date || "").localeCompare(String(b.records[0]?.date || "")));
+  }, [creatorWeekClasses]);
+  const materialGroupLink = (group: { key: string; records: DataRecord[] }) => {
+    const existing = group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "";
+    return (materialDrafts[group.key] ?? existing).trim();
+  };
+  const distributeMaterialLink = (groupKey: string) => {
+    if (!dataReady) return;
+    const group = creatorTopicGroups.find((item) => item.key === groupKey);
+    if (!group) return;
+    const link = materialGroupLink(group);
+    if (!link) return;
+    group.records.forEach((record) => {
+      if ((record.canvaLink || "").trim() !== link || (record.evidence || "").trim() !== link) {
+        onUpdateOrientationRecord(record.id, { canvaLink: link, evidence: link });
+      }
+    });
+  };
+  const distributeAllMaterialLinks = () => creatorTopicGroups.forEach((group) => distributeMaterialLink(group.key));
   const missingCreatorSlots = useMemo(() => creatorSlots.filter(({ slot, date }) => date && !ownerStoredClasses.some((record) =>
     (record.date || "").slice(0, 10) === date && normalize(record.course || "") === normalize(slot.course)
   )), [creatorSlots, ownerStoredClasses]);
@@ -6314,6 +6360,53 @@ function OrientationCycleView({
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Materiales por taller · pega el link de Canva una vez y se copia a todos los cursos</p>
+          {creatorTopicGroups.length > 1 ? (
+            <button
+              type="button"
+              disabled={!dataReady}
+              onClick={distributeAllMaterialLinks}
+              className="inline-flex items-center gap-1.5 rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-800 hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-50"
+            >
+              <FileText className="h-3.5 w-3.5" /> Distribuir todos
+            </button>
+          ) : null}
+        </div>
+        {creatorTopicGroups.length ? creatorTopicGroups.map((group) => {
+          const link = materialGroupLink(group);
+          const applied = link ? group.records.filter((record) => (record.canvaLink || "").trim() === link).length : 0;
+          const allApplied = Boolean(link) && applied === group.records.length;
+          return (
+            <div key={group.key} className="grid gap-2 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(240px,340px)_auto] sm:items-center sm:gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-xs font-bold text-slate-950" title={group.title}>{group.title}</p>
+                <p className="text-[11px] text-slate-500">
+                  {group.records.map((record) => `${record.course}${(record.canvaLink || "").trim() && (record.canvaLink || "").trim() === link ? " ✓" : ""}`).join(" · ")}
+                </p>
+              </div>
+              <input
+                value={materialDrafts[group.key] ?? (group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "")}
+                onChange={(event) => setMaterialDrafts((drafts) => ({ ...drafts, [group.key]: event.target.value }))}
+                placeholder="https://www.canva.com/..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"
+              />
+              <button
+                type="button"
+                disabled={!dataReady || !link}
+                onClick={() => distributeMaterialLink(group.key)}
+                className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${allApplied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
+              >
+                {allApplied ? <><Check className="h-3.5 w-3.5" /> Aplicado</> : `Aplicar a ${group.records.length}`}
+              </button>
+            </div>
+          );
+        }) : (
+          <p className="px-3 py-3 text-xs text-slate-500">Cuando crees las clases de esta semana, aquí aparecerá un campo por taller para pegar su link de Canva una sola vez.</p>
+        )}
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
