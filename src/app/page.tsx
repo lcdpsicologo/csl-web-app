@@ -1801,6 +1801,26 @@ const feedbackSectionCard = (number: string, eyebrow: string, title: string, acc
     <tr><td colspan="2" style="padding:0;">${inner}</td></tr>
   </table>`;
 
+// En Android/iOS la URL de Gmail web abre una pestaña del navegador dentro de la
+// app; `mailto:` en cambio entrega el correo al cliente nativo (Gmail), que es
+// donde se puede pegar el diseño copiado. En escritorio se mantiene Gmail web.
+const isMobileDevice = () =>
+  typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+const openMailCompose = ({ to, subject, body }: { to: string; subject: string; body?: string }) => {
+  if (isMobileDevice()) {
+    const query = [`subject=${encodeURIComponent(subject)}`, body ? `body=${encodeURIComponent(body)}` : ""]
+      .filter(Boolean)
+      .join("&");
+    // La dirección va sin codificar (RFC 6068); location.href en vez de
+    // window.open porque los esquemas mailto se bloquean en pestañas nuevas.
+    window.location.href = `mailto:${to.replace(/\s+/g, "")}?${query}`;
+    return;
+  }
+  const params = `view=cm&fs=1&tf=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}${body ? `&body=${encodeURIComponent(body)}` : ""}`;
+  window.open(`https://mail.google.com/mail/?${params}`, "_blank", "noopener");
+};
+
 const classFeedbackEmailHtml = (record: DataRecord, data: ClassFeedbackData) => {
   const answers = [...data.cultureItems, ...data.strengthItems, data.comprehensionUsed, data.thinkingUsed, data.climateUsed];
   const positiveCount = answers.filter((value) => value === "si").length;
@@ -2040,11 +2060,12 @@ function OrientationFeedbackModal({
     }
     // Con formato copiado: Gmail se abre vacío y la profesora pega el correo con colores.
     // Sin permiso de portapapeles: se abre con el texto plano como respaldo.
-    const params = `view=cm&fs=1&tf=1&to=${encodeURIComponent(teacherEmail)}&su=${encodeURIComponent(subject)}${richCopied ? "" : `&body=${encodeURIComponent(plain)}`}`;
-    window.open(`https://mail.google.com/mail/?${params}`, "_blank", "noopener");
+    openMailCompose({ to: teacherEmail, subject, body: richCopied ? undefined : plain });
     setEmailState("idle");
     setEmailHint(richCopied
-      ? "Diseño editorial copiado. En Gmail presiona ⌘V (o Ctrl+V), revisa el mensaje y envíalo."
+      ? (isMobileDevice()
+        ? "Diseño copiado. En Gmail mantén presionado el cuerpo del correo y elige Pegar; revisa y envía."
+        : "Diseño editorial copiado. En Gmail presiona ⌘V (o Ctrl+V), revisa el mensaje y envíalo.")
       : "Se abrió Gmail con una versión en texto porque el navegador no permitió copiar el diseño.");
     window.setTimeout(() => setEmailHint(""), 12000);
   };
@@ -6070,8 +6091,7 @@ function OrientationCycleView({
     }
     // Con el correo copiado, Gmail se abre vacío y se pega con formato; si no, va el texto plano.
     const subject = `Clases de Orientación · ${weekLabel}${planWeek ? ` (${planWeek})` : ""}`;
-    const params = `view=cm&fs=1&tf=1&to=${encodeURIComponent(recipients.join(","))}&su=${encodeURIComponent(subject)}${richCopied ? "" : `&body=${encodeURIComponent(plain)}`}`;
-    window.open(`https://mail.google.com/mail/?${params}`, "_blank", "noopener");
+    openMailCompose({ to: recipients.join(","), subject, body: richCopied ? undefined : plain });
     setWeekEmailHint({ weekKey, mode: richCopied ? "copied" : "plain" });
     window.setTimeout(() => setWeekEmailHint(null), 12000);
   };
