@@ -6,6 +6,7 @@ import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
+import { columnaForCourse, columnaProgress, matchColumnaClass } from "@/lib/columna-vertebral";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import {
   COURSE_SCHEDULE,
@@ -5329,6 +5330,7 @@ function OrientationCycleView({
   const [weekCreatorWeek, setWeekCreatorWeek] = useState("");
   // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
   const [quickFormExpanded, setQuickFormExpanded] = useState(Boolean(createRequest));
+  const [quickTopicCustom, setQuickTopicCustom] = useState(false);
   const [quickFormAttempted, setQuickFormAttempted] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
@@ -5512,6 +5514,12 @@ function OrientationCycleView({
     (cal) => !ownerStoredClasses.some((s) => (s.date || "") === cal.date && normalize(s.course || "") === normalize(cal.course)),
   ), [calendarClasses, ownerStoredClasses]);
   const ownerClasses: DataRecord[] = useMemo(() => [...ownerStoredClasses, ...calendarClassesFiltered], [calendarClassesFiltered, ownerStoredClasses]);
+  // Clase sugerida de la columna vertebral para cada curso del horario. Las ya
+  // agendadas (Planificada/Pendiente) reservan su lugar para que dos semanas
+  // seguidas no repitan la misma sugerencia.
+  const creatorSuggestions = useMemo(() => new Map(
+    creatorSlots.map(({ slot }) => [slot.course, columnaProgress(slot.course, ownerClasses, { reserveUpcoming: true })?.next || null] as const),
+  ), [creatorSlots, ownerClasses]);
   const missingCreatorSlots = useMemo(() => creatorSlots.filter(({ slot, date }) => date && !ownerStoredClasses.some((record) =>
     (record.date || "").slice(0, 10) === date && normalize(record.course || "") === normalize(slot.course)
   )), [creatorSlots, ownerStoredClasses]);
@@ -5671,6 +5679,45 @@ function OrientationCycleView({
     setNewClassForm((form) => ({ ...newClassDefaults, ...form, ...updates, orientationOwner: owner.name, orientationEmail: owner.email }));
   };
 
+  // Columna vertebral FDC: clase sugerida y alerta de continuidad para el curso del formulario.
+  const quickCourseColumna = columnaForCourse(quickClassForm.course || "");
+  const quickCourseProgress = useMemo(
+    () => columnaProgress(quickClassForm.course || "", ownerClasses),
+    [ownerClasses, quickClassForm.course],
+  );
+  const columnaNext = quickCourseProgress?.next || null;
+  const columnaOffPlan = quickCourseProgress?.offPlan || null;
+  const quickTopicMatch = quickCourseColumna ? matchColumnaClass(quickClassForm.course || "", quickClassForm.topic || "") : null;
+  const quickTopicSelectValue = (() => {
+    if (!quickCourseColumna) return "";
+    if (quickTopicCustom) return "__custom__";
+    if (quickTopicMatch) return quickTopicMatch.title;
+    return (quickClassForm.topic || "").trim() ? "__custom__" : "";
+  })();
+  const columnaTopicOptions: TizaSelectOption[] = useMemo(() => {
+    if (!quickCourseColumna) return [];
+    const nextOrder = quickCourseProgress?.next?.order;
+    const done = quickCourseProgress?.done;
+    return [
+      ...quickCourseColumna.map((item) => ({
+        value: item.title,
+        label: `${item.order}. ${item.title}${item.order === nextOrder ? " ★ sugerida" : done?.has(item.order) ? " · realizada" : ""}`,
+        keywords: [item.strength, item.block],
+      })),
+      { value: "__custom__", label: "Otra actividad / clase formativa (fuera del plan)" },
+    ];
+  }, [quickCourseColumna, quickCourseProgress]);
+  const selectColumnaTopic = (value: string) => {
+    if (value === "__custom__") {
+      setQuickTopicCustom(true);
+      updateQuickClassForm({ topic: "" });
+      return;
+    }
+    setQuickTopicCustom(false);
+    const item = quickCourseColumna?.find((candidate) => candidate.title === value);
+    updateQuickClassForm(item ? { topic: item.title, axis: item.strength, characterStrength: item.strength } : { topic: value });
+  };
+
   // Al elegir fecha se selecciona sola la semana del plan (y se sugiere la fortaleza de esa semana).
   const quickFormPatchForDate = (date: string): Record<string, string> => {
     const patch: Record<string, string> = { date };
@@ -5716,6 +5763,7 @@ function OrientationCycleView({
     setNewClassOpen(false);
     setQuickFormAttempted(false);
     setQuickFormExpanded(false);
+    setQuickTopicCustom(false);
   };
 
   const closeQuickClassForm = () => {
@@ -5724,6 +5772,7 @@ function OrientationCycleView({
     setNewClassOpen(false);
     setQuickFormAttempted(false);
     setQuickFormExpanded(false);
+    setQuickTopicCustom(false);
   };
 
   const clearQuickClassForm = () => {
@@ -5731,12 +5780,15 @@ function OrientationCycleView({
     setNewClassForm({});
     setNewClassOpen(false);
     setQuickFormAttempted(false);
+    setQuickTopicCustom(false);
   };
 
   const createWeekFromSchedule = () => {
     if (!dataReady || !creatorRange || !missingCreatorSlots.length) return;
     const config = ORIENTATION_FIRST_CYCLE_CONFIG.find((item) => item.week === effectiveCreatorWeek);
-    const records = missingCreatorSlots.map(({ slot, date }) => ({
+    const records = missingCreatorSlots.map(({ slot, date }) => {
+      const suggested = creatorSuggestions.get(slot.course) || null;
+      return {
       id: `orientation-week-${date}-${normalize(slot.course).replace(/\s+/g, "-")}`,
       createdAt: nowIso(),
       updatedAt: nowIso(),
@@ -5746,9 +5798,10 @@ function OrientationCycleView({
       course: slot.course,
       orientationOwner: owner.name,
       orientationEmail: owner.email,
-      topic: config?.session || "Tema por definir",
+      topic: suggested?.title || config?.session || "Tema por definir",
       classType: "Clase de orientación",
-      axis: config?.action || "Intervención Formativa",
+      axis: suggested?.strength || config?.action || "Intervención Formativa",
+      characterStrength: suggested?.strength || "",
       status: "Planificada",
       canvaLink: "",
       teacherLink: "",
@@ -5762,7 +5815,8 @@ function OrientationCycleView({
       scheduleStart: slot.start,
       scheduleEnd: slot.end,
       source: "Horario semanal orientación 2026",
-    }));
+      };
+    });
     onAddOrientationWeekRecords(records);
     setWeekCreatorOpen(false);
   };
@@ -6226,7 +6280,7 @@ function OrientationCycleView({
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Horario semanal de {owner.name}</p>
           <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Crear clases desde el horario</h2>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán solo los cursos que todavía no tengan una clase registrada en su fecha correspondiente. Después podrás editar tema, fortaleza y enlaces desde la bitácora.</p>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán solo los cursos que todavía no tengan una clase registrada en su fecha correspondiente. Cada curso parte con su clase sugerida de la columna vertebral; después podrás editar tema, fortaleza y enlaces desde la bitácora.</p>
         </div>
         <div className="w-full sm:w-72">
           <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana a preparar</span>
@@ -6240,10 +6294,14 @@ function OrientationCycleView({
         </div>
         {creatorSlots.map(({ slot, date }) => {
           const exists = !missingCreatorSlots.some((candidate) => candidate.date === date && normalize(candidate.slot.course) === normalize(slot.course));
+          const suggested = creatorSuggestions.get(slot.course) || null;
           return (
             <div key={`${slot.day}-${slot.course}`} className="grid gap-1 border-b border-slate-100 px-3 py-2.5 text-xs last:border-b-0 sm:grid-cols-[110px_1fr_150px_120px] sm:items-center sm:gap-3">
               <span className="font-semibold text-slate-600">{slot.dayName}</span>
-              <span className="font-bold text-slate-950">{slot.course}</span>
+              <span className="font-bold text-slate-950">
+                {slot.course}
+                {suggested && !exists ? <span className="block text-[11px] font-semibold text-cyan-700">{suggested.order}. {suggested.title} · {suggested.strength}</span> : null}
+              </span>
               <span className="tabular-nums text-slate-600">{formatOrientationDate(date)}</span>
               <span className="flex items-center justify-between gap-2 tabular-nums text-slate-600">
                 {slot.start}-{slot.end}
@@ -6432,10 +6490,28 @@ function OrientationCycleView({
                   <span className="text-sm font-semibold text-slate-800">Estado</span>
                   <TizaSelect value={quickClassForm.status} onChange={(status) => updateQuickClassForm({ status })} options={quickStatuses} className="mt-1.5" buttonClassName={`py-2.5 font-bold ${statusTone(quickClassForm.status)} ring-1`} />
                 </div>
-                <label className="block sm:col-span-2 lg:col-span-4">
+                <div className="sm:col-span-2 lg:col-span-4">
                   <span className="flex items-center justify-between text-sm font-semibold text-slate-800"><span>Tema o actividad</span><span className="text-[10px] font-bold uppercase text-slate-400">Tema o enlace requerido</span></span>
-                  <input autoFocus value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Mi cuerpo, mi espacio y mis límites" className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" />
-                </label>
+                  {quickCourseColumna ? (
+                    <>
+                      <TizaSelect
+                        value={quickTopicSelectValue}
+                        onChange={selectColumnaTopic}
+                        options={columnaTopicOptions}
+                        placeholder="Elegir clase de la columna vertebral…"
+                        searchable
+                        searchPlaceholder="Buscar clase, bloque o fortaleza…"
+                        className="mt-1.5"
+                        buttonClassName="py-2.5"
+                      />
+                      {quickTopicSelectValue === "__custom__" ? (
+                        <input autoFocus value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Quiz RICE y sexualidad (tema emergente)" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" />
+                      ) : null}
+                    </>
+                  ) : (
+                    <input autoFocus value={quickClassForm.topic} onChange={(event) => updateQuickClassForm({ topic: event.target.value })} placeholder="Ej.: Mi cuerpo, mi espacio y mis límites" className="mt-1.5 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100" />
+                  )}
+                </div>
                 <div className="sm:col-span-2 lg:col-span-2">
                   <span className="text-sm font-semibold text-slate-800">Acción o fortaleza</span>
                   <TizaSelect
@@ -6453,6 +6529,20 @@ function OrientationCycleView({
                   <span className="text-sm font-semibold text-slate-800">Semana del plan</span>
                   <TizaSelect value={quickClassForm.week} onChange={syncQuickClassWeek} options={weekOptionsFor(quickClassForm.week)} className="mt-1.5" buttonClassName="py-2.5" />
                 </div>
+                {columnaNext && columnaOffPlan ? (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 px-3.5 py-3 text-xs leading-relaxed text-amber-900 sm:col-span-2 lg:col-span-6" role="alert">
+                    <p><span className="font-bold">⚠ Continuidad de la columna vertebral:</span> la última clase realizada en {quickClassForm.course} fue fuera de la planificación («{columnaOffPlan.title}»). Para mantener la coherencia del programa, corresponde retomar con <span className="font-bold">«{columnaNext.title}»</span> · {columnaNext.strength} · prioridad {columnaNext.priority}.</p>
+                    <button type="button" onClick={() => selectColumnaTopic(columnaNext.title)} className="mt-2 rounded-md bg-amber-600 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-amber-700">Usar esta clase</button>
+                  </div>
+                ) : columnaNext ? (
+                  <div className="rounded-lg border border-cyan-200 bg-cyan-50/70 px-3.5 py-3 text-xs leading-relaxed text-cyan-950 sm:col-span-2 lg:col-span-6">
+                    <p><span className="font-bold">Columna vertebral · clase sugerida:</span> «{columnaNext.title}» — {columnaNext.block} · {columnaNext.strength} · prioridad {columnaNext.priority}.</p>
+                    {columnaNext.objective ? <p className="mt-1 text-[11px] text-cyan-900/80">{columnaNext.objective}</p> : null}
+                    {quickTopicSelectValue !== columnaNext.title ? (
+                      <button type="button" onClick={() => selectColumnaTopic(columnaNext.title)} className="mt-2 rounded-md bg-cyan-700 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-cyan-800">Usar sugerida</button>
+                    ) : null}
+                  </div>
+                ) : null}
               </section>
 
               <section className="border-t border-slate-200 bg-white px-5 py-5 sm:px-6">
