@@ -322,6 +322,109 @@ const normalize = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+const getCleanRecordTitle = (rec: Record<string, any>): string => {
+  const explicitTitle = (rec.title || "").trim();
+  if (explicitTitle && explicitTitle.length < 90 && !explicitTitle.includes("\n")) {
+    return explicitTitle;
+  }
+  const explicitReason = (rec.reason || "").trim();
+  if (explicitReason && explicitReason.length < 90 && !explicitReason.includes("\n")) {
+    return explicitReason;
+  }
+
+  const typeTag = rec.meetingType || rec.category || rec.type || "Entrevista / Registro";
+  const studentTag = rec.student || rec.relatedStudents || rec.relatedTo || "";
+  const courseTag = rec.course || rec.cycle || "";
+
+  if (studentTag) {
+    return `${typeTag} · ${studentTag}${courseTag ? ` (${courseTag})` : ""}`;
+  }
+  if (courseTag) {
+    return `${typeTag} · ${courseTag}`;
+  }
+
+  const rawText = explicitTitle || explicitReason || rec.topic || rec.description || "";
+  const firstLine = rawText.split("\n")[0].trim();
+  if (firstLine.length > 5 && firstLine.length <= 85) return firstLine;
+  return `${typeTag}${firstLine ? ` · ${firstLine.slice(0, 75)}...` : ""}`;
+};
+
+const parseStructuredInterviewText = (rawText: string | undefined) => {
+  if (!rawText) return { isStructured: false, cleanBody: "" };
+  const text = rawText.trim();
+
+  const isFormTemplate =
+    text.includes("Motivo de entrevista") ||
+    text.includes("Aspectos a tratar") ||
+    text.includes("Nombre entrevistador") ||
+    text.includes("Nombre Alumno") ||
+    text.includes("ENTREVISTA ALUMNO");
+
+  if (!isFormTemplate) return { isStructured: false, cleanBody: text };
+
+  const extractVal = (pattern: RegExp) => {
+    const m = text.match(pattern);
+    return m ? m[1].trim() : undefined;
+  };
+
+  const alumnoName = extractVal(/Nombre Alumno\s*\n+([^\n]+)/i);
+  const run = extractVal(/(?:RUN:?\s*\n*)?([0-9\.\-kK]{7,12})/i);
+  const entrevistador = extractVal(/Nombre entrevistador\s*\n+([^\n]+)/i);
+  const curso = extractVal(/Curso\s*\n+([^\n]+)/i);
+  const hora = extractVal(/Hora\s*\n+([^\n]+)/i);
+  const fecha = extractVal(/Fecha\s*\n+([^\n]+)/i);
+  const acompaniantes = extractVal(/Acompañan en la entrevista\s*\n+([^\n]+)/i);
+
+  const motivoMatch = text.match(/Motivo de entrevista\s*\n+([\s\S]*?)(?=Aspectos a tratar|Acuerdos|Compromisos|$)/i);
+  const motivo = motivoMatch ? motivoMatch[1].trim() : undefined;
+
+  const aspectosMatch = text.match(/Aspectos a tratar(?: con el alumno)?\s*\n+([\s\S]*?)(?=Acuerdos|Compromisos|$)/i);
+  const aspectos = aspectosMatch ? aspectosMatch[1].trim() : undefined;
+
+  const acuerdosMatch = text.match(/Acuerdos(?: y compromisos)?\s*\n+([\s\S]*?)$/i);
+  const acuerdosText = acuerdosMatch ? acuerdosMatch[1].trim() : undefined;
+
+  const hasExtractedSections = Boolean(motivo || aspectos || hora || entrevistador || run);
+
+  const cleanBodyParts = [motivo, aspectos, acuerdosText].filter(Boolean);
+  const cleanBody = cleanBodyParts.length > 0 ? cleanBodyParts.join("\n\n") : text;
+
+  return {
+    isStructured: hasExtractedSections,
+    alumnoName,
+    run,
+    entrevistador,
+    curso,
+    hora,
+    fecha,
+    acompaniantes,
+    motivo,
+    aspectos,
+    acuerdosText,
+    cleanBody,
+  };
+};
+
+const cleanRecordBodyText = (rawText: string | undefined): string => {
+  if (!rawText) return "";
+  const parsed = parseStructuredInterviewText(rawText);
+  if (parsed.isStructured) return parsed.cleanBody;
+
+  let text = rawText.trim();
+  if (text.includes("ENTREVISTA ALUMNO") || text.includes("DIRECCIÓN") || text.includes("COORDINACIÓN CICLO")) {
+    const lines = text.split("\n").map((l) => l.trim());
+    const cleanLines = lines.filter((line) => {
+      if (!line) return false;
+      if (line.match(/^(ENTREVISTA ALUMNO|DIRECCIÓN|COORDINACIÓN CICLO|CONVIVENCIA ESCOLAR|INSPECTORÍA|PROFESOR JEFE|PROFESOR ASIGNATURA|EQUIPO D\. ESTUDIANTE|PIE|PASTORAL|OTRO|Orientador primer ciclo|RUN:)$/i)) {
+        return false;
+      }
+      return true;
+    });
+    text = cleanLines.join("\n");
+  }
+  return text.trim();
+};
+
 const textDistance = (left: string, right: string) => {
   const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
   for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
@@ -8705,50 +8808,251 @@ const linkedKindTones: Record<string, string> = {
 };
 
 function LinkedRecordList({ title, records, emptyText, kinds, onSelect }: { title: string; records: DataRecord[]; emptyText: string; kinds?: Record<string, string>; onSelect?: (record: DataRecord) => void }) {
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+
+  const toggleExpand = (id: string) => {
+    setExpandedIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
+  };
+
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">{title}</h3>
-        <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-semibold text-white tabular-nums">{records.length}</span>
+        <div className="flex items-center gap-2">
+          {records.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                if (expandedIds.length > 0) setExpandedIds([]);
+                else setExpandedIds(records.map((r) => r.id));
+              }}
+              className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition"
+            >
+              {expandedIds.length > 0 ? "Minimizar todos" : "Expandir todos"}
+            </button>
+          )}
+          <span className="rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-semibold text-white tabular-nums">{records.length}</span>
+        </div>
       </div>
+
       {records.length === 0 ? (
         <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-500">{emptyText}</p>
       ) : (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           {records.map((record) => {
+            const isExpanded = expandedIds.includes(record.id);
             const status = record.status || record.priority || "";
             const statusTone = /critic|alta|abierto|activ/i.test(status)
               ? "bg-amber-50 text-amber-700 ring-amber-200"
               : /cerrad|realizad|complet/i.test(status)
                 ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
                 : "bg-slate-100 text-slate-600 ring-slate-200";
-            const kind = kinds?.[record.id] || "";
-            const clickable = Boolean(onSelect);
-            const body = (
-              <>
-                <div className="flex items-start justify-between gap-3">
-                  <strong className="block flex-1 text-slate-950">{record.title || record.reason || record.topic || record.type || record.student || record.relatedTo || "Registro"}</strong>
-                  <span className="flex shrink-0 items-center gap-1.5">
-                    {kind ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${linkedKindTones[kind] || "bg-slate-100 text-slate-600"}`}>{kind}</span> : null}
-                    {status ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${statusTone}`}>{status}</span> : null}
-                  </span>
+            const kind = kinds?.[record.id] || record.meetingType || record.category || record.type || "Registro";
+
+            const cleanTitle = getCleanRecordTitle(record);
+            const rawBody = record.description || record.topics || record.detail || record.reason || record.observations || record.notes || "";
+            const bodyText = cleanRecordBodyText(rawBody);
+            const parsed = parseStructuredInterviewText(rawBody);
+
+            const displayDate = record.date || record.dueDate || (record.updatedAt ? new Date(record.updatedAt).toLocaleDateString("es-CL") : "");
+
+            return (
+              <div
+                key={record.id}
+                className={`group relative flex flex-col justify-between w-full rounded-xl border border-slate-200 bg-white transition shadow-2xs hover:border-indigo-300 hover:shadow-xs ${
+                  isExpanded ? "p-4 space-y-3" : "px-3.5 py-2.5"
+                }`}
+              >
+                {/* Clickable Header Bar */}
+                <div
+                  onClick={() => toggleExpand(record.id)}
+                  className={`flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none ${
+                    isExpanded ? "border-b border-slate-100 pb-2.5" : ""
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-2 min-w-0 flex-1">
+                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${linkedKindTones[kind] || "bg-indigo-50 text-indigo-700"}`}>
+                      {kind}
+                    </span>
+
+                    {displayDate && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                        📅 {displayDate}
+                      </span>
+                    )}
+
+                    {status && (
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${statusTone}`}>
+                        {status}
+                      </span>
+                    )}
+
+                    {/* Minimized Inline Title */}
+                    {!isExpanded && (
+                      <span className="text-xs font-bold text-slate-900 truncate max-w-xs sm:max-w-md group-hover:text-indigo-600 transition">
+                        {cleanTitle}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Header Actions & Expand/Minimize Chevron */}
+                  <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {(record.fileLink || record.url) && (
+                      <a
+                        href={record.fileLink || record.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-0.5 text-[11px] font-bold text-indigo-700 hover:bg-indigo-100 transition ring-1 ring-indigo-200/60"
+                        title="Ver enlace / Drive"
+                      >
+                        <ExternalLink className="h-3 w-3" /> Drive
+                      </a>
+                    )}
+
+                    {onSelect && (
+                      <button
+                        type="button"
+                        onClick={() => onSelect(record)}
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                        title="Editar / Ver"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+
+                    {/* Chevron Toggle Icon */}
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(record.id)}
+                      className="grid h-6 w-6 place-items-center rounded-md bg-slate-100 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition ml-1"
+                      title={isExpanded ? "Minimizar" : "Expandir"}
+                    >
+                      {isExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    </button>
+                  </div>
                 </div>
-                {(record.description || record.agreements || record.observations || record.notes) ? (
-                  <p className="mt-1.5 line-clamp-2 text-slate-600">{record.description || record.agreements || record.observations || record.notes}</p>
-                ) : null}
-                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                  {record.date || record.dueDate || new Date(record.updatedAt).toLocaleDateString("es-CL")}
-                </p>
-              </>
-            );
-            return clickable ? (
-              <button key={record.id} onClick={() => onSelect?.(record)} className="tz-card group block w-full rounded-lg border border-slate-200 bg-white p-3 text-left text-sm transition hover:border-blue-300 hover:bg-blue-50/40">
-                {body}
-              </button>
-            ) : (
-              <article key={record.id} className="tz-card group rounded-lg border border-slate-200 bg-white p-3 text-sm">
-                {body}
-              </article>
+
+                {/* Expanded Full Content Body */}
+                {isExpanded && (
+                  <div className="animate-fadeIn space-y-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                      <h4 className="text-xs font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                        {cleanTitle}
+                      </h4>
+                      <span className="text-[10px] text-slate-400 font-mono">ID: {record.id.slice(0, 8)}</span>
+                    </div>
+
+                    {(record.leader || record.interviewer || record.participant || record.course || record.cycle) && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600 font-medium">
+                        {record.leader || record.interviewer ? (
+                          <span><strong>Responsable:</strong> {record.leader || record.interviewer}</span>
+                        ) : null}
+                        {record.participant ? (
+                          <span><strong>Participante:</strong> {record.participant}</span>
+                        ) : null}
+                        {record.course || record.cycle ? (
+                          <span><strong>Curso/Ciclo:</strong> {record.course || record.cycle}</span>
+                        ) : null}
+                      </div>
+                    )}
+
+                    {/* Executive Structured Details */}
+                    {bodyText && (
+                      parsed.isStructured ? (
+                        <>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 rounded-lg border border-slate-200/80 bg-slate-50/80 p-2.5 text-[11px]">
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Hora</span>
+                              <span className="font-semibold text-slate-800">{parsed.hora || "No especificada"}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Entrevistador</span>
+                              <span className="font-semibold text-slate-800">{parsed.entrevistador || record.leader || record.interviewer || "No especificado"}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">RUN</span>
+                              <span className="font-mono font-semibold text-slate-800">{parsed.run || "No especificado"}</span>
+                            </div>
+                            <div>
+                              <span className="text-[9px] font-bold uppercase tracking-wider text-slate-400 block">Acompañantes</span>
+                              <span className="font-semibold text-slate-800">{parsed.acompaniantes || "Ninguno"}</span>
+                            </div>
+                          </div>
+
+                          {parsed.motivo && (
+                            <div className="rounded-lg border-l-4 border-indigo-500 bg-white p-3 shadow-xs border-y border-r border-slate-200/70">
+                              <h5 className="text-[10px] font-bold uppercase tracking-wider text-indigo-900 mb-1">
+                                📌 Motivo de la Entrevista
+                              </h5>
+                              <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.motivo}</p>
+                            </div>
+                          )}
+
+                          {parsed.aspectos && (
+                            <div className="rounded-lg border-l-4 border-blue-500 bg-white p-3 shadow-xs border-y border-r border-slate-200/70">
+                              <h5 className="text-[10px] font-bold uppercase tracking-wider text-blue-900 mb-1">
+                                💬 Aspectos abordados con el estudiante
+                              </h5>
+                              <p className="text-xs leading-relaxed text-slate-800 font-normal whitespace-pre-wrap">{parsed.aspectos}</p>
+                            </div>
+                          )}
+
+                          {(parsed.acuerdosText || record.agreements || record.commitments) && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {(parsed.acuerdosText || record.agreements) && (
+                                <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-lg p-2.5 border border-emerald-200/80">
+                                  <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
+                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{parsed.acuerdosText || record.agreements}</p>
+                                </div>
+                              )}
+                              {record.commitments && (
+                                <div className="text-xs text-blue-900 bg-blue-50/80 rounded-lg p-2.5 border border-blue-200/80">
+                                  <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
+                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{record.commitments}</p>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-lg p-3 border border-slate-200/80 whitespace-pre-wrap font-normal">
+                            {bodyText}
+                          </div>
+                          {(record.agreements || record.commitments) && (
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              {record.agreements ? (
+                                <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-lg p-2.5 border border-emerald-200/80">
+                                  <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
+                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{record.agreements}</p>
+                                </div>
+                              ) : null}
+                              {record.commitments ? (
+                                <div className="text-xs text-blue-900 bg-blue-50/80 rounded-lg p-2.5 border border-blue-200/80">
+                                  <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
+                                  <p className="leading-relaxed whitespace-pre-wrap font-normal">{record.commitments}</p>
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+                        </>
+                      )
+                    )}
+
+                    <div className="border-t border-slate-100 pt-2 flex items-center justify-end">
+                      <button
+                        type="button"
+                        onClick={() => toggleExpand(record.id)}
+                        className="inline-flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-slate-700 transition"
+                      >
+                        <ChevronUp className="h-3.5 w-3.5" /> Minimizar detalle
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
@@ -12459,113 +12763,6 @@ function MeetingsAndInterviewsView({
     setExpandedRecordIds((current) =>
       current.includes(recId) ? current.filter((id) => id !== recId) : [...current, recId]
     );
-  };
-
-  const getCleanRecordTitle = (rec: Record<string, any>): string => {
-    const explicitTitle = (rec.title || "").trim();
-    if (explicitTitle && explicitTitle.length < 90 && !explicitTitle.includes("\n")) {
-      return explicitTitle;
-    }
-    const explicitReason = (rec.reason || "").trim();
-    if (explicitReason && explicitReason.length < 90 && !explicitReason.includes("\n")) {
-      return explicitReason;
-    }
-
-    const typeTag = rec.meetingType || rec.category || (isGpMeeting(rec) ? "Reunión GP" : "Entrevista");
-    const studentTag = rec.student || rec.relatedStudents || "";
-    const courseTag = rec.course || rec.cycle || "";
-
-    if (studentTag) {
-      return `${typeTag} · ${studentTag}${courseTag ? ` (${courseTag})` : ""}`;
-    }
-    if (courseTag) {
-      return `${typeTag} · ${courseTag}`;
-    }
-
-    const rawText = explicitTitle || explicitReason || "";
-    const firstLine = rawText.split("\n")[0].trim();
-    if (firstLine.length > 5 && firstLine.length <= 85) return firstLine;
-    return `${typeTag}${firstLine ? ` · ${firstLine.slice(0, 75)}...` : ""}`;
-  };
-
-  const parseStructuredInterviewText = (rawText: string | undefined) => {
-    if (!rawText) return { isStructured: false, cleanBody: "" };
-    const text = rawText.trim();
-
-    const isFormTemplate =
-      text.includes("Motivo de entrevista") ||
-      text.includes("Aspectos a tratar") ||
-      text.includes("Nombre entrevistador") ||
-      text.includes("Nombre Alumno") ||
-      text.includes("ENTREVISTA ALUMNO");
-
-    if (!isFormTemplate) return { isStructured: false, cleanBody: text };
-
-    const extractVal = (pattern: RegExp) => {
-      const m = text.match(pattern);
-      return m ? m[1].trim() : undefined;
-    };
-
-    const alumnoName = extractVal(/Nombre Alumno\s*\n+([^\n]+)/i);
-    const run = extractVal(/(?:RUN:?\s*\n*)?([0-9\.\-kK]{7,12})/i);
-    const entrevistador = extractVal(/Nombre entrevistador\s*\n+([^\n]+)/i);
-    const curso = extractVal(/Curso\s*\n+([^\n]+)/i);
-    const hora = extractVal(/Hora\s*\n+([^\n]+)/i);
-    const fecha = extractVal(/Fecha\s*\n+([^\n]+)/i);
-    const acompaniantes = extractVal(/Acompañan en la entrevista\s*\n+([^\n]+)/i);
-
-    // Extract Motivo
-    const motivoMatch = text.match(/Motivo de entrevista\s*\n+([\s\S]*?)(?=Aspectos a tratar|Acuerdos|Compromisos|$)/i);
-    const motivo = motivoMatch ? motivoMatch[1].trim() : undefined;
-
-    // Extract Aspectos
-    const aspectosMatch = text.match(/Aspectos a tratar(?: con el alumno)?\s*\n+([\s\S]*?)(?=Acuerdos|Compromisos|$)/i);
-    const aspectos = aspectosMatch ? aspectosMatch[1].trim() : undefined;
-
-    // Extract Acuerdos if present in text
-    const acuerdosMatch = text.match(/Acuerdos(?: y compromisos)?\s*\n+([\s\S]*?)$/i);
-    const acuerdosText = acuerdosMatch ? acuerdosMatch[1].trim() : undefined;
-
-    const hasExtractedSections = Boolean(motivo || aspectos || hora || entrevistador || run);
-
-    // Build a concise clean summary for collapsed preview
-    const cleanBodyParts = [motivo, aspectos, acuerdosText].filter(Boolean);
-    const cleanBody = cleanBodyParts.length > 0 ? cleanBodyParts.join("\n\n") : text;
-
-    return {
-      isStructured: hasExtractedSections,
-      alumnoName,
-      run,
-      entrevistador,
-      curso,
-      hora,
-      fecha,
-      acompaniantes,
-      motivo,
-      aspectos,
-      acuerdosText,
-      cleanBody,
-    };
-  };
-
-  const cleanRecordBodyText = (rawText: string | undefined): string => {
-    if (!rawText) return "";
-    const parsed = parseStructuredInterviewText(rawText);
-    if (parsed.isStructured) return parsed.cleanBody;
-
-    let text = rawText.trim();
-    if (text.includes("ENTREVISTA ALUMNO") || text.includes("DIRECCIÓN") || text.includes("COORDINACIÓN CICLO")) {
-      const lines = text.split("\n").map((l) => l.trim());
-      const cleanLines = lines.filter((line) => {
-        if (!line) return false;
-        if (line.match(/^(ENTREVISTA ALUMNO|DIRECCIÓN|COORDINACIÓN CICLO|CONVIVENCIA ESCOLAR|INSPECTORÍA|PROFESOR JEFE|PROFESOR ASIGNATURA|EQUIPO D\. ESTUDIANTE|PIE|PASTORAL|OTRO|Orientador primer ciclo|RUN:)$/i)) {
-          return false;
-        }
-        return true;
-      });
-      text = cleanLines.join("\n");
-    }
-    return text.trim();
   };
 
   // Modal State
