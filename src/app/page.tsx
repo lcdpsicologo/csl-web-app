@@ -6,7 +6,7 @@ import { createPortal } from "react-dom";
 import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
-import { columnaForCourse, columnaProgress, matchColumnaClass } from "@/lib/columna-vertebral";
+import { columnaCourseKey, columnaForCourse, columnaProgress, matchColumnaClass } from "@/lib/columna-vertebral";
 import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
 import {
   COURSE_SCHEDULE,
@@ -17,6 +17,7 @@ import {
   type SchoolDay,
   type StaffScheduleEntry,
 } from "@/lib/school-schedule";
+import { orientationWeekEmailHtml, orientationWeekEmailText, type WeekEmailClass } from "@/lib/orientation-email";
 import { ORIENTATION_WEEKLY_SLOTS, mondayOfWeek, toISODate, type OrientationWeeklySlot } from "@/lib/orientation-weekly-schedule";
 import { games } from "@/lib/games";
 import { GameShareModal } from "@/components/GameShareModal";
@@ -53,6 +54,7 @@ import {
   Gamepad2,
   GripVertical,
   GraduationCap,
+  History,
   Home,
   Lock,
   LogOut,
@@ -523,7 +525,7 @@ function TizaSelect({
         aria-expanded={open}
         onClick={() => {
           setSearchQuery("");
-          setOpen((current) => !current);
+          startAfterNextPaint(() => setOpen((current) => !current));
         }}
         className={`inline-flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-sm outline-none transition focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100 disabled:bg-slate-100 disabled:text-slate-500 ${hasCustomTone ? "border-transparent" : "border-slate-200 bg-white text-slate-800 hover:border-cyan-400"} ${buttonClassName}`}
       >
@@ -546,9 +548,9 @@ function TizaSelect({
                 onKeyDown={(event) => {
                   if (event.key !== "Enter" || !visibleOptions[0]) return;
                   event.preventDefault();
-                  onChange(visibleOptions[0].value);
                   setOpen(false);
                   setSearchQuery("");
+                  startAfterNextPaint(() => onChange(visibleOptions[0].value));
                 }}
                 aria-label={searchPlaceholder}
                 placeholder={searchPlaceholder}
@@ -571,9 +573,9 @@ function TizaSelect({
                   role="option"
                   aria-selected={active}
                   onClick={() => {
-                    onChange(option.value);
                     setOpen(false);
                     setSearchQuery("");
+                    startAfterNextPaint(() => onChange(option.value));
                   }}
                   className={`flex min-h-9 w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-sm font-medium transition ${
                     active ? "bg-cyan-50 text-cyan-900" : "text-slate-700 hover:bg-slate-50 hover:text-slate-950"
@@ -927,6 +929,46 @@ const headTeacherForCourse = (course: string) => {
   return STAFF_DIRECTORY.find((member) => member.headship && classroomTeamCourseKey(member.headship) === key) || null;
 };
 
+type FeedbackTeacherOption = { name: string; email: string; role: string; headship: string; isTest?: boolean };
+
+const FEEDBACK_TEST_TEACHER: FeedbackTeacherOption = {
+  name: "Gustavo Test",
+  email: "psi.gustavocaro@gmail.com",
+  role: "Profesor de prueba",
+  headship: "",
+  isTest: true,
+};
+
+const feedbackTeacherDisplayName = (name: string) => {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed !== trimmed.toLocaleUpperCase("es")) return trimmed;
+  return trimmed
+    .toLocaleLowerCase("es")
+    .replace(/(^|[\s-])([a-záéíóúüñ])/g, (_, separator: string, letter: string) => `${separator}${letter.toLocaleUpperCase("es")}`);
+};
+
+const FEEDBACK_TEACHER_OPTIONS: FeedbackTeacherOption[] = (() => {
+  const byEmail = new Map<string, FeedbackTeacherOption>();
+  FIRST_CYCLE_COURSES.forEach((course) => {
+    const member = firstCycleHeadTeachers[classroomTeamCourseKey(course)];
+    if (!member) return;
+    const email = String(member?.email || "").trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return;
+    if (!byEmail.has(email)) {
+      byEmail.set(email, {
+        name: feedbackTeacherDisplayName(member.name),
+        email,
+        role: "Profesor/a jefe de primer ciclo",
+        headship: course,
+      });
+    }
+  });
+  return [
+    FEEDBACK_TEST_TEACHER,
+    ...Array.from(byEmail.values()).sort((a, b) => a.name.localeCompare(b.name, "es", { sensitivity: "base" })),
+  ];
+})();
+
 // Próxima fecha en que le toca orientación a un curso, después de una fecha dada.
 const nextSlotDateForCourse = (course: string, afterISO: string) => {
   const slot = ORIENTATION_WEEKLY_SLOTS.find((item) => normalize(item.course) === normalize(course));
@@ -1058,11 +1100,23 @@ const defaultAppConfiguration = (): TizaAppConfiguration => ({
 
 // Mantiene vigente el horario institucional corregido aunque el perfil todavía
 // conserve una copia anterior de la configuración semanal.
-const applyOrientationScheduleCorrections = (schedule: OrientationWeeklySlot[]) => schedule.map((slot) => (
-  normalize(slot.owner) === normalize("Gustavo Caro") && normalize(slot.course) === normalize("4° Básico A")
-    ? { ...slot, day: 1 as const, dayName: "Lunes" as const, start: "14:15", end: "14:55" }
-    : slot
-));
+const applyOrientationScheduleCorrections = (schedule: OrientationWeeklySlot[]) => {
+  const corrected = schedule.map((slot) => (
+    normalize(slot.owner) === normalize("Gustavo Caro") && normalize(slot.course) === normalize("4° Básico A")
+      ? { ...slot, day: 1 as const, dayName: "Lunes" as const, start: "14:15", end: "14:55" }
+      : slot
+  ));
+  // Las configuraciones guardadas antes de incorporar un curso pueden quedar
+  // incompletas. Se agregan únicamente los bloques oficiales ausentes y se
+  // conservan intactos los horarios personalizados que sí existen.
+  ORIENTATION_WEEKLY_SLOTS.forEach((officialSlot) => {
+    const exists = corrected.some((slot) =>
+      normalize(slot.owner) === normalize(officialSlot.owner) && normalize(slot.course) === normalize(officialSlot.course)
+    );
+    if (!exists) corrected.push({ ...officialSlot });
+  });
+  return corrected;
+};
 
 const parseAppConfiguration = (value: string | undefined): TizaAppConfiguration => {
   const defaults = defaultAppConfiguration();
@@ -1512,12 +1566,34 @@ const isGenericOrientationTopic = (value: string | undefined) => /^sesion\s+\d+$
 // comparte materiales (Canva, planificación y carpeta). Los grupos con clases
 // sin Canva van primero; luego por fecha.
 type MaterialGroup = { key: string; title: string; records: DataRecord[] };
+const orientationMaterialWeekKey = (dateValue: string | undefined) => {
+  const clean = String(dateValue || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return "sin-fecha";
+  const [year, month, day] = clean.split("-").map(Number);
+  return toISODate(mondayOfWeek(new Date(year, month - 1, day)));
+};
+
+const FOURTH_GRADE_OVERRIDE = {
+  weekStart: "2026-07-27",
+  weekEnd: "2026-07-31",
+  title: "Evaluación de Sexualidad y RICE (Reglamento Interno de Convivencia Escolar)",
+  axis: "Intervención Formativa",
+  reason: "Actividad extraordinaria de Sexualidad y RICE. La clase SENDA sugerida se posterga a la próxima semana.",
+};
+
+const orientationClassOverride = (course: string, date: string) =>
+  columnaCourseKey(course).startsWith("4basico") && date >= FOURTH_GRADE_OVERRIDE.weekStart && date <= FOURTH_GRADE_OVERRIDE.weekEnd
+    ? FOURTH_GRADE_OVERRIDE
+    : null;
+
 const buildMaterialGroups = (records: DataRecord[]): MaterialGroup[] => {
   const groups = new Map<string, { title: string; records: DataRecord[] }>();
   records.forEach((record) => {
-    const title = (record.topic || "").trim();
-    if (!title || isPlaceholderOrientationText(title) || isGenericOrientationTopic(title)) return;
-    const key = normalize(title);
+    const rawTitle = (record.topic || "").trim();
+    const title = rawTitle && !isPlaceholderOrientationText(rawTitle) && !isGenericOrientationTopic(rawTitle)
+      ? rawTitle
+      : "Tema por definir";
+    const key = `${orientationMaterialWeekKey(record.date)}::${normalize(title) || record.id}`;
     const group = groups.get(key) || { title, records: [] };
     group.records.push(record);
     groups.set(key, group);
@@ -1530,6 +1606,19 @@ const buildMaterialGroups = (records: DataRecord[]): MaterialGroup[] => {
       records: group.records.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.course || "").localeCompare(String(b.course || ""), "es")),
     }))
     .sort((a, b) => (missing(b.records) ? 1 : 0) - (missing(a.records) ? 1 : 0) || String(a.records[0]?.date || "").localeCompare(String(b.records[0]?.date || "")));
+};
+
+// Deja que el navegador pinte primero la respuesta visual del clic antes de
+// recalcular la bitácora completa. Esto evita que interacciones sobre textos
+// truncados queden atribuidas como tareas largas de INP.
+const startAfterNextPaint = (update: () => void) => {
+  if (typeof window === "undefined") {
+    update();
+    return;
+  }
+  window.requestAnimationFrame(() => {
+    window.requestAnimationFrame(() => React.startTransition(update));
+  });
 };
 
 const meaningfulOrientationNotes = (record: DataRecord) => {
@@ -1582,6 +1671,7 @@ const FEEDBACK_COMPREHENSION_STRATEGIES = ["Localización", "Inferencia", "Refle
 
 type ClassFeedbackData = {
   teacher: string;
+  teacherEmail: string;
   subject: string;
   startTime: string;
   endTime: string;
@@ -1603,6 +1693,7 @@ type ClassFeedbackData = {
 
 const emptyClassFeedback = (): ClassFeedbackData => ({
   teacher: "",
+  teacherEmail: "",
   subject: "Orientación",
   startTime: "",
   endTime: "",
@@ -1643,7 +1734,7 @@ const classFeedbackSummaryText = (record: DataRecord, data: ClassFeedbackData) =
   const lines: string[] = [
     `FEEDBACK DE CLASE · ${record.course || "Sin curso"} · ${record.date || "Sin fecha"}`,
     `Docente: ${data.teacher || "—"} · Asignatura: ${data.subject || "—"} · Horario: ${data.startTime || "—"} a ${data.endTime || "—"}`,
-    `Observador/a: ${data.observer || "—"} · N° de observación: ${data.observationNumber || "—"}`,
+    `Observador/a: ${data.observer || "—"} · N° de acompañamiento: ${data.observationNumber || "—"}`,
     `Clase: ${record.topic || "—"} · Fortaleza/acción: ${record.axis || record.characterStrength || "—"}`,
     "",
     "1. INTERVENCIÓN FORMATIVA Y CULTURA INSTITUCIONAL",
@@ -1664,7 +1755,7 @@ const classFeedbackSummaryText = (record: DataRecord, data: ClassFeedbackData) =
   if (data.improvements.trim()) {
     lines.push("", "5. ELEMENTOS DESTACADOS Y SUGERENCIAS PARA LA MEJORA", `  ${data.improvements.trim()}`);
   }
-  lines.push("", "Por favor confirma la recepción de este feedback respondiendo a este correo.");
+  lines.push("", "Favor responder acusando recibo.");
   return lines.join("\n");
 };
 
@@ -1678,98 +1769,118 @@ const escapeFeedbackHtml = (value: string) =>
     .replace(/\n/g, "<br>");
 
 const feedbackMarkBadge = (value: string) => {
-  if (value === "si") return `<span style="display:inline-block;padding:3px 11px;border-radius:999px;background:#dcfce7;color:#15803d;font-size:12px;font-weight:700;">&#10003; Sí</span>`;
-  if (value === "no") return `<span style="display:inline-block;padding:3px 11px;border-radius:999px;background:#fee2e2;color:#b91c1c;font-size:12px;font-weight:700;">&#10007; No</span>`;
-  return `<span style="display:inline-block;padding:3px 11px;border-radius:999px;background:#f1f5f9;color:#94a3b8;font-size:12px;font-weight:700;">&mdash;</span>`;
+  if (value === "si") return `<span style="display:inline-block;padding:4px 10px;border-radius:999px;background-color:#e8f5ee;color:#176b45;font-size:11px;font-weight:800;letter-spacing:.04em;">&#10003;&nbsp; SÍ</span>`;
+  if (value === "no") return `<span style="display:inline-block;padding:4px 10px;border-radius:999px;background-color:#fff0ed;color:#a63d2f;font-size:11px;font-weight:800;letter-spacing:.04em;">&#10005;&nbsp; NO</span>`;
+  return `<span style="display:inline-block;padding:4px 10px;border-radius:999px;background-color:#f1f3f5;color:#7a8491;font-size:11px;font-weight:800;">&mdash;</span>`;
 };
 
 const feedbackChecklistHtml = (items: string[], values: string[]) =>
   items
     .map(
       (item, index) => `<tr>
-        <td style="padding:9px 14px;border-bottom:1px solid #eef2f7;font-size:14px;line-height:1.4;color:#334155;">${escapeFeedbackHtml(item)}</td>
-        <td style="padding:9px 14px;border-bottom:1px solid #eef2f7;text-align:right;white-space:nowrap;">${feedbackMarkBadge(values[index] || "")}</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #ece9e2;font-size:13px;line-height:1.55;color:#34404c;">${escapeFeedbackHtml(item)}</td>
+        <td style="padding:12px 16px;border-bottom:1px solid #ece9e2;text-align:right;white-space:nowrap;">${feedbackMarkBadge(values[index] || "")}</td>
       </tr>`,
     )
     .join("");
 
-const feedbackSectionCard = (accent: string, title: string, inner: string) => `
-  <div style="margin-top:16px;border:1px solid #e5e9f0;border-radius:14px;overflow:hidden;">
-    <div style="background:${accent};padding:10px 16px;">
-      <span style="font-size:12px;font-weight:800;letter-spacing:0.06em;text-transform:uppercase;color:#ffffff;">${escapeFeedbackHtml(title)}</span>
-    </div>
-    <div style="padding:4px 0;">${inner}</div>
-  </div>`;
+const feedbackSectionCard = (number: string, eyebrow: string, title: string, accent: string, inner: string) => `
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:22px;border-collapse:separate;border-spacing:0;border:1px solid #e4e1da;border-radius:14px;background-color:#ffffff;">
+    <tr>
+      <td style="width:54px;padding:17px 0 15px 16px;vertical-align:top;">
+        <span style="display:inline-block;width:34px;height:34px;border-radius:50%;background-color:${accent};color:#ffffff;font-family:Arial,sans-serif;font-size:14px;font-weight:800;line-height:34px;text-align:center;">${escapeFeedbackHtml(number)}</span>
+      </td>
+      <td style="padding:15px 16px 13px 8px;vertical-align:top;">
+        <div style="font-family:Arial,sans-serif;font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:${accent};">${escapeFeedbackHtml(eyebrow)}</div>
+        <div style="margin-top:3px;font-family:Georgia,'Times New Roman',serif;font-size:19px;line-height:1.25;color:#152d47;">${escapeFeedbackHtml(title)}</div>
+      </td>
+    </tr>
+    <tr><td colspan="2" style="padding:0;">${inner}</td></tr>
+  </table>`;
 
 const classFeedbackEmailHtml = (record: DataRecord, data: ClassFeedbackData) => {
+  const answers = [...data.cultureItems, ...data.strengthItems, data.comprehensionUsed, data.thinkingUsed, data.climateUsed];
+  const positiveCount = answers.filter((value) => value === "si").length;
+  const answeredCount = answers.filter((value) => value === "si" || value === "no").length;
   const infoRow = (label: string, value: string) => value && value !== "—"
-    ? `<tr><td style="padding:4px 0;font-size:12px;color:#64748b;width:44%;">${escapeFeedbackHtml(label)}</td><td style="padding:4px 0;font-size:13px;font-weight:600;color:#0f172a;">${escapeFeedbackHtml(value)}</td></tr>`
+    ? `<tr><td style="padding:5px 0;font-family:Arial,sans-serif;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#8a7660;width:42%;">${escapeFeedbackHtml(label)}</td><td style="padding:5px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#24384d;">${escapeFeedbackHtml(value)}</td></tr>`
     : "";
   const strengthText = record.axis || record.characterStrength || "";
   const strategyLine = (label: string, used: string, detail: string) =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #eef2f7;">
-        <span style="font-size:14px;color:#334155;">${escapeFeedbackHtml(label)}</span>
-        ${feedbackMarkBadge(used)}
-      </div>${detail.trim() ? `<div style="padding:2px 14px 10px;font-size:13px;color:#475569;">${escapeFeedbackHtml(detail.trim())}</div>` : ""}`;
+    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr>
+        <td style="padding:12px 16px;border-top:1px solid #ece9e2;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#34404c;">${escapeFeedbackHtml(label)}${detail.trim() ? `<div style="margin-top:4px;font-size:12px;line-height:1.55;color:#66727e;">${escapeFeedbackHtml(detail.trim())}</div>` : ""}</td>
+        <td style="padding:12px 16px;border-top:1px solid #ece9e2;text-align:right;white-space:nowrap;">${feedbackMarkBadge(used)}</td>
+      </tr></table>`;
 
   const comprehensionInner =
-    `<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid #eef2f7;">
-        <span style="font-size:14px;color:#334155;">a. Habilidad de comprensión${data.comprehensionStrategies.length ? ` <span style="color:#7c3aed;font-weight:600;">(${escapeFeedbackHtml(data.comprehensionStrategies.join(", "))})</span>` : ""}</span>
-        ${feedbackMarkBadge(data.comprehensionUsed)}
-      </div>${data.comprehensionEvidence.trim() ? `<div style="padding:2px 14px 10px;font-size:13px;color:#475569;">${escapeFeedbackHtml(data.comprehensionEvidence.trim())}</div>` : ""}` +
+    `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr>
+        <td style="padding:12px 16px;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#34404c;">Habilidad de comprensión${data.comprehensionStrategies.length ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#476c78;">${escapeFeedbackHtml(data.comprehensionStrategies.join(" · "))}</div>` : ""}${data.comprehensionEvidence.trim() ? `<div style="margin-top:4px;font-size:12px;line-height:1.55;color:#66727e;">${escapeFeedbackHtml(data.comprehensionEvidence.trim())}</div>` : ""}</td>
+        <td style="padding:12px 16px;text-align:right;white-space:nowrap;">${feedbackMarkBadge(data.comprehensionUsed)}</td>
+      </tr></table>` +
     strategyLine("b. Estrategias de pensamiento", data.thinkingUsed, data.thinkingDetail) +
     strategyLine("c. Estrategias de clima de aula", data.climateUsed, data.climateDetail);
 
   const freeText = (title: string, body: string, accent: string) => body.trim()
-    ? feedbackSectionCard(accent, title, `<div style="padding:12px 16px;font-size:14px;line-height:1.55;color:#334155;">${escapeFeedbackHtml(body.trim())}</div>`)
+    ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:20px;border-collapse:separate;border-spacing:0;border-left:4px solid ${accent};background-color:#f7f4ed;border-radius:0 12px 12px 0;"><tr><td style="padding:18px 20px;"><div style="font-family:Arial,sans-serif;font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:${accent};">${escapeFeedbackHtml(title)}</div><div style="margin-top:8px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.7;color:#2d3a45;">${escapeFeedbackHtml(body.trim())}</div></td></tr></table>`
     : "";
 
-  return `<div style="margin:0;padding:0;background:#f1f5f9;">
-  <div style="max-width:640px;margin:0 auto;padding:20px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-    <div style="background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,0.08);">
-      <div style="background:#1d4ed8;background-image:linear-gradient(135deg,#1d4ed8 0%,#4f46e5 60%,#7c3aed 100%);padding:24px 24px 22px;">
-        <p style="margin:0;font-size:12px;font-weight:800;letter-spacing:0.1em;text-transform:uppercase;color:#c7d2fe;">Acompañamiento de clase &middot; SOY+</p>
-        <h1 style="margin:6px 0 0;font-size:22px;font-weight:800;color:#ffffff;">Feedback de Orientación</h1>
-        <p style="margin:8px 0 0;font-size:14px;color:#e0e7ff;">${escapeFeedbackHtml(record.course || "Sin curso")} &middot; ${escapeFeedbackHtml(record.date || "Sin fecha")}${record.topic ? ` &middot; ${escapeFeedbackHtml(record.topic)}` : ""}</p>
-      </div>
+  return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin:0;background-color:#eeeae1;"><tr><td align="center" style="padding:28px 10px;">
+  <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="width:100%;max-width:640px;border-collapse:separate;border-spacing:0;background-color:#fffdf8;border-radius:18px;overflow:hidden;">
+    <tr><td style="height:7px;background-color:#e55f45;font-size:1px;line-height:1px;">&nbsp;</td></tr>
+    <tr><td style="padding:30px 34px 26px;background-color:#132f4c;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
+        <td style="vertical-align:top;">
+          <div style="font-family:Arial,sans-serif;font-size:10px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#f2b8a9;">Tiza Education &nbsp;/&nbsp; SOY+</div>
+          <h1 style="margin:13px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:34px;font-weight:400;line-height:1.05;color:#ffffff;">Una mirada<br>sobre la clase</h1>
+        </td>
+        <td align="right" style="vertical-align:top;width:88px;">
+          <img src="https://tiza-education-app.vercel.app/logo-san-lucas-transparent.png" width="78" height="78" alt="Colegio San Lucas" style="display:block;width:78px;height:78px;border:0;outline:none;text-decoration:none;" />
+        </td>
+      </tr></table>
+      <div style="margin-top:24px;padding-top:17px;border-top:1px solid #40576e;font-family:Arial,sans-serif;font-size:12px;line-height:1.55;color:#dce4ec;">${escapeFeedbackHtml(record.course || "Sin curso")} &nbsp;&middot;&nbsp; ${escapeFeedbackHtml(record.date || "Sin fecha")} &nbsp;&middot;&nbsp; Acompañamiento N.º ${escapeFeedbackHtml(data.observationNumber || "—")}${record.topic ? ` &nbsp;&middot;&nbsp; ${escapeFeedbackHtml(record.topic)}` : ""}</div>
+    </td></tr>
 
-      <div style="padding:20px 24px 8px;">
-        <p style="margin:0 0 12px;font-size:15px;color:#334155;">Estimada/o <strong style="color:#0f172a;">${escapeFeedbackHtml(data.teacher || "docente")}</strong>,</p>
-        <p style="margin:0 0 4px;font-size:14px;line-height:1.55;color:#475569;">Compartimos contigo el feedback del acompañamiento realizado a tu clase de orientación. Gracias por tu compromiso con la formación de nuestros estudiantes.</p>
+    <tr><td style="padding:30px 34px 8px;">
+      <div style="font-family:Georgia,'Times New Roman',serif;font-size:20px;line-height:1.45;color:#20364b;">Estimada/o ${escapeFeedbackHtml(data.teacher || "docente")},</div>
+      <div style="margin-top:10px;font-family:Arial,sans-serif;font-size:14px;line-height:1.7;color:#56616c;">Comparto contigo esta síntesis del acompañamiento realizado en tu clase de Orientación. Es una invitación a reconocer lo que ya está dando frutos y a seguir fortaleciendo nuestra práctica formativa.</div>
 
-        <table style="width:100%;border-collapse:collapse;margin-top:14px;background:#f8fafc;border:1px solid #e5e9f0;border-radius:12px;padding:4px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:22px;border-collapse:separate;border-spacing:0;background-color:#f4efe5;border-radius:13px;"><tr>
+        <td style="padding:18px 20px;vertical-align:top;width:60%;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">
           ${infoRow("Docente", data.teacher)}
           ${infoRow("Asignatura", data.subject)}
           ${infoRow("Fecha", record.date || "")}
           ${infoRow("Horario", data.startTime || data.endTime ? `${data.startTime || "—"} a ${data.endTime || "—"}` : "")}
-          ${infoRow("N° de observación", data.observationNumber)}
           ${infoRow("Fortaleza / acción", strengthText)}
           ${infoRow("Observador/a", data.observer)}
-        </table>
-      </div>
+          </table>
+        </td>
+        <td align="center" style="padding:18px 16px;border-left:1px solid #ddd5c7;vertical-align:middle;">
+          <div style="font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1;color:#e55f45;">${positiveCount}<span style="font-size:17px;color:#8a7660;">/${answeredCount}</span></div>
+          <div style="margin-top:6px;font-family:Arial,sans-serif;font-size:9px;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:#8a7660;">Prácticas<br>observadas</div>
+        </td>
+      </tr></table>
 
-      <div style="padding:0 24px;">
-        ${feedbackSectionCard("#2563eb", "1. Intervención formativa y cultura institucional", `<table style="width:100%;border-collapse:collapse;">${feedbackChecklistHtml(FEEDBACK_SECTION_CULTURE, data.cultureItems)}</table>`)}
-        ${feedbackSectionCard("#7c3aed", "2. Trabajo de fortalezas del carácter", `<table style="width:100%;border-collapse:collapse;">${feedbackChecklistHtml(FEEDBACK_SECTION_STRENGTHS, data.strengthItems)}</table>`)}
-        ${feedbackSectionCard("#0891b2", "3. Estrategias pedagógicas observadas", comprehensionInner)}
-        ${freeText("4. Evidencia / observaciones generales", data.generalEvidence, "#0f766e")}
-        ${freeText("5. Elementos destacados y sugerencias para la mejora", data.improvements, "#d97706")}
-      </div>
+      ${feedbackSectionCard("01", "Cultura institucional", "Intervención formativa", "#2c6e7f", `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">${feedbackChecklistHtml(FEEDBACK_SECTION_CULTURE, data.cultureItems)}</table>`)}
+      ${feedbackSectionCard("02", "Formación del carácter", "Fortalezas puestas en práctica", "#76568c", `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">${feedbackChecklistHtml(FEEDBACK_SECTION_STRENGTHS, data.strengthItems)}</table>`)}
+      ${feedbackSectionCard("03", "Didáctica y ambiente", "Estrategias pedagógicas observadas", "#b87935", comprehensionInner)}
+      ${freeText("04 / Evidencia y observaciones", data.generalEvidence, "#2c6e7f")}
+      ${freeText("05 / Elementos destacados y próximos pasos", data.improvements, "#e55f45")}
 
-      <div style="margin:18px 24px 6px;padding:16px 18px;border-radius:14px;background:#eff6ff;border:1px solid #bfdbfe;">
-        <p style="margin:0;font-size:14px;font-weight:700;color:#1e40af;">&#128233; Por favor confirma la recepción de este feedback respondiendo a este correo.</p>
-        <p style="margin:6px 0 0;font-size:13px;line-height:1.5;color:#3b82f6;">Tu acuse de recibo nos permite dejar registro del acompañamiento. Si tienes dudas o quieres conversar sobre alguna sugerencia, quedo a tu disposición.</p>
+      <div style="padding:25px 0 29px;font-family:Arial,sans-serif;color:#34404c;">
+        <div style="font-size:13px;">Un cordial saludo,</div>
+        <div style="margin-top:5px;font-family:Georgia,'Times New Roman',serif;font-size:18px;color:#152d47;">${escapeFeedbackHtml(data.observer || "Equipo de Orientación")}</div>
+        <div style="margin-top:3px;font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#9a7e63;">Equipo de Orientación &middot; Colegio San Lucas de Lo Espejo</div>
       </div>
-
-      <div style="padding:12px 24px 24px;">
-        <p style="margin:0;font-size:14px;color:#334155;">Un cordial saludo,</p>
-        <p style="margin:2px 0 0;font-size:14px;font-weight:700;color:#0f172a;">${escapeFeedbackHtml(data.observer || "Equipo de Orientación")}</p>
-        <p style="margin:0;font-size:12px;color:#94a3b8;">Equipo de Orientación &middot; Colegio San Lucas de Lo Espejo</p>
-      </div>
-    </div>
-  </div>
-</div>`;
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin:0 0 30px;border-collapse:separate;border-spacing:0;background-color:#eaf1f3;border-radius:12px;"><tr><td style="padding:16px 20px;text-align:center;">
+        <div style="font-family:Georgia,'Times New Roman',serif;font-size:16px;font-weight:700;line-height:1.4;color:#173f50;">Favor responder acusando recibo.</div>
+      </td></tr></table>
+    </td></tr>
+    <tr><td style="padding:15px 34px;background-color:#132f4c;font-family:Arial,sans-serif;font-size:9px;line-height:1.5;letter-spacing:.1em;text-align:center;text-transform:uppercase;color:#aebdca;">Documento de acompañamiento pedagógico &nbsp;&middot;&nbsp; Generado con Tiza Education</td></tr>
+  </table>
+  </td></tr></table>`;
 };
+
 
 function FeedbackYesNo({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
@@ -1803,6 +1914,7 @@ function OrientationFeedbackModal({
   onClose,
   onSave,
   onAutoSave,
+  onDelete,
 }: {
   record: DataRecord;
   ownerName: string;
@@ -1812,19 +1924,35 @@ function OrientationFeedbackModal({
   onClose: () => void;
   onSave: (data: ClassFeedbackData) => void;
   onAutoSave: (data: ClassFeedbackData) => void;
+  onDelete: () => void;
 }) {
   const [data, setData] = useState<ClassFeedbackData>(() => {
     const parsed = parseClassFeedback(record.classFeedback);
-    if (!parsed.teacher) parsed.teacher = headTeacherForCourse(record.course || "")?.name || "";
+    const courseTeacher = headTeacherForCourse(record.course || "");
+    const allowedTeacher = FEEDBACK_TEACHER_OPTIONS.find((teacher) =>
+      (!teacher.isTest && parsed.teacherEmail && teacher.email === parsed.teacherEmail.trim().toLowerCase()) ||
+      (!teacher.isTest && parsed.teacher && normalize(teacher.name) === normalize(parsed.teacher))
+    );
+    const fallbackTeacher = courseTeacher
+      ? FEEDBACK_TEACHER_OPTIONS.find((teacher) => !teacher.isTest && teacher.email === courseTeacher.email)
+      : null;
+    const selectedTeacher = allowedTeacher || fallbackTeacher;
+    parsed.teacher = selectedTeacher?.name || "";
+    parsed.teacherEmail = selectedTeacher?.email || "";
     if (!parsed.observer) parsed.observer = ownerName;
-    // Correlativo automático por curso: se puede corregir a mano si hace falta.
-    if (!parsed.observationNumber) parsed.observationNumber = autoObservationNumber;
+    // El número corresponde a la posición real de la clase realizada en el curso,
+    // independientemente de cuántas clases anteriores tengan feedback guardado.
+    parsed.observationNumber = autoObservationNumber;
     // El horario oficial es el punto de partida y se puede corregir manualmente.
     if (!parsed.startTime) parsed.startTime = defaultStartTime;
     if (!parsed.endTime) parsed.endTime = defaultEndTime;
     return parsed;
   });
   const [copied, setCopied] = useState(false);
+  const [testTeacherActive, setTestTeacherActive] = useState(false);
+  const emailFeedbackData = testTeacherActive
+    ? { ...data, teacher: FEEDBACK_TEST_TEACHER.name, teacherEmail: FEEDBACK_TEST_TEACHER.email }
+    : data;
   const lastAutoSavedRef = React.useRef(JSON.stringify(data));
   const update = (changes: Partial<ClassFeedbackData>) => setData((current) => ({ ...current, ...changes }));
   const updateItem = (key: "cultureItems" | "strengthItems", index: number, value: string) =>
@@ -1854,25 +1982,44 @@ function OrientationFeedbackModal({
     onSave(data);
   };
 
+  const deleteFeedback = () => {
+    if (!window.confirm(`¿Eliminar definitivamente el feedback de ${record.course || "esta clase"}${record.date ? ` del ${record.date}` : ""}? La clase y sus materiales se conservarán.`)) return;
+    lastAutoSavedRef.current = JSON.stringify(data);
+    onDelete();
+  };
+
   const copySummary = async () => {
     try {
-      await navigator.clipboard.writeText(classFeedbackSummaryText(record, data));
+      await navigator.clipboard.writeText(classFeedbackSummaryText(record, emailFeedbackData));
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2500);
     } catch {
-      window.prompt("Copia el resumen manualmente:", classFeedbackSummaryText(record, data));
+      window.prompt("Copia el resumen manualmente:", classFeedbackSummaryText(record, emailFeedbackData));
     }
   };
 
-  const teacherEmail = headTeacherForCourse(record.course || "")?.email || "";
-  const [emailHint, setEmailHint] = useState<"" | "copied" | "plain">("");
-  const sendFeedbackEmail = async () => {
+  const teacherEmail = emailFeedbackData.teacherEmail || "";
+  const feedbackComplete = [...data.cultureItems, ...data.strengthItems, data.comprehensionUsed, data.thinkingUsed, data.climateUsed]
+    .every((value) => value === "si" || value === "no");
+  const [emailState, setEmailState] = useState<"idle" | "error">("idle");
+  const [emailHint, setEmailHint] = useState("");
+  const openFeedbackInGmail = async () => {
+    if (!feedbackComplete) {
+      setEmailState("error");
+      setEmailHint("Completa todos los indicadores Sí/No antes de preparar el correo.");
+      return;
+    }
+    if (!teacherEmail) {
+      setEmailState("error");
+      setEmailHint("Este curso no tiene correo de profesora jefe configurado.");
+      return;
+    }
     // Guarda el feedback antes de enviarlo para no perder cambios recientes.
     lastAutoSavedRef.current = JSON.stringify(data);
     onAutoSave(data);
     const subject = `Feedback de clase de Orientación · ${record.course || "Sin curso"}${record.date ? ` · ${record.date}` : ""}`;
-    const html = classFeedbackEmailHtml(record, data);
-    const plain = classFeedbackSummaryText(record, data);
+    const html = classFeedbackEmailHtml(record, emailFeedbackData);
+    const plain = classFeedbackSummaryText(record, emailFeedbackData);
     let richCopied = false;
     try {
       const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
@@ -1892,8 +2039,11 @@ function OrientationFeedbackModal({
     // Sin permiso de portapapeles: se abre con el texto plano como respaldo.
     const params = `view=cm&fs=1&tf=1&to=${encodeURIComponent(teacherEmail)}&su=${encodeURIComponent(subject)}${richCopied ? "" : `&body=${encodeURIComponent(plain)}`}`;
     window.open(`https://mail.google.com/mail/?${params}`, "_blank", "noopener");
-    setEmailHint(richCopied ? "copied" : "plain");
-    window.setTimeout(() => setEmailHint(""), 9000);
+    setEmailState("idle");
+    setEmailHint(richCopied
+      ? "Diseño editorial copiado. En Gmail presiona ⌘V (o Ctrl+V), revisa el mensaje y envíalo."
+      : "Se abrió Gmail con una versión en texto porque el navegador no permitió copiar el diseño.");
+    window.setTimeout(() => setEmailHint(""), 12000);
   };
 
   const sectionTitle = "text-[11px] font-bold uppercase tracking-[0.12em] text-blue-700 sm:text-xs";
@@ -1910,6 +2060,7 @@ function OrientationFeedbackModal({
             <p className="text-xs font-bold uppercase tracking-wider text-blue-700">Pauta de acompañamiento de clase</p>
             <h2 className="mt-0.5 truncate text-base font-semibold text-slate-950 sm:text-lg">Feedback · {record.course || "Sin curso"}</h2>
             <p className="mt-0.5 truncate text-xs text-slate-500">{record.date || "Sin fecha"} · {record.topic || "Sin tema definido"}{(record.axis || record.characterStrength) ? ` · ${record.axis || record.characterStrength}` : ""}</p>
+            <p className="mt-1 text-[11px] font-semibold text-blue-700">El correo se prepara con diseño editorial y se envía desde tu Gmail institucional.</p>
           </div>
           <button onClick={saveAndClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Guardar y cerrar">
             <X className="h-4 w-4" />
@@ -1917,18 +2068,49 @@ function OrientationFeedbackModal({
         </header>
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3 sm:space-y-5 sm:px-5 sm:py-4">
-          <section className="grid grid-cols-2 gap-2.5 rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3">
-            <label className="col-span-2 block sm:col-span-1">
+          <section className="grid grid-cols-2 gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 lg:grid-cols-3">
+            <label className="col-span-2 block rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:col-span-3 sm:p-4">
               <span className={fieldLabel}>Nombre docente</span>
-              <input value={data.teacher} onChange={(event) => update({ teacher: event.target.value })} className={inputStyle} />
+              <select
+                value={testTeacherActive ? FEEDBACK_TEST_TEACHER.email : data.teacherEmail}
+                onChange={(event) => {
+                  const selected = FEEDBACK_TEACHER_OPTIONS.find((teacher) => teacher.email === event.target.value);
+                  if (!selected) return;
+                  if (selected.isTest) {
+                    setTestTeacherActive(true);
+                  } else {
+                    setTestTeacherActive(false);
+                    update({ teacher: selected.name, teacherEmail: selected.email });
+                  }
+                }}
+                className={inputStyle}
+              >
+                {!data.teacherEmail ? <option value="">Selecciona un docente</option> : null}
+                {FEEDBACK_TEACHER_OPTIONS.map((teacher) => (
+                  <option key={teacher.email} value={teacher.email}>
+                    {teacher.isTest ? "★ PRUEBA · " : ""}{teacher.name} · {teacher.email}{teacher.headship ? ` · ${teacher.headship}` : ""}
+                  </option>
+                ))}
+              </select>
+              <span className={`mt-2 block break-words px-0.5 text-[10px] font-semibold ${testTeacherActive ? "text-violet-700" : "text-slate-500"}`}>
+                {testTeacherActive ? "Modo de prueba temporal · " : "Destinatario · "}{teacherEmail || "Sin correo seleccionado"}
+              </span>
             </label>
             <label className="block">
               <span className={fieldLabel}>Asignatura</span>
               <input value={data.subject} onChange={(event) => update({ subject: event.target.value })} className={inputStyle} />
             </label>
             <label className="block">
-              <span className={fieldLabel}>N° de observación</span>
-              <input value={data.observationNumber} onChange={(event) => update({ observationNumber: event.target.value })} className={inputStyle} />
+              <span className={fieldLabel}>N° de acompañamiento</span>
+              <input
+                value={data.observationNumber}
+                readOnly
+                aria-readonly="true"
+                className={`${inputStyle} cursor-default bg-slate-100 font-bold text-slate-700`}
+              />
+              <span className="mt-1.5 block text-[10px] font-semibold leading-4 text-slate-500">
+                Calculado automáticamente según el orden de las clases realizadas del curso.
+              </span>
             </label>
             <label className="block">
               <span className={fieldLabel}>Hora de inicio</span>
@@ -2035,12 +2217,8 @@ function OrientationFeedbackModal({
         </div>
 
         {emailHint ? (
-          <div className="shrink-0 border-t border-blue-100 bg-blue-50 px-4 py-2.5 text-xs font-semibold text-blue-800">
-            {emailHint === "copied" ? (
-              <span>📋 Correo con formato copiado. En Gmail haz clic en el cuerpo del mensaje y pega con <span className="rounded bg-white px-1.5 py-0.5 font-mono text-[11px] ring-1 ring-blue-200">⌘/Ctrl + V</span> para enviarlo con colores.</span>
-            ) : (
-              <span>Se abrió Gmail con el feedback en texto{teacherEmail ? "" : " (agrega el correo de la profesora manualmente)"}.</span>
-            )}
+          <div className={`shrink-0 border-t px-4 py-2.5 text-xs font-semibold ${emailState === "error" ? "border-rose-100 bg-rose-50 text-rose-700" : "border-blue-100 bg-blue-50 text-blue-800"}`}>
+            {emailHint}
           </div>
         ) : null}
         <footer className="grid shrink-0 grid-cols-2 gap-2 border-t border-slate-100 bg-slate-50 px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:items-center sm:justify-between sm:rounded-b-2xl sm:px-5">
@@ -2048,20 +2226,21 @@ function OrientationFeedbackModal({
             <button onClick={copySummary} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
               <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar texto"}
             </button>
-            <button
-              onClick={sendFeedbackEmail}
-              title={teacherEmail ? `Enviar a ${teacherEmail}` : "No se encontró el correo de la profesora jefe; se abrirá Gmail para completarlo"}
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 text-xs font-bold text-white shadow hover:from-blue-700 hover:to-indigo-700"
-            >
-              <Mail className="h-4 w-4" /> Enviar por correo
-            </button>
           </div>
           <div className="contents sm:flex sm:gap-2">
+            {record.classFeedback ? (
+              <button onClick={deleteFeedback} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-50 sm:px-4">
+                <Trash2 className="h-4 w-4" /> Eliminar feedback
+              </button>
+            ) : null}
             <button onClick={saveAndClose} className="min-h-10 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 sm:px-4">
               Guardar y cerrar
             </button>
-            <button onClick={saveFeedback} className="col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-violet-700">
-              <Save className="h-4 w-4" /> Guardar feedback
+            <button onClick={saveFeedback} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 hover:bg-violet-100 sm:px-4">
+              <Save className="h-4 w-4" /> Guardar borrador
+            </button>
+            <button onClick={openFeedbackInGmail} title={teacherEmail ? `Copiar el diseño y preparar correo para ${teacherEmail}` : "No se encontró el correo de la profesora jefe"} className="col-span-2 inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-700 to-indigo-700 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-900/15 transition hover:from-blue-800 hover:to-indigo-800 sm:text-sm">
+              <Mail className="h-4 w-4" /> Copiar diseño y abrir Gmail
             </button>
           </div>
         </footer>
@@ -2078,12 +2257,14 @@ function FeedbackHistoryModal({
   accessToken,
   onClose,
   onOpenFeedback,
+  onDeleteFeedback,
 }: {
   records: DataRecord[];
   ownerName: string;
   accessToken: string;
   onClose: () => void;
   onOpenFeedback: (recordId: string) => void;
+  onDeleteFeedback: (recordId: string) => void;
 }) {
   const [search, setSearch] = useState("");
   const [report, setReport] = useState("");
@@ -2223,26 +2404,40 @@ function FeedbackHistoryModal({
                 const yesCount = [...data.cultureItems, ...data.strengthItems].filter((item) => item === "si").length;
                 const totalMarked = [...data.cultureItems, ...data.strengthItems].filter(Boolean).length;
                 return (
-                  <button
-                    key={record.id}
-                    onClick={() => onOpenFeedback(record.id)}
-                    className="flex w-full items-center justify-between gap-3 bg-white px-3 py-2.5 text-left transition hover:bg-violet-50/50"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-950">
-                        {record.course || "Sin curso"} · {record.date || "Sin fecha"}
-                        {data.observationNumber ? <span className="ml-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">Obs. N° {data.observationNumber}</span> : null}
-                      </p>
-                      <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
-                        {data.teacher ? `${data.teacher} · ` : ""}{record.topic || "Sin tema"}
-                      </p>
-                      {data.improvements.trim() ? <p className="mt-0.5 line-clamp-1 text-xs text-amber-800">{data.improvements.trim()}</p> : null}
-                    </div>
-                    <div className="shrink-0 text-right">
-                      {totalMarked ? <p className="text-xs font-bold text-emerald-700">{yesCount}/{totalMarked} logrados</p> : null}
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Abrir</p>
-                    </div>
-                  </button>
+                  <div key={record.id} className="flex items-stretch bg-white transition hover:bg-violet-50/50">
+                    <button
+                      type="button"
+                      onClick={() => onOpenFeedback(record.id)}
+                      className="flex min-w-0 flex-1 items-center justify-between gap-3 px-3 py-2.5 text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-950">
+                          {record.course || "Sin curso"} · {record.date || "Sin fecha"}
+                          {data.observationNumber ? <span className="ml-1.5 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold text-violet-700">Acomp. N° {data.observationNumber}</span> : null}
+                        </p>
+                        <p className="mt-0.5 line-clamp-1 text-xs text-slate-500">
+                          {data.teacher ? `${data.teacher} · ` : ""}{record.topic || "Sin tema"}
+                        </p>
+                        {data.improvements.trim() ? <p className="mt-0.5 line-clamp-1 text-xs text-amber-800">{data.improvements.trim()}</p> : null}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        {totalMarked ? <p className="text-xs font-bold text-emerald-700">{yesCount}/{totalMarked} logrados</p> : null}
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Abrir</p>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!window.confirm(`¿Eliminar definitivamente el feedback de ${record.course || "esta clase"}${record.date ? ` del ${record.date}` : ""}? La clase se conservará.`)) return;
+                        onDeleteFeedback(record.id);
+                      }}
+                      title="Eliminar este feedback"
+                      aria-label={`Eliminar feedback de ${record.course || "la clase"}`}
+                      className="grid w-12 shrink-0 place-items-center border-l border-slate-100 text-slate-400 transition hover:bg-rose-50 hover:text-rose-700"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -5357,8 +5552,10 @@ function OrientationCycleView({
   const [quickTopicCustom, setQuickTopicCustom] = useState(false);
   // Borradores de links por taller (clave: tema normalizado) para distribuirlos
   // de una vez a todos los cursos que comparten la misma clase.
-  const [materialDrafts, setMaterialDrafts] = useState<Record<string, { canva?: string; plan?: string; folder?: string }>>({});
+  const [materialDrafts, setMaterialDrafts] = useState<Record<string, { topic?: string; axis?: string; canva?: string; plan?: string; folder?: string }>>({});
+  const appliedClassOverridesRef = useRef(new Set<string>());
   const [materialsPanelOpen, setMaterialsPanelOpen] = useState(false);
+  const [coverageMapOpen, setCoverageMapOpen] = useState(false);
   // Semana cuyo panel de materiales está abierto dentro de la bitácora.
   const [materialsWeekKey, setMaterialsWeekKey] = useState<string | null>(null);
   const [quickFormAttempted, setQuickFormAttempted] = useState(false);
@@ -5376,18 +5573,18 @@ function OrientationCycleView({
   // Fechas de la bitácora contraídas (clave AAAA-MM-DD).
   const [collapsedDateKeys, setCollapsedDateKeys] = useState<string[]>([]);
   const toggleDateCollapsed = (dateKey: string) =>
-    setCollapsedDateKeys((current) => (current.includes(dateKey) ? current.filter((key) => key !== dateKey) : [...current, dateKey]));
+    startAfterNextPaint(() => setCollapsedDateKeys((current) => (current.includes(dateKey) ? current.filter((key) => key !== dateKey) : [...current, dateKey])));
   // Semanas de la bitácora contraídas (clave = lunes de la semana AAAA-MM-DD).
   const [collapsedWeekKeys, setCollapsedWeekKeys] = useState<string[]>([]);
   const toggleWeekCollapsed = (weekKey: string) =>
-    setCollapsedWeekKeys((current) => (current.includes(weekKey) ? current.filter((key) => key !== weekKey) : [...current, weekKey]));
+    startAfterNextPaint(() => setCollapsedWeekKeys((current) => (current.includes(weekKey) ? current.filter((key) => key !== weekKey) : [...current, weekKey])));
   // Lunes de la semana de una fecha AAAA-MM-DD; agrupa los registros por bloque semanal.
-  const weekKeyOf = (dateStr: string) => {
+  const weekKeyOf = React.useCallback((dateStr: string) => {
     const clean = (dateStr || "").slice(0, 10);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return "sin-fecha";
     const [y, m, d] = clean.split("-").map(Number);
     return toISODate(mondayOfWeek(new Date(y, m - 1, d)));
-  };
+  }, []);
   const weekRangeLabel = (weekKey: string) => {
     if (weekKey === "sin-fecha") return "Sin fecha definida";
     const [y, m, d] = weekKey.split("-").map(Number);
@@ -5470,16 +5667,16 @@ function OrientationCycleView({
         end: `2026-${endMonth}-${endDay}`,
       };
     };
-    const current = ORIENTATION_FIRST_CYCLE_CONFIG.find((config) => {
-      const range = parseWeekRange(config.week);
+    const current = orientationWeekOptions.find((option) => {
+      const range = parseWeekRange(option.value);
       return range && today >= range.start && today <= range.end;
     });
-    if (current) return current.week;
-    return ORIENTATION_FIRST_CYCLE_CONFIG.find((config) => {
-      const range = parseWeekRange(config.week);
+    if (current) return current.value;
+    return orientationWeekOptions.find((option) => {
+      const range = parseWeekRange(option.value);
       return range && range.end >= today;
-    })?.week || ORIENTATION_FIRST_CYCLE_CONFIG[0]?.week || "";
-  }, [today]);
+    })?.value || orientationWeekOptions.at(-1)?.value || "";
+  }, [orientationWeekOptions, today]);
   const weekOptionsFor = (week: string | undefined) => {
     const current = week || "";
     return current && !orientationWeekOptions.some((option) => option.value === current)
@@ -5488,8 +5685,8 @@ function OrientationCycleView({
   };
   const planWeekForWeekKey = (weekKey: string) => {
     if (weekKey === "sin-fecha") return defaultOrientationWeek;
-    const match = ORIENTATION_FIRST_CYCLE_CONFIG.find((config) => parseOrientationWeekRange(config.week)?.start === weekKey);
-    return match?.week || defaultOrientationWeek;
+    const match = orientationWeekOptions.find((option) => parseOrientationWeekRange(option.value)?.start === weekKey);
+    return match?.value || defaultOrientationWeek;
   };
   const openWeekCreatorForKey = (weekKey: string) => {
     React.startTransition(() => {
@@ -5517,6 +5714,29 @@ function OrientationCycleView({
       owner.courses.some((course) => normalize(record.course || "") === normalize(course))
     )
   ), [owner, store.orientation]);
+
+  // Ajuste excepcional solicitado para la semana del 27 de julio: si las clases
+  // de 4° ya existían con SENDA (o sin tema), se reemplazan sin perder la clase
+  // originalmente planificada, que seguirá pendiente para la semana siguiente.
+  useEffect(() => {
+    if (!dataReady) return;
+    ownerStoredClasses.forEach((record) => {
+      const override = orientationClassOverride(record.course || "", (record.date || "").slice(0, 10));
+      if (!override || appliedClassOverridesRef.current.has(record.id) || /realizad|cancelad|suspendid/i.test(record.status || "")) return;
+      const planned = matchColumnaClass(record.course || "", record.topic || record.notes || "");
+      if (!planned && !isPlaceholderOrientationText(record.topic)) return;
+      appliedClassOverridesRef.current.add(record.id);
+      onUpdateOrientationRecord(record.id, {
+        topic: override.title,
+        axis: override.axis,
+        characterStrength: override.axis,
+        notes: [record.notes, override.reason].filter(Boolean).join("\n"),
+        plannedColumnaTitle: record.plannedColumnaTitle || planned?.title || "",
+        deferredColumnaTitle: record.plannedColumnaTitle || planned?.title || "",
+        deferredColumnaReason: override.reason,
+      });
+    });
+  }, [dataReady, onUpdateOrientationRecord, ownerStoredClasses]);
 
   // Calendar events that look like orientation classes for one of this owner's
   // courses. We treat them as virtual class records (Planificada by default) so
@@ -5550,12 +5770,56 @@ function OrientationCycleView({
     (cal) => !ownerStoredClasses.some((s) => (s.date || "") === cal.date && normalize(s.course || "") === normalize(cal.course)),
   ), [calendarClasses, ownerStoredClasses]);
   const ownerClasses: DataRecord[] = useMemo(() => [...ownerStoredClasses, ...calendarClassesFiltered], [calendarClassesFiltered, ownerStoredClasses]);
+  // Acceso rápido al material inmediatamente anterior del mismo curso. Se
+  // calcula desde los registros para que no haya que copiar ni mantener links
+  // duplicados cuando se corrige el Canva de una clase pasada.
+  const previousCanvaByRecordId = useMemo(() => {
+    type PreviousCanva = { url: string; date: string; topic: string };
+    const result = new Map<string, PreviousCanva>();
+    const recordsByCourse = new Map<string, DataRecord[]>();
+    ownerClasses.forEach((record) => {
+      const courseKey = normalize(record.course || "");
+      if (!courseKey) return;
+      const courseRecords = recordsByCourse.get(courseKey) || [];
+      courseRecords.push(record);
+      recordsByCourse.set(courseKey, courseRecords);
+    });
+    recordsByCourse.forEach((courseRecords) => {
+      const sorted = [...courseRecords].sort((a, b) =>
+        String(a.date || "").localeCompare(String(b.date || "")) ||
+        String(a.createdAt || "").localeCompare(String(b.createdAt || "")) ||
+        a.id.localeCompare(b.id)
+      );
+      let previous: PreviousCanva | null = null;
+      for (let index = 0; index < sorted.length;) {
+        const date = (sorted[index].date || "").slice(0, 10);
+        let groupEnd = index + 1;
+        while (groupEnd < sorted.length && (sorted[groupEnd].date || "").slice(0, 10) === date) groupEnd += 1;
+        for (let currentIndex = index; currentIndex < groupEnd; currentIndex += 1) {
+          if (previous) result.set(sorted[currentIndex].id, previous);
+        }
+        let currentWithCanva: DataRecord | undefined;
+        for (let currentIndex = index; currentIndex < groupEnd; currentIndex += 1) {
+          if ((sorted[currentIndex].canvaLink || sorted[currentIndex].evidence || "").trim()) currentWithCanva = sorted[currentIndex];
+        }
+        if (date && currentWithCanva) {
+          previous = {
+            url: (currentWithCanva.canvaLink || currentWithCanva.evidence || "").trim(),
+            date,
+            topic: getOrientationDisplayTitle(currentWithCanva),
+          };
+        }
+        index = groupEnd;
+      }
+    });
+    return result;
+  }, [ownerClasses]);
   // Clase sugerida de la columna vertebral para cada curso del horario. Las ya
   // agendadas (Planificada/Pendiente) reservan su lugar para que dos semanas
   // seguidas no repitan la misma sugerencia.
   const creatorSuggestions = useMemo(() => new Map(
-    creatorSlots.map(({ slot }) => [slot.course, columnaProgress(slot.course, ownerClasses, { reserveUpcoming: true })?.next || null] as const),
-  ), [creatorSlots, ownerClasses]);
+    creatorSlots.map(({ slot }) => [slot.course, columnaProgress(slot.course, ownerClasses, { reserveUpcoming: true, reserveFromDate: periodWindows.thisWeekStart })?.next || null] as const),
+  ), [creatorSlots, ownerClasses, periodWindows.thisWeekStart]);
   // Clases ya creadas de la semana seleccionada, agrupadas por taller.
   const creatorWeekClasses = useMemo(() => creatorRange
     ? ownerStoredClasses.filter((record) => {
@@ -5575,11 +5839,13 @@ function OrientationCycleView({
     [upcomingMaterialGroups],
   );
   // Materiales de una semana específica, abiertos desde su encabezado en la bitácora.
-  const weekMaterialGroups = materialsWeekKey
+  const weekMaterialGroups = useMemo(() => materialsWeekKey
     ? buildMaterialGroups(ownerStoredClasses.filter((record) => weekKeyOf(record.date || "") === materialsWeekKey))
-    : [];
-  type MaterialLinkSet = { canva: string; plan: string; folder: string };
+    : [], [materialsWeekKey, ownerStoredClasses, weekKeyOf]);
+  type MaterialLinkSet = { topic: string; axis: string; canva: string; plan: string; folder: string };
   const materialGroupExisting = (group: MaterialGroup): MaterialLinkSet => ({
+    topic: group.records.map((record) => (record.topic || "").trim()).find(Boolean) || group.title,
+    axis: group.records.map((record) => (record.axis || record.characterStrength || "").trim()).find(Boolean) || "",
     canva: group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "",
     plan: group.records.map((record) => (record.planificacion || "").trim()).find(Boolean) || "",
     folder: group.records.map((record) => (record.folderLink || "").trim()).find(Boolean) || "",
@@ -5588,21 +5854,43 @@ function OrientationCycleView({
     const existing = materialGroupExisting(group);
     const draft = materialDrafts[group.key] || {};
     return {
+      topic: (draft.topic ?? existing.topic).trim(),
+      axis: (draft.axis ?? existing.axis).trim(),
       canva: (draft.canva ?? existing.canva).trim(),
       plan: (draft.plan ?? existing.plan).trim(),
       folder: (draft.folder ?? existing.folder).trim(),
     };
   };
   const recordHasMaterialLinks = (record: DataRecord, links: MaterialLinkSet) =>
+    (record.topic || "").trim() === links.topic &&
+    (record.axis || record.characterStrength || "").trim() === links.axis &&
     (!links.canva || (record.canvaLink || "").trim() === links.canva) &&
     (!links.plan || (record.planificacion || "").trim() === links.plan) &&
     (!links.folder || (record.folderLink || "").trim() === links.folder);
+  const columnaDeferralPatch = (record: DataRecord, nextTopic: string): Record<string, string> => {
+    const currentMatch = matchColumnaClass(record.course || "", record.topic || record.notes || "");
+    const expectedTitle = (record.plannedColumnaTitle || currentMatch?.title || "").trim();
+    if (!expectedTitle) return {};
+    if (normalize(nextTopic) === normalize(expectedTitle)) {
+      return { plannedColumnaTitle: expectedTitle, deferredColumnaTitle: "", deferredColumnaReason: "" };
+    }
+    return {
+      plannedColumnaTitle: expectedTitle,
+      deferredColumnaTitle: expectedTitle,
+      deferredColumnaReason: `Reemplazada por «${nextTopic}»; retomar la próxima semana.`,
+    };
+  };
   const distributeMaterialGroup = (group: MaterialGroup) => {
     if (!dataReady) return;
     const links = materialGroupDraft(group);
-    if (!links.canva && !links.plan && !links.folder) return;
+    if (!links.topic) return;
     group.records.forEach((record) => {
-      const updates: Record<string, string> = {};
+      const updates: Record<string, string> = { ...columnaDeferralPatch(record, links.topic) };
+      if ((record.topic || "").trim() !== links.topic) updates.topic = links.topic;
+      if ((record.axis || record.characterStrength || "").trim() !== links.axis) {
+        updates.axis = links.axis;
+        updates.characterStrength = links.axis;
+      }
       if (links.canva && ((record.canvaLink || "").trim() !== links.canva || (record.evidence || "").trim() !== links.canva)) {
         updates.canvaLink = links.canva;
         updates.evidence = links.canva;
@@ -5628,19 +5916,21 @@ function OrientationCycleView({
   // Fila compartida entre "Preparar semana", "Materiales" y el panel semanal.
   const renderMaterialGroupRow = (group: MaterialGroup, showWeek = false) => {
     const links = materialGroupDraft(group);
-    const hasAny = Boolean(links.canva || links.plan || links.folder);
+    const hasAny = Boolean(links.topic);
     const allApplied = hasAny && group.records.every((record) => recordHasMaterialLinks(record, links));
     const existing = materialGroupExisting(group);
     const draft = materialDrafts[group.key] || {};
     const groupWeekKey = weekKeyOf(group.records[0]?.date || "");
+    const setDraftValue = (field: keyof MaterialLinkSet, value: string) =>
+      setMaterialDrafts((drafts) => ({ ...drafts, [group.key]: { ...(drafts[group.key] || {}), [field]: value } }));
     const setDraft = (field: keyof MaterialLinkSet) => (event: React.ChangeEvent<HTMLInputElement>) =>
-      setMaterialDrafts((drafts) => ({ ...drafts, [group.key]: { ...(drafts[group.key] || {}), [field]: event.target.value } }));
+      setDraftValue(field, event.target.value);
     const inputStyle = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100";
     return (
       <div key={group.key} className="border-b border-slate-100 px-3 py-3 last:border-b-0">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate text-xs font-bold text-slate-950" title={group.title}>{group.title}</p>
+            <p className="truncate text-xs font-bold text-slate-950" title={links.topic}>{links.topic}</p>
             <p className="text-[11px] text-slate-500">
               {showWeek && groupWeekKey !== "sin-fecha" ? `${weekRangeLabel(groupWeekKey)} · ` : ""}
               {group.records.map((record) => `${record.course}${hasAny && recordHasMaterialLinks(record, links) ? " ✓" : ""}`).join(" · ")}
@@ -5663,10 +5953,32 @@ function OrientationCycleView({
               onClick={() => distributeMaterialGroup(group)}
               className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${allApplied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
             >
-              {allApplied ? <><Check className="h-3.5 w-3.5" /> Aplicado</> : `Aplicar a ${group.records.length}`}
+              {allApplied ? <><Check className="h-3.5 w-3.5" /> Guardado</> : `Guardar en ${group.records.length}`}
             </button>
           </div>
         </div>
+        <div className="mt-2 grid gap-2 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Título o actividad</span>
+            <input value={draft.topic ?? existing.topic} onChange={setDraft("topic")} placeholder="Nombre de la clase o actividad" className={inputStyle} />
+          </label>
+          <div className="block">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Acción o fortaleza</span>
+            <TizaSelect
+              value={draft.axis ?? existing.axis}
+              onChange={(axis) => setDraftValue("axis", axis)}
+              options={!links.axis || actionOptions.some((option) => (typeof option === "string" ? option : option.value) === links.axis)
+                ? actionOptions
+                : [{ value: links.axis, label: links.axis }, ...actionOptions]}
+              placeholder="Seleccionar acción o fortaleza"
+              searchable
+              searchPlaceholder="Buscar acción o fortaleza..."
+              className="mt-1"
+              buttonClassName="py-2 text-xs font-semibold"
+            />
+          </div>
+        </div>
+        <p className="mt-1.5 text-[10px] leading-relaxed text-slate-500">Si reemplazas la clase sugerida por otra actividad, la clase de la columna vertebral quedará pendiente y se propondrá la semana siguiente.</p>
         <div className="mt-2 grid gap-2 md:grid-cols-3">
           <label className="block">
             <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Canva o presentación</span>
@@ -5697,6 +6009,66 @@ function OrientationCycleView({
   // Valor tal como está guardado, sin normalizar: es lo que se muestra y edita
   // en la bitácora (getOrientationAction solo agrupa para matriz y estadísticas).
   const rawOrientationAction = (record: DataRecord) => record.axis || record.characterStrength || record.classType || "";
+
+  // ---- Enviar por Gmail todas las clases de una semana a sus profesores jefes ----
+  const [weekEmailHint, setWeekEmailHint] = useState<{ weekKey: string; mode: "copied" | "plain" } | null>(null);
+  const sendWeekClassesEmail = async (weekKey: string) => {
+    const weekClasses = ownerClasses
+      .filter((record) => weekKeyOf(record.date || "") === weekKey)
+      .sort((a, b) => `${a.date || ""} ${classTime(a.course) || "99:99"}`.localeCompare(`${b.date || ""} ${classTime(b.course) || "99:99"}`));
+    if (!weekClasses.length) return;
+
+    const items: WeekEmailClass[] = weekClasses.map((record) => {
+      const canva = (record.canvaLink || record.evidence || "").trim();
+      const title = getOrientationDisplayTitle(record);
+      const notes = record.notes && normalize(record.notes) !== normalize(title) ? record.notes : "";
+      return {
+        date: (record.date || "").slice(0, 10),
+        dayLabel: formatOrientationDate(record.date),
+        course: record.course || "",
+        teacherName: courseHeadTeacher(record.course || "")?.name || "",
+        time: classTime(record.course) || "",
+        title,
+        action: rawOrientationAction(record),
+        status: canonicalOrientationStatus(record.status),
+        notes,
+        canvaUrl: /^https?:\/\//i.test(canva) ? canva : "",
+        planUrl: orientationDocUrl(record.planificacion),
+        driveUrl: orientationDocUrl(record.folderLink),
+      };
+    });
+    const recipients = Array.from(new Set(
+      weekClasses.map((record) => courseHeadTeacher(record.course || "")?.email || "").filter(Boolean),
+    ));
+    const weekLabel = weekRangeLabel(weekKey);
+    const planWeek = weekKey === "sin-fecha" ? "" : planWeekForWeekKey(weekKey);
+    const payload = { weekLabel, planWeek, ownerName: owner.name, classes: items, publicUrl: "https://tiza-education-app.vercel.app/clases" };
+    const html = orientationWeekEmailHtml(payload);
+    const plain = orientationWeekEmailText(payload);
+
+    let richCopied = false;
+    try {
+      const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
+      if (navigator.clipboard && ClipboardItemCtor) {
+        await navigator.clipboard.write([
+          new ClipboardItemCtor({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([plain], { type: "text/plain" }),
+          }),
+        ]);
+        richCopied = true;
+      }
+    } catch {
+      richCopied = false;
+    }
+    // Con el correo copiado, Gmail se abre vacío y se pega con formato; si no, va el texto plano.
+    const subject = `Clases de Orientación · ${weekLabel}${planWeek ? ` (${planWeek})` : ""}`;
+    const params = `view=cm&fs=1&tf=1&to=${encodeURIComponent(recipients.join(","))}&su=${encodeURIComponent(subject)}${richCopied ? "" : `&body=${encodeURIComponent(plain)}`}`;
+    window.open(`https://mail.google.com/mail/?${params}`, "_blank", "noopener");
+    setWeekEmailHint({ weekKey, mode: richCopied ? "copied" : "plain" });
+    window.setTimeout(() => setWeekEmailHint(null), 12000);
+  };
+
   const orientationActionTotals = useMemo(() => actionColumns.map((action) => ({
     action,
     count: ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length,
@@ -5718,6 +6090,30 @@ function OrientationCycleView({
     if (count >= Math.max(2, Math.ceil(maxActionCount * 0.4))) return "bg-emerald-100 text-emerald-900";
     return "bg-amber-50 text-amber-800";
   };
+  const coverageRows = useMemo(() => owner.courses.map((course) => {
+    const actions = visibleActionColumns.map((action) => ({
+      action,
+      count: ownerClasses.filter((record) =>
+        normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)
+      ).length,
+    }));
+    const total = actions.reduce((sum, item) => sum + item.count, 0);
+    const covered = actions.filter((item) => item.count > 0).length;
+    return {
+      course,
+      actions,
+      total,
+      covered,
+      percentage: visibleActionColumns.length ? Math.round((covered / visibleActionColumns.length) * 100) : 0,
+    };
+  }), [getOrientationAction, owner.courses, ownerClasses, visibleActionColumns]);
+  const globalCoverageTotals = useMemo(() => visibleActionColumns.map((action) => ({
+    action,
+    count: ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length,
+  })), [getOrientationAction, ownerClasses, visibleActionColumns]);
+  const maxGlobalCoverage = Math.max(1, ...globalCoverageTotals.map((item) => item.count));
+  const activeCoverageCourses = coverageRows.filter((row) => row.total > 0).length;
+  const averageSessionsPerCourse = owner.courses.length ? (ownerClasses.length / owner.courses.length).toFixed(1) : "0";
   const ownerWorkshops = useMemo(() => store.workshops.filter((workshop) => {
     const target = `${workshop.targetCourses || ""} ${workshop.audience || ""} ${workshop.course || ""}`;
     return owner.courses.some((course) => normalize(target).includes(normalize(course))) ||
@@ -5788,11 +6184,13 @@ function OrientationCycleView({
     { value: "all", label: "Todo", detail: "Bitácora completa" },
   ];
   const selectPeriodFilter = (period: OrientationPeriodFilter) => {
-    setFilterPeriod(period);
-    setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
-    setExpandedClassIds([]);
-    setCollapsedDateKeys([]);
-    setCollapsedWeekKeys([]);
+    startAfterNextPaint(() => {
+      setFilterPeriod(period);
+      setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
+      setExpandedClassIds([]);
+      setCollapsedDateKeys([]);
+      setCollapsedWeekKeys([]);
+    });
   };
   const renderedClasses = useMemo(() => filteredClasses.slice(0, visibleClassCount), [filteredClasses, visibleClassCount]);
   const renderedDateCounts = useMemo(() => renderedClasses.reduce((counts, record) => {
@@ -5915,13 +6313,20 @@ function OrientationCycleView({
   const saveNewClass = () => {
     setQuickFormAttempted(true);
     if (!dataReady || !quickClassHasContent || !quickClassForm.course?.trim()) return;
+    const savedTopic = quickClassForm.topic || getOrientationDisplayTitle(quickClassForm);
+    const planned = quickCourseProgress?.next || null;
+    const replacesPlannedClass = Boolean(planned && normalize(savedTopic) !== normalize(planned.title));
     onAddOrientationRecord({
       id: uid(),
       createdAt: nowIso(),
       updatedAt: nowIso(),
       ...quickClassForm,
-      topic: quickClassForm.topic || getOrientationDisplayTitle(quickClassForm),
+      topic: savedTopic,
       week: quickClassForm.week || defaultOrientationWeek,
+      plannedColumnaTitle: planned?.title || "",
+      plannedColumnaOrder: planned ? String(planned.order) : "",
+      deferredColumnaTitle: replacesPlannedClass ? planned?.title || "" : "",
+      deferredColumnaReason: replacesPlannedClass ? `Reemplazada por «${savedTopic}»; retomar la próxima semana.` : "",
     });
     setNewClassForm({});
     setNewClassOpen(false);
@@ -5952,6 +6357,7 @@ function OrientationCycleView({
     const config = ORIENTATION_FIRST_CYCLE_CONFIG.find((item) => item.week === effectiveCreatorWeek);
     const records = missingCreatorSlots.map(({ slot, date }) => {
       const suggested = creatorSuggestions.get(slot.course) || null;
+      const override = orientationClassOverride(slot.course, date);
       return {
       id: `orientation-week-${date}-${normalize(slot.course).replace(/\s+/g, "-")}`,
       createdAt: nowIso(),
@@ -5962,10 +6368,10 @@ function OrientationCycleView({
       course: slot.course,
       orientationOwner: owner.name,
       orientationEmail: owner.email,
-      topic: suggested?.title || config?.session || "Tema por definir",
+      topic: override?.title || suggested?.title || config?.session || "Tema por definir",
       classType: "Clase de orientación",
-      axis: suggested?.strength || config?.action || "Intervención Formativa",
-      characterStrength: suggested?.strength || "",
+      axis: override?.axis || suggested?.strength || config?.action || "Intervención Formativa",
+      characterStrength: override?.axis || suggested?.strength || "",
       status: "Planificada",
       canvaLink: "",
       teacherLink: "",
@@ -5974,7 +6380,11 @@ function OrientationCycleView({
       evidence: "",
       planificacion: "",
       folderLink: "",
-      notes: "",
+      notes: override?.reason || "",
+      plannedColumnaTitle: suggested?.title || "",
+      plannedColumnaOrder: suggested ? String(suggested.order) : "",
+      deferredColumnaTitle: override ? suggested?.title || "" : "",
+      deferredColumnaReason: override?.reason || "",
       scheduleDay: slot.dayName,
       scheduleStart: slot.start,
       scheduleEnd: slot.end,
@@ -6253,7 +6663,7 @@ function OrientationCycleView({
     addTableSheet("Acciones", "Cobertura por acción / fortaleza", ["Acción / fortaleza", "Registros", "Realizadas", "Planificadas", "Pendientes", "Reprogramadas", "Canceladas", "% del total"], actionRows, [32, 14, 14, 14, 13, 16, 13, 14]);
     addTableSheet("Temáticas por curso", "Temáticas efectivamente realizadas por curso", ["Curso", "Temática", "Cantidad de clases", "Acción / fortaleza", "Primera fecha", "Última fecha"], thematicRows.length ? thematicRows : [["", "No hay temáticas realizadas registradas.", "", "", "", ""]], [18, 48, 18, 34, 14, 14]);
     addTableSheet("Talleres", "Registro completo de talleres", ["Fecha", "Taller", "Cursos", "Destinatarios", "Responsable", "Estado", "Duración", "Objetivo", "Presentes", "Ausentes", "Seguimiento", "Evidencia", "Observaciones"], workshopRows.length ? workshopRows : [["", "No hay talleres asociados a este orientador.", "", "", "", "", "", "", "", "", "", "", ""]], [13, 30, 28, 18, 22, 14, 12, 36, 12, 12, 32, 28, 36]);
-    addTableSheet("Feedbacks", "Historial de feedbacks de clase", ["Fecha", "Curso", "Clase", "Docente", "Asignatura", "N° observación", "Logrados", "Evidencias", "Oportunidades de mejora", "Observador/a"], feedbackRows.length ? feedbackRows : [["", "", "No hay feedbacks registrados para este orientador.", "", "", "", "", "", "", ""]], [13, 16, 34, 24, 18, 16, 12, 40, 40, 22]);
+    addTableSheet("Feedbacks", "Historial de feedbacks de clase", ["Fecha", "Curso", "Clase", "Docente", "Asignatura", "N° acompañamiento", "Logrados", "Evidencias", "Oportunidades de mejora", "Observador/a"], feedbackRows.length ? feedbackRows : [["", "", "No hay feedbacks registrados para este orientador.", "", "", "", "", "", "", ""]], [13, 16, 34, 24, 18, 18, 12, 40, 40, 22]);
     addTableSheet("Reprogramadas", "Clases reprogramadas", ["Fecha", "Semana", "Curso", "Acción / fortaleza", "Tema", "Motivo", "Nueva fecha", "Observaciones"], reprogrammedRows.length ? reprogrammedRows : [["", "", "", "", "No hay clases reprogramadas registradas para este orientador.", "", "", ""]], [13, 24, 16, 24, 34, 36, 14, 36]);
     addTableSheet("Bitácora completa", "Bitácora detallada completa", ["SEM", "FECHA", "CURSO", "PROFESOR/A JEFE", "CORREO PJ", "ACCIÓN / FORTALEZA", "TEMA / COMENTARIO", "ESTADO", "MOTIVO REPROGRAMACIÓN", "NUEVA FECHA", "OBSERVACIONES", "Canva", "Planificación", "Carpeta", "Orientador/a", "Fuente"], detailRows, [24, 13, 16, 22, 30, 24, 36, 16, 30, 14, 36, 28, 28, 28, 20, 18]);
 
@@ -6376,6 +6786,7 @@ function OrientationCycleView({
     const config = orientationConfigForDate(draft.date || "");
     onUpdateOrientationRecord(record.id, {
       ...draft,
+      ...columnaDeferralPatch(record, draft.topic || ""),
       ...(config ? { week: config.week, weekNumber: orientationWeekNumber(config.week) } : {}),
     });
     setExpandedClassIds((current) => current.filter((id) => id !== record.id));
@@ -6408,7 +6819,6 @@ function OrientationCycleView({
   const plannedCount = ownerStoredClasses.filter((r) => /planificad/i.test(r.status || "")).length;
   const withCanva = ownerStoredClasses.filter((r) => (r.canvaLink || r.evidence || "").trim()).length;
   const withPlan = ownerStoredClasses.filter((r) => (r.planificacion || r.folderLink || "").trim()).length;
-  const courseTotal = (course: string) => ownerClasses.filter((r) => normalize(r.course || "") === normalize(course)).length;
   const actionGrandTotal = ownerClasses.length;
   const renderOrientationTools = (variant: "row" | "rail") => {
     const isRail = variant === "rail";
@@ -6444,7 +6854,7 @@ function OrientationCycleView({
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Horario semanal de {owner.name}</p>
           <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Crear la semana con la columna vertebral</h2>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán solo los cursos que todavía no tengan una clase registrada en su fecha correspondiente. Cada curso parte con su clase sugerida de la columna vertebral; después podrás editar tema, fortaleza y enlaces desde la bitácora.</p>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Se crearán todas las clases del horario que aún no estén registradas, aunque todavía no tengan enlaces. Después podrás editar título, acción y materiales desde “Materiales de la semana”.</p>
         </div>
         <div className="w-full sm:w-72">
           <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Semana a preparar</span>
@@ -6459,12 +6869,18 @@ function OrientationCycleView({
         {creatorSlots.map(({ slot, date }) => {
           const exists = !missingCreatorSlots.some((candidate) => candidate.date === date && normalize(candidate.slot.course) === normalize(slot.course));
           const suggested = creatorSuggestions.get(slot.course) || null;
+          const override = orientationClassOverride(slot.course, date);
           return (
             <div key={`${slot.day}-${slot.course}`} className="grid gap-1 border-b border-slate-100 px-3 py-2.5 text-xs last:border-b-0 sm:grid-cols-[110px_1fr_150px_120px] sm:items-center sm:gap-3">
               <span className="font-semibold text-slate-600">{slot.dayName}</span>
               <span className="font-bold text-slate-950">
                 {slot.course}
-                {suggested && !exists ? <span className="block text-[11px] font-semibold text-cyan-700">{suggested.order}. {suggested.title} · {suggested.strength}</span> : null}
+                {!exists && override ? (
+                  <>
+                    <span className="block text-[11px] font-semibold text-violet-700">{override.title} · {override.axis}</span>
+                    {suggested ? <span className="block text-[10px] font-semibold text-amber-700">Se posterga: {suggested.title}</span> : null}
+                  </>
+                ) : suggested && !exists ? <span className="block text-[11px] font-semibold text-cyan-700">{suggested.order}. {suggested.title} · {suggested.strength}</span> : null}
               </span>
               <span className="tabular-nums text-slate-600">{formatOrientationDate(date)}</span>
               <span className="flex items-center justify-between gap-2 tabular-nums text-slate-600">
@@ -6478,7 +6894,7 @@ function OrientationCycleView({
 
       <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-slate-50 px-3 py-2">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Materiales por taller · pega el link de Canva una vez y se copia a todos los cursos</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Clases de la semana · edita título, acción y enlaces para todos los cursos del grupo</p>
           {creatorTopicGroups.length > 1 ? (
             <button
               type="button"
@@ -6491,7 +6907,7 @@ function OrientationCycleView({
           ) : null}
         </div>
         {creatorTopicGroups.length ? creatorTopicGroups.map((group) => renderMaterialGroupRow(group)) : (
-          <p className="px-3 py-3 text-xs text-slate-500">Cuando crees las clases de esta semana, aquí aparecerá un campo por taller para pegar su link de Canva una sola vez.</p>
+          <p className="px-3 py-3 text-xs text-slate-500">Cuando crees las clases de esta semana, todas aparecerán aquí aunque todavía no tengan materiales.</p>
         )}
       </div>
 
@@ -6512,12 +6928,17 @@ function OrientationCycleView({
   ) : null;
 
   const materialsPanel = materialsPanelOpen ? (
-    <section className="tz-slide-down rounded-xl border border-cyan-200 bg-cyan-50/50 p-4">
+    <section id="orientation-materials-panel" className="tz-slide-down overflow-hidden rounded-2xl border border-cyan-200 bg-white shadow-[0_18px_45px_-32px_rgba(8,145,178,0.65)]">
+      <div className="h-1 bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600" />
+      <div className="p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Clases ya creadas · desde esta semana en adelante</p>
-          <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Materiales por taller</h2>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Un mismo taller se dicta en varios cursos con el mismo material: pega una vez el Canva, la planificación o la carpeta y aplícalos a todas sus clases, aunque la semana ya esté preparada. Los talleres con clases sin Canva aparecen primero, y con &quot;Ir a la semana&quot; saltas a esa semana en la bitácora.</p>
+        <div className="flex max-w-3xl items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-cyan-600 to-blue-700 text-white shadow-md shadow-cyan-900/15"><FolderOpen className="h-5 w-5" /></span>
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-700">Biblioteca de recursos · próximas clases</p>
+            <h2 className="mt-0.5 text-xl font-black tracking-tight text-slate-950">Materiales por taller</h2>
+            <p className="mt-1 text-xs leading-relaxed text-slate-600">Edita el título, la acción y los enlaces de cada clase. Puedes preparar primero la semana y añadir los materiales cuando estén listos.</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           {upcomingMissingLinkCount ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200">{upcomingMissingLinkCount} {upcomingMissingLinkCount === 1 ? "clase sin link" : "clases sin link"}</span> : <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200">Todo con material ✓</span>}
@@ -6541,6 +6962,7 @@ function OrientationCycleView({
       <div className="mt-4 flex justify-end">
         <button onClick={() => setMaterialsPanelOpen(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cerrar</button>
       </div>
+      </div>
     </section>
   ) : null;
 
@@ -6550,7 +6972,7 @@ function OrientationCycleView({
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">{weekRangeLabel(materialsWeekKey)}</p>
           <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Materiales de la semana</h2>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Pega una vez el Canva, la planificación o la carpeta de cada taller y aplícalos a todos los cursos que lo comparten esta semana.</p>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Edita el título, la acción y los materiales de cada clase. Los enlaces pueden quedar vacíos y completarse más adelante.</p>
         </div>
         <div className="flex items-center gap-2">
           {weekMaterialGroups.length > 1 ? (
@@ -6569,7 +6991,7 @@ function OrientationCycleView({
       <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
         {weekMaterialGroups.length
           ? weekMaterialGroups.map((group) => renderMaterialGroupRow(group))
-          : <p className="px-3 py-3 text-xs text-slate-500">Esta semana aún no tiene clases con taller definido.</p>}
+          : <p className="px-3 py-3 text-xs text-slate-500">Esta semana aún no tiene clases creadas.</p>}
       </div>
     </section>
   ) : null;
@@ -6602,7 +7024,7 @@ function OrientationCycleView({
           return (
             <button
               key={item.email}
-              onClick={() => {
+              onClick={() => startAfterNextPaint(() => {
                 setSelectedOwner(item.name);
                 setFilterCourse("all");
                 setFilterStatus("all");
@@ -6611,7 +7033,7 @@ function OrientationCycleView({
                 setNewClassForm({});
                 setExpandedClassIds([]);
                 setVisibleClassCount(ORIENTATION_LOG_PAGE_SIZE);
-              }}
+              })}
               className={`tz-card flex items-center gap-3 rounded-xl border p-3 text-left transition ${
                 active ? "border-blue-500 bg-blue-50/60 shadow-sm ring-1 ring-blue-200" : "border-slate-200 bg-white hover:bg-slate-50"
               }`}
@@ -6852,16 +7274,22 @@ function OrientationCycleView({
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
-                onClick={() => React.startTransition(() => {
-                  if (materialsPanelOpen) { setMaterialsPanelOpen(false); return; }
-                  setMaterialsPanelOpen(true);
+                type="button"
+                onClick={() => startAfterNextPaint(() => {
+                  setMaterialsPanelOpen((current) => !current);
                   setWeekCreatorOpen(false);
                 })}
+                aria-expanded={materialsPanelOpen}
+                aria-controls="orientation-materials-panel"
                 title="Pegar el link de Canva de cada taller una sola vez y aplicarlo a todos los cursos con esa clase ya creada"
-                className={`tz-press inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold shadow-sm transition ${materialsPanelOpen ? "border-cyan-700 bg-cyan-700 text-white" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
+                className={`tz-press group relative inline-flex min-h-12 items-center gap-2.5 overflow-hidden rounded-xl border px-2.5 py-2 pr-3 text-left shadow-sm transition focus:outline-none focus:ring-4 focus:ring-cyan-200 ${materialsPanelOpen ? "border-cyan-700 bg-gradient-to-br from-cyan-700 to-blue-800 text-white shadow-cyan-900/20" : "border-cyan-200 bg-gradient-to-br from-white to-cyan-50 text-cyan-950 hover:-translate-y-0.5 hover:border-cyan-400 hover:shadow-md"}`}
               >
-                <FileText className="h-4 w-4" /> Materiales
-                {upcomingMissingLinkCount ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums ${materialsPanelOpen ? "bg-white/25 text-white" : "bg-amber-200 text-amber-900"}`}>{upcomingMissingLinkCount}</span> : null}
+                <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ring-1 transition ${materialsPanelOpen ? "bg-white/15 text-white ring-white/20" : "bg-cyan-100 text-cyan-700 ring-cyan-200 group-hover:bg-cyan-200"}`}><FolderOpen className="h-4 w-4" /></span>
+                <span className="min-w-0 leading-tight">
+                  <span className={`block text-[9px] font-black uppercase tracking-[0.14em] ${materialsPanelOpen ? "text-cyan-100" : "text-cyan-600"}`}>Recursos</span>
+                  <span className="block text-sm font-black">Materiales</span>
+                </span>
+                {upcomingMissingLinkCount ? <span className={`ml-1 rounded-full px-2 py-1 text-[10px] font-black tabular-nums ${materialsPanelOpen ? "bg-white/20 text-white ring-1 ring-white/20" : "bg-amber-200 text-amber-950 ring-1 ring-amber-300"}`}>{upcomingMissingLinkCount}</span> : <Check className={`ml-1 h-4 w-4 ${materialsPanelOpen ? "text-emerald-200" : "text-emerald-600"}`} />}
               </button>
               <button
                 onClick={() => React.startTransition(() => {
@@ -7003,6 +7431,7 @@ function OrientationCycleView({
           {renderedClasses.map((record, index) => {
             const isCalendar = record.source === "calendar";
             const canvaUrl = record.canvaLink || record.evidence || "";
+            const previousCanva = previousCanvaByRecordId.get(record.id);
             const folderUrl = record.folderLink || "";
             const expanded = expandedClassIds.includes(record.id);
             const displayTitle = getOrientationDisplayTitle(record);
@@ -7068,11 +7497,12 @@ function OrientationCycleView({
                     <button
                       disabled={!dataReady}
                       type="button"
-                      onClick={() => React.startTransition(() => setMaterialsWeekKey((current) => (current === weekKey ? null : weekKey)))}
+                      onClick={() => startAfterNextPaint(() => setMaterialsWeekKey((current) => (current === weekKey ? null : weekKey)))}
+                      aria-expanded={materialsWeekKey === weekKey}
                       title="Materiales de esta semana: pega cada link una vez y aplícalo a todos los cursos del taller"
-                      className={`tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${materialsWeekKey === weekKey ? "border-white/40 bg-white text-cyan-800" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
+                      className={`tz-press inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-black shadow-sm transition disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${materialsWeekKey === weekKey ? "border-amber-300 bg-amber-300 text-slate-950 ring-2 ring-amber-200" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-white text-cyan-800 hover:border-cyan-400 hover:bg-cyan-50"}`}
                     >
-                      <FileText className="h-3.5 w-3.5" /> Materiales
+                      <FolderOpen className="h-3.5 w-3.5" /> Materiales
                     </button>
                   ) : null}
                   {weekKey !== "sin-fecha" && ownerHasScheduleSlots ? (
@@ -7086,7 +7516,24 @@ function OrientationCycleView({
                       <Plus className="h-3.5 w-3.5" /> Preparar
                     </button>
                   ) : null}
+                  <button
+                    type="button"
+                    onClick={() => sendWeekClassesEmail(weekKey)}
+                    title="Abrir Gmail con las clases de esta semana ya redactadas para los profesores jefes"
+                    className={`tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm transition ${isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                  >
+                    <Mail className="h-3.5 w-3.5" /> Enviar clases
+                  </button>
                 </div>
+                {weekEmailHint?.weekKey === weekKey ? (
+                  <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-900">
+                    {weekEmailHint.mode === "copied" ? (
+                      <span>📋 Correo con diseño copiado. En Gmail haz clic en el cuerpo del mensaje y pega con <span className="rounded bg-white px-1.5 py-0.5 font-mono ring-1 ring-emerald-200">⌘/Ctrl + V</span> antes de enviar.</span>
+                    ) : (
+                      <span>Se abrió Gmail con las clases de la semana en texto plano.</span>
+                    )}
+                  </div>
+                ) : null}
                 {materialsWeekKey === weekKey ? <div className="mt-2">{weekMaterialsPanel}</div> : null}
               </div>
             ) : null;
@@ -7200,6 +7647,21 @@ function OrientationCycleView({
                       </a>
                     ) : (
                       <span title="Sin link de Canva guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><FileText className="h-3 w-3" /> Canva</span>
+                    )}
+                    {previousCanva ? (
+                      <a
+                        href={previousCanva.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`${previousCanva.topic} · ${formatOrientationDate(previousCanva.date)}`}
+                        className="inline-flex items-center gap-1 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100"
+                      >
+                        <History className="h-3 w-3" /> Canva clase anterior <ExternalLink className="h-2.5 w-2.5" />
+                      </a>
+                    ) : (
+                      <span title="Este curso todavía no tiene un Canva de una clase anterior" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400">
+                        <History className="h-3 w-3" /> Canva clase anterior
+                      </span>
                     )}
                     {planUrl ? (
                       <a href={planUrl} target="_blank" rel="noopener noreferrer" title={planTitle} className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
@@ -7401,68 +7863,120 @@ function OrientationCycleView({
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 via-white to-white px-5 py-4">
-          <div>
-            <p className="inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-cyan-700"><BarChart3 className="h-3.5 w-3.5" /> Mapa de cobertura del ciclo</p>
-            <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Sesiones por curso y acción / fortaleza</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Cuántas veces se trabajó cada fortaleza o intervención en cada curso. <strong className="font-semibold text-slate-700">{actionGrandTotal} sesiones</strong> registradas en total.</p>
-          </div>
-          <div className="flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500 ring-1 ring-slate-200">
-            <span>Menos</span>
-            <span className="h-3 w-3 rounded-full bg-white ring-1 ring-slate-200" />
-            <span className="h-3 w-3 rounded-full bg-amber-100" />
-            <span className="h-3 w-3 rounded-full bg-emerald-100" />
-            <span className="h-3 w-3 rounded-full bg-emerald-300" />
-            <span>Más</span>
-          </div>
-        </header>
-        <div className="tz-contained-x tz-thin-scroll p-3">
-          <table className="min-w-[1040px] w-full border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                <th className="sticky left-0 z-10 min-w-40 rounded-tl-xl border-b-2 border-slate-200 bg-slate-50 px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-500">Curso</th>
-                {visibleActionColumns.map((action) => (
-                  <th key={action} className="min-w-24 border-b-2 border-slate-200 bg-slate-50 px-2 py-3 text-center text-[11px] font-bold leading-tight text-slate-500">{action}</th>
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_18px_50px_-38px_rgba(8,145,178,0.55)]">
+        <button
+          type="button"
+          onClick={() => startAfterNextPaint(() => setCoverageMapOpen((open) => !open))}
+          aria-expanded={coverageMapOpen}
+          className="group relative flex w-full flex-col gap-4 overflow-hidden px-5 py-5 text-left transition hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+        >
+          <span className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-cyan-100/60 blur-3xl" />
+          <span className="relative flex min-w-0 items-center gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-cyan-600 to-blue-700 text-white shadow-lg shadow-cyan-900/15">
+              <BarChart3 className="h-5 w-5" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[10px] font-black uppercase tracking-[0.18em] text-cyan-700">Analítica del ciclo</span>
+              <span className="mt-0.5 block text-lg font-black tracking-tight text-slate-950">Mapa de cobertura</span>
+              <span className="mt-0.5 block text-xs leading-relaxed text-slate-500">Fortalezas e intervenciones trabajadas por curso · contraído por defecto</span>
+            </span>
+          </span>
+          <span className="relative flex w-full items-center gap-2 sm:w-auto">
+            <span className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-center shadow-sm">
+              <span className="block text-base font-black tabular-nums text-slate-950">{actionGrandTotal}</span>
+              <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Sesiones</span>
+            </span>
+            <span className="rounded-xl border border-slate-200 bg-white/90 px-3 py-2 text-center shadow-sm">
+              <span className="block text-base font-black tabular-nums text-cyan-700">{activeCoverageCourses}/{owner.courses.length}</span>
+              <span className="block text-[9px] font-black uppercase tracking-wider text-slate-400">Cursos activos</span>
+            </span>
+            <span className={`ml-auto grid h-10 w-10 shrink-0 place-items-center rounded-xl border transition ${coverageMapOpen ? "border-cyan-200 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-white text-slate-500 group-hover:border-cyan-200 group-hover:text-cyan-700"}`}>
+              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${coverageMapOpen ? "rotate-180" : ""}`} />
+            </span>
+          </span>
+        </button>
+
+        {coverageMapOpen ? (
+          <div className="tz-slide-down border-t border-slate-100 bg-gradient-to-b from-slate-50/80 to-white px-4 py-5 sm:px-6 sm:py-6">
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-cyan-100 bg-cyan-50/70 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-cyan-700">Actividad total</p>
+                <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{actionGrandTotal}</p>
+                <p className="mt-1 text-xs text-slate-500">sesiones registradas en el ciclo</p>
+              </div>
+              <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-violet-700">Cursos con actividad</p>
+                <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{activeCoverageCourses}<span className="text-base text-slate-400">/{owner.courses.length}</span></p>
+                <p className="mt-1 text-xs text-slate-500">cursos con al menos una sesión</p>
+              </div>
+              <div className="rounded-2xl border border-amber-100 bg-amber-50/70 p-4">
+                <p className="text-[10px] font-black uppercase tracking-[0.15em] text-amber-700">Promedio por curso</p>
+                <p className="mt-2 text-3xl font-black tracking-tight text-slate-950">{averageSessionsPerCourse}</p>
+                <p className="mt-1 text-xs text-slate-500">sesiones por curso hasta hoy</p>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Detalle por curso</p>
+                <h3 className="mt-0.5 text-base font-black text-slate-950">Cobertura de acciones y fortalezas</h3>
+              </div>
+              <div className="hidden items-center gap-1.5 text-[10px] font-bold text-slate-400 sm:flex">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-100 ring-1 ring-amber-200" /> Inicial
+                <span className="ml-1 h-2.5 w-2.5 rounded-full bg-emerald-200 ring-1 ring-emerald-300" /> Reforzada
+              </div>
+            </div>
+
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {coverageRows.map((row) => (
+                <article key={row.course} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-cyan-200 hover:shadow-md">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-black text-slate-950">{row.course}</h4>
+                      <p className="mt-0.5 text-[11px] font-medium text-slate-500">{row.covered} de {visibleActionColumns.length} áreas con actividad</p>
+                    </div>
+                    <span className="rounded-xl bg-slate-950 px-2.5 py-1.5 text-sm font-black tabular-nums text-white">{row.total}</span>
+                  </div>
+                  <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+                    <div className="h-full rounded-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all" style={{ width: `${row.percentage}%` }} />
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {row.actions.filter((item) => item.count > 0).length ? row.actions.filter((item) => item.count > 0).map((item) => (
+                      <span key={item.action} title={`${item.action}: ${item.count} sesiones`} className={`inline-flex max-w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] font-bold ring-1 ring-inset ${actionCellTone(item.count)}`}>
+                        <span className="truncate">{item.action}</span>
+                        <strong className="tabular-nums">{item.count}</strong>
+                      </span>
+                    )) : <span className="text-xs font-medium text-slate-400">Sin sesiones registradas todavía.</span>}
+                  </div>
+                  <p className="mt-3 text-right text-[10px] font-black uppercase tracking-wider text-slate-400">{row.percentage}% de cobertura</p>
+                </article>
+              ))}
+            </div>
+
+            <section className="mt-6 rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white sm:p-5">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-cyan-300">Panorama global</p>
+                  <h3 className="mt-0.5 text-base font-black">Sesiones por acción o fortaleza</h3>
+                </div>
+                <span className="text-xs font-semibold text-slate-400">Total del ciclo · {actionGrandTotal}</span>
+              </div>
+              <div className="mt-4 grid gap-x-6 gap-y-3 md:grid-cols-2">
+                {globalCoverageTotals.map((item) => (
+                  <div key={item.action}>
+                    <div className="flex items-center justify-between gap-3 text-[11px]">
+                      <span className="truncate font-semibold text-slate-200" title={item.action}>{item.action}</span>
+                      <span className="font-black tabular-nums text-white">{item.count}</span>
+                    </div>
+                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-white/10">
+                      <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 to-emerald-300" style={{ width: `${item.count ? Math.max(6, (item.count / maxGlobalCoverage) * 100) : 0}%` }} />
+                    </div>
+                  </div>
                 ))}
-                <th className="min-w-16 rounded-tr-xl border-b-2 border-cyan-200 bg-cyan-50 px-2 py-3 text-center text-[11px] font-bold uppercase tracking-wide text-cyan-700">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {owner.courses.map((course) => {
-                const total = courseTotal(course);
-                return (
-                  <tr key={course} className="group">
-                    <th className="sticky left-0 z-10 border-b border-slate-100 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-800 transition group-hover:bg-cyan-50/50">{course}</th>
-                    {visibleActionColumns.map((action) => {
-                      const count = ownerClasses.filter((record) => normalize(record.course || "") === normalize(course) && normalize(getOrientationAction(record)) === normalize(action)).length;
-                      return (
-                        <td key={`${course}-${action}`} className="border-b border-slate-100 px-1.5 py-1.5 text-center transition group-hover:bg-cyan-50/20">
-                          {count > 0 ? (
-                            <span className={`inline-flex h-7 min-w-[28px] items-center justify-center rounded-lg px-1.5 text-sm font-bold tabular-nums ring-1 ring-inset ${actionCellTone(count)}`}>{count}</span>
-                          ) : (
-                            <span className="text-slate-200">·</span>
-                          )}
-                        </td>
-                      );
-                    })}
-                    <td className="border-b border-slate-100 px-2 py-1.5 text-center transition group-hover:bg-cyan-50/20">
-                      <span className={`inline-flex h-7 min-w-[32px] items-center justify-center rounded-lg px-2 text-sm font-extrabold tabular-nums ${total > 0 ? "bg-cyan-100 text-cyan-800 ring-1 ring-inset ring-cyan-200" : "text-slate-300"}`}>{total}</span>
-                    </td>
-                  </tr>
-                );
-              })}
-              <tr>
-                <th className="sticky left-0 z-10 rounded-bl-xl bg-slate-900 px-3 py-2.5 text-left text-xs font-extrabold uppercase tracking-wide text-white">Total ciclo</th>
-                {visibleActionColumns.map((action) => {
-                  const t = ownerClasses.filter((record) => normalize(getOrientationAction(record)) === normalize(action)).length;
-                  return <td key={`total-${action}`} className="bg-slate-900 px-2 py-2.5 text-center text-sm font-extrabold tabular-nums text-white">{t || <span className="text-white/25">·</span>}</td>;
-                })}
-                <td className="rounded-br-xl bg-cyan-600 px-2 py-2.5 text-center text-sm font-extrabold tabular-nums text-white">{actionGrandTotal}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+              </div>
+            </section>
+          </div>
+        ) : null}
       </section>
 
         </div>
@@ -7474,17 +7988,27 @@ function OrientationCycleView({
       {(() => {
         const feedbackRecord = feedbackRecordId ? store.orientation.find((record) => record.id === feedbackRecordId) : undefined;
         if (!feedbackRecord) return null;
-        // Correlativo por curso: feedbacks ya guardados en otras clases del mismo curso + 1.
-        const priorCount = store.orientation.filter((record) =>
-          record.classFeedback && record.id !== feedbackRecord.id && normalize(record.course || "") === normalize(feedbackRecord.course || ""),
-        ).length;
+        // El correlativo representa la clase realizada N del curso, no la cantidad
+        // de feedbacks existentes. Así sigue siendo correcto aunque haya clases sin feedback.
+        const completedCourseClasses = ownerStoredClasses
+          .filter((record) =>
+            normalize(record.course || "") === normalize(feedbackRecord.course || "") &&
+            canonicalOrientationStatus(record.status) === "Realizada"
+          )
+          .sort((a, b) =>
+            String(a.date || "").localeCompare(String(b.date || "")) ||
+            String(a.createdAt || "").localeCompare(String(b.createdAt || "")) ||
+            a.id.localeCompare(b.id)
+          );
+        const completedClassIndex = completedCourseClasses.findIndex((record) => record.id === feedbackRecord.id);
+        const completedClassNumber = completedClassIndex >= 0 ? completedClassIndex + 1 : 1;
         const feedbackSlot = scheduleSlots.find((slot) => normalize(slot.course) === normalize(feedbackRecord.course || ""));
         return (
           <OrientationFeedbackModal
             key={feedbackRecord.id}
             record={feedbackRecord}
             ownerName={owner.name}
-            autoObservationNumber={String(priorCount + 1)}
+            autoObservationNumber={String(completedClassNumber)}
             defaultStartTime={feedbackSlot?.start || ""}
             defaultEndTime={feedbackSlot?.end || ""}
             onClose={() => setFeedbackRecordId("")}
@@ -7493,6 +8017,10 @@ function OrientationCycleView({
             }}
             onSave={(data) => {
               onUpdateOrientationRecord(feedbackRecord.id, { classFeedback: JSON.stringify({ ...data, updatedAt: nowIso() }) });
+              setFeedbackRecordId("");
+            }}
+            onDelete={() => {
+              onUpdateOrientationRecord(feedbackRecord.id, { classFeedback: "" });
               setFeedbackRecordId("");
             }}
           />
@@ -7509,6 +8037,7 @@ function OrientationCycleView({
             setFeedbackHistoryOpen(false);
             setFeedbackRecordId(recordId);
           }}
+          onDeleteFeedback={(recordId) => onUpdateOrientationRecord(recordId, { classFeedback: "" })}
         />
       ) : null}
 
