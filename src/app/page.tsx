@@ -5334,6 +5334,7 @@ function OrientationCycleView({
   // Borradores de links de Canva por taller (clave: tema normalizado) para
   // distribuirlos de una vez a todos los cursos que comparten la misma clase.
   const [materialDrafts, setMaterialDrafts] = useState<Record<string, string>>({});
+  const [materialsPanelOpen, setMaterialsPanelOpen] = useState(false);
   const [quickFormAttempted, setQuickFormAttempted] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
@@ -5553,14 +5554,40 @@ function OrientationCycleView({
       }))
       .sort((a, b) => String(a.records[0]?.date || "").localeCompare(String(b.records[0]?.date || "")));
   }, [creatorWeekClasses]);
-  const materialGroupLink = (group: { key: string; records: DataRecord[] }) => {
+  // Todas las clases ya creadas desde esta semana en adelante, agrupadas por
+  // taller: cubre el caso "preparé la semana sin links" y semanas futuras.
+  const upcomingMaterialGroups = useMemo(() => {
+    const groups = new Map<string, { title: string; records: DataRecord[] }>();
+    ownerStoredClasses.forEach((record) => {
+      const date = (record.date || "").slice(0, 10);
+      if (!date || date < periodWindows.thisWeekStart) return;
+      const title = (record.topic || "").trim();
+      if (!title || isPlaceholderOrientationText(title)) return;
+      const key = normalize(title);
+      const group = groups.get(key) || { title, records: [] };
+      group.records.push(record);
+      groups.set(key, group);
+    });
+    const missingCount = (records: DataRecord[]) => records.filter((record) => !(record.canvaLink || record.evidence || "").trim()).length;
+    return Array.from(groups.entries())
+      .map(([key, group]) => ({
+        key,
+        title: group.title,
+        records: group.records.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.course || "").localeCompare(String(b.course || ""), "es")),
+      }))
+      .sort((a, b) => (missingCount(b.records) ? 1 : 0) - (missingCount(a.records) ? 1 : 0) || String(a.records[0]?.date || "").localeCompare(String(b.records[0]?.date || "")));
+  }, [ownerStoredClasses, periodWindows.thisWeekStart]);
+  const upcomingMissingLinkCount = useMemo(
+    () => upcomingMaterialGroups.reduce((total, group) => total + group.records.filter((record) => !(record.canvaLink || record.evidence || "").trim()).length, 0),
+    [upcomingMaterialGroups],
+  );
+  type MaterialGroup = { key: string; title: string; records: DataRecord[] };
+  const materialGroupLink = (group: MaterialGroup) => {
     const existing = group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "";
     return (materialDrafts[group.key] ?? existing).trim();
   };
-  const distributeMaterialLink = (groupKey: string) => {
+  const distributeMaterialGroup = (group: MaterialGroup) => {
     if (!dataReady) return;
-    const group = creatorTopicGroups.find((item) => item.key === groupKey);
-    if (!group) return;
     const link = materialGroupLink(group);
     if (!link) return;
     group.records.forEach((record) => {
@@ -5569,7 +5596,37 @@ function OrientationCycleView({
       }
     });
   };
-  const distributeAllMaterialLinks = () => creatorTopicGroups.forEach((group) => distributeMaterialLink(group.key));
+  const distributeAllMaterialGroups = (groups: MaterialGroup[]) => groups.forEach((group) => distributeMaterialGroup(group));
+  // Fila compartida entre "Preparar semana" y el panel "Materiales".
+  const renderMaterialGroupRow = (group: MaterialGroup) => {
+    const link = materialGroupLink(group);
+    const applied = link ? group.records.filter((record) => (record.canvaLink || "").trim() === link).length : 0;
+    const allApplied = Boolean(link) && applied === group.records.length;
+    return (
+      <div key={group.key} className="grid gap-2 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(240px,340px)_auto] sm:items-center sm:gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-bold text-slate-950" title={group.title}>{group.title}</p>
+          <p className="text-[11px] text-slate-500">
+            {group.records.map((record) => `${record.course}${(record.canvaLink || "").trim() && (record.canvaLink || "").trim() === link ? " ✓" : ""}`).join(" · ")}
+          </p>
+        </div>
+        <input
+          value={materialDrafts[group.key] ?? (group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "")}
+          onChange={(event) => setMaterialDrafts((drafts) => ({ ...drafts, [group.key]: event.target.value }))}
+          placeholder="https://www.canva.com/..."
+          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"
+        />
+        <button
+          type="button"
+          disabled={!dataReady || !link}
+          onClick={() => distributeMaterialGroup(group)}
+          className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${allApplied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
+        >
+          {allApplied ? <><Check className="h-3.5 w-3.5" /> Aplicado</> : `Aplicar a ${group.records.length}`}
+        </button>
+      </div>
+    );
+  };
   const missingCreatorSlots = useMemo(() => creatorSlots.filter(({ slot, date }) => date && !ownerStoredClasses.some((record) =>
     (record.date || "").slice(0, 10) === date && normalize(record.course || "") === normalize(slot.course)
   )), [creatorSlots, ownerStoredClasses]);
@@ -6369,42 +6426,14 @@ function OrientationCycleView({
             <button
               type="button"
               disabled={!dataReady}
-              onClick={distributeAllMaterialLinks}
+              onClick={() => distributeAllMaterialGroups(creatorTopicGroups)}
               className="inline-flex items-center gap-1.5 rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1 text-[11px] font-bold text-cyan-800 hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-50"
             >
               <FileText className="h-3.5 w-3.5" /> Distribuir todos
             </button>
           ) : null}
         </div>
-        {creatorTopicGroups.length ? creatorTopicGroups.map((group) => {
-          const link = materialGroupLink(group);
-          const applied = link ? group.records.filter((record) => (record.canvaLink || "").trim() === link).length : 0;
-          const allApplied = Boolean(link) && applied === group.records.length;
-          return (
-            <div key={group.key} className="grid gap-2 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(240px,340px)_auto] sm:items-center sm:gap-3">
-              <div className="min-w-0">
-                <p className="truncate text-xs font-bold text-slate-950" title={group.title}>{group.title}</p>
-                <p className="text-[11px] text-slate-500">
-                  {group.records.map((record) => `${record.course}${(record.canvaLink || "").trim() && (record.canvaLink || "").trim() === link ? " ✓" : ""}`).join(" · ")}
-                </p>
-              </div>
-              <input
-                value={materialDrafts[group.key] ?? (group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "")}
-                onChange={(event) => setMaterialDrafts((drafts) => ({ ...drafts, [group.key]: event.target.value }))}
-                placeholder="https://www.canva.com/..."
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"
-              />
-              <button
-                type="button"
-                disabled={!dataReady || !link}
-                onClick={() => distributeMaterialLink(group.key)}
-                className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${allApplied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
-              >
-                {allApplied ? <><Check className="h-3.5 w-3.5" /> Aplicado</> : `Aplicar a ${group.records.length}`}
-              </button>
-            </div>
-          );
-        }) : (
+        {creatorTopicGroups.length ? creatorTopicGroups.map(renderMaterialGroupRow) : (
           <p className="px-3 py-3 text-xs text-slate-500">Cuando crees las clases de esta semana, aquí aparecerá un campo por taller para pegar su link de Canva una sola vez.</p>
         )}
       </div>
@@ -6421,6 +6450,39 @@ function OrientationCycleView({
             <CalendarDays className="h-4 w-4" /> {missingCreatorSlots.length ? `Crear ${missingCreatorSlots.length} clases` : "Semana preparada"}
           </button>
         </div>
+      </div>
+    </section>
+  ) : null;
+
+  const materialsPanel = materialsPanelOpen ? (
+    <section className="tz-slide-down rounded-xl border border-cyan-200 bg-cyan-50/50 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Clases ya creadas · desde esta semana en adelante</p>
+          <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Materiales por taller</h2>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Un mismo taller se dicta en varios cursos con el mismo Canva: pega el link una vez y aplícalo a todas sus clases, aunque la semana ya esté preparada. Los talleres con clases sin link aparecen primero.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {upcomingMissingLinkCount ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200">{upcomingMissingLinkCount} {upcomingMissingLinkCount === 1 ? "clase sin link" : "clases sin link"}</span> : <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200">Todo con material ✓</span>}
+          {upcomingMaterialGroups.length > 1 ? (
+            <button
+              type="button"
+              disabled={!dataReady}
+              onClick={() => distributeAllMaterialGroups(upcomingMaterialGroups)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-800 hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-50"
+            >
+              <FileText className="h-3.5 w-3.5" /> Distribuir todos
+            </button>
+          ) : null}
+        </div>
+      </div>
+      <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
+        {upcomingMaterialGroups.length
+          ? upcomingMaterialGroups.map(renderMaterialGroupRow)
+          : <p className="px-3 py-3 text-xs text-slate-500">No hay clases creadas desde esta semana en adelante. Usa &quot;Preparar semana&quot; para crearlas con la columna vertebral.</p>}
+      </div>
+      <div className="mt-4 flex justify-end">
+        <button onClick={() => setMaterialsPanelOpen(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cerrar</button>
       </div>
     </section>
   ) : null;
@@ -6704,9 +6766,22 @@ function OrientationCycleView({
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
                 onClick={() => {
+                  if (materialsPanelOpen) { setMaterialsPanelOpen(false); return; }
+                  setMaterialsPanelOpen(true);
+                  setWeekCreatorOpen(false);
+                }}
+                title="Pegar el link de Canva de cada taller una sola vez y aplicarlo a todos los cursos con esa clase ya creada"
+                className={`tz-press inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold shadow-sm transition ${materialsPanelOpen ? "border-cyan-700 bg-cyan-700 text-white" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
+              >
+                <FileText className="h-4 w-4" /> Materiales
+                {upcomingMissingLinkCount ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums ${materialsPanelOpen ? "bg-white/25 text-white" : "bg-amber-200 text-amber-900"}`}>{upcomingMissingLinkCount}</span> : null}
+              </button>
+              <button
+                onClick={() => {
                   if (weekCreatorOpen) { setWeekCreatorOpen(false); return; }
                   setWeekCreatorWeek(defaultOrientationWeek);
                   setWeekCreatorOpen(true);
+                  setMaterialsPanelOpen(false);
                 }}
                 title="Crear de una vez todas las clases de la semana, cada curso con su clase de la columna vertebral"
                 className={`tz-press inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold shadow-sm transition ${weekCreatorOpen ? "border-cyan-700 bg-cyan-700 text-white" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
@@ -6828,6 +6903,7 @@ function OrientationCycleView({
           </div>
         </div>
         {weekCreatorOpen ? <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-5">{weekCreatorPanel}</div> : null}
+        {materialsPanelOpen ? <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-5">{materialsPanel}</div> : null}
         <div className="bg-slate-50/60">
           {/* Replica la caja de las tarjetas (margen lateral + borde transparente + padding) para que las columnas calcen exactas. */}
           <div className="hidden border border-transparent border-b-slate-200 bg-slate-100/80 px-4 py-2.5 text-[11px] font-bold uppercase tracking-wide text-slate-500 lg:mx-4 lg:grid lg:grid-cols-[184px_132px_minmax(240px,1fr)_200px_180px] lg:items-center lg:gap-4">
