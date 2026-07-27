@@ -5492,11 +5492,13 @@ function OrientationCycleView({
     return match?.week || defaultOrientationWeek;
   };
   const openWeekCreatorForKey = (weekKey: string) => {
-    setWeekCreatorWeek(planWeekForWeekKey(weekKey));
-    setWeekCreatorOpen(true);
+    React.startTransition(() => {
+      setWeekCreatorWeek(planWeekForWeekKey(weekKey));
+      setWeekCreatorOpen(true);
+    });
     // El panel vive arriba de la bitácora: al abrirlo desde una semana lejana, subimos hasta él.
     if (typeof window !== "undefined") {
-      window.requestAnimationFrame(() => document.getElementById("registro-rapido")?.scrollIntoView({ behavior: "smooth", block: "start" }));
+      window.setTimeout(() => document.getElementById("registro-rapido")?.scrollIntoView({ behavior: "smooth", block: "start" }), 150);
     }
   };
 
@@ -5613,12 +5615,14 @@ function OrientationCycleView({
   const distributeAllMaterialGroups = (groups: MaterialGroup[]) => groups.forEach((group) => distributeMaterialGroup(group));
   // Desde el panel general: salta al encabezado de la semana del taller y abre ahí sus materiales.
   const goToWeekMaterials = (weekKey: string) => {
-    setMaterialsPanelOpen(false);
-    selectPeriodFilter("all");
-    setVisibleClassCount(Number.MAX_SAFE_INTEGER);
-    setMaterialsWeekKey(weekKey);
+    React.startTransition(() => {
+      setMaterialsPanelOpen(false);
+      selectPeriodFilter("all");
+      setVisibleClassCount(Number.MAX_SAFE_INTEGER);
+      setMaterialsWeekKey(weekKey);
+    });
     if (typeof window !== "undefined") {
-      window.setTimeout(() => document.getElementById(`orientation-week-${weekKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+      window.setTimeout(() => document.getElementById(`orientation-week-${weekKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
     }
   };
   // Fila compartida entre "Preparar semana", "Materiales" y el panel semanal.
@@ -6848,11 +6852,11 @@ function OrientationCycleView({
             </div>
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <button
-                onClick={() => {
+                onClick={() => React.startTransition(() => {
                   if (materialsPanelOpen) { setMaterialsPanelOpen(false); return; }
                   setMaterialsPanelOpen(true);
                   setWeekCreatorOpen(false);
-                }}
+                })}
                 title="Pegar el link de Canva de cada taller una sola vez y aplicarlo a todos los cursos con esa clase ya creada"
                 className={`tz-press inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold shadow-sm transition ${materialsPanelOpen ? "border-cyan-700 bg-cyan-700 text-white" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
               >
@@ -6860,12 +6864,12 @@ function OrientationCycleView({
                 {upcomingMissingLinkCount ? <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-black tabular-nums ${materialsPanelOpen ? "bg-white/25 text-white" : "bg-amber-200 text-amber-900"}`}>{upcomingMissingLinkCount}</span> : null}
               </button>
               <button
-                onClick={() => {
+                onClick={() => React.startTransition(() => {
                   if (weekCreatorOpen) { setWeekCreatorOpen(false); return; }
                   setWeekCreatorWeek(defaultOrientationWeek);
                   setWeekCreatorOpen(true);
                   setMaterialsPanelOpen(false);
-                }}
+                })}
                 title="Crear de una vez todas las clases de la semana, cada curso con su clase de la columna vertebral"
                 className={`tz-press inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-bold shadow-sm transition ${weekCreatorOpen ? "border-cyan-700 bg-cyan-700 text-white" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
               >
@@ -7064,7 +7068,7 @@ function OrientationCycleView({
                     <button
                       disabled={!dataReady}
                       type="button"
-                      onClick={() => setMaterialsWeekKey((current) => (current === weekKey ? null : weekKey))}
+                      onClick={() => React.startTransition(() => setMaterialsWeekKey((current) => (current === weekKey ? null : weekKey)))}
                       title="Materiales de esta semana: pega cada link una vez y aplícalo a todos los cursos del taller"
                       className={`tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${materialsWeekKey === weekKey ? "border-white/40 bg-white text-cyan-800" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
                     >
