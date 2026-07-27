@@ -1508,6 +1508,30 @@ const isPlaceholderOrientationText = (value: string | undefined) => {
 
 const isGenericOrientationTopic = (value: string | undefined) => /^sesion\s+\d+$/i.test(normalize(value || ""));
 
+// Agrupa clases por taller: un mismo taller se dicta en varios cursos y
+// comparte materiales (Canva, planificación y carpeta). Los grupos con clases
+// sin Canva van primero; luego por fecha.
+type MaterialGroup = { key: string; title: string; records: DataRecord[] };
+const buildMaterialGroups = (records: DataRecord[]): MaterialGroup[] => {
+  const groups = new Map<string, { title: string; records: DataRecord[] }>();
+  records.forEach((record) => {
+    const title = (record.topic || "").trim();
+    if (!title || isPlaceholderOrientationText(title) || isGenericOrientationTopic(title)) return;
+    const key = normalize(title);
+    const group = groups.get(key) || { title, records: [] };
+    group.records.push(record);
+    groups.set(key, group);
+  });
+  const missing = (items: DataRecord[]) => items.filter((record) => !(record.canvaLink || record.evidence || "").trim()).length;
+  return Array.from(groups.entries())
+    .map(([key, group]) => ({
+      key,
+      title: group.title,
+      records: group.records.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.course || "").localeCompare(String(b.course || ""), "es")),
+    }))
+    .sort((a, b) => (missing(b.records) ? 1 : 0) - (missing(a.records) ? 1 : 0) || String(a.records[0]?.date || "").localeCompare(String(b.records[0]?.date || "")));
+};
+
 const meaningfulOrientationNotes = (record: DataRecord) => {
   const notes = record.notes || "";
   return normalize(notes).includes("fecha ajustada por feriado") ? "" : notes;
@@ -5331,10 +5355,12 @@ function OrientationCycleView({
   // El registro rápido parte minimizado; se expande al hacer clic en el encabezado.
   const [quickFormExpanded, setQuickFormExpanded] = useState(Boolean(createRequest));
   const [quickTopicCustom, setQuickTopicCustom] = useState(false);
-  // Borradores de links de Canva por taller (clave: tema normalizado) para
-  // distribuirlos de una vez a todos los cursos que comparten la misma clase.
-  const [materialDrafts, setMaterialDrafts] = useState<Record<string, string>>({});
+  // Borradores de links por taller (clave: tema normalizado) para distribuirlos
+  // de una vez a todos los cursos que comparten la misma clase.
+  const [materialDrafts, setMaterialDrafts] = useState<Record<string, { canva?: string; plan?: string; folder?: string }>>({});
   const [materialsPanelOpen, setMaterialsPanelOpen] = useState(false);
+  // Semana cuyo panel de materiales está abierto dentro de la bitácora.
+  const [materialsWeekKey, setMaterialsWeekKey] = useState<string | null>(null);
   const [quickFormAttempted, setQuickFormAttempted] = useState(false);
   const [newClassForm, setNewClassForm] = useState<Record<string, string>>({});
   const [expandedClassIds, setExpandedClassIds] = useState<string[]>([]);
@@ -5528,102 +5554,129 @@ function OrientationCycleView({
   const creatorSuggestions = useMemo(() => new Map(
     creatorSlots.map(({ slot }) => [slot.course, columnaProgress(slot.course, ownerClasses, { reserveUpcoming: true })?.next || null] as const),
   ), [creatorSlots, ownerClasses]);
-  // Clases ya creadas de la semana seleccionada, agrupadas por taller: un mismo
-  // taller suele repetirse en varios cursos y comparte el mismo Canva.
+  // Clases ya creadas de la semana seleccionada, agrupadas por taller.
   const creatorWeekClasses = useMemo(() => creatorRange
     ? ownerStoredClasses.filter((record) => {
         const date = (record.date || "").slice(0, 10);
         return date >= creatorRange.start && date <= creatorRange.end;
       })
     : [], [creatorRange, ownerStoredClasses]);
-  const creatorTopicGroups = useMemo(() => {
-    const groups = new Map<string, { title: string; records: DataRecord[] }>();
-    creatorWeekClasses.forEach((record) => {
-      const title = (record.topic || "").trim();
-      if (!title || isPlaceholderOrientationText(title)) return;
-      const key = normalize(title);
-      const group = groups.get(key) || { title, records: [] };
-      group.records.push(record);
-      groups.set(key, group);
-    });
-    return Array.from(groups.entries())
-      .map(([key, group]) => ({
-        key,
-        title: group.title,
-        records: group.records.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.course || "").localeCompare(String(b.course || ""), "es")),
-      }))
-      .sort((a, b) => String(a.records[0]?.date || "").localeCompare(String(b.records[0]?.date || "")));
-  }, [creatorWeekClasses]);
+  const creatorTopicGroups = useMemo(() => buildMaterialGroups(creatorWeekClasses), [creatorWeekClasses]);
   // Todas las clases ya creadas desde esta semana en adelante, agrupadas por
   // taller: cubre el caso "preparé la semana sin links" y semanas futuras.
-  const upcomingMaterialGroups = useMemo(() => {
-    const groups = new Map<string, { title: string; records: DataRecord[] }>();
-    ownerStoredClasses.forEach((record) => {
-      const date = (record.date || "").slice(0, 10);
-      if (!date || date < periodWindows.thisWeekStart) return;
-      const title = (record.topic || "").trim();
-      if (!title || isPlaceholderOrientationText(title)) return;
-      const key = normalize(title);
-      const group = groups.get(key) || { title, records: [] };
-      group.records.push(record);
-      groups.set(key, group);
-    });
-    const missingCount = (records: DataRecord[]) => records.filter((record) => !(record.canvaLink || record.evidence || "").trim()).length;
-    return Array.from(groups.entries())
-      .map(([key, group]) => ({
-        key,
-        title: group.title,
-        records: group.records.sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")) || String(a.course || "").localeCompare(String(b.course || ""), "es")),
-      }))
-      .sort((a, b) => (missingCount(b.records) ? 1 : 0) - (missingCount(a.records) ? 1 : 0) || String(a.records[0]?.date || "").localeCompare(String(b.records[0]?.date || "")));
-  }, [ownerStoredClasses, periodWindows.thisWeekStart]);
+  const upcomingMaterialGroups = useMemo(() => buildMaterialGroups(ownerStoredClasses.filter((record) => {
+    const date = (record.date || "").slice(0, 10);
+    return Boolean(date) && date >= periodWindows.thisWeekStart;
+  })), [ownerStoredClasses, periodWindows.thisWeekStart]);
   const upcomingMissingLinkCount = useMemo(
     () => upcomingMaterialGroups.reduce((total, group) => total + group.records.filter((record) => !(record.canvaLink || record.evidence || "").trim()).length, 0),
     [upcomingMaterialGroups],
   );
-  type MaterialGroup = { key: string; title: string; records: DataRecord[] };
-  const materialGroupLink = (group: MaterialGroup) => {
-    const existing = group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "";
-    return (materialDrafts[group.key] ?? existing).trim();
+  // Materiales de una semana específica, abiertos desde su encabezado en la bitácora.
+  const weekMaterialGroups = materialsWeekKey
+    ? buildMaterialGroups(ownerStoredClasses.filter((record) => weekKeyOf(record.date || "") === materialsWeekKey))
+    : [];
+  type MaterialLinkSet = { canva: string; plan: string; folder: string };
+  const materialGroupExisting = (group: MaterialGroup): MaterialLinkSet => ({
+    canva: group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "",
+    plan: group.records.map((record) => (record.planificacion || "").trim()).find(Boolean) || "",
+    folder: group.records.map((record) => (record.folderLink || "").trim()).find(Boolean) || "",
+  });
+  const materialGroupDraft = (group: MaterialGroup): MaterialLinkSet => {
+    const existing = materialGroupExisting(group);
+    const draft = materialDrafts[group.key] || {};
+    return {
+      canva: (draft.canva ?? existing.canva).trim(),
+      plan: (draft.plan ?? existing.plan).trim(),
+      folder: (draft.folder ?? existing.folder).trim(),
+    };
   };
+  const recordHasMaterialLinks = (record: DataRecord, links: MaterialLinkSet) =>
+    (!links.canva || (record.canvaLink || "").trim() === links.canva) &&
+    (!links.plan || (record.planificacion || "").trim() === links.plan) &&
+    (!links.folder || (record.folderLink || "").trim() === links.folder);
   const distributeMaterialGroup = (group: MaterialGroup) => {
     if (!dataReady) return;
-    const link = materialGroupLink(group);
-    if (!link) return;
+    const links = materialGroupDraft(group);
+    if (!links.canva && !links.plan && !links.folder) return;
     group.records.forEach((record) => {
-      if ((record.canvaLink || "").trim() !== link || (record.evidence || "").trim() !== link) {
-        onUpdateOrientationRecord(record.id, { canvaLink: link, evidence: link });
+      const updates: Record<string, string> = {};
+      if (links.canva && ((record.canvaLink || "").trim() !== links.canva || (record.evidence || "").trim() !== links.canva)) {
+        updates.canvaLink = links.canva;
+        updates.evidence = links.canva;
       }
+      if (links.plan && (record.planificacion || "").trim() !== links.plan) updates.planificacion = links.plan;
+      if (links.folder && (record.folderLink || "").trim() !== links.folder) updates.folderLink = links.folder;
+      if (Object.keys(updates).length) onUpdateOrientationRecord(record.id, updates);
     });
   };
   const distributeAllMaterialGroups = (groups: MaterialGroup[]) => groups.forEach((group) => distributeMaterialGroup(group));
-  // Fila compartida entre "Preparar semana" y el panel "Materiales".
-  const renderMaterialGroupRow = (group: MaterialGroup) => {
-    const link = materialGroupLink(group);
-    const applied = link ? group.records.filter((record) => (record.canvaLink || "").trim() === link).length : 0;
-    const allApplied = Boolean(link) && applied === group.records.length;
+  // Desde el panel general: salta al encabezado de la semana del taller y abre ahí sus materiales.
+  const goToWeekMaterials = (weekKey: string) => {
+    setMaterialsPanelOpen(false);
+    selectPeriodFilter("all");
+    setVisibleClassCount(Number.MAX_SAFE_INTEGER);
+    setMaterialsWeekKey(weekKey);
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => document.getElementById(`orientation-week-${weekKey}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    }
+  };
+  // Fila compartida entre "Preparar semana", "Materiales" y el panel semanal.
+  const renderMaterialGroupRow = (group: MaterialGroup, showWeek = false) => {
+    const links = materialGroupDraft(group);
+    const hasAny = Boolean(links.canva || links.plan || links.folder);
+    const allApplied = hasAny && group.records.every((record) => recordHasMaterialLinks(record, links));
+    const existing = materialGroupExisting(group);
+    const draft = materialDrafts[group.key] || {};
+    const groupWeekKey = weekKeyOf(group.records[0]?.date || "");
+    const setDraft = (field: keyof MaterialLinkSet) => (event: React.ChangeEvent<HTMLInputElement>) =>
+      setMaterialDrafts((drafts) => ({ ...drafts, [group.key]: { ...(drafts[group.key] || {}), [field]: event.target.value } }));
+    const inputStyle = "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100";
     return (
-      <div key={group.key} className="grid gap-2 border-b border-slate-100 px-3 py-2.5 last:border-b-0 sm:grid-cols-[minmax(0,1fr)_minmax(240px,340px)_auto] sm:items-center sm:gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-bold text-slate-950" title={group.title}>{group.title}</p>
-          <p className="text-[11px] text-slate-500">
-            {group.records.map((record) => `${record.course}${(record.canvaLink || "").trim() && (record.canvaLink || "").trim() === link ? " ✓" : ""}`).join(" · ")}
-          </p>
+      <div key={group.key} className="border-b border-slate-100 px-3 py-3 last:border-b-0">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-xs font-bold text-slate-950" title={group.title}>{group.title}</p>
+            <p className="text-[11px] text-slate-500">
+              {showWeek && groupWeekKey !== "sin-fecha" ? `${weekRangeLabel(groupWeekKey)} · ` : ""}
+              {group.records.map((record) => `${record.course}${hasAny && recordHasMaterialLinks(record, links) ? " ✓" : ""}`).join(" · ")}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {showWeek && groupWeekKey !== "sin-fecha" ? (
+              <button
+                type="button"
+                onClick={() => goToWeekMaterials(groupWeekKey)}
+                title={`Ir a la ${weekRangeLabel(groupWeekKey).toLowerCase()} en la bitácora`}
+                className="rounded-md px-2 py-1.5 text-[11px] font-bold text-cyan-700 hover:bg-cyan-50"
+              >
+                Ir a la semana →
+              </button>
+            ) : null}
+            <button
+              type="button"
+              disabled={!dataReady || !hasAny}
+              onClick={() => distributeMaterialGroup(group)}
+              className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${allApplied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
+            >
+              {allApplied ? <><Check className="h-3.5 w-3.5" /> Aplicado</> : `Aplicar a ${group.records.length}`}
+            </button>
+          </div>
         </div>
-        <input
-          value={materialDrafts[group.key] ?? (group.records.map((record) => (record.canvaLink || record.evidence || "").trim()).find(Boolean) || "")}
-          onChange={(event) => setMaterialDrafts((drafts) => ({ ...drafts, [group.key]: event.target.value }))}
-          placeholder="https://www.canva.com/..."
-          className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs outline-none placeholder:text-slate-400 hover:border-slate-300 focus:border-cyan-600 focus:ring-4 focus:ring-cyan-100"
-        />
-        <button
-          type="button"
-          disabled={!dataReady || !link}
-          onClick={() => distributeMaterialGroup(group)}
-          className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-bold transition disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${allApplied ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-cyan-300 bg-cyan-50 text-cyan-800 hover:bg-cyan-100"}`}
-        >
-          {allApplied ? <><Check className="h-3.5 w-3.5" /> Aplicado</> : `Aplicar a ${group.records.length}`}
-        </button>
+        <div className="mt-2 grid gap-2 md:grid-cols-3">
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Canva o presentación</span>
+            <input value={draft.canva ?? existing.canva} onChange={setDraft("canva")} placeholder="https://www.canva.com/..." className={inputStyle} />
+          </label>
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Planificación</span>
+            <input value={draft.plan ?? existing.plan} onChange={setDraft("plan")} placeholder="Link o nombre del documento" className={inputStyle} />
+          </label>
+          <label className="block">
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Carpeta Drive</span>
+            <input value={draft.folder ?? existing.folder} onChange={setDraft("folder")} placeholder="https://drive.google.com/..." className={inputStyle} />
+          </label>
+        </div>
       </div>
     );
   };
@@ -6433,7 +6486,7 @@ function OrientationCycleView({
             </button>
           ) : null}
         </div>
-        {creatorTopicGroups.length ? creatorTopicGroups.map(renderMaterialGroupRow) : (
+        {creatorTopicGroups.length ? creatorTopicGroups.map((group) => renderMaterialGroupRow(group)) : (
           <p className="px-3 py-3 text-xs text-slate-500">Cuando crees las clases de esta semana, aquí aparecerá un campo por taller para pegar su link de Canva una sola vez.</p>
         )}
       </div>
@@ -6460,7 +6513,7 @@ function OrientationCycleView({
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Clases ya creadas · desde esta semana en adelante</p>
           <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Materiales por taller</h2>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Un mismo taller se dicta en varios cursos con el mismo Canva: pega el link una vez y aplícalo a todas sus clases, aunque la semana ya esté preparada. Los talleres con clases sin link aparecen primero.</p>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Un mismo taller se dicta en varios cursos con el mismo material: pega una vez el Canva, la planificación o la carpeta y aplícalos a todas sus clases, aunque la semana ya esté preparada. Los talleres con clases sin Canva aparecen primero, y con &quot;Ir a la semana&quot; saltas a esa semana en la bitácora.</p>
         </div>
         <div className="flex items-center gap-2">
           {upcomingMissingLinkCount ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800 ring-1 ring-amber-200">{upcomingMissingLinkCount} {upcomingMissingLinkCount === 1 ? "clase sin link" : "clases sin link"}</span> : <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-800 ring-1 ring-emerald-200">Todo con material ✓</span>}
@@ -6478,11 +6531,41 @@ function OrientationCycleView({
       </div>
       <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
         {upcomingMaterialGroups.length
-          ? upcomingMaterialGroups.map(renderMaterialGroupRow)
+          ? upcomingMaterialGroups.map((group) => renderMaterialGroupRow(group, true))
           : <p className="px-3 py-3 text-xs text-slate-500">No hay clases creadas desde esta semana en adelante. Usa &quot;Preparar semana&quot; para crearlas con la columna vertebral.</p>}
       </div>
       <div className="mt-4 flex justify-end">
         <button onClick={() => setMaterialsPanelOpen(false)} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cerrar</button>
+      </div>
+    </section>
+  ) : null;
+
+  const weekMaterialsPanel = materialsWeekKey ? (
+    <section className="tz-slide-down rounded-xl border border-cyan-200 bg-cyan-50/50 p-4">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">{weekRangeLabel(materialsWeekKey)}</p>
+          <h2 className="mt-0.5 text-lg font-semibold text-slate-950">Materiales de la semana</h2>
+          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Pega una vez el Canva, la planificación o la carpeta de cada taller y aplícalos a todos los cursos que lo comparten esta semana.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {weekMaterialGroups.length > 1 ? (
+            <button
+              type="button"
+              disabled={!dataReady}
+              onClick={() => distributeAllMaterialGroups(weekMaterialGroups)}
+              className="inline-flex items-center gap-1.5 rounded-md border border-cyan-300 bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-800 hover:bg-cyan-100 disabled:cursor-wait disabled:opacity-50"
+            >
+              <FileText className="h-3.5 w-3.5" /> Distribuir todos
+            </button>
+          ) : null}
+          <button onClick={() => setMaterialsWeekKey(null)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50">Cerrar</button>
+        </div>
+      </div>
+      <div className="mt-4 overflow-hidden rounded-lg border border-cyan-200 bg-white">
+        {weekMaterialGroups.length
+          ? weekMaterialGroups.map((group) => renderMaterialGroupRow(group))
+          : <p className="px-3 py-3 text-xs text-slate-500">Esta semana aún no tiene clases con taller definido.</p>}
       </div>
     </section>
   ) : null;
@@ -6960,7 +7043,7 @@ function OrientationCycleView({
             const weekCreatorForThisWeek = weekCreatorOpen && effectiveCreatorWeek === weekPlan;
             const ownerHasScheduleSlots = scheduleSlots.some((slot) => normalize(slot.owner) === normalize(owner.name));
             const weekHeader = startsWeekGroup ? (
-              <div className={index === 0 || startsMonthGroup ? "px-2 pb-1 sm:px-3 lg:px-4" : "px-2 pb-1 pt-6 sm:px-3 lg:px-4"}>
+              <div id={`orientation-week-${weekKey}`} className={index === 0 || startsMonthGroup ? "scroll-mt-4 px-2 pb-1 sm:px-3 lg:px-4" : "scroll-mt-4 px-2 pb-1 pt-6 sm:px-3 lg:px-4"}>
                 <div className={`flex w-full flex-wrap items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm ring-1 transition sm:flex-nowrap ${isCurrentWeek ? "bg-gradient-to-r from-cyan-700 to-cyan-800 text-white ring-cyan-700" : "bg-gradient-to-r from-slate-100 to-slate-50 text-slate-900 ring-slate-200"}`}>
                   <button
                     type="button"
@@ -6977,6 +7060,17 @@ function OrientationCycleView({
                     <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums ${isCurrentWeek ? "bg-white/20 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{weekCount} {weekCount === 1 ? "clase" : "clases"}</span>
                     <ChevronDown className={`h-4 w-4 shrink-0 transition ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"} ${weekCollapsed ? "-rotate-90" : ""}`} />
                   </button>
+                  {weekKey !== "sin-fecha" ? (
+                    <button
+                      disabled={!dataReady}
+                      type="button"
+                      onClick={() => setMaterialsWeekKey((current) => (current === weekKey ? null : weekKey))}
+                      title="Materiales de esta semana: pega cada link una vez y aplícalo a todos los cursos del taller"
+                      className={`tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${materialsWeekKey === weekKey ? "border-white/40 bg-white text-cyan-800" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
+                    >
+                      <FileText className="h-3.5 w-3.5" /> Materiales
+                    </button>
+                  ) : null}
                   {weekKey !== "sin-fecha" && ownerHasScheduleSlots ? (
                     <button
                       disabled={!dataReady}
@@ -6989,10 +7083,11 @@ function OrientationCycleView({
                     </button>
                   ) : null}
                 </div>
+                {materialsWeekKey === weekKey ? <div className="mt-2">{weekMaterialsPanel}</div> : null}
               </div>
             ) : null;
             if (weekCollapsed) {
-              return <React.Fragment key={record.id}>{monthHeader}{weekHeader}{weekCreatorForThisWeek ? <div className="px-2 pb-3 sm:px-3 lg:px-4">{weekCreatorPanel}</div> : null}</React.Fragment>;
+              return <React.Fragment key={record.id}>{monthHeader}{weekHeader}</React.Fragment>;
             }
             const dateHeader = startsDateGroup ? (
               <div className={dateCollapsed ? "" : "pb-2 pt-1"}>
