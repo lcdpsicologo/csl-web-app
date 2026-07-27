@@ -2989,7 +2989,6 @@ const viewNav: Array<{ id: ViewId; label: string; icon: LucideIcon }> = [
   { id: "cases", label: "Casos", icon: FileText },
   { id: "logs", label: "Bitácoras", icon: ClipboardList },
   { id: "interviews", label: "Entrevistas", icon: MessageSquareText },
-  { id: "meetings", label: "Reuniones y Entrevistas", icon: NotebookPen },
   { id: "protocols", label: "Protocolos", icon: ShieldCheck },
   { id: "workshops", label: "Talleres", icon: GraduationCap },
   { id: "documents", label: "Documentos", icon: FolderOpen },
@@ -12443,6 +12442,17 @@ function MeetingsAndInterviewsView({
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("todos");
 
+  // UI View States
+  const [showStatsPanel, setShowStatsPanel] = useState(false);
+  const [collapsedCategories, setCollapsedCategories] = useState<string[]>([]);
+  const [deleteCandidateItem, setDeleteCandidateItem] = useState<{ entity: EntityId; id: string; title: string } | null>(null);
+
+  const toggleCategoryCollapse = (catId: string) => {
+    setCollapsedCategories((current) =>
+      current.includes(catId) ? current.filter((id) => id !== catId) : [...current, catId]
+    );
+  };
+
   // Modal State
   const [modalType, setModalType] = useState<"" | "gp" | "interview">("");
   const [editingItem, setEditingItem] = useState<{ entity: "meetings" | "interviews"; id: string } | null>(null);
@@ -12771,6 +12781,94 @@ function MeetingsAndInterviewsView({
     }
   };
 
+  // Group filtered records into bitácora-style category blocks
+  const categorizedGroups = useMemo(() => {
+    if (activeTab === "gp") {
+      const groups = [
+        { id: "formativo", title: "GP Formativo", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as any[] },
+        { id: "interdisciplinario", title: "GP Interdisciplinario", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as any[] },
+        { id: "tecnico", title: "GP Técnico / Docente", icon: ClipboardList, color: "bg-blue-600 text-white", badgeBg: "bg-blue-50 text-blue-700 ring-1 ring-blue-200", records: [] as any[] },
+        { id: "otras", title: "Otras Reuniones GP", icon: NotebookPen, color: "bg-slate-800 text-white", badgeBg: "bg-slate-100 text-slate-700 ring-1 ring-slate-200", records: [] as any[] },
+      ];
+
+      filteredRecords.forEach((recItem) => {
+        const rec = recItem as Record<string, any>;
+        const mType = normalize(rec.meetingType || "");
+        if (mType.includes("formativo")) groups[0].records.push(recItem);
+        else if (mType.includes("interdisciplinario")) groups[1].records.push(recItem);
+        else if (mType.includes("tecnico") || mType.includes("docente")) groups[2].records.push(recItem);
+        else groups[3].records.push(recItem);
+      });
+
+      return groups.filter((g) => g.records.length > 0 || (gpFilter !== "todas" && gpFilter === g.id));
+    }
+
+    if (activeTab === "entrevistas_estudiantes" || activeTab === "entrevistas_apoderados") {
+      const map = new Map<string, any[]>();
+      filteredRecords.forEach((recItem) => {
+        const rec = recItem as Record<string, any>;
+        const courseKey = rec.course || rec.cycle || "Sin Curso Asignado";
+        if (!map.has(courseKey)) map.set(courseKey, []);
+        map.get(courseKey)!.push(recItem);
+      });
+
+      const isStudent = activeTab === "entrevistas_estudiantes";
+      const icon = isStudent ? GraduationCap : UsersRound;
+      const color = isStudent ? "bg-emerald-600 text-white" : "bg-purple-600 text-white";
+      const badgeBg = isStudent ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-purple-50 text-purple-700 ring-1 ring-purple-200";
+
+      return Array.from(map.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], "es"))
+        .map(([courseName, records]) => ({
+          id: `course-${normalize(courseName)}`,
+          title: `Curso / Ciclo: ${courseName}`,
+          icon,
+          color,
+          badgeBg,
+          records,
+        }));
+    }
+
+    if (activeTab === "correos") {
+      const map = new Map<string, any[]>();
+      filteredRecords.forEach((recItem) => {
+        const rec = recItem as Record<string, any>;
+        const catKey = rec.category || "Información General";
+        if (!map.has(catKey)) map.set(catKey, []);
+        map.get(catKey)!.push(recItem);
+      });
+
+      return Array.from(map.entries())
+        .sort((a, b) => a[0].localeCompare(b[0], "es"))
+        .map(([catName, records]) => ({
+          id: `email-cat-${normalize(catName)}`,
+          title: catName,
+          icon: Mail,
+          color: "bg-amber-600 text-white",
+          badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
+          records,
+        }));
+    }
+
+    // "todas" tab -> Master section breakdown
+    const masterGroups = [
+      { id: "master-gp", title: "📌 Reuniones de Gestión Pedagógica (GP)", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as any[] },
+      { id: "master-students", title: "🎓 Entrevistas a Estudiantes", icon: GraduationCap, color: "bg-emerald-600 text-white", badgeBg: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", records: [] as any[] },
+      { id: "master-parents", title: "👨‍👩‍👧 Entrevistas a Apoderados", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as any[] },
+      { id: "master-emails", title: "📧 Información y Correos", icon: Mail, color: "bg-amber-600 text-white", badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200", records: [] as any[] },
+    ];
+
+    filteredRecords.forEach((recItem) => {
+      const rec = recItem as Record<string, any>;
+      if (isEmailOrInfo(rec)) masterGroups[3].records.push(recItem);
+      else if (isGpMeeting(rec)) masterGroups[0].records.push(recItem);
+      else if (isParentInterview(rec)) masterGroups[2].records.push(recItem);
+      else masterGroups[1].records.push(recItem);
+    });
+
+    return masterGroups.filter((g) => g.records.length > 0);
+  }, [filteredRecords, activeTab, gpFilter]);
+
   return (
     <div className="space-y-6">
       {/* Header Banner */}
@@ -12778,15 +12876,27 @@ function MeetingsAndInterviewsView({
         <div>
           <div className="flex items-center gap-2">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/20 text-indigo-300 ring-1 ring-indigo-400/30">
-              <NotebookPen className="h-5 w-5" />
+              <MessageSquareText className="h-5 w-5" />
             </span>
-            <h1 className="text-2xl font-bold tracking-tight">Reuniones, Entrevistas e Información</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Reuniones, Entrevistas y Actas</h1>
           </div>
           <p className="mt-1 text-sm text-slate-300">
-            Gestión Pedagógica (GP), actas de entrevistas a apoderados y alumnos, y respaldo rápido de correos.
+            Gestión Pedagógica (GP), actas de entrevistas a apoderados y alumnos, y respaldo de correos.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={() => setShowStatsPanel((prev) => !prev)}
+            className={`tz-press inline-flex items-center gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold transition ring-1 ${
+              showStatsPanel
+                ? "bg-indigo-500 text-white ring-indigo-300 shadow-sm"
+                : "bg-white/10 text-slate-200 hover:bg-white/20 ring-white/20"
+            }`}
+          >
+            <BarChart3 className="h-4 w-4" />
+            {showStatsPanel ? "Ocultar estadísticas" : "Ver estadísticas en detalle"}
+          </button>
+
           <button
             onClick={handleOpenNewGp}
             className="tz-press inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-500"
@@ -12808,41 +12918,65 @@ function MeetingsAndInterviewsView({
         </div>
       </div>
 
-      {/* Counter Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <button
-          onClick={() => setActiveTab("gp")}
-          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "gp" ? "border-indigo-500 bg-indigo-50/50 ring-2 ring-indigo-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
-        >
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Reuniones GP</span>
-          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{gpCount}</span>
-          <span className="mt-1 text-[11px] text-slate-500">Formativo, Interdisciplinario, etc.</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("entrevistas_estudiantes")}
-          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "entrevistas_estudiantes" ? "border-blue-500 bg-blue-50/50 ring-2 ring-blue-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
-        >
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Entrevistas Alumnos</span>
-          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{studentInterviewCount}</span>
-          <span className="mt-1 text-[11px] text-slate-500">Entrevistas directas</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("entrevistas_apoderados")}
-          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "entrevistas_apoderados" ? "border-purple-500 bg-purple-50/50 ring-2 ring-purple-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
-        >
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Entrevistas Apoderados</span>
-          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{parentInterviewCount}</span>
-          <span className="mt-1 text-[11px] text-slate-500">Apoderados y tutores</span>
-        </button>
-        <button
-          onClick={() => setActiveTab("correos")}
-          className={`flex flex-col rounded-2xl border p-4 text-left transition shadow-sm ${activeTab === "correos" ? "border-amber-500 bg-amber-50/50 ring-2 ring-amber-500/20" : "border-slate-200 bg-white hover:border-slate-300"}`}
-        >
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Correos / Info</span>
-          <span className="mt-1 text-2xl font-extrabold text-slate-900 tabular-nums">{emailCount}</span>
-          <span className="mt-1 text-[11px] text-slate-500">Respaldos aludidos</span>
-        </button>
-      </div>
+      {/* Collapsible Stats Panel */}
+      {showStatsPanel && (
+        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/70 via-white to-slate-50 p-5 shadow-sm space-y-4 animate-fadeIn">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600 flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-indigo-600" /> Resumen Estadístico de Actas y Reuniones
+            </h3>
+            <span className="text-xs font-semibold text-slate-500">
+              Total acumulado: <strong>{allRecords.length}</strong> registros
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="rounded-xl border border-indigo-200/80 bg-white p-3.5 text-left shadow-xs">
+              <span className="text-[11px] font-bold uppercase text-slate-500">Reuniones GP</span>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-2xl font-black text-indigo-950">{gpCount}</span>
+                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-md">
+                  {allRecords.length ? Math.round((gpCount / allRecords.length) * 100) : 0}%
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">Formativo, Interdisciplinario</p>
+            </div>
+
+            <div className="rounded-xl border border-emerald-200/80 bg-white p-3.5 text-left shadow-xs">
+              <span className="text-[11px] font-bold uppercase text-slate-500">Entrevistas Alumnos</span>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-2xl font-black text-emerald-950">{studentInterviewCount}</span>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-md">
+                  {allRecords.length ? Math.round((studentInterviewCount / allRecords.length) * 100) : 0}%
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">Entrevistas directas</p>
+            </div>
+
+            <div className="rounded-xl border border-purple-200/80 bg-white p-3.5 text-left shadow-xs">
+              <span className="text-[11px] font-bold uppercase text-slate-500">Entrevistas Apoderados</span>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-2xl font-black text-purple-950">{parentInterviewCount}</span>
+                <span className="text-[10px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-md">
+                  {allRecords.length ? Math.round((parentInterviewCount / allRecords.length) * 100) : 0}%
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">Apoderados y tutores</p>
+            </div>
+
+            <div className="rounded-xl border border-amber-200/80 bg-white p-3.5 text-left shadow-xs">
+              <span className="text-[11px] font-bold uppercase text-slate-500">Correos / Información</span>
+              <div className="mt-1 flex items-baseline justify-between">
+                <span className="text-2xl font-black text-amber-950">{emailCount}</span>
+                <span className="text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-md">
+                  {allRecords.length ? Math.round((emailCount / allRecords.length) * 100) : 0}%
+                </span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-slate-500">Respaldos aludidos</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-2">
@@ -13038,10 +13172,10 @@ function MeetingsAndInterviewsView({
         </form>
       )}
 
-      {/* Cards List */}
+      {/* Bitácora Style Categorized List */}
       {filteredRecords.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
-          <NotebookPen className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
+          <MessageSquareText className="mx-auto h-12 w-12 text-slate-300 animate-pulse" />
           <h3 className="mt-3 text-base font-bold text-slate-900">No hay registros en esta sección</h3>
           <p className="mt-1 text-xs text-slate-500 max-w-sm mx-auto">
             Aún no se han ingresado reuniones GP, entrevistas o correos con los filtros seleccionados.
@@ -13056,146 +13190,222 @@ function MeetingsAndInterviewsView({
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredRecords.map((recItem) => {
-            const rec = recItem as Record<string, any> & { _entity: "meetings" | "interviews"; id: string };
-            const isGp = isGpMeeting(rec);
-            const isEmail = isEmailOrInfo(rec);
-
-            // Match student if tagged
-            const studentMatch = sortedStudents.find((s) =>
-              normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || ""))
-            );
+        <div className="space-y-6">
+          {categorizedGroups.map((group) => {
+            const isCollapsed = collapsedCategories.includes(group.id);
+            const IconComp = group.icon;
 
             return (
-              <div
-                key={`${rec._entity}-${rec.id}`}
-                className="group relative flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-5 shadow-sm hover:border-slate-300 hover:shadow-md transition"
-              >
-                <div>
-                  {/* Top Bar / Badges */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold ${
-                      isEmail
-                        ? "bg-amber-100 text-amber-800"
-                        : isGp
-                          ? "bg-indigo-100 text-indigo-800"
-                          : "bg-blue-100 text-blue-800"
-                    }`}>
-                      {isEmail ? <Mail className="h-3 w-3" /> : isGp ? <NotebookPen className="h-3 w-3" /> : <MessageSquareText className="h-3 w-3" />}
-                      {rec.meetingType || rec.category || (isGp ? "Reunión GP" : "Entrevista")}
+              <div key={group.id} className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden transition">
+                {/* Category Header */}
+                <button
+                  type="button"
+                  onClick={() => toggleCategoryCollapse(group.id)}
+                  className="w-full flex items-center justify-between bg-slate-50/80 px-5 py-4 hover:bg-slate-100/80 transition text-left border-b border-slate-200/70"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`grid h-8 w-8 place-items-center rounded-xl ${group.color} shadow-xs`}>
+                      <IconComp className="h-4 w-4" />
                     </span>
-
-                    <span className="text-xs font-semibold text-slate-400">
-                      {rec.date ? new Date(rec.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" }) : "Sin fecha"}
-                    </span>
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900">{group.title}</h2>
+                      <p className="text-[11px] text-slate-500 font-medium">{group.records.length} registro{group.records.length === 1 ? "" : "s"} en esta categoría</p>
+                    </div>
                   </div>
-
-                  {/* Title */}
-                  <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-2">
-                    {rec.title || rec.reason || "Registro sin título"}
-                  </h3>
-
-                  {/* Tagged Student Pill */}
-                  {(rec.student || rec.relatedStudents) && (
-                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-slate-400">Estudiante:</span>
-                      {studentMatch ? (
-                        <button
-                          type="button"
-                          onClick={() => onOpenStudent(studentMatch.id)}
-                          className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 transition"
-                        >
-                          <UserRound className="h-3 w-3" />
-                          {studentMatch.fullName} ({studentMatch.course || "Sin curso"})
-                        </button>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                          <UserRound className="h-3 w-3 text-slate-400" />
-                          {rec.student || rec.relatedStudents}
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Leader / Interviewer / Participant */}
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
-                    {rec.leader || rec.interviewer ? (
-                      <span><strong>Responsable:</strong> {rec.leader || rec.interviewer}</span>
-                    ) : null}
-                    {rec.participant ? (
-                      <span><strong>Participante:</strong> {rec.participant}</span>
-                    ) : null}
-                    {rec.cycle || rec.course ? (
-                      <span><strong>Curso/Ciclo:</strong> {rec.cycle || rec.course}</span>
-                    ) : null}
-                  </div>
-
-                  {/* Main content / Topics / Details */}
-                  {(rec.topics || rec.detail) && (
-                    <div className="mt-3 text-xs leading-relaxed text-slate-700 bg-slate-50/70 rounded-xl p-3 border border-slate-100 line-clamp-4">
-                      {rec.topics || rec.detail}
-                    </div>
-                  )}
-
-                  {/* Agreements & Commitments */}
-                  {(rec.agreements || rec.commitments) && (
-                    <div className="mt-3 space-y-1.5">
-                      {rec.agreements ? (
-                        <div className="text-xs text-emerald-800 bg-emerald-50/60 rounded-xl p-2.5 border border-emerald-100/60">
-                          <strong className="block font-bold text-emerald-900">Acuerdos:</strong>
-                          <p className="mt-0.5 leading-normal">{rec.agreements}</p>
-                        </div>
-                      ) : null}
-                      {rec.commitments ? (
-                        <div className="text-xs text-blue-800 bg-blue-50/60 rounded-xl p-2.5 border border-blue-100/60">
-                          <strong className="block font-bold text-blue-900">Compromisos:</strong>
-                          <p className="mt-0.5 leading-normal">{rec.commitments}</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  )}
-                </div>
-
-                {/* Bottom Actions Bar */}
-                <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-3">
                   <div className="flex items-center gap-2">
-                    {rec.fileLink ? (
-                      <a
-                        href={rec.fileLink}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
-                      >
-                        Ver Acta / Drive
-                      </a>
-                    ) : (
-                      <span className="text-[11px] text-slate-400 font-medium">ID: {rec.id.slice(0, 8)}</span>
-                    )}
+                    <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${group.badgeBg}`}>
+                      {group.records.length}
+                    </span>
+                    <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${isCollapsed ? "-rotate-90" : ""}`} />
                   </div>
+                </button>
 
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => handleEditRecord(rec)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-                      title="Editar registro"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onDeleteRecord(rec._entity, rec.id)}
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                      title="Eliminar registro"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                {/* Category Card Grid */}
+                {!isCollapsed && (
+                  <div className="p-4 grid gap-4 md:grid-cols-2">
+                    {group.records.map((recItem) => {
+                      const rec = recItem as Record<string, any> & { _entity: "meetings" | "interviews"; id: string };
+                      const isGp = isGpMeeting(rec);
+                      const isEmail = isEmailOrInfo(rec);
+
+                      const studentMatch = sortedStudents.find((s) =>
+                        normalize(rec.student || rec.relatedStudents || "").includes(normalize(s.fullName || ""))
+                      );
+
+                      return (
+                        <div
+                          key={`${rec._entity}-${rec.id}`}
+                          className="group relative flex flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-4.5 shadow-xs hover:border-slate-300 hover:shadow-md transition"
+                        >
+                          <div>
+                            {/* Badges Bar */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                                isEmail
+                                  ? "bg-amber-100 text-amber-800"
+                                  : isGp
+                                    ? "bg-indigo-100 text-indigo-800"
+                                    : "bg-emerald-100 text-emerald-800"
+                              }`}>
+                                {rec.meetingType || rec.category || (isGp ? "Reunión GP" : "Entrevista")}
+                              </span>
+
+                              <span className="text-[11px] font-semibold text-slate-400">
+                                {rec.date ? new Date(rec.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" }) : "Sin fecha"}
+                              </span>
+                            </div>
+
+                            {/* Title */}
+                            <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-2">
+                              {rec.title || rec.reason || "Registro sin título"}
+                            </h3>
+
+                            {/* Tagged Student Pill */}
+                            {(rec.student || rec.relatedStudents) && (
+                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <span className="text-[11px] font-semibold text-slate-400">Estudiante:</span>
+                                {studentMatch ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenStudent(studentMatch.id)}
+                                    className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 transition"
+                                  >
+                                    <UserRound className="h-3 w-3" />
+                                    {studentMatch.fullName} ({studentMatch.course || "Sin curso"})
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                                    <UserRound className="h-3 w-3 text-slate-400" />
+                                    {rec.student || rec.relatedStudents}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Leader / Interviewer / Participant */}
+                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500 font-medium">
+                              {rec.leader || rec.interviewer ? (
+                                <span><strong>Responsable:</strong> {rec.leader || rec.interviewer}</span>
+                              ) : null}
+                              {rec.participant ? (
+                                <span><strong>Participante:</strong> {rec.participant}</span>
+                              ) : null}
+                              {rec.cycle || rec.course ? (
+                                <span><strong>Curso/Ciclo:</strong> {rec.cycle || rec.course}</span>
+                              ) : null}
+                            </div>
+
+                            {/* Main Topics / Content */}
+                            {(rec.topics || rec.detail) && (
+                              <div className="mt-2.5 text-xs leading-relaxed text-slate-700 bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 line-clamp-3">
+                                {rec.topics || rec.detail}
+                              </div>
+                            )}
+
+                            {/* Agreements & Commitments */}
+                            {(rec.agreements || rec.commitments) && (
+                              <div className="mt-2.5 space-y-1.5">
+                                {rec.agreements ? (
+                                  <div className="text-[11px] text-emerald-800 bg-emerald-50/70 rounded-lg p-2 border border-emerald-100">
+                                    <strong className="block font-bold text-emerald-900">Acuerdos:</strong>
+                                    <p className="mt-0.5 leading-normal">{rec.agreements}</p>
+                                  </div>
+                                ) : null}
+                                {rec.commitments ? (
+                                  <div className="text-[11px] text-blue-800 bg-blue-50/70 rounded-lg p-2 border border-blue-100">
+                                    <strong className="block font-bold text-blue-900">Compromisos:</strong>
+                                    <p className="mt-0.5 leading-normal">{rec.commitments}</p>
+                                  </div>
+                                ) : null}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Footer Toolbar */}
+                          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
+                            <div>
+                              {rec.fileLink ? (
+                                <a
+                                  href={rec.fileLink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
+                                >
+                                  <ExternalLink className="h-3 w-3" /> Ver Drive
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-slate-400 font-mono">ID: {rec.id.slice(0, 8)}</span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => handleEditRecord(rec)}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                                title="Editar registro"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteCandidateItem({ entity: rec._entity, id: rec.id, title: rec.title || rec.reason || "Este registro" })}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                                title="Eliminar registro"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
+                )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteCandidateItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <span className="grid h-10 w-10 place-items-center rounded-xl bg-red-100">
+                <Trash2 className="h-5 w-5" />
+              </span>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">¿Confirmar eliminación?</h3>
+                <p className="text-xs text-slate-500">Esta acción es irreversible.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
+              ¿Estás seguro de eliminar el registro <strong>"{deleteCandidateItem.title}"</strong>?
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeleteCandidateItem(null)}
+                className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteRecord(deleteCandidateItem.entity, deleteCandidateItem.id);
+                  setDeleteCandidateItem(null);
+                }}
+                className="rounded-xl bg-red-600 px-4 py-2 text-xs font-bold text-white shadow hover:bg-red-500"
+              >
+                Sí, Eliminar
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
