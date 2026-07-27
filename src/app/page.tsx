@@ -1832,11 +1832,13 @@ const copyRichEmailSync = (html: string) => {
   }
 };
 
+// Se ejecutan los dos métodos, no uno u otro: en Android execCommand dice haber
+// copiado pero deja solo texto plano, así que después se sobrescribe el
+// portapapeles con la API moderna, que sí declara el tipo text/html que Gmail
+// necesita para pegar con formato. El orden importa porque execCommand exige el
+// gesto del usuario todavía vigente y cualquier await previo lo consume.
 const copyRichEmail = async (html: string, plain: string) => {
-  // Primero el camino síncrono: execCommand exige el gesto del usuario todavía
-  // vigente, y cualquier await previo lo consume. Es además el formato que
-  // Gmail de Android reconoce al pegar.
-  if (copyRichEmailSync(html)) return true;
+  const legacyCopied = copyRichEmailSync(html);
   try {
     const ClipboardItemCtor = (window as unknown as { ClipboardItem?: typeof ClipboardItem }).ClipboardItem;
     if (navigator.clipboard && ClipboardItemCtor) {
@@ -1849,9 +1851,9 @@ const copyRichEmail = async (html: string, plain: string) => {
       return true;
     }
   } catch {
-    return false;
+    // Queda lo copiado por execCommand.
   }
-  return false;
+  return legacyCopied;
 };
 
 const openMailCompose = ({ to, subject, body }: { to: string; subject: string; body?: string }) => {
@@ -2073,6 +2075,9 @@ function OrientationFeedbackModal({
     .every((value) => value === "si" || value === "no");
   const [emailState, setEmailState] = useState<"idle" | "error">("idle");
   const [emailHint, setEmailHint] = useState("");
+  // Vista previa del correo renderizada: respaldo cuando el portapapeles del
+  // celular no conserva el formato (se copia a mano desde aquí).
+  const [previewHtml, setPreviewHtml] = useState("");
   const openFeedbackInGmail = async () => {
     if (!feedbackComplete) {
       setEmailState("error");
@@ -2275,6 +2280,15 @@ function OrientationFeedbackModal({
           </section>
         </div>
 
+        {previewHtml ? (
+          <div className="shrink-0 border-t border-slate-200 bg-white">
+            <div className="flex items-center justify-between gap-2 px-4 py-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Vista previa · mantén presionado, selecciona todo y copia</p>
+              <button onClick={() => setPreviewHtml("")} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-bold text-slate-600 hover:bg-slate-50">Cerrar</button>
+            </div>
+            <div className="max-h-64 overflow-auto border-t border-slate-100 px-3 py-3" dangerouslySetInnerHTML={{ __html: previewHtml }} />
+          </div>
+        ) : null}
         {emailHint ? (
           <div className={`shrink-0 border-t px-4 py-2.5 text-xs font-semibold ${emailState === "error" ? "border-rose-100 bg-rose-50 text-rose-700" : "border-blue-100 bg-blue-50 text-blue-800"}`}>
             {emailHint}
@@ -2284,6 +2298,13 @@ function OrientationFeedbackModal({
           <div className="contents sm:flex sm:gap-2">
             <button onClick={copySummary} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
               <Copy className="h-4 w-4" /> {copied ? "¡Copiado!" : "Copiar texto"}
+            </button>
+            <button
+              onClick={() => setPreviewHtml(previewHtml ? "" : classFeedbackEmailHtml(record, emailFeedbackData))}
+              title="Muestra el correo tal como se verá, para copiarlo a mano si el celular no conserva el formato"
+              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50"
+            >
+              <FileText className="h-4 w-4" /> {previewHtml ? "Ocultar diseño" : "Ver diseño"}
             </button>
           </div>
           <div className="contents sm:flex sm:gap-2">
