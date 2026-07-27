@@ -12800,6 +12800,7 @@ function MeetingsAndInterviewsView({
         else groups[3].records.push(recItem);
       });
 
+      groups.forEach((g) => g.records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
       return groups.filter((g) => g.records.length > 0 || (gpFilter !== "todas" && gpFilter === g.id));
     }
 
@@ -12819,14 +12820,17 @@ function MeetingsAndInterviewsView({
 
       return Array.from(map.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "es"))
-        .map(([courseName, records]) => ({
-          id: `course-${normalize(courseName)}`,
-          title: `Curso / Ciclo: ${courseName}`,
-          icon,
-          color,
-          badgeBg,
-          records,
-        }));
+        .map(([courseName, records]) => {
+          records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+          return {
+            id: `course-${normalize(courseName)}`,
+            title: `Curso / Ciclo: ${courseName}`,
+            icon,
+            color,
+            badgeBg,
+            records,
+          };
+        });
     }
 
     if (activeTab === "correos") {
@@ -12840,14 +12844,17 @@ function MeetingsAndInterviewsView({
 
       return Array.from(map.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "es"))
-        .map(([catName, records]) => ({
-          id: `email-cat-${normalize(catName)}`,
-          title: catName,
-          icon: Mail,
-          color: "bg-amber-600 text-white",
-          badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
-          records,
-        }));
+        .map(([catName, records]) => {
+          records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+          return {
+            id: `email-cat-${normalize(catName)}`,
+            title: catName,
+            icon: Mail,
+            color: "bg-amber-600 text-white",
+            badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
+            records,
+          };
+        });
     }
 
     // "todas" tab -> Master section breakdown
@@ -12865,6 +12872,8 @@ function MeetingsAndInterviewsView({
       else if (isParentInterview(rec)) masterGroups[2].records.push(recItem);
       else masterGroups[1].records.push(recItem);
     });
+
+    masterGroups.forEach((g) => g.records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
 
     return masterGroups.filter((g) => g.records.length > 0);
   }, [filteredRecords, activeTab, gpFilter]);
@@ -13220,9 +13229,9 @@ function MeetingsAndInterviewsView({
                   </div>
                 </button>
 
-                {/* Category Card Grid */}
+                {/* Category Wide Bitácora Rows Container */}
                 {!isCollapsed && (
-                  <div className="p-4 grid gap-4 md:grid-cols-2">
+                  <div className="p-4 flex flex-col gap-3.5 w-full">
                     {group.records.map((recItem) => {
                       const rec = recItem as Record<string, any> & { _entity: "meetings" | "interviews"; id: string };
                       const isGp = isGpMeeting(rec);
@@ -13235,12 +13244,12 @@ function MeetingsAndInterviewsView({
                       return (
                         <div
                           key={`${rec._entity}-${rec.id}`}
-                          className="group relative flex flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-4.5 shadow-xs hover:border-slate-300 hover:shadow-md transition"
+                          className="group relative flex flex-col justify-between w-full rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs hover:border-indigo-300 hover:shadow-md transition space-y-3"
                         >
-                          <div>
-                            {/* Badges Bar */}
-                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-                              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-bold ${
+                          {/* Top Bar: Badges, Date, Actions */}
+                          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold ${
                                 isEmail
                                   ? "bg-amber-100 text-amber-800"
                                   : isGp
@@ -13250,40 +13259,55 @@ function MeetingsAndInterviewsView({
                                 {rec.meetingType || rec.category || (isGp ? "Reunión GP" : "Entrevista")}
                               </span>
 
-                              <span className="text-[11px] font-semibold text-slate-400">
-                                {rec.date ? new Date(rec.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" }) : "Sin fecha"}
-                              </span>
+                              {rec.date && (
+                                <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                                  📅 {new Date(rec.date).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" })}
+                                </span>
+                              )}
                             </div>
 
-                            {/* Title */}
-                            <h3 className="text-sm font-bold text-slate-900 group-hover:text-indigo-600 transition line-clamp-2">
-                              {rec.title || rec.reason || "Registro sin título"}
-                            </h3>
+                            <div className="flex items-center gap-2">
+                              {rec.fileLink && (
+                                <a
+                                  href={rec.fileLink}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2.5 py-1 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition ring-1 ring-indigo-200/60"
+                                >
+                                  <ExternalLink className="h-3.5 w-3.5" /> Ver Drive
+                                </a>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleEditRecord(rec)}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                                title="Editar registro"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setDeleteCandidateItem({ entity: rec._entity, id: rec.id, title: rec.title || rec.reason || "Este registro" })}
+                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
+                                title="Eliminar registro"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
 
-                            {/* Tagged Student Pill */}
-                            {(rec.student || rec.relatedStudents) && (
-                              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                                <span className="text-[11px] font-semibold text-slate-400">Estudiante:</span>
-                                {studentMatch ? (
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenStudent(studentMatch.id)}
-                                    className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 transition"
-                                  >
-                                    <UserRound className="h-3 w-3" />
-                                    {studentMatch.fullName} ({studentMatch.course || "Sin curso"})
-                                  </button>
-                                ) : (
-                                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
-                                    <UserRound className="h-3 w-3 text-slate-400" />
-                                    {rec.student || rec.relatedStudents}
-                                  </span>
-                                )}
-                              </div>
-                            )}
+                          {/* Main Content Body */}
+                          <div>
+                            {/* Title & ID */}
+                            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                              <h3 className="text-base font-bold text-slate-900 group-hover:text-indigo-600 transition">
+                                {rec.title || rec.reason || "Registro sin título"}
+                              </h3>
+                              <span className="text-[11px] text-slate-400 font-mono">ID: {rec.id.slice(0, 8)}</span>
+                            </div>
 
-                            {/* Leader / Interviewer / Participant */}
-                            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500 font-medium">
+                            {/* Metadata & Tagged Student */}
+                            <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 font-medium">
                               {rec.leader || rec.interviewer ? (
                                 <span><strong>Responsable:</strong> {rec.leader || rec.interviewer}</span>
                               ) : null}
@@ -13293,69 +13317,53 @@ function MeetingsAndInterviewsView({
                               {rec.cycle || rec.course ? (
                                 <span><strong>Curso/Ciclo:</strong> {rec.cycle || rec.course}</span>
                               ) : null}
+
+                              {(rec.student || rec.relatedStudents) && (
+                                <div className="inline-flex items-center gap-1.5">
+                                  <span className="font-semibold text-slate-400">Estudiante:</span>
+                                  {studentMatch ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenStudent(studentMatch.id)}
+                                      className="inline-flex items-center gap-1 rounded-full bg-indigo-50 hover:bg-indigo-100 px-2.5 py-0.5 text-xs font-bold text-indigo-700 ring-1 ring-indigo-200 transition"
+                                    >
+                                      <UserRound className="h-3 w-3" />
+                                      {studentMatch.fullName} ({studentMatch.course || "Sin curso"})
+                                    </button>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                                      <UserRound className="h-3 w-3 text-slate-400" />
+                                      {rec.student || rec.relatedStudents}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                             </div>
 
-                            {/* Main Topics / Content */}
+                            {/* Topics / Content Text Box */}
                             {(rec.topics || rec.detail) && (
-                              <div className="mt-2.5 text-xs leading-relaxed text-slate-700 bg-slate-50/80 rounded-xl p-2.5 border border-slate-100 line-clamp-3">
+                              <div className="mt-3 text-xs leading-relaxed text-slate-800 bg-slate-50/80 rounded-xl p-3.5 border border-slate-200/80 whitespace-pre-wrap">
                                 {rec.topics || rec.detail}
                               </div>
                             )}
 
-                            {/* Agreements & Commitments */}
+                            {/* Agreements & Commitments Boxes */}
                             {(rec.agreements || rec.commitments) && (
-                              <div className="mt-2.5 space-y-1.5">
+                              <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
                                 {rec.agreements ? (
-                                  <div className="text-[11px] text-emerald-800 bg-emerald-50/70 rounded-lg p-2 border border-emerald-100">
-                                    <strong className="block font-bold text-emerald-900">Acuerdos:</strong>
-                                    <p className="mt-0.5 leading-normal">{rec.agreements}</p>
+                                  <div className="text-xs text-emerald-900 bg-emerald-50/80 rounded-xl p-3 border border-emerald-200/80">
+                                    <strong className="block font-bold text-emerald-950 mb-0.5">Acuerdos:</strong>
+                                    <p className="leading-relaxed whitespace-pre-wrap">{rec.agreements}</p>
                                   </div>
                                 ) : null}
                                 {rec.commitments ? (
-                                  <div className="text-[11px] text-blue-800 bg-blue-50/70 rounded-lg p-2 border border-blue-100">
-                                    <strong className="block font-bold text-blue-900">Compromisos:</strong>
-                                    <p className="mt-0.5 leading-normal">{rec.commitments}</p>
+                                  <div className="text-xs text-blue-900 bg-blue-50/80 rounded-xl p-3 border border-blue-200/80">
+                                    <strong className="block font-bold text-blue-950 mb-0.5">Compromisos:</strong>
+                                    <p className="leading-relaxed whitespace-pre-wrap">{rec.commitments}</p>
                                   </div>
                                 ) : null}
                               </div>
                             )}
-                          </div>
-
-                          {/* Footer Toolbar */}
-                          <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2.5">
-                            <div>
-                              {rec.fileLink ? (
-                                <a
-                                  href={rec.fileLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline"
-                                >
-                                  <ExternalLink className="h-3 w-3" /> Ver Drive
-                                </a>
-                              ) : (
-                                <span className="text-[10px] text-slate-400 font-mono">ID: {rec.id.slice(0, 8)}</span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => handleEditRecord(rec)}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
-                                title="Editar registro"
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteCandidateItem({ entity: rec._entity, id: rec.id, title: rec.title || rec.reason || "Este registro" })}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 transition"
-                                title="Eliminar registro"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
                           </div>
                         </div>
                       );
