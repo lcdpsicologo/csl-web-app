@@ -361,7 +361,7 @@ const normalize = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-const getCleanRecordTitle = (rec: Record<string, any>): string => {
+const getCleanRecordTitle = (rec: DataRecord): string => {
   const explicitTitle = (rec.title || "").trim();
   if (explicitTitle && explicitTitle.length < 90 && !explicitTitle.includes("\n")) {
     return explicitTitle;
@@ -12971,32 +12971,34 @@ function MeetingsAndInterviewsView({
   }, [store.students, store.courses]);
 
   // Combine meetings and interviews
-  const allRecords = useMemo(() => {
+  // Registro del centro unificado: conserva de qué entidad proviene.
+  type HubRecord = DataRecord & { _entity: "meetings" | "interviews" };
+  const allRecords = useMemo<HubRecord[]>(() => {
     const meetingsList = (store.meetings || []).map((r) => ({ ...r, _entity: "meetings" as const }));
     const interviewsList = (store.interviews || []).map((r) => ({ ...r, _entity: "interviews" as const }));
-    return [...meetingsList, ...interviewsList].sort((a: any, b: any) =>
+    return [...meetingsList, ...interviewsList].sort((a: DataRecord, b: DataRecord) =>
       String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))
     );
   }, [store.meetings, store.interviews]);
 
-  const isGpMeeting = (rec: Record<string, any>) => {
+  const isGpMeeting = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.category || "").toLowerCase();
     const title = String(rec.title || rec.reason || "").toLowerCase();
     return type.includes("gp") || type.includes("gestión") || title.includes("gp") || rec._entity === "meetings";
   };
 
-  const isStudentInterview = (rec: Record<string, any>) => {
+  const isStudentInterview = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.type || "").toLowerCase();
     return type.includes("estudiante") || (rec._entity === "interviews" && !type.includes("apoderado"));
   };
 
-  const isParentInterview = (rec: Record<string, any>) => {
+  const isParentInterview = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.type || "").toLowerCase();
     const participant = String(rec.participant || "").toLowerCase();
     return type.includes("apoderado") || type.includes("padre") || type.includes("tutor") || participant.includes("apoderad");
   };
 
-  const isEmailOrInfo = (rec: Record<string, any>) => {
+  const isEmailOrInfo = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.category || "").toLowerCase();
     const source = String(rec.source || "").toLowerCase();
     return type.includes("correo") || type.includes("información") || source.includes("email") || rec.category === "Correo";
@@ -13004,7 +13006,7 @@ function MeetingsAndInterviewsView({
 
   const filteredRecords = useMemo(() => {
     return allRecords.filter((recItem) => {
-      const rec = recItem as Record<string, any>;
+      const rec = recItem as DataRecord;
       // Course filter
       if (courseFilter !== "todos") {
         const recCourse = String(rec.course || rec.cycle || rec.title || rec.reason || "");
@@ -13201,8 +13203,8 @@ function MeetingsAndInterviewsView({
     });
   };
 
-  const handleEditRecord = (recItem: any) => {
-    const rec = recItem as Record<string, any>;
+  const handleEditRecord = (recItem: HubRecord) => {
+    const rec = recItem as DataRecord;
     setEditingItem({ entity: recItem._entity, id: recItem.id });
     if (recItem._entity === "meetings") {
       const studentObj = sortedStudents.find((s) => normalize(rec.relatedStudents || rec.student || "").includes(normalize(s.fullName || "")));
@@ -13245,14 +13247,14 @@ function MeetingsAndInterviewsView({
   const categorizedGroups = useMemo(() => {
     if (activeTab === "gp") {
       const groups = [
-        { id: "formativo", title: "GP Formativo", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as any[] },
-        { id: "interdisciplinario", title: "GP Interdisciplinario", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as any[] },
-        { id: "tecnico", title: "GP Técnico / Docente", icon: ClipboardList, color: "bg-blue-600 text-white", badgeBg: "bg-blue-50 text-blue-700 ring-1 ring-blue-200", records: [] as any[] },
-        { id: "otras", title: "Otras Reuniones GP", icon: NotebookPen, color: "bg-slate-800 text-white", badgeBg: "bg-slate-100 text-slate-700 ring-1 ring-slate-200", records: [] as any[] },
+        { id: "formativo", title: "GP Formativo", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as DataRecord[] },
+        { id: "interdisciplinario", title: "GP Interdisciplinario", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as DataRecord[] },
+        { id: "tecnico", title: "GP Técnico / Docente", icon: ClipboardList, color: "bg-blue-600 text-white", badgeBg: "bg-blue-50 text-blue-700 ring-1 ring-blue-200", records: [] as DataRecord[] },
+        { id: "otras", title: "Otras Reuniones GP", icon: NotebookPen, color: "bg-slate-800 text-white", badgeBg: "bg-slate-100 text-slate-700 ring-1 ring-slate-200", records: [] as DataRecord[] },
       ];
 
       filteredRecords.forEach((recItem) => {
-        const rec = recItem as Record<string, any>;
+        const rec = recItem as DataRecord;
         const mType = normalize(rec.meetingType || "");
         if (mType.includes("formativo")) groups[0].records.push(recItem);
         else if (mType.includes("interdisciplinario")) groups[1].records.push(recItem);
@@ -13260,14 +13262,14 @@ function MeetingsAndInterviewsView({
         else groups[3].records.push(recItem);
       });
 
-      groups.forEach((g) => g.records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
+      groups.forEach((g) => g.records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
       return groups.filter((g) => g.records.length > 0 || (gpFilter !== "todas" && gpFilter === g.id));
     }
 
     if (activeTab === "entrevistas_estudiantes" || activeTab === "entrevistas_apoderados") {
-      const map = new Map<string, any[]>();
+      const map = new Map<string, DataRecord[]>();
       filteredRecords.forEach((recItem) => {
-        const rec = recItem as Record<string, any>;
+        const rec = recItem as DataRecord;
         const courseKey = rec.course || rec.cycle || "Sin Curso Asignado";
         if (!map.has(courseKey)) map.set(courseKey, []);
         map.get(courseKey)!.push(recItem);
@@ -13281,7 +13283,7 @@ function MeetingsAndInterviewsView({
       return Array.from(map.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "es"))
         .map(([courseName, records]) => {
-          records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+          records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
           return {
             id: `course-${normalize(courseName)}`,
             title: `Curso / Ciclo: ${courseName}`,
@@ -13294,9 +13296,9 @@ function MeetingsAndInterviewsView({
     }
 
     if (activeTab === "correos") {
-      const map = new Map<string, any[]>();
+      const map = new Map<string, DataRecord[]>();
       filteredRecords.forEach((recItem) => {
-        const rec = recItem as Record<string, any>;
+        const rec = recItem as DataRecord;
         const catKey = rec.category || "Información General";
         if (!map.has(catKey)) map.set(catKey, []);
         map.get(catKey)!.push(recItem);
@@ -13305,7 +13307,7 @@ function MeetingsAndInterviewsView({
       return Array.from(map.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "es"))
         .map(([catName, records]) => {
-          records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+          records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
           return {
             id: `email-cat-${normalize(catName)}`,
             title: catName,
@@ -13319,21 +13321,21 @@ function MeetingsAndInterviewsView({
 
     // "todas" tab -> Master section breakdown
     const masterGroups = [
-      { id: "master-gp", title: "📌 Reuniones de Gestión Pedagógica (GP)", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as any[] },
-      { id: "master-students", title: "🎓 Entrevistas a Estudiantes", icon: GraduationCap, color: "bg-emerald-600 text-white", badgeBg: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", records: [] as any[] },
-      { id: "master-parents", title: "👨‍👩‍👧 Entrevistas a Apoderados", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as any[] },
-      { id: "master-emails", title: "📧 Información y Correos", icon: Mail, color: "bg-amber-600 text-white", badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200", records: [] as any[] },
+      { id: "master-gp", title: "📌 Reuniones de Gestión Pedagógica (GP)", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as DataRecord[] },
+      { id: "master-students", title: "🎓 Entrevistas a Estudiantes", icon: GraduationCap, color: "bg-emerald-600 text-white", badgeBg: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", records: [] as DataRecord[] },
+      { id: "master-parents", title: "👨‍👩‍👧 Entrevistas a Apoderados", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as DataRecord[] },
+      { id: "master-emails", title: "📧 Información y Correos", icon: Mail, color: "bg-amber-600 text-white", badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200", records: [] as DataRecord[] },
     ];
 
     filteredRecords.forEach((recItem) => {
-      const rec = recItem as Record<string, any>;
+      const rec = recItem as DataRecord;
       if (isEmailOrInfo(rec)) masterGroups[3].records.push(recItem);
       else if (isGpMeeting(rec)) masterGroups[0].records.push(recItem);
       else if (isParentInterview(rec)) masterGroups[2].records.push(recItem);
       else masterGroups[1].records.push(recItem);
     });
 
-    masterGroups.forEach((g) => g.records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
+    masterGroups.forEach((g) => g.records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
 
     return masterGroups.filter((g) => g.records.length > 0);
   }, [filteredRecords, activeTab, gpFilter]);
@@ -13509,7 +13511,7 @@ function MeetingsAndInterviewsView({
             type="button"
             onClick={() => {
               if (expandedRecordIds.length > 0) setExpandedRecordIds([]);
-              else setExpandedRecordIds(filteredRecords.map((r: any) => r.id));
+              else setExpandedRecordIds(filteredRecords.map((r: DataRecord) => r.id));
             }}
             className="tz-press rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
           >
@@ -13704,7 +13706,7 @@ function MeetingsAndInterviewsView({
                 {!isCollapsed && (
                   <div className="p-4 flex flex-col gap-3.5 w-full">
                     {group.records.map((recItem) => {
-                      const rec = recItem as Record<string, any> & { _entity: "meetings" | "interviews"; id: string };
+                      const rec = recItem as DataRecord & { _entity: "meetings" | "interviews"; id: string };
                       const isGp = isGpMeeting(rec);
                       const isEmail = isEmailOrInfo(rec);
 
@@ -13987,7 +13989,7 @@ function MeetingsAndInterviewsView({
             </div>
 
             <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
-              ¿Estás seguro de eliminar el registro <strong>"{deleteCandidateItem.title}"</strong>?
+              ¿Estás seguro de eliminar el registro <strong>&quot;{deleteCandidateItem.title}&quot;</strong>?
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-2">
