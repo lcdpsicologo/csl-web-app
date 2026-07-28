@@ -12437,7 +12437,6 @@ function PieImportConfirmationView({
 function DashboardAgenda({
   store,
   courseSchedule,
-  staffSchedule,
   calendarEvents,
   calendarLoading,
   calendarIcalUrl,
@@ -12456,7 +12455,6 @@ function DashboardAgenda({
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
 
-  // Combine calendar events + app entries (interviews, classes) into a unified timeline.
   type AgendaItem = {
     key: string;
     start: Date;
@@ -12544,9 +12542,6 @@ function DashboardAgenda({
   };
 
   const dateLong = today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
-  const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
-  const protocolsDue = store.protocols.filter((r) => r.dueDate && r.dueDate >= todayStr && r.dueDate <= in7 && r.status !== "Cerrado");
-  const criticalCases = store.cases.filter((r) => /abierto|seguimiento|activad/i.test(r.status || "") && /crítica|alta/i.test(r.priority || ""));
   const schoolDay = today.toLocaleDateString("es-CL", { weekday: "long" }).toLowerCase();
   const nowMinutes = today.getHours() * 60 + today.getMinutes();
   const toMinutes = (time: string) => {
@@ -12554,261 +12549,122 @@ function DashboardAgenda({
     return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
   };
 
-  const currentStaffSlots = staffSchedule
-    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
-    .sort((a, b) => a.staffName.localeCompare(b.staffName, "es"))
-    .map((slot) => {
-      const start = toMinutes(slot.startTime);
-      const end = toMinutes(slot.endTime);
-      const duration = Math.max(1, end - start);
-      const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
-      const progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
-      const remaining = Math.max(0, end - nowMinutes);
-      return { ...slot, progress, remaining };
-    });
+  // Calculate live state for the 14 courses of 1er Ciclo
+  const firstCycleLiveStates = officialCourses
+    .filter((c) => c.cycle === "I Ciclo")
+    .map((c) => {
+      const courseKey = schoolScheduleCourseKey(c.name);
+      const slots = courseSchedule.filter((slot) => schoolScheduleCourseKey(slot.course) === courseKey && slot.day === schoolDay);
+      const activeSlot = slots.find((slot) => toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime));
 
-  const currentCourseSlots = courseSchedule
-    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
-    .sort((a, b) => a.course.localeCompare(b.course, "es"))
-    .map((slot) => {
-      const start = toMinutes(slot.startTime);
-      const end = toMinutes(slot.endTime);
-      const duration = Math.max(1, end - start);
-      const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
-      const progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
-      const remaining = Math.max(0, end - nowMinutes);
-      return { ...slot, progress, remaining };
-    });
+      let activity = "Sin clase activa";
+      let progress = 0;
+      let remaining = 0;
+      let isLive = false;
 
-  // Calculate live state for ALL official courses
-  const allCourseLiveStates = officialCourses.map((c) => {
-    const courseKey = schoolScheduleCourseKey(c.name);
-    const slots = courseSchedule.filter((slot) => schoolScheduleCourseKey(slot.course) === courseKey && slot.day === schoolDay);
-    const activeSlot = slots.find((slot) => toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime));
-
-    let activity = "Sin clase activa";
-    let progress = 0;
-    let remaining = 0;
-    let isLive = false;
-
-    if (activeSlot) {
-      isLive = true;
-      activity = activeSlot.activity || "En clase";
-      const start = toMinutes(activeSlot.startTime);
-      const end = toMinutes(activeSlot.endTime);
-      const duration = Math.max(1, end - start);
-      const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
-      progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
-      remaining = Math.max(0, end - nowMinutes);
-    } else if (slots.length > 0) {
-      const nextSlot = slots.find((slot) => toMinutes(slot.startTime) > nowMinutes);
-      if (nextSlot) {
-        activity = `Próxima: ${nextSlot.activity} (${nextSlot.startTime})`;
-      } else {
-        activity = "Clases finalizadas por hoy";
+      if (activeSlot) {
+        isLive = true;
+        activity = activeSlot.activity || "En clase";
+        const start = toMinutes(activeSlot.startTime);
+        const end = toMinutes(activeSlot.endTime);
+        const duration = Math.max(1, end - start);
+        const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
+        progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
+        remaining = Math.max(0, end - nowMinutes);
+      } else if (slots.length > 0) {
+        const nextSlot = slots.find((slot) => toMinutes(slot.startTime) > nowMinutes);
+        if (nextSlot) {
+          activity = `Próxima: ${nextSlot.activity} (${nextSlot.startTime})`;
+        } else {
+          activity = "Clases finalizadas por hoy";
+        }
       }
-    }
 
-    return {
-      courseName: c.name,
-      cycle: c.cycle,
-      activity,
-      isLive,
-      progress,
-      remaining,
-    };
-  });
-
-  const miniStats: Array<[string, number, LucideIcon, ViewId, string]> = [
-    ["Agenda de hoy", items.length, CalendarDays, "today", "bg-blue-50 text-blue-700 border-blue-200"],
-    ["Protocolos activos", protocolsDue.length, ShieldCheck, "protocols", "bg-amber-50 text-amber-700 border-amber-200"],
-    ["Casos de seguimiento", criticalCases.length, AlertTriangle, "cases", "bg-rose-50 text-rose-700 border-rose-200"],
-    ["Docentes activos", currentStaffSlots.length, MapPin, "today", "bg-emerald-50 text-emerald-700 border-emerald-200"],
-  ];
+      return {
+        courseName: c.name,
+        activity,
+        isLive,
+        progress,
+        remaining,
+      };
+    });
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
-        <div className="flex items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-900 text-white shadow-xs">
-            <CalendarDays className="h-4 w-4" />
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs space-y-6 p-5">
+      {/* Encabezado Principal de Cada Curso Ahora */}
+      <div>
+        <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white shadow-xs">
+              <BookOpen className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-950">Cada curso ahora · 1er Ciclo</h2>
+              <p className="text-xs text-slate-500 capitalize">{dateLong} · Estado en vivo de los 14 cursos</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-bold text-slate-950">Mi día · resumen operativo</h2>
-            <p className="text-[11px] capitalize text-slate-500">{dateLong}</p>
-          </div>
-          {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
+          <button
+            onClick={() => onNavigate("courses")}
+            className="tz-press inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Ver todos los cursos
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{items.length} {items.length === 1 ? "actividad" : "actividades"}</span>
-          {calendarIcalUrl ? (
-            <button onClick={onReloadCalendar} className="tz-press rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Recargar</button>
-          ) : null}
-        </div>
-      </header>
 
-      <div className="space-y-4 p-4">
-        {/* Subtles minimal info indicators */}
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {miniStats.map(([label, value, Icon, view, tone]) => (
-            <button key={label} onClick={() => onNavigate(view)} className={`tz-press flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left border ${tone} transition hover:bg-opacity-80`}>
-              <span className="flex min-w-0 items-center gap-2">
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate text-xs font-semibold">{label}</span>
-              </span>
-              <span className="text-base font-bold tabular-nums">{value}</span>
-            </button>
+        {/* Grilla sobria de los 14 cursos de Primer Ciclo */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {firstCycleLiveStates.map((state) => (
+            <div
+              key={state.courseName}
+              className="group relative flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/40 p-3 transition hover:bg-white hover:border-slate-300 hover:shadow-xs"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-slate-950 text-xs truncate">{state.courseName}</span>
+                  {state.isLive ? (
+                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 tabular-nums">
+                      🟢 {state.progress}% ({state.remaining}m)
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                      Pausa / Sin clase
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs font-medium text-slate-700 truncate">{state.activity}</p>
+              </div>
+
+              {state.isLive ? (
+                <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-500"
+                    style={{ width: `${state.progress}%` }}
+                  />
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
+      </div>
 
-        <div className="grid gap-4 xl:grid-cols-3">
-          {/* Horario personal en vivo */}
-          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/20 p-3.5 shadow-xs">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-800">
-                <MapPin className="h-4 w-4 text-emerald-600" /> Horario personal en vivo
-              </p>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{currentStaffSlots.length} activos</span>
-            </div>
-            {currentStaffSlots.length === 0 ? (
-              <p className="rounded-lg bg-white p-3 text-xs text-slate-500 border border-slate-200/60">Sin bloques docentes activos en este momento.</p>
-            ) : (
-              <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-2 overflow-y-auto pr-1">
-                {currentStaffSlots.map((slot, index) => (
-                  <li key={`${slot.staffName}-${slot.startTime}-${index}`} className="rounded-xl border border-emerald-200/60 bg-white p-2.5 text-xs shadow-2xs">
-                    <div className="flex items-center justify-between gap-2">
-                      <strong className="truncate text-slate-900 font-bold">{slot.staffName}</strong>
-                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 tabular-nums">
-                        {slot.progress}% ({slot.remaining} min)
-                      </span>
-                    </div>
-                    <p className="mt-0.5 truncate text-slate-600">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</p>
-                    {/* Live progress bar */}
-                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 transition-all duration-500" style={{ width: `${slot.progress}%` }} />
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {/* Cada curso ahora (con porcentaje transcurrido en vivo) */}
-          <div className="rounded-xl border border-blue-200/80 bg-blue-50/20 p-3.5 shadow-xs">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-800">
-                <BookOpen className="h-4 w-4 text-blue-600" /> Cada curso ahora
-              </p>
-              <button onClick={() => onNavigate("courses")} className="text-[10px] font-bold text-blue-700 hover:underline">
-                Ver todos ({allCourseLiveStates.length})
-              </button>
-            </div>
-            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-2 overflow-y-auto pr-1">
-              {allCourseLiveStates.map((state) => (
-                <li key={state.courseName} className="rounded-xl border border-blue-200/60 bg-white p-2.5 text-xs shadow-2xs hover:bg-blue-50/30 transition">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-slate-900 truncate">{state.courseName}</span>
-                    {state.isLive ? (
-                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 tabular-nums">
-                        🟢 {state.progress}% transcurrido ({state.remaining} min)
-                      </span>
-                    ) : (
-                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
-                        Pausa / Recreo
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 truncate text-slate-600 font-medium">{state.activity}</p>
-                  {state.isLive ? (
-                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                      <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500" style={{ width: `${state.progress}%` }} />
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Tareas Por Hacer y Pendientes */}
-          <div className="rounded-xl border border-amber-200/80 bg-amber-50/20 p-3.5 shadow-xs">
-            <div className="mb-2.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-900">
-                <ClipboardList className="h-4 w-4 text-amber-600" /> Tareas "Por Hacer" y Pendientes
-              </p>
-              <button onClick={() => onNavigate("interviews")} className="text-[10px] font-bold text-amber-800 hover:underline">
-                Ver todos
-              </button>
-            </div>
-
-            {(() => {
-              const pendingInterviews = store.interviews.filter((r) => !/realizad|cerrad/i.test(r.status || ""));
-              const totalPending = pendingInterviews.length + criticalCases.length;
-
-              if (totalPending === 0) {
-                return (
-                  <div className="rounded-xl bg-white p-4 text-center border border-slate-200/60">
-                    <Check className="mx-auto h-5 w-5 text-emerald-500" />
-                    <p className="mt-1 text-xs font-semibold text-slate-700">¡Al día! No hay entrevistas ni tareas pendientes.</p>
-                  </div>
-                );
-              }
-
-              return (
-                <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-2 overflow-y-auto pr-1">
-                  {pendingInterviews.slice(0, 4).map((r) => (
-                    <li key={r.id} className="rounded-xl border border-amber-200/80 bg-white p-2.5 text-xs shadow-2xs hover:border-amber-400 transition">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800">
-                          📌 Entrevista Por Hacer
-                        </span>
-                        <span className="text-[10px] font-semibold text-slate-400">{r.date || "Hoy"}</span>
-                      </div>
-                      <strong className="mt-1 block truncate text-slate-900 font-bold">{r.reason || r.title || "Entrevista agendada"}</strong>
-                      <p className="truncate text-slate-500 text-[11px]">{r.participant || r.student || "Estudiante"} {r.course ? `(${r.course})` : ""}</p>
-                    </li>
-                  ))}
-                  {criticalCases.slice(0, 2).map((c) => (
-                    <li key={c.id} className="rounded-xl border border-rose-200/80 bg-white p-2.5 text-xs shadow-2xs hover:border-rose-400 transition">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-bold text-rose-800">
-                          ⚠ Caso Abierto
-                        </span>
-                        <span className="text-[10px] font-bold text-rose-700">{c.priority || "Alta"}</span>
-                      </div>
-                      <strong className="mt-1 block truncate text-slate-900 font-bold">{c.title}</strong>
-                      <p className="truncate text-slate-500 text-[11px]">{c.student || "Estudiante"} {c.course ? `(${c.course})` : ""}</p>
-                    </li>
-                  ))}
-                </ul>
-              );
-            })()}
-          </div>
+      {/* Sección Secundaria: Agenda de Hoy */}
+      <div className="pt-2 border-t border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-slate-600" /> Agenda de hoy
+          </h3>
+          {calendarIcalUrl ? (
+            <button onClick={onReloadCalendar} className="tz-press text-xs font-bold text-blue-700 hover:underline">
+              Recargar calendario
+            </button>
+          ) : null}
         </div>
 
-        {!calendarIcalUrl && items.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/40 p-3 text-center">
-            <CalendarDays className="mx-auto h-5 w-5 text-blue-600" />
-            <p className="mt-1 text-sm font-semibold text-slate-900">Conecta tu Google Calendar</p>
-            <p className="mt-1 text-xs text-slate-600">Verás tus clases, reuniones, entrevistas y compromisos del día integrados aquí.</p>
-            <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
-              Conectar ahora
-            </button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="rounded-lg bg-slate-50 p-3 text-center">
-            <p className="text-sm font-semibold text-slate-700">Sin actividades para hoy</p>
-            <p className="mt-1 text-xs text-slate-500">Disfruta un día despejado, o revisa lo pendiente en Hoy.</p>
-            <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-              Ver resumen del día
-            </button>
-          </div>
+        {items.length === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-500">No hay actividades programadas para hoy.</p>
         ) : (
-          <div className="rounded-lg border border-slate-200 bg-white">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Agenda de hoy</p>
-              <button onClick={() => onNavigate("today")} className="text-[11px] font-bold text-blue-700 hover:underline">Abrir detalle</button>
-            </div>
-            <ul className="tz-thin-scroll max-h-64 divide-y divide-slate-100 overflow-y-auto">
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <ul className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
               {agendaRows.map((item) => {
                 const Icon = item.icon;
                 const isPast = !item.allDay && (item.end ? item.end.getTime() : item.start.getTime()) < nowMs;
@@ -12817,29 +12673,22 @@ function DashboardAgenda({
                   <li key={item.key}>
                     <button
                       onClick={() => item.href ? onNavigate(item.href) : onNavigate("today")}
-                      className={`grid w-full grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left transition hover:bg-blue-50/50 ${isPast && !isNext ? "opacity-60" : ""}`}
+                      className={`grid w-full grid-cols-[80px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 text-left transition hover:bg-slate-50 ${isPast && !isNext ? "opacity-60" : ""}`}
                     >
-                      <span className={`rounded-md px-2 py-1 text-center text-[11px] font-black tabular-nums ${isNext ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                      <span className={`rounded-md px-2 py-1 text-center text-[11px] font-bold tabular-nums ${isNext ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>
                         {agendaTimeLabel(item)}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold text-slate-950">{item.title}</span>
-                        <span className="block truncate text-xs text-slate-500">{item.typeLabel}{item.location ? ` · ${item.location}` : ""}</span>
+                        <span className="block truncate text-xs font-bold text-slate-950">{item.title}</span>
+                        <span className="block truncate text-[11px] text-slate-500">{item.typeLabel}{item.location ? ` · ${item.location}` : ""}</span>
                       </span>
-                      <span className={`grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br ${item.color} text-white`}>
+                      <span className={`grid h-6 w-6 place-items-center rounded-md bg-gradient-to-br ${item.color} text-white`}>
                         <Icon className="h-3.5 w-3.5" />
                       </span>
                     </button>
                   </li>
                 );
               })}
-              {items.length > agendaRows.length ? (
-                <li>
-                  <button onClick={() => onNavigate("today")} className="w-full px-3 py-2 text-center text-xs font-bold text-blue-700 hover:bg-blue-50">
-                    Ver {items.length - agendaRows.length} actividades más
-                  </button>
-                </li>
-              ) : null}
             </ul>
           </div>
         )}
@@ -12857,107 +12706,40 @@ function OperationsPanel({
   onNavigate: (view: ViewId) => void;
   onQuickAdd: (entity: EntityId) => void;
 }) {
-  const currentDate = new Date();
-  const today = currentDate.toISOString().slice(0, 10);
-  const weekEndDate = new Date(currentDate);
-  weekEndDate.setDate(weekEndDate.getDate() + 7);
-  const weekEnd = weekEndDate.toISOString().slice(0, 10);
-  const todayClasses = store.orientation.filter((record) => (record.date || "").slice(0, 10) === today);
-  const upcomingClasses = store.orientation
-    .filter((record) => record.date && record.date >= today && record.date <= weekEnd)
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .slice(0, 5);
-  const workshopsWeek = store.workshops
-    .filter((record) => record.date && record.date >= today && record.date <= weekEnd)
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .slice(0, 5);
-  const unplannedClasses = store.orientation
-    .filter((record) => record.date && record.date >= today && record.date <= weekEnd && !(record.planificacion || record.objective || "").trim())
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .slice(0, 5);
-  const openCases = store.cases.filter((record) => !/cerrad/i.test(record.status || ""));
-  const pendingInterviews = store.interviews
-    .filter((record) => !/realizada|cerrada/i.test(record.status || "") && (!record.date || record.date >= today))
-    .sort((a, b) => String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt)))
-    .slice(0, 5);
+  const openCasesCount = store.cases.filter((record) => !/cerrad/i.test(record.status || "")).length;
+  const upcomingInterviewsCount = store.interviews.filter((record) => !/realizada|cerrada/i.test(record.status || "")).length;
+  const activeProtocolsCount = store.protocols.filter((record) => record.status !== "Cerrado").length;
+  const totalLogsCount = store.logs.length;
 
-  const quickActions: Array<{ label: string; detail: string; icon: LucideIcon; action: () => void; tone: string }> = [
-    { label: "Registrar clase", detail: "Orientacion semanal", icon: ClipboardList, action: () => onNavigate("orientation"), tone: "bg-blue-600" },
-    { label: "Nuevo taller", detail: "Planificar y pasar lista", icon: GraduationCap, action: () => onNavigate("workshops"), tone: "bg-emerald-600" },
-    { label: "Bitacora", detail: "Seguimiento breve", icon: FileText, action: () => onQuickAdd("logs"), tone: "bg-violet-600" },
-    { label: "Entrevista", detail: "Acta y acuerdos", icon: MessageSquareText, action: () => onQuickAdd("interviews"), tone: "bg-sky-600" },
-    { label: "Caso", detail: "Abrir seguimiento", icon: AlertTriangle, action: () => onQuickAdd("cases"), tone: "bg-amber-600" },
-    { label: "Importar", detail: "Planillas y datos", icon: FileSpreadsheet, action: () => onNavigate("import"), tone: "bg-slate-900" },
-  ];
-
-  const workLists: Array<{ title: string; count: number; view: ViewId; empty: string; records: DataRecord[]; icon: LucideIcon }> = [
-    { title: "Clases proximas", count: upcomingClasses.length, view: "orientation", empty: "No hay clases registradas para los proximos 7 dias.", records: upcomingClasses, icon: ClipboardList },
-    { title: "Talleres proximos", count: workshopsWeek.length, view: "workshops", empty: "No hay talleres programados para esta semana.", records: workshopsWeek, icon: GraduationCap },
-    { title: "Falta planificacion", count: unplannedClasses.length, view: "orientation", empty: "Las clases de la semana tienen planificacion.", records: unplannedClasses, icon: Bell },
-    { title: "Entrevistas pendientes", count: pendingInterviews.length, view: "interviews", empty: "No hay entrevistas pendientes visibles.", records: pendingInterviews, icon: MessageSquareText },
+  const globalMetrics = [
+    { label: "Casos Abiertos", count: openCasesCount, detail: "En seguimiento activo", view: "cases" as ViewId },
+    { label: "Entrevistas Próximas", count: upcomingInterviewsCount, detail: "Agendadas o pendientes", view: "interviews" as ViewId },
+    { label: "Protocolos Activos", count: activeProtocolsCount, detail: "En proceso o revisión", view: "protocols" as ViewId },
+    { label: "Bitácoras Totales", count: totalLogsCount, detail: "Registros históricos", view: "logs" as ViewId },
   ];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Centro operativo</p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950">Registrar, revisar y cerrar la semana</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Accesos directos para el trabajo real: clases de orientacion, talleres, bitacoras, entrevistas y casos.
-          </p>
+    <section className="space-y-4">
+      {/* Barra Horizontal Minimalista de Datos */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="mb-3 px-1">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Métricas y Estado General del Establecimiento</h3>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-          <div className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700 ring-1 ring-blue-100"><strong className="block text-lg">{todayClasses.length}</strong> hoy</div>
-          <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700 ring-1 ring-amber-100"><strong className="block text-lg">{openCases.length}</strong> casos</div>
-          <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700 ring-1 ring-rose-100"><strong className="block text-lg">{unplannedClasses.length}</strong> sin plan</div>
-        </div>
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        {quickActions.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button key={item.label} onClick={item.action} className="group rounded-xl border border-slate-200/80 bg-slate-50/40 p-2.5 text-left transition hover:bg-white hover:border-slate-300 hover:shadow-xs flex items-center gap-3">
-              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white transition">
-                <Icon className="h-4 w-4" />
+        <div className="grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 lg:grid-cols-4">
+          {globalMetrics.map((metric) => (
+            <button
+              key={metric.label}
+              onClick={() => onNavigate(metric.view)}
+              className="flex items-center justify-between gap-3 p-3 text-left transition hover:bg-slate-50/80 rounded-xl"
+            >
+              <div>
+                <span className="block text-xs font-semibold text-slate-700">{metric.label}</span>
+                <span className="block text-[11px] text-slate-500">{metric.detail}</span>
               </div>
-              <div className="min-w-0">
-                <strong className="block text-xs font-bold text-slate-900 truncate">{item.label}</strong>
-                <span className="block text-[10px] text-slate-500 truncate">{item.detail}</span>
-              </div>
+              <span className="text-2xl font-bold text-slate-950 tabular-nums">{metric.count}</span>
             </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 grid gap-3 xl:grid-cols-4">
-        {workLists.map((list) => {
-          const Icon = list.icon;
-          return (
-            <article key={list.title} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="truncate">{list.title}</span>
-                </h3>
-                <button onClick={() => onNavigate(list.view)} className="text-[11px] font-bold text-blue-700 hover:underline">{list.count}</button>
-              </div>
-              {list.records.length === 0 ? (
-                <p className="rounded-lg bg-white p-2 text-xs text-slate-500 ring-1 ring-slate-100">{list.empty}</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {list.records.map((record) => (
-                    <li key={record.id} className="rounded-lg bg-white px-2.5 py-2 text-xs ring-1 ring-slate-100">
-                      <strong className="block truncate text-slate-900">{record.topic || record.title || record.reason || "Registro"}</strong>
-                      <span className="mt-0.5 block truncate text-slate-500">{record.date || record.dueDate || "Sin fecha"}{record.course ? ` - ${record.course}` : ""}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -13032,40 +12814,16 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
               <button onClick={() => onNavigate("today")} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow-md">
                 <CalendarDays className="h-4 w-4" /> Ver mi día
               </button>
-              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm hover:bg-cyan-50">
+              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-xs hover:bg-cyan-50">
                 <TizaIaIcon className="h-4 w-4" /> Tiza-IA
               </button>
-              <button onClick={() => onNavigate("games")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50">
+              <button onClick={() => onNavigate("games")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-xs hover:bg-emerald-50">
                 <Gamepad2 className="h-4 w-4" /> Juegos Vinculares
               </button>
-              <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+              <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-50">
                 <UserRound className="h-4 w-4" /> Estudiantes
               </button>
             </div>
-          </div>
-
-          <div className="grid w-full grid-cols-2 gap-3 sm:max-w-md lg:w-auto lg:grid-cols-1 lg:gap-2">
-            {([
-              ["Casos abiertos", store.cases.filter((c) => !/cerrad/i.test(c.status || "")).length, "from-amber-500 to-orange-500", "cases" as ViewId, FileText],
-              ["Entrevistas próximas", store.interviews.filter((r) => r.date && r.date >= now.toISOString().slice(0, 10)).length, "from-sky-500 to-blue-600", "interviews" as ViewId, MessageSquareText],
-              ["Protocolos activos", store.protocols.filter((r) => !/cerrad/i.test(r.status || "")).length, "from-rose-500 to-pink-600", "protocols" as ViewId, ShieldCheck],
-              ["Bitácoras totales", store.logs.length, "from-violet-500 to-purple-600", "logs" as ViewId, ClipboardList],
-            ] as Array<[string, number, string, ViewId, LucideIcon]>).map(([label, value, tone, view, Icon]) => (
-              <button
-                key={label}
-                onClick={() => onNavigate(view)}
-                className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-left shadow-sm backdrop-blur transition hover:border-slate-300 hover:shadow-md lg:w-56"
-              >
-                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${tone} text-white shadow-sm`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-                  <p className="text-xl font-semibold tabular-nums text-slate-950">{value.toLocaleString("es-CL")}</p>
-                </div>
-                <ChevronDown className="-rotate-90 h-4 w-4 text-slate-300 transition group-hover:text-slate-500" />
-              </button>
-            ))}
           </div>
         </div>
       </section>
@@ -13080,6 +12838,33 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
         onReloadCalendar={onReloadCalendar}
         onNavigate={onNavigate}
       />
+
+      {/* Barra Horizontal Minimalista de Datos (Casos Abiertos, Entrevistas Próximas, Protocolos Activos, Bitácoras Totales) */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="mb-3 px-1 border-b border-slate-100 pb-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Métricas y Trazabilidad del Establecimiento</h3>
+        </div>
+        <div className="grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 lg:grid-cols-4">
+          {[
+            { label: "Casos abiertos", value: store.cases.filter((c) => !/cerrad/i.test(c.status || "")).length, detail: "En seguimiento activo", view: "cases" as ViewId },
+            { label: "Entrevistas próximas", value: store.interviews.filter((r) => !/realizada|cerrada/i.test(r.status || "")).length, detail: "Agendadas o pendientes", view: "interviews" as ViewId },
+            { label: "Protocolos activos", value: store.protocols.filter((r) => !/cerrad/i.test(r.status || "")).length, detail: "En proceso de revisión", view: "protocols" as ViewId },
+            { label: "Bitácoras totales", value: store.logs.length, detail: "Registros almacenados", view: "logs" as ViewId },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={() => onNavigate(item.view)}
+              className="flex items-center justify-between gap-3 p-3.5 text-left transition hover:bg-slate-50/80 rounded-xl"
+            >
+              <div>
+                <span className="block text-xs font-bold text-slate-900">{item.label}</span>
+                <span className="block text-[11px] font-medium text-slate-500">{item.detail}</span>
+              </div>
+              <span className="text-2xl font-black text-slate-950 tabular-nums">{item.value}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       <OperationsPanel store={store} onNavigate={onNavigate} onQuickAdd={onQuickAdd} />
 
