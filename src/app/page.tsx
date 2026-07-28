@@ -12891,6 +12891,10 @@ function MeetingsAndInterviewsView({
   initialTab?: "gp" | "entrevistas_estudiantes" | "entrevistas_apoderados" | "correos" | "todas";
 }) {
   const [activeTab, setActiveTab] = useState<"gp" | "entrevistas_estudiantes" | "entrevistas_apoderados" | "correos" | "todas">(initialTab);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
   const [gpFilter, setGpFilter] = useState<"todas" | "formativo" | "interdisciplinario" | "tecnico" | "otras">("todas");
   const [search, setSearch] = useState("");
   const [courseFilter, setCourseFilter] = useState("todos");
@@ -18134,6 +18138,7 @@ export default function TizaEducationApp() {
     if (activeView === "meetings" || activeView === "interviews") {
       return (
         <MeetingsAndInterviewsView
+          key={`${activeView}-${activeView === "interviews" ? "entrevistas" : "gp"}`}
           store={store}
           onAddRecord={addRecord}
           onUpdateRecord={updateRecord}
