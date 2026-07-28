@@ -15974,7 +15974,7 @@ function AIChatMode({
       const fd = new FormData();
       fd.append("message", userMessage);
       fd.append("today", new Date().toISOString().slice(0, 10));
-      const roster = store.students.slice(0, 500).map((s) => ({ id: s.id, name: s.fullName || "", course: s.course || "", rut: s.rut || "" }));
+      const roster = store.students.slice(0, 2500).map((s) => ({ id: s.id, name: s.fullName || "", course: s.course || "", rut: s.rut || "" }));
       fd.append("roster", JSON.stringify(roster));
       const coursesSeed = officialCourses.map((c) => ({ name: c.name, cycle: c.cycle }));
       fd.append("courses", JSON.stringify(coursesSeed));

@@ -449,7 +449,7 @@ async function handle(request: Request) {
   }
 
   const hasFiles = extracted.length > 0;
-  const rosterTrimmed = roster.slice(0, hasFiles ? 300 : 500);
+  const rosterTrimmed = roster.slice(0, 2500);
   const rosterTable = rosterTrimmed.map((s) => `${s.id}|${s.name}|${s.course || ""}|${s.rut || ""}`).join("\n");
   const coursesList = courses.slice(0, 80).map((c) => `${c.name}${c.cycle ? ` (${c.cycle})` : ""}`).join("\n");
 
@@ -540,10 +540,120 @@ async function handle(request: Request) {
   if (!parsed) {
     return NextResponse.json({ error: `Gemini no respondió. Último: ${lastStatus} ${lastMsg}` }, { status: 503 });
   }
+
+  postProcessRosterMatches(parsed, message, roster);
+
   return NextResponse.json({
     ok: true,
     result: parsed,
     model: usedModel,
     filesProcessed: extracted.map((e) => ({ name: e.name, kind: e.inlinePart ? "binary" : "text" })),
   });
+}
+
+function matchStudentInRoster(
+  mentionText: string,
+  userMessage: string,
+  roster: Array<{ id: string; name: string; course?: string; rut?: string }>
+) {
+  if (!roster || roster.length === 0) return null;
+  const fullText = `${mentionText || ""} ${userMessage || ""}`.toLowerCase();
+  const normalizedText = fullText.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  const stopWords = new Set(["el", "la", "los", "las", "un", "una", "de", "del", "con", "que", "estudiante", "alumno", "nino", "nina", "caso", "entrevista", "revisar", "tengo", "hacer", "esto"]);
+
+  const rawTokens = (mentionText || userMessage)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 1 && !stopWords.has(t) && !/^\d+°?[a-z]?$/i.test(t));
+
+  if (rawTokens.length === 0) return null;
+
+  let bestMatch: { id: string; name: string; course?: string; rut?: string } | null = null;
+  let maxScore = 0;
+
+  for (const s of roster) {
+    if (!s.name) continue;
+    const sNameNorm = s.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const sTokens = sNameNorm.split(/\s+/).filter(Boolean);
+
+    let matchedCount = 0;
+    for (const token of rawTokens) {
+      if (sTokens.some((st) => st === token || st.startsWith(token) || token.startsWith(st))) {
+        matchedCount += 1;
+      }
+    }
+
+    if (matchedCount === 0) continue;
+
+    let score = (matchedCount / rawTokens.length) * 100;
+    const joined = rawTokens.join(" ");
+    if (sNameNorm.includes(joined)) score += 50;
+
+    if (s.course) {
+      const cNorm = s.course.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const cShort = cNorm.replace("basico", "").replace("medio", "");
+      if (normalizedText.includes(cNorm) || (cShort.length >= 2 && normalizedText.includes(cShort))) {
+        score += 40;
+      }
+    }
+
+    if (score > maxScore) {
+      maxScore = score;
+      bestMatch = s;
+    }
+  }
+
+  return maxScore >= 40 ? bestMatch : null;
+}
+
+function postProcessRosterMatches(
+  result: any,
+  userMessage: string,
+  roster: Array<{ id: string; name: string; course?: string; rut?: string }>
+) {
+  if (!result || !roster || roster.length === 0) return;
+
+  if (Array.isArray(result.involvedStudents)) {
+    result.involvedStudents = result.involvedStudents.map((inv: any) => {
+      const match = matchStudentInRoster(inv.studentName || inv.evidence || "", userMessage, roster);
+      if (match) {
+        return {
+          ...inv,
+          studentId: match.id,
+          studentName: match.name,
+          confidence: 0.98,
+        };
+      }
+      return inv;
+    });
+  }
+
+  if (Array.isArray(result.studentRecords)) {
+    result.studentRecords = result.studentRecords.map((rec: any, idx: number) => {
+      const invMatch = result.involvedStudents?.[idx] || result.involvedStudents?.[0];
+      const match = matchStudentInRoster(rec.title + " " + (rec.description || ""), userMessage, roster) ||
+                    (invMatch?.studentId ? roster.find((s) => s.id === invMatch.studentId) : null);
+      if (match) {
+        return {
+          ...rec,
+          studentId: match.id,
+          title: rec.title || `Intervención · ${match.name}`,
+        };
+      }
+      return rec;
+    });
+  }
+
+  if (typeof result.notes === "string" && result.notes.includes("Se ha asumido que")) {
+    const matchedInv = result.involvedStudents?.[0];
+    if (matchedInv?.studentName) {
+      result.notes = `Estudiante identificado: ${matchedInv.studentName}.`;
+    } else {
+      result.notes = "";
+    }
+  }
 }
