@@ -10073,12 +10073,14 @@ function StudentsWorkspaceView({
   store,
   onAdd,
   onOpenStudent,
+  onUpdateStudent,
   onReplaceFirstCycleRoster,
   replacingFirstCycleRoster = false,
 }: {
   store: DataStore;
   onAdd: () => void;
   onOpenStudent: (studentId: string, focusField?: string) => void;
+  onUpdateStudent?: (studentId: string, updates: Record<string, string>) => void;
   onReplaceFirstCycleRoster?: (file: File) => void;
   replacingFirstCycleRoster?: boolean;
 }) {
@@ -10087,6 +10089,41 @@ function StudentsWorkspaceView({
   const [showPieOnly, setShowPieOnly] = useState(false);
   const [selectedCourseName, setSelectedCourseName] = useState<string>(() => officialCourses[0]?.name || "");
   const rosterInputRef = React.useRef<HTMLInputElement | null>(null);
+  const bulkPhotoInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  const handleBulkPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0 || !onUpdateStudent) return;
+    let matchedCount = 0;
+    const fileArray = Array.from(files);
+
+    for (const file of fileArray) {
+      const fileNameNorm = normalize(file.name.replace(/\.[^/.]+$/, ""));
+      const match = store.students.find((s) => {
+        const studentNameNorm = normalize(s.fullName || "");
+        const studentFirstName = normalize((s.fullName || "").split(" ")[0] || "");
+        const studentLastName = normalize((s.fullName || "").split(" ").slice(-1)[0] || "");
+        return (
+          studentNameNorm.includes(fileNameNorm) ||
+          fileNameNorm.includes(studentNameNorm) ||
+          (fileNameNorm.length >= 3 && (studentNameNorm.includes(fileNameNorm) || fileNameNorm.includes(studentFirstName) || fileNameNorm.includes(studentLastName)))
+        );
+      });
+
+      if (match) {
+        const compressed = await compressImageBase64(file, 360, 0.8);
+        if (compressed) {
+          onUpdateStudent(match.id, { profilePhoto: compressed });
+          matchedCount += 1;
+        }
+      }
+    }
+
+    if (matchedCount > 0) {
+      window.alert(`¡Éxito! Se vincularon y guardaron ${matchedCount} foto(s) de estudiantes.`);
+    } else {
+      window.alert("No se encontraron coincidencias de nombres entre los archivos cargados y los estudiantes.");
+    }
+  };
 
   const searchable = normalize(search);
   const cycleByCourse = new Map(officialCourses.map((c) => [normalize(c.name), c.cycle]));
@@ -10141,6 +10178,17 @@ function StudentsWorkspaceView({
 
   return (
     <div className="tz-fade">
+      <input
+        ref={bulkPhotoInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(event) => {
+          handleBulkPhotos(event.target.files);
+          event.currentTarget.value = "";
+        }}
+      />
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Estudiantes</h1>
@@ -10149,6 +10197,15 @@ function StudentsWorkspaceView({
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {onUpdateStudent ? (
+            <button
+              onClick={() => bulkPhotoInputRef.current?.click()}
+              className="tz-press inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/90 px-4 py-2.5 text-sm font-semibold text-blue-900 shadow-sm hover:bg-blue-100 transition"
+              title="Selecciona varias fotos de estudiantes a la vez para vincularlas automáticamente por nombre"
+            >
+              <Camera className="h-4 w-4 text-blue-700" /> Cargar fotos masivas
+            </button>
+          ) : null}
           {onReplaceFirstCycleRoster ? (
             <>
               <input
@@ -17993,6 +18050,7 @@ export default function TizaEducationApp() {
           store={store}
           onAdd={() => openNewRecord("students")}
           onOpenStudent={openStudent}
+          onUpdateStudent={updateStudentRecord}
           onReplaceFirstCycleRoster={replaceFirstCycleRoster}
           replacingFirstCycleRoster={replacingFirstCycleRoster}
         />
