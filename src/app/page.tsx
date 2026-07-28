@@ -3706,6 +3706,412 @@ function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: 
   );
 }
 
+function CasesWorkspaceView({
+  store,
+  onAdd,
+  onEdit,
+  onDelete,
+  onExport,
+  onImport,
+  onOpenStudent,
+}: {
+  store: DataStore;
+  onAdd: () => void;
+  onEdit: (record: DataRecord) => void;
+  onDelete: (id: string) => void;
+  onExport: () => void;
+  onImport: () => void;
+  onOpenStudent: (studentId: string, focusField?: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
+  const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
+
+  const cases = store.cases || [];
+  const searchable = normalize(query);
+
+  const filtered = cases.filter((record) => {
+    const matchesSearch =
+      !searchable ||
+      Object.values(record).some((v) => normalize(String(v || "")).includes(searchable));
+
+    const recStatus = (record.status || record.estado || "").toLowerCase();
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "abierto" && (/abiert|agendad|pendient/i.test(recStatus) || !recStatus)) ||
+      (statusFilter === "seguimiento" && /seguim/i.test(recStatus)) ||
+      (statusFilter === "cerrado" && /cerrad|resuelt/i.test(recStatus));
+
+    const recPriority = (record.priority || record.prioridad || "").toLowerCase();
+    const matchesPriority =
+      priorityFilter === "all" ||
+      (priorityFilter === "alta" && /alta|critic|urgente/i.test(recPriority)) ||
+      (priorityFilter === "media" && /media/i.test(recPriority)) ||
+      (priorityFilter === "baja" && /baja/i.test(recPriority));
+
+    const recCategory = (record.category || record.categoria || "").toLowerCase();
+    const matchesCategory =
+      categoryFilter === "all" || recCategory.includes(categoryFilter.toLowerCase());
+
+    return matchesSearch && matchesStatus && matchesPriority && matchesCategory;
+  });
+
+  const totalCount = cases.length;
+  const openCount = cases.filter((r) => !/cerrad|resuelt/i.test(r.status || r.estado || "")).length;
+  const highPriorityCount = cases.filter((r) => /alta|critic|urgente/i.test(r.priority || r.prioridad || "")).length;
+  const convivenciaCount = cases.filter((r) => /conviven/i.test(r.category || r.categoria || "")).length;
+
+  return (
+    <div className="tz-fade space-y-6">
+      {/* Header */}
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-center">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white shadow-md">
+              <FileText className="h-5 w-5" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-slate-950">Casos y Seguimiento</h1>
+              <p className="text-xs text-slate-500 font-medium">Gestión integral de convivencia, bienestar y acuerdos pedagógicos por estudiante</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={onImport} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-xs">
+            <Upload className="h-4 w-4" /> Importar
+          </button>
+          <button onClick={onExport} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 shadow-xs">
+            <ArrowDownToLine className="h-4 w-4" /> Exportar
+          </button>
+          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-4 py-2 text-sm font-semibold text-white shadow-md">
+            <Plus className="h-4 w-4" /> Crear nuevo caso
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Total de Casos</span>
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-blue-50 text-blue-600 font-bold">📁</span>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-slate-950">{totalCount}</p>
+          <p className="text-xs text-slate-500">Registrados en la plataforma</p>
+        </div>
+        <div className="rounded-2xl border border-emerald-200/80 bg-emerald-50/40 p-4 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-800">Abiertos / Pendientes</span>
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-emerald-100 text-emerald-700 font-bold">🟢</span>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-emerald-950">{openCount}</p>
+          <p className="text-xs text-emerald-700 font-medium">Requieren seguimiento activo</p>
+        </div>
+        <div className="rounded-2xl border border-rose-200/80 bg-rose-50/40 p-4 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-rose-800">Alta Prioridad / Crítica</span>
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-rose-100 text-rose-700 font-bold">⚡</span>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-rose-950">{highPriorityCount}</p>
+          <p className="text-xs text-rose-700 font-medium">Atención prioritaria</p>
+        </div>
+        <div className="rounded-2xl border border-violet-200/80 bg-violet-50/40 p-4 shadow-sm hover:shadow-md transition">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-violet-800">Convivencia Escolar</span>
+            <span className="grid h-8 w-8 place-items-center rounded-xl bg-violet-100 text-violet-700 font-bold">🤝</span>
+          </div>
+          <p className="mt-2 text-2xl font-bold text-violet-950">{convivenciaCount}</p>
+          <p className="text-xs text-violet-700 font-medium">Casos de convivencia</p>
+        </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-slate-50/80 px-3.5 py-2">
+          <Search className="h-4 w-4 text-slate-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Buscar por estudiante, curso, motivo, descripción o responsable…"
+            className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500 font-medium"
+          />
+          {query ? (
+            <button onClick={() => setQuery("")} className="rounded p-0.5 text-slate-400 hover:bg-slate-100">
+              <X className="h-4 w-4" />
+            </button>
+          ) : null}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-50"
+          >
+            <option value="all">Estado: Todos</option>
+            <option value="abierto">🟢 Abiertos / Agendados</option>
+            <option value="seguimiento">🔄 En Seguimiento</option>
+            <option value="cerrado">🔒 Cerrados</option>
+          </select>
+          <select
+            value={priorityFilter}
+            onChange={(e) => setPriorityFilter(e.target.value)}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none hover:bg-slate-50"
+          >
+            <option value="all">Prioridad: Todas</option>
+            <option value="alta">⚡ Alta / Crítica</option>
+            <option value="media">🔹 Media</option>
+            <option value="baja">🟢 Baja</option>
+          </select>
+          <div className="flex items-center rounded-xl border border-slate-200 bg-slate-100 p-0.5">
+            <button
+              onClick={() => setViewMode("grid")}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${viewMode === "grid" ? "bg-white text-slate-950 shadow-xs" : "text-slate-600"}`}
+            >
+              Tarjetas
+            </button>
+            <button
+              onClick={() => setViewMode("table")}
+              className={`rounded-lg px-2.5 py-1 text-xs font-bold transition ${viewMode === "table" ? "bg-white text-slate-950 shadow-xs" : "text-slate-600"}`}
+            >
+              Tabla
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Cases List */}
+      {cases.length === 0 ? (
+        <EmptyState entity={entityConfigs.cases} onAdd={onAdd} onImport={onImport} />
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center">
+          <Search className="mx-auto h-8 w-8 text-slate-400" />
+          <p className="mt-3 text-sm font-semibold text-slate-600">No hay casos que coincidan con los filtros seleccionados.</p>
+        </div>
+      ) : viewMode === "grid" ? (
+        <div className="grid gap-4 md:grid-cols-2">
+          {filtered.map((record) => {
+            const student =
+              store.students.find((s) => s.id === record.studentId) ||
+              store.students.find((s) => studentMatches(record, s));
+
+            const priority = (record.priority || record.prioridad || "Alta").trim();
+            const status = (record.status || record.estado || "Abierto").trim();
+            const category = (record.category || record.categoria || record.entity || "Convivencia").trim();
+            const isHighPriority = /alta|critic|urgente/i.test(priority);
+            const isOpen = !/cerrad|resuelt/i.test(status);
+
+            return (
+              <div
+                key={record.id}
+                className={`group relative flex flex-col justify-between overflow-hidden rounded-2xl border bg-white p-5 shadow-sm transition hover:shadow-lg ${
+                  isHighPriority ? "border-rose-200/80 hover:border-rose-300" : "border-slate-200/80 hover:border-slate-300"
+                }`}
+              >
+                <div>
+                  {/* Student Card Banner */}
+                  <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-100 bg-slate-50/90 p-3 transition group-hover:bg-blue-50/40">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {student ? (
+                        <button
+                          onClick={() => onOpenStudent(student.id)}
+                          className="relative grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-indigo-500 to-blue-600 text-xs font-bold text-white shadow-sm ring-2 ring-white hover:scale-105 transition"
+                          title={`Ver perfil completo de ${student.fullName}`}
+                        >
+                          <StudentPhoto student={student} sizes="44px" fallback={initialsOf(student.fullName)} />
+                        </button>
+                      ) : (
+                        <div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-slate-200 text-slate-600 font-bold text-xs">
+                          <UserRound className="h-5 w-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        {student ? (
+                          <button
+                            onClick={() => onOpenStudent(student.id)}
+                            className="group/btn text-left block w-full"
+                          >
+                            <p className="truncate text-base font-bold text-slate-950 group-hover/btn:text-blue-700 transition">
+                              {student.fullName}
+                            </p>
+                            <p className="truncate text-xs font-semibold text-slate-500">
+                              {student.course || record.course || "Sin curso"}{student.rut ? ` · RUT: ${formatRutValue(student.rut)}` : ""}
+                            </p>
+                          </button>
+                        ) : (
+                          <div>
+                            <p className="truncate text-base font-bold text-slate-950">{record.student || record.title || "Estudiante"}</p>
+                            <p className="truncate text-xs font-semibold text-slate-500">{record.course || "Sin curso"}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {student ? (
+                      <button
+                        onClick={() => onOpenStudent(student.id)}
+                        className="tz-press shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 transition shadow-2xs"
+                      >
+                        <UserRound className="h-3.5 w-3.5 text-blue-600" /> Ver Perfil
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {/* Case Badges */}
+                  <div className="mb-2.5 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-[10px] font-extrabold uppercase text-violet-800 tracking-wider">
+                      {category}
+                    </span>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
+                      isOpen ? "bg-emerald-100 text-emerald-900 ring-1 ring-emerald-300/60" : "bg-slate-100 text-slate-700"
+                    }`}>
+                      {isOpen ? "🟢 " + (status || "Abierto") : "🔒 " + status}
+                    </span>
+                    <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-extrabold ${
+                      isHighPriority ? "bg-rose-100 text-rose-900 ring-1 ring-rose-300" : "bg-amber-100 text-amber-900"
+                    }`}>
+                      {isHighPriority ? "⚡ Prioridad " + priority : "Prioridad " + priority}
+                    </span>
+                  </div>
+
+                  {/* Title & Description */}
+                  <h3 className="text-base font-bold text-slate-950 leading-snug">
+                    {record.title || record.reason || record.motivo || "Caso de seguimiento"}
+                  </h3>
+                  {record.description || record.summary || record.notes ? (
+                    <p className="mt-2 text-xs text-slate-600 leading-relaxed line-clamp-4 font-medium bg-slate-50/50 p-2.5 rounded-xl border border-slate-100">
+                      {record.description || record.summary || record.notes}
+                    </p>
+                  ) : null}
+                </div>
+
+                {/* Footer Actions */}
+                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    Actualizado: {record.updatedAt ? new Date(record.updatedAt).toLocaleDateString("es-CL") : "Recientemente"}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {student ? (
+                      <button
+                        onClick={() => onOpenStudent(student.id)}
+                        className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50/60 px-2.5 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition"
+                      >
+                        <UserRound className="h-3.5 w-3.5 text-blue-600" /> Ir a Perfil
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => onEdit(record)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </button>
+                    <button
+                      onClick={() => onDelete(record.id)}
+                      className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* Table View */
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100 uppercase tracking-wider text-[11px]">
+              <tr>
+                <th className="px-4 py-3">Estudiante</th>
+                <th className="px-4 py-3">Caso / Motivo</th>
+                <th className="px-4 py-3">Categoría</th>
+                <th className="px-4 py-3">Prioridad</th>
+                <th className="px-4 py-3">Estado</th>
+                <th className="px-4 py-3 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filtered.map((record) => {
+                const student =
+                  store.students.find((s) => s.id === record.studentId) ||
+                  store.students.find((s) => studentMatches(record, s));
+                return (
+                  <tr key={record.id} className="hover:bg-slate-50/60 transition">
+                    <td className="px-4 py-3">
+                      {student ? (
+                        <button
+                          onClick={() => onOpenStudent(student.id)}
+                          className="flex items-center gap-2.5 text-left group/st"
+                        >
+                          <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-lg bg-gradient-to-br from-indigo-500 to-blue-600 text-white font-bold text-xs">
+                            <StudentPhoto student={student} sizes="32px" fallback={initialsOf(student.fullName)} />
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-900 group-hover/st:text-blue-700 transition">{student.fullName}</p>
+                            <p className="text-[11px] text-slate-500">{student.course || "Sin curso"}</p>
+                          </div>
+                        </button>
+                      ) : (
+                        <span className="font-semibold text-slate-800">{record.student || "—"}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-slate-900">{record.title || record.reason || "Caso"}</p>
+                      <p className="text-[11px] text-slate-500 line-clamp-1">{record.description || record.notes || "—"}</p>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-violet-50 px-2 py-0.5 font-bold text-violet-700">
+                        {record.category || record.categoria || "Convivencia"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`rounded-full px-2 py-0.5 font-bold ${
+                        /alta|critic/i.test(record.priority || "") ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"
+                      }`}>
+                        {record.priority || "Normal"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-bold text-emerald-700">
+                        {record.status || "Abierto"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        {student ? (
+                          <button
+                            onClick={() => onOpenStudent(student.id)}
+                            className="rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 font-bold text-blue-700 hover:bg-blue-100"
+                          >
+                            Ver Ficha
+                          </button>
+                        ) : null}
+                        <button
+                          onClick={() => onEdit(record)}
+                          className="rounded-lg border border-slate-200 bg-white px-2 py-1 font-bold text-slate-700 hover:bg-slate-50"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          onClick={() => onDelete(record.id)}
+                          className="rounded-lg border border-rose-200 bg-white px-2 py-1 font-bold text-rose-600 hover:bg-rose-50"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function EntityView({
   entity,
   records,
@@ -18216,15 +18622,16 @@ export default function TizaEducationApp() {
         />
       );
     }
-    if (activeView === "meetings" || activeView === "interviews") {
+    if (activeView === "cases") {
       return (
-        <MeetingsAndInterviewsView
+        <CasesWorkspaceView
           store={store}
-          onAddRecord={addRecord}
-          onUpdateRecord={updateRecord}
-          onDeleteRecord={deleteRecord}
+          onAdd={() => openNewRecord("cases")}
+          onEdit={(record) => openExistingRecord("cases", record.id)}
+          onDelete={(id) => deleteRecord("cases", id)}
+          onExport={() => exportEntity("cases")}
+          onImport={() => setActiveView("triage")}
           onOpenStudent={openStudent}
-          initialTab={activeView === "interviews" ? "entrevistas_estudiantes" : "gp"}
         />
       );
     }
