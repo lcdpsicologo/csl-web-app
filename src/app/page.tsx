@@ -9639,7 +9639,18 @@ function StudentDetailDialog({
                 }}
               />
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl">{student.fullName || "Estudiante"}</h2>
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h2 className="text-xl font-bold leading-tight tracking-tight text-slate-950 sm:text-2xl">{student.fullName || "Estudiante"}</h2>
+                  <button
+                    type="button"
+                    onClick={() => photoInputRef.current?.click()}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-700 hover:border-blue-300 transition shadow-2xs"
+                    title="Subir o cambiar fotografía del estudiante"
+                  >
+                    <Camera className="h-3.5 w-3.5 text-blue-600" />
+                    {student.profilePhoto || student.photo || student.avatar ? "Cambiar foto" : "Subir foto"}
+                  </button>
+                </div>
                 <p className="mt-0.5 text-xs sm:text-sm text-slate-600">{formatRutValue(student.rut) || "Sin RUT/ID"}{student.guardian ? ` · Apoderado/a: ${student.guardian}` : ""}</p>
                 <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
                   {student.phone ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.phone}</span> : null}
