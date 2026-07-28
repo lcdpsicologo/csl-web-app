@@ -313,27 +313,40 @@ const initialsOf = (name: string) =>
 
 function StudentPhoto({
   student,
-  sizes,
   fallback,
   alt = "",
   fit = "cover",
 }: {
   student: DataRecord;
-  sizes: string;
+  sizes?: string;
   fallback: React.ReactNode;
   alt?: string;
   fit?: "cover" | "contain";
 }) {
-  const src = student.profilePhoto || "";
-  if (!src) return fallback;
+  const [hasError, setHasError] = useState(false);
+  const src =
+    (typeof student.profilePhoto === "string" ? student.profilePhoto : "") ||
+    (typeof student.photo === "string" ? student.photo : "") ||
+    (typeof student.avatar === "string" ? student.avatar : "") ||
+    (typeof student.image === "string" ? student.image : "") ||
+    (typeof student.foto === "string" ? student.foto : "") ||
+    (typeof student.picture === "string" ? student.picture : "") ||
+    "";
+
+  useEffect(() => {
+    setHasError(false);
+  }, [src]);
+
+  if (!src || hasError) return <>{fallback}</>;
+
   return (
-    <Image
+    <img
       src={src}
-      alt={alt}
-      fill
-      sizes={sizes}
-      className={fit === "contain" ? "object-contain object-center" : "object-cover object-center"}
-      unoptimized={src.startsWith("data:") || src.startsWith("blob:")}
+      alt={alt || (typeof student.fullName === "string" ? student.fullName : "Foto del estudiante")}
+      onError={() => setHasError(true)}
+      className={`absolute inset-0 h-full w-full ${
+        fit === "contain" ? "object-contain object-center" : "object-cover object-center"
+      }`}
     />
   );
 }
