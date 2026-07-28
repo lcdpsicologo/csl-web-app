@@ -210,8 +210,19 @@ const buildMatches = (photos, rows) => {
     for (const student of courseStudents) {
       const bestPhoto = uniqueBest(coursePhotos.map((photo) => ({ photo, score: matchScore(photo.shortName, student.name) })));
       if (!bestPhoto) continue;
-      const bestStudent = uniqueBest(courseStudents.map((candidate) => ({ student: candidate, score: matchScore(bestPhoto.photo.shortName, candidate.name) })));
-      if (bestStudent?.student.record_id === student.record_id) matches.push({ student, photo: bestPhoto.photo, score: bestPhoto.score });
+      const scored = courseStudents
+        .map((candidate) => ({ student: candidate, score: matchScore(bestPhoto.photo.shortName, candidate.name) }))
+        .filter((candidate) => candidate.score > 0)
+        .sort((left, right) => right.score - left.score);
+      const topScore = scored[0]?.score ?? 0;
+      const tied = scored.filter((candidate) => candidate.score === topScore);
+      // Un empate entre fichas del mismo nombre son duplicados de la nómina:
+      // la foto es de esa persona, así que se asigna a todas sus fichas.
+      const sameStudentDuplicated = tied.length > 1
+        && tied.every((candidate) => normalize(candidate.student.name) === normalize(tied[0].student.name));
+      const isBest = tied.some((candidate) => candidate.student.record_id === student.record_id)
+        && (tied.length === 1 || sameStudentDuplicated);
+      if (isBest) matches.push({ student, photo: bestPhoto.photo, score: bestPhoto.score });
       else ambiguousStudents.push({ course, student: student.name, photo: bestPhoto.photo.shortName });
     }
   }
