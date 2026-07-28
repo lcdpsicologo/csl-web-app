@@ -7416,16 +7416,25 @@ function OrientationCycleView({
             onClick={(event) => event.stopPropagation()}
             className="tz-pop-fast flex max-h-[96dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-xl border border-slate-200 bg-white shadow-2xl sm:max-h-[88dvh] sm:rounded-lg"
           >
-            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+            <header className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
               <div className="flex min-w-0 items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-slate-900 text-white"><ClipboardList className="h-5 w-5" /></span>
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-cyan-700">Nuevo registro</p>
                   <h2 id="orientation-entry-title" className="text-xl font-semibold text-slate-950">Actividad de orientación</h2>
-                  <p className="mt-0.5 text-sm text-slate-500">Primero identifica la actividad; los enlaces y notas pueden completarse después.</p>
+                  <p className="mt-0.5 text-xs text-slate-500">Primero identifica la actividad; los enlaces y notas pueden completarse después.</p>
                 </div>
               </div>
-              <button type="button" onClick={closeQuickClassForm} title="Cerrar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="submit"
+                  disabled={!dataReady || !quickClassForm.course.trim()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 transition"
+                >
+                  <Save className="h-4 w-4" /> Guardar
+                </button>
+                <button type="button" onClick={closeQuickClassForm} title="Cerrar" className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 hover:text-slate-900"><X className="h-4 w-4" /></button>
+              </div>
             </header>
 
             <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-slate-50/60">
@@ -8120,6 +8129,39 @@ function OrientationCycleView({
                         </div>
                       ) : null}
                     </div>
+
+                    {!isCalendar ? (
+                      <div className="sticky bottom-0 z-20 mt-4 -mx-4 -mb-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 bg-white/95 px-4 py-3 backdrop-blur-xs rounded-b-lg shadow-xs">
+                        <span className="text-xs font-bold text-slate-700">
+                          {record.course} · {record.week || "Sin semana"}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            disabled={!dataReady}
+                            onClick={() => saveClassEditDraft(record)}
+                            title="Guardar los cambios y minimizar la clase"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-300 transition"
+                          >
+                            <Save className="h-4 w-4" /> Guardar cambios
+                          </button>
+                          <button
+                            onClick={() => toggleClassDetails(record)}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
+                          >
+                            <X className="h-4 w-4" /> Cerrar
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (window.confirm("¿Eliminar este registro?")) onDeleteOrientationRecord(record.id);
+                            }}
+                            title="Eliminar registro"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-bold text-red-600 hover:bg-red-50 transition"
+                          >
+                            <Trash2 className="h-4 w-4" /> Borrar
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </article>
