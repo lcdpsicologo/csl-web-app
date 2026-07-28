@@ -12370,49 +12370,111 @@ function DashboardAgenda({
           ))}
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-2">
-          <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500"><MapPin className="h-3.5 w-3.5 text-emerald-600" /> Ahora en el colegio</p>
-              <span className="text-[10px] text-slate-400">{SCHOOL_SCHEDULE_SUMMARY.teacherEntries} bloques</span>
+        <div className="grid gap-3 xl:grid-cols-3">
+          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/30 p-3 shadow-xs">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-emerald-800">
+                <MapPin className="h-3.5 w-3.5 text-emerald-600" /> Horario personal en vivo
+              </p>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{currentStaffSlots.length}</span>
             </div>
             {currentStaffSlots.length === 0 ? (
-              <p className="rounded-md bg-slate-50 p-2 text-xs text-slate-500">Sin bloques activos de funcionarios en este momento.</p>
+              <p className="rounded-lg bg-white p-2.5 text-xs text-slate-500 border border-slate-200/60">Sin bloques docentes activos en este momento.</p>
             ) : (
-              <ul className="tz-thin-scroll tz-stagger-list max-h-32 space-y-1 overflow-y-auto pr-1">
+              <ul className="tz-thin-scroll tz-stagger-list max-h-36 space-y-1.5 overflow-y-auto pr-1">
                 {currentStaffSlots.map((slot, index) => (
-                  <li key={`${slot.staffName}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs transition hover:bg-emerald-50/50">
+                  <li key={`${slot.staffName}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/60 bg-white p-2 text-xs transition hover:bg-emerald-50/50 shadow-2xs">
                     <span className="min-w-0">
-                      <strong className="block truncate text-slate-900">{slot.staffName}</strong>
-                      <span className="block truncate text-slate-500">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</span>
+                      <strong className="block truncate text-slate-900 font-bold">{slot.staffName}</strong>
+                      <span className="block truncate text-slate-600">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</span>
                     </span>
-                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}</span>
+                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{slot.startTime}</span>
                   </li>
                 ))}
               </ul>
             )}
           </div>
 
-          <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500"><BookOpen className="h-3.5 w-3.5 text-blue-600" /> Cursos ahora</p>
-              <span className="text-[10px] text-slate-400">{SCHOOL_SCHEDULE_SUMMARY.courseEntries} bloques</span>
+          <div className="rounded-xl border border-blue-200/80 bg-blue-50/30 p-3 shadow-xs">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-blue-800">
+                <BookOpen className="h-3.5 w-3.5 text-blue-600" /> Cada curso ahora
+              </p>
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">{currentCourseSlots.length}</span>
             </div>
             {currentCourseSlots.length === 0 ? (
-              <p className="rounded-md bg-slate-50 p-2 text-xs text-slate-500">Sin cursos activos en este momento.</p>
+              <p className="rounded-lg bg-white p-2.5 text-xs text-slate-500 border border-slate-200/60">Sin cursos activos en este bloque.</p>
             ) : (
-              <ul className="tz-thin-scroll tz-stagger-list max-h-32 space-y-1 overflow-y-auto pr-1">
+              <ul className="tz-thin-scroll tz-stagger-list max-h-36 space-y-1.5 overflow-y-auto pr-1">
                 {currentCourseSlots.map((slot, index) => (
-                  <li key={`${slot.course}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs transition hover:bg-blue-50/50">
+                  <li key={`${slot.course}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-blue-200/60 bg-white p-2 text-xs transition hover:bg-blue-50/50 shadow-2xs">
                     <span className="min-w-0">
-                      <strong className="block truncate text-slate-900">{slot.course}</strong>
-                      <span className="block truncate text-slate-500">{slot.activity}</span>
+                      <strong className="block truncate text-slate-900 font-bold">{slot.course}</strong>
+                      <span className="block truncate text-slate-600">{slot.activity}</span>
                     </span>
-                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}</span>
+                    <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">{slot.startTime}</span>
                   </li>
                 ))}
               </ul>
             )}
+          </div>
+
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3 shadow-xs">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-amber-900">
+                <ClipboardList className="h-3.5 w-3.5 text-amber-600" /> Tareas "Por Hacer" y Pendientes
+              </p>
+              <button onClick={() => onNavigate("interviews")} className="text-[10px] font-bold text-amber-800 hover:underline">
+                Ver todos ({store.interviews.filter((r) => !/realizad|cerrad/i.test(r.status || "")).length + criticalCases.length})
+              </button>
+            </div>
+
+            {(() => {
+              const pendingInterviews = store.interviews.filter((r) => !/realizad|cerrad/i.test(r.status || ""));
+              const totalPending = pendingInterviews.length + criticalCases.length;
+
+              if (totalPending === 0) {
+                return (
+                  <div className="rounded-lg bg-white p-3 text-center border border-slate-200/60">
+                    <Check className="mx-auto h-5 w-5 text-emerald-500" />
+                    <p className="mt-1 text-xs font-semibold text-slate-700">¡Al día! No tienes tareas ni entrevistas pendientes.</p>
+                  </div>
+                );
+              }
+
+              return (
+                <ul className="tz-thin-scroll tz-stagger-list max-h-36 space-y-1.5 overflow-y-auto pr-1">
+                  {pendingInterviews.slice(0, 4).map((r) => (
+                    <li key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-amber-200/80 bg-white p-2 text-xs shadow-2xs hover:border-amber-400 transition">
+                      <div className="min-w-0 flex-1">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.2 text-[9px] font-bold text-amber-800 mr-1.5">
+                          📌 Entrevista Por Hacer
+                        </span>
+                        <strong className="block truncate text-slate-900 font-bold">{r.reason || r.title || "Entrevista agendada"}</strong>
+                        <span className="block truncate text-slate-500">{r.participant || r.student || "Estudiante"} {r.course ? `(${r.course})` : ""}</span>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-200">
+                        {r.date || "Hoy"}
+                      </span>
+                    </li>
+                  ))}
+                  {criticalCases.slice(0, 2).map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-2 rounded-lg border border-rose-200/80 bg-white p-2 text-xs shadow-2xs hover:border-rose-400 transition">
+                      <div className="min-w-0 flex-1">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.2 text-[9px] font-bold text-rose-800 mr-1.5">
+                          ⚠ Caso Abierto
+                        </span>
+                        <strong className="block truncate text-slate-900 font-bold">{c.title}</strong>
+                        <span className="block truncate text-slate-500">{c.student || "Estudiante"} {c.course ? `(${c.course})` : ""}</span>
+                      </div>
+                      <span className="shrink-0 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-200">
+                        {c.priority || "Alta"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
           </div>
         </div>
 
@@ -12699,8 +12761,6 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
         </div>
       </section>
 
-      <OperationsPanel store={store} onNavigate={onNavigate} onQuickAdd={onQuickAdd} />
-
       <DashboardAgenda
         store={store}
         courseSchedule={courseSchedule}
@@ -12711,6 +12771,8 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
         onReloadCalendar={onReloadCalendar}
         onNavigate={onNavigate}
       />
+
+      <OperationsPanel store={store} onNavigate={onNavigate} onQuickAdd={onQuickAdd} />
 
       <section className="tz-card rounded-2xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50 to-cyan-50 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -15969,18 +16031,30 @@ function AIChatMode({
 
     (r.studentRecords || []).forEach((rec, i) => {
       if (!acc[`sr-${i}`]) return;
-      const student = store.students.find((s) => s.id === rec.studentId);
-      if (!student) return;
+      // Match by studentId, or by involvedStudents, or by student name lookup
+      const student = store.students.find((s) => s.id === rec.studentId) ||
+        (r.involvedStudents && r.involvedStudents[i] ? store.students.find((s) => s.id === r.involvedStudents?.[i]?.studentId) : undefined) ||
+        store.students.find((s) => normalize(s.fullName || "") === normalize(r.involvedStudents?.[0]?.studentName || "")) ||
+        store.students.find((s) => normalize(s.fullName || "").includes(normalize(rec.title || "")));
+
+      const studentName = student ? (student.fullName || "") : (r.involvedStudents?.[0]?.studentName || "Estudiante");
+      const studentCourse = student ? (student.course || "") : "";
+
       onAddRecord(rec.entity, {
         id: uid(), createdAt: nowIso(), updatedAt: nowIso(),
-        student: student.fullName || "", course: student.course || "",
+        student: studentName,
+        course: studentCourse,
+        relatedStudents: studentName,
         date: rec.date || new Date().toISOString().slice(0, 10),
-        title: rec.title || "Registro IA",
-        category: rec.category || "", priority: rec.priority || "",
-        status: rec.status || (rec.entity === "cases" ? "Abierto" : ""),
-        type: rec.type || "", description: rec.description || "",
-        participant: rec.entity === "interviews" ? (rec.title || student.fullName || "") : "",
-        reason: rec.entity === "interviews" ? (rec.title || "") : "",
+        title: rec.title || (rec.entity === "interviews" ? "Entrevista Agendada" : "Registro IA"),
+        category: rec.category || (rec.entity === "cases" ? "Socioemocional" : "Convivencia"),
+        priority: rec.priority || "Media",
+        status: rec.status || (rec.entity === "interviews" ? "Agendada" : rec.entity === "cases" ? "Abierto" : ""),
+        type: rec.type || (rec.entity === "interviews" ? "Entrevista Estudiante" : "Seguimiento"),
+        description: rec.description || "",
+        detail: rec.description || "",
+        participant: rec.entity === "interviews" ? studentName : "",
+        reason: rec.entity === "interviews" ? (rec.title || "Entrevista de seguimiento") : "",
       });
       count += 1;
     });
@@ -16371,9 +16445,16 @@ function ChatResultRenderer({
                   <input type="checkbox" checked={!!accepted[`sr-${i}`]} onChange={() => onToggle(`sr-${i}`)} className="mt-0.5 h-4 w-4" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">{config?.label || rec.entity}</span>
-                      {rec.priority ? <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{rec.priority}</span> : null}
-                      {student ? <span className="text-[10px] text-slate-500">→ {student.fullName}</span> : null}
+                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-violet-700">{config?.label || rec.entity}</span>
+                      {rec.status ? (
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          /agendad|pendient/i.test(rec.status) ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300" : "bg-emerald-100 text-emerald-800"
+                        }`}>
+                          {/agendad|pendient/i.test(rec.status) ? "📌 Por Hacer (Agendada)" : rec.status}
+                        </span>
+                      ) : null}
+                      {rec.priority ? <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">{rec.priority}</span> : null}
+                      {student ? <span className="text-[10px] font-bold text-slate-600">→ {student.fullName} ({student.course || "Sin curso"})</span> : null}
                     </div>
                     <p className="mt-0.5 font-semibold text-slate-900">{rec.title}</p>
                     {rec.description ? <p className="text-slate-600 line-clamp-2">{rec.description}</p> : null}
