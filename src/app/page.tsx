@@ -18314,17 +18314,16 @@ export default function TizaEducationApp() {
         />
       );
     }
-    if (activeView === "cases") {
+    if (activeView === "meetings" || activeView === "interviews") {
       return (
         <MeetingsAndInterviewsView
-          key={`${activeView}-${activeView === "interviews" ? "entrevistas" : "gp"}`}
+          key={`${activeView}-${(activeView as string) === "interviews" ? "entrevistas" : "gp"}`}
           store={store}
-          onAdd={() => openNewRecord("cases")}
-          onEdit={(record) => openExistingRecord("cases", record.id)}
-          onDelete={(id) => deleteRecord("cases", id)}
-          onExport={() => exportEntity("cases")}
-          onImport={() => setActiveView("triage")}
+          onAddRecord={addRecord}
+          onUpdateRecord={updateRecord}
+          onDeleteRecord={deleteRecord}
           onOpenStudent={openStudent}
+          initialTab={activeView === "interviews" ? "entrevistas_estudiantes" : "gp"}
         />
       );
     }
