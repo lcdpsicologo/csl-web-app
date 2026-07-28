@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -236,29 +236,42 @@ const photoBuffer = (filePath) => sharp(filePath)
   .webp({ quality: 82, effort: 5, smartSubsample: true })
   .toBuffer();
 
-// Sube la foto al bucket y devuelve su URL pública estable.
-const uploadPhoto = async (supabase, recordId, filePath) => {
+// Sube la foto con un nombre aleatorio y devuelve un enlace firmado. Se evita
+// derivar el nombre del identificador de la ficha: al venir del RUT, hacía que
+// las URLs fueran adivinables.
+const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 año
+
+const uploadPhoto = async (supabase, _recordId, filePath) => {
   const buffer = await photoBuffer(filePath);
-  const objectPath = `${recordId}.webp`;
+  const objectPath = `${randomBytes(16).toString("hex")}.webp`;
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(objectPath, buffer, {
     contentType: "image/webp",
     upsert: true,
     cacheControl: "31536000",
   });
   if (error) throw error;
-  const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(objectPath);
-  return data.publicUrl;
+  const { data, error: signError } = await supabase.storage
+    .from(PHOTO_BUCKET).createSignedUrl(objectPath, SIGNED_URL_TTL);
+  if (signError) throw signError;
+  return data.signedUrl;
 };
 
+// El bucket es privado: las fotos de menores no deben quedar accesibles a
+// cualquiera que dé con la dirección.
 const ensureBucket = async (supabase) => {
   const { data: buckets, error } = await supabase.storage.listBuckets();
   if (error) throw error;
-  if (buckets.some((bucket) => bucket.name === PHOTO_BUCKET)) return;
-  const { error: createError } = await supabase.storage.createBucket(PHOTO_BUCKET, {
-    public: true,
+  const options = {
+    public: false,
     fileSizeLimit: 2 * 1024 * 1024,
     allowedMimeTypes: ["image/webp", "image/jpeg", "image/png"],
-  });
+  };
+  if (buckets.some((bucket) => bucket.name === PHOTO_BUCKET)) {
+    const { error: updateError } = await supabase.storage.updateBucket(PHOTO_BUCKET, options);
+    if (updateError) throw updateError;
+    return;
+  }
+  const { error: createError } = await supabase.storage.createBucket(PHOTO_BUCKET, options);
   if (createError) throw createError;
 };
 
