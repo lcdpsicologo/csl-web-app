@@ -617,7 +617,8 @@ function postProcessRosterMatches(
 ) {
   if (!result || !roster || roster.length === 0) return;
 
-  if (Array.isArray(result.involvedStudents)) {
+  // 1. Resolve involvedStudents deterministically against full roster
+  if (Array.isArray(result.involvedStudents) && result.involvedStudents.length > 0) {
     result.involvedStudents = result.involvedStudents.map((inv: any) => {
       const match = matchStudentInRoster(inv.studentName || inv.evidence || "", userMessage, roster);
       if (match) {
@@ -630,28 +631,53 @@ function postProcessRosterMatches(
       }
       return inv;
     });
+  } else {
+    // If Gemini didn't populate involvedStudents but user prompt mentions a student
+    const match = matchStudentInRoster(userMessage, userMessage, roster);
+    if (match) {
+      result.involvedStudents = [
+        {
+          studentId: match.id,
+          studentName: match.name,
+          confidence: 0.98,
+          evidence: userMessage.slice(0, 100),
+        },
+      ];
+    }
   }
 
+  // Primary involved student resolved for this message/story
+  const primaryInvolved = result.involvedStudents?.[0];
+  const primaryStudent = primaryInvolved?.studentId
+    ? roster.find((s) => s.id === primaryInvolved.studentId)
+    : null;
+
+  // 2. Bind ALL studentRecords to the primary involved student (or specific involved student)
   if (Array.isArray(result.studentRecords)) {
     result.studentRecords = result.studentRecords.map((rec: any, idx: number) => {
-      const invMatch = result.involvedStudents?.[idx] || result.involvedStudents?.[0];
-      const match = matchStudentInRoster(rec.title + " " + (rec.description || ""), userMessage, roster) ||
-                    (invMatch?.studentId ? roster.find((s) => s.id === invMatch.studentId) : null);
-      if (match) {
+      // Check if another involved student is explicitly named in this specific record description
+      const specificInv = (result.involvedStudents || []).find((inv: any) =>
+        inv.studentName && (rec.description || "").toLowerCase().includes(inv.studentName.toLowerCase())
+      );
+      const targetStudent = specificInv
+        ? roster.find((s) => s.id === specificInv.studentId)
+        : primaryStudent;
+
+      if (targetStudent) {
         return {
           ...rec,
-          studentId: match.id,
-          title: rec.title || `Intervención · ${match.name}`,
+          studentId: targetStudent.id,
+          title: rec.title || `Intervención · ${targetStudent.name}`,
         };
       }
       return rec;
     });
   }
 
+  // 3. Clean up erroneous disclaimer notes
   if (typeof result.notes === "string" && result.notes.includes("Se ha asumido que")) {
-    const matchedInv = result.involvedStudents?.[0];
-    if (matchedInv?.studentName) {
-      result.notes = `Estudiante identificado: ${matchedInv.studentName}.`;
+    if (primaryStudent) {
+      result.notes = `Estudiante identificado: ${primaryStudent.name}${primaryStudent.course ? ` (${primaryStudent.course})` : ""}.`;
     } else {
       result.notes = "";
     }

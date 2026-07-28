@@ -16438,7 +16438,9 @@ function ChatResultRenderer({
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Registros propuestos</p>
           <div className="space-y-1.5">
             {(result.studentRecords || []).map((rec, i) => {
-              const student = store.students.find((s) => s.id === rec.studentId);
+              const student = store.students.find((s) => s.id === rec.studentId) ||
+                (result.involvedStudents && result.involvedStudents[i] ? store.students.find((s) => s.id === result.involvedStudents?.[i]?.studentId) : undefined) ||
+                (result.involvedStudents && result.involvedStudents[0] ? store.students.find((s) => s.id === result.involvedStudents?.[0]?.studentId) : undefined);
               const config = entityConfigs[rec.entity as EntityId];
               return (
                 <label key={i} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-xs hover:bg-slate-50">
