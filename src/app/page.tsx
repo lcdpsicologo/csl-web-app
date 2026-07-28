@@ -12550,33 +12550,91 @@ function DashboardAgenda({
   const schoolDay = today.toLocaleDateString("es-CL", { weekday: "long" }).toLowerCase();
   const nowMinutes = today.getHours() * 60 + today.getMinutes();
   const toMinutes = (time: string) => {
-    const [hours, minutes] = time.split(":").map(Number);
-    return hours * 60 + minutes;
+    const [hours, minutes] = String(time || "").split(":").map(Number);
+    return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
   };
+
   const currentStaffSlots = staffSchedule
     .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
     .sort((a, b) => a.staffName.localeCompare(b.staffName, "es"))
-    .slice(0, 6);
+    .map((slot) => {
+      const start = toMinutes(slot.startTime);
+      const end = toMinutes(slot.endTime);
+      const duration = Math.max(1, end - start);
+      const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
+      const progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
+      const remaining = Math.max(0, end - nowMinutes);
+      return { ...slot, progress, remaining };
+    });
+
   const currentCourseSlots = courseSchedule
     .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
     .sort((a, b) => a.course.localeCompare(b.course, "es"))
-    .slice(0, 6);
+    .map((slot) => {
+      const start = toMinutes(slot.startTime);
+      const end = toMinutes(slot.endTime);
+      const duration = Math.max(1, end - start);
+      const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
+      const progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
+      const remaining = Math.max(0, end - nowMinutes);
+      return { ...slot, progress, remaining };
+    });
+
+  // Calculate live state for ALL official courses
+  const allCourseLiveStates = officialCourses.map((c) => {
+    const courseKey = schoolScheduleCourseKey(c.name);
+    const slots = courseSchedule.filter((slot) => schoolScheduleCourseKey(slot.course) === courseKey && slot.day === schoolDay);
+    const activeSlot = slots.find((slot) => toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime));
+
+    let activity = "Sin clase activa";
+    let progress = 0;
+    let remaining = 0;
+    let isLive = false;
+
+    if (activeSlot) {
+      isLive = true;
+      activity = activeSlot.activity || "En clase";
+      const start = toMinutes(activeSlot.startTime);
+      const end = toMinutes(activeSlot.endTime);
+      const duration = Math.max(1, end - start);
+      const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
+      progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
+      remaining = Math.max(0, end - nowMinutes);
+    } else if (slots.length > 0) {
+      const nextSlot = slots.find((slot) => toMinutes(slot.startTime) > nowMinutes);
+      if (nextSlot) {
+        activity = `Próxima: ${nextSlot.activity} (${nextSlot.startTime})`;
+      } else {
+        activity = "Clases finalizadas por hoy";
+      }
+    }
+
+    return {
+      courseName: c.name,
+      cycle: c.cycle,
+      activity,
+      isLive,
+      progress,
+      remaining,
+    };
+  });
+
   const miniStats: Array<[string, number, LucideIcon, ViewId, string]> = [
-    ["Agenda", items.length, CalendarDays, "today", "bg-blue-50 text-blue-700"],
-    ["Protocolos", protocolsDue.length, ShieldCheck, "protocols", "bg-amber-50 text-amber-700"],
-    ["Críticos", criticalCases.length, AlertTriangle, "cases", "bg-rose-50 text-rose-700"],
-    ["Ahora", currentStaffSlots.length + currentCourseSlots.length, MapPin, "today", "bg-emerald-50 text-emerald-700"],
+    ["Agenda de hoy", items.length, CalendarDays, "today", "bg-blue-50 text-blue-700 border-blue-200"],
+    ["Protocolos activos", protocolsDue.length, ShieldCheck, "protocols", "bg-amber-50 text-amber-700 border-amber-200"],
+    ["Casos de seguimiento", criticalCases.length, AlertTriangle, "cases", "bg-rose-50 text-rose-700 border-rose-200"],
+    ["Docentes activos", currentStaffSlots.length, MapPin, "today", "bg-emerald-50 text-emerald-700 border-emerald-200"],
   ];
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-3 py-2.5">
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/80 px-4 py-3">
         <div className="flex items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
+          <div className="grid h-8 w-8 place-items-center rounded-lg bg-slate-900 text-white shadow-xs">
             <CalendarDays className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-sm font-semibold text-slate-950">Mi día · resumen operativo</h2>
+            <h2 className="text-sm font-bold text-slate-950">Mi día · resumen operativo</h2>
             <p className="text-[11px] capitalize text-slate-500">{dateLong}</p>
           </div>
           {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
@@ -12589,75 +12647,96 @@ function DashboardAgenda({
         </div>
       </header>
 
-      <div className="space-y-3 p-3">
+      <div className="space-y-4 p-4">
+        {/* Subtles minimal info indicators */}
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {miniStats.map(([label, value, Icon, view, tone]) => (
-            <button key={label} onClick={() => onNavigate(view)} className={`tz-press flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left ${tone} ring-1 ring-inset ring-black/5 hover:-translate-y-0.5`}>
+            <button key={label} onClick={() => onNavigate(view)} className={`tz-press flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-left border ${tone} transition hover:bg-opacity-80`}>
               <span className="flex min-w-0 items-center gap-2">
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate text-[11px] font-bold uppercase tracking-wide">{label}</span>
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="truncate text-xs font-semibold">{label}</span>
               </span>
-              <span className="text-base font-black tabular-nums">{value}</span>
+              <span className="text-base font-bold tabular-nums">{value}</span>
             </button>
           ))}
         </div>
 
-        <div className="grid gap-3 xl:grid-cols-3">
-          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/30 p-3 shadow-xs">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                <MapPin className="h-3.5 w-3.5 text-emerald-600" /> Horario personal en vivo
+        <div className="grid gap-4 xl:grid-cols-3">
+          {/* Horario personal en vivo */}
+          <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/20 p-3.5 shadow-xs">
+            <div className="mb-2.5 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-800">
+                <MapPin className="h-4 w-4 text-emerald-600" /> Horario personal en vivo
               </p>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{currentStaffSlots.length}</span>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{currentStaffSlots.length} activos</span>
             </div>
             {currentStaffSlots.length === 0 ? (
-              <p className="rounded-lg bg-white p-2.5 text-xs text-slate-500 border border-slate-200/60">Sin bloques docentes activos en este momento.</p>
+              <p className="rounded-lg bg-white p-3 text-xs text-slate-500 border border-slate-200/60">Sin bloques docentes activos en este momento.</p>
             ) : (
-              <ul className="tz-thin-scroll tz-stagger-list max-h-36 space-y-1.5 overflow-y-auto pr-1">
+              <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-2 overflow-y-auto pr-1">
                 {currentStaffSlots.map((slot, index) => (
-                  <li key={`${slot.staffName}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-emerald-200/60 bg-white p-2 text-xs transition hover:bg-emerald-50/50 shadow-2xs">
-                    <span className="min-w-0">
-                      <strong className="block truncate text-slate-900 font-bold">{slot.staffName}</strong>
-                      <span className="block truncate text-slate-600">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">{slot.startTime}</span>
+                  <li key={`${slot.staffName}-${slot.startTime}-${index}`} className="rounded-xl border border-emerald-200/60 bg-white p-2.5 text-xs shadow-2xs">
+                    <div className="flex items-center justify-between gap-2">
+                      <strong className="truncate text-slate-900 font-bold">{slot.staffName}</strong>
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 tabular-nums">
+                        {slot.progress}% ({slot.remaining} min)
+                      </span>
+                    </div>
+                    <p className="mt-0.5 truncate text-slate-600">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</p>
+                    {/* Live progress bar */}
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-teal-600 transition-all duration-500" style={{ width: `${slot.progress}%` }} />
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
           </div>
 
-          <div className="rounded-xl border border-blue-200/80 bg-blue-50/30 p-3 shadow-xs">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-blue-800">
-                <BookOpen className="h-3.5 w-3.5 text-blue-600" /> Cada curso ahora
+          {/* Cada curso ahora (con porcentaje transcurrido en vivo) */}
+          <div className="rounded-xl border border-blue-200/80 bg-blue-50/20 p-3.5 shadow-xs">
+            <div className="mb-2.5 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-800">
+                <BookOpen className="h-4 w-4 text-blue-600" /> Cada curso ahora
               </p>
-              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">{currentCourseSlots.length}</span>
+              <button onClick={() => onNavigate("courses")} className="text-[10px] font-bold text-blue-700 hover:underline">
+                Ver todos ({allCourseLiveStates.length})
+              </button>
             </div>
-            {currentCourseSlots.length === 0 ? (
-              <p className="rounded-lg bg-white p-2.5 text-xs text-slate-500 border border-slate-200/60">Sin cursos activos en este bloque.</p>
-            ) : (
-              <ul className="tz-thin-scroll tz-stagger-list max-h-36 space-y-1.5 overflow-y-auto pr-1">
-                {currentCourseSlots.map((slot, index) => (
-                  <li key={`${slot.course}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-lg border border-blue-200/60 bg-white p-2 text-xs transition hover:bg-blue-50/50 shadow-2xs">
-                    <span className="min-w-0">
-                      <strong className="block truncate text-slate-900 font-bold">{slot.course}</strong>
-                      <span className="block truncate text-slate-600">{slot.activity}</span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">{slot.startTime}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-2 overflow-y-auto pr-1">
+              {allCourseLiveStates.map((state) => (
+                <li key={state.courseName} className="rounded-xl border border-blue-200/60 bg-white p-2.5 text-xs shadow-2xs hover:bg-blue-50/30 transition">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-900 truncate">{state.courseName}</span>
+                    {state.isLive ? (
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 tabular-nums">
+                        🟢 {state.progress}% transcurrido ({state.remaining} min)
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                        Pausa / Recreo
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 truncate text-slate-600 font-medium">{state.activity}</p>
+                  {state.isLive ? (
+                    <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-indigo-600 transition-all duration-500" style={{ width: `${state.progress}%` }} />
+                    </div>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <div className="rounded-xl border border-amber-200/80 bg-amber-50/40 p-3 shadow-xs">
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-amber-900">
-                <ClipboardList className="h-3.5 w-3.5 text-amber-600" /> Tareas "Por Hacer" y Pendientes
+          {/* Tareas Por Hacer y Pendientes */}
+          <div className="rounded-xl border border-amber-200/80 bg-amber-50/20 p-3.5 shadow-xs">
+            <div className="mb-2.5 flex items-center justify-between gap-2">
+              <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-900">
+                <ClipboardList className="h-4 w-4 text-amber-600" /> Tareas "Por Hacer" y Pendientes
               </p>
               <button onClick={() => onNavigate("interviews")} className="text-[10px] font-bold text-amber-800 hover:underline">
-                Ver todos ({store.interviews.filter((r) => !/realizad|cerrad/i.test(r.status || "")).length + criticalCases.length})
+                Ver todos
               </button>
             </div>
 
@@ -12667,41 +12746,37 @@ function DashboardAgenda({
 
               if (totalPending === 0) {
                 return (
-                  <div className="rounded-lg bg-white p-3 text-center border border-slate-200/60">
+                  <div className="rounded-xl bg-white p-4 text-center border border-slate-200/60">
                     <Check className="mx-auto h-5 w-5 text-emerald-500" />
-                    <p className="mt-1 text-xs font-semibold text-slate-700">¡Al día! No tienes tareas ni entrevistas pendientes.</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-700">¡Al día! No hay entrevistas ni tareas pendientes.</p>
                   </div>
                 );
               }
 
               return (
-                <ul className="tz-thin-scroll tz-stagger-list max-h-36 space-y-1.5 overflow-y-auto pr-1">
+                <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-2 overflow-y-auto pr-1">
                   {pendingInterviews.slice(0, 4).map((r) => (
-                    <li key={r.id} className="flex items-center justify-between gap-2 rounded-lg border border-amber-200/80 bg-white p-2 text-xs shadow-2xs hover:border-amber-400 transition">
-                      <div className="min-w-0 flex-1">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-1.5 py-0.2 text-[9px] font-bold text-amber-800 mr-1.5">
+                    <li key={r.id} className="rounded-xl border border-amber-200/80 bg-white p-2.5 text-xs shadow-2xs hover:border-amber-400 transition">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-800">
                           📌 Entrevista Por Hacer
                         </span>
-                        <strong className="block truncate text-slate-900 font-bold">{r.reason || r.title || "Entrevista agendada"}</strong>
-                        <span className="block truncate text-slate-500">{r.participant || r.student || "Estudiante"} {r.course ? `(${r.course})` : ""}</span>
+                        <span className="text-[10px] font-semibold text-slate-400">{r.date || "Hoy"}</span>
                       </div>
-                      <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-amber-200">
-                        {r.date || "Hoy"}
-                      </span>
+                      <strong className="mt-1 block truncate text-slate-900 font-bold">{r.reason || r.title || "Entrevista agendada"}</strong>
+                      <p className="truncate text-slate-500 text-[11px]">{r.participant || r.student || "Estudiante"} {r.course ? `(${r.course})` : ""}</p>
                     </li>
                   ))}
                   {criticalCases.slice(0, 2).map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-2 rounded-lg border border-rose-200/80 bg-white p-2 text-xs shadow-2xs hover:border-rose-400 transition">
-                      <div className="min-w-0 flex-1">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-1.5 py-0.2 text-[9px] font-bold text-rose-800 mr-1.5">
+                    <li key={c.id} className="rounded-xl border border-rose-200/80 bg-white p-2.5 text-xs shadow-2xs hover:border-rose-400 transition">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-bold text-rose-800">
                           ⚠ Caso Abierto
                         </span>
-                        <strong className="block truncate text-slate-900 font-bold">{c.title}</strong>
-                        <span className="block truncate text-slate-500">{c.student || "Estudiante"} {c.course ? `(${c.course})` : ""}</span>
+                        <span className="text-[10px] font-bold text-rose-700">{c.priority || "Alta"}</span>
                       </div>
-                      <span className="shrink-0 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] font-bold text-rose-700 ring-1 ring-rose-200">
-                        {c.priority || "Alta"}
-                      </span>
+                      <strong className="mt-1 block truncate text-slate-900 font-bold">{c.title}</strong>
+                      <p className="truncate text-slate-500 text-[11px]">{c.student || "Estudiante"} {c.course ? `(${c.course})` : ""}</p>
                     </li>
                   ))}
                 </ul>
@@ -12839,16 +12914,18 @@ function OperationsPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         {quickActions.map((item) => {
           const Icon = item.icon;
           return (
-            <button key={item.label} onClick={item.action} className="group rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
-              <div className={`mb-3 grid h-9 w-9 place-items-center rounded-lg ${item.tone} text-white shadow-sm`}>
+            <button key={item.label} onClick={item.action} className="group rounded-xl border border-slate-200/80 bg-slate-50/40 p-2.5 text-left transition hover:bg-white hover:border-slate-300 hover:shadow-xs flex items-center gap-3">
+              <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-700 group-hover:bg-slate-900 group-hover:text-white transition">
                 <Icon className="h-4 w-4" />
               </div>
-              <strong className="block text-sm text-slate-950">{item.label}</strong>
-              <span className="mt-1 block text-xs text-slate-500">{item.detail}</span>
+              <div className="min-w-0">
+                <strong className="block text-xs font-bold text-slate-900 truncate">{item.label}</strong>
+                <span className="block text-[10px] text-slate-500 truncate">{item.detail}</span>
+              </div>
             </button>
           );
         })}
