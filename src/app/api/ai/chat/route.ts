@@ -551,63 +551,77 @@ async function handle(request: Request) {
   });
 }
 
-function matchStudentInRoster(
-  mentionText: string,
+function extractCourseFromText(text: string): string | null {
+  const norm = normalizeText(text);
+  const m = norm.match(/\b([1-8])\s*°?\s*(b|basico\s*b|a|basico\s*a|c|basico\s*c)\b/) ||
+            norm.match(/\b([1-4])\s*°?\s*(m|medio\s*a|medio\s*b|medio\s*c)\b/) ||
+            norm.match(/\b(kinder|prekinder)\s*([a-c])?\b/);
+  if (!m) return null;
+  const num = m[1];
+  const rest = m[2] || "";
+  const isMedio = norm.includes("medio") || rest.startsWith("m");
+  const letter = rest.slice(-1).toUpperCase();
+  if (isMedio) return `${num}° Medio ${letter || "A"}`;
+  return `${num}° Básico ${letter || "A"}`;
+}
+
+function resolveStudentFromPrompt(
   userMessage: string,
+  extraContext: string,
   roster: Array<{ id: string; name: string; course?: string; rut?: string }>
-) {
+): { id: string; name: string; course?: string; rut?: string } | null {
   if (!roster || roster.length === 0) return null;
-  const fullText = `${mentionText || ""} ${userMessage || ""}`.toLowerCase();
-  const normalizedText = fullText.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
-  const stopWords = new Set(["el", "la", "los", "las", "un", "una", "de", "del", "con", "que", "estudiante", "alumno", "nino", "nina", "caso", "entrevista", "revisar", "tengo", "hacer", "esto"]);
+  const fullTextNorm = normalizeText(`${userMessage} ${extraContext}`);
+  const detectedCourse = extractCourseFromText(fullTextNorm);
+  const promptCourseNorm = detectedCourse ? normalizeText(detectedCourse).replace(/[^a-z0-9]/g, "") : "";
 
-  const rawTokens = (mentionText || userMessage)
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .split(/\s+/)
-    .filter((t) => t.length > 1 && !stopWords.has(t) && !/^\d+°?[a-z]?$/i.test(t));
-
-  if (rawTokens.length === 0) return null;
-
-  let bestMatch: { id: string; name: string; course?: string; rut?: string } | null = null;
-  let maxScore = 0;
+  let bestStudent: { id: string; name: string; course?: string; rut?: string } | null = null;
+  let maxScore = -999;
 
   for (const s of roster) {
     if (!s.name) continue;
-    const sNameNorm = s.name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const sTokens = sNameNorm.split(/\s+/).filter(Boolean);
+    const sNameNorm = normalizeText(s.name);
+    const sTokens = sNameNorm.split(/\s+/).filter((t) => t.length > 2);
 
-    let matchedCount = 0;
-    for (const token of rawTokens) {
-      if (sTokens.some((st) => st === token || st.startsWith(token) || token.startsWith(st))) {
-        matchedCount += 1;
+    if (sTokens.length === 0) continue;
+
+    let matchedTokens = 0;
+    for (const token of sTokens) {
+      const reg = new RegExp(`\\b${token}\\b`, "i");
+      if (reg.test(fullTextNorm)) {
+        matchedTokens += 1;
       }
     }
 
-    if (matchedCount === 0) continue;
+    if (matchedTokens === 0) continue;
 
-    let score = (matchedCount / rawTokens.length) * 100;
-    const joined = rawTokens.join(" ");
-    if (sNameNorm.includes(joined)) score += 50;
+    let score = (matchedTokens / sTokens.length) * 100 + (matchedTokens * 35);
+
+    if (sTokens.length >= 2) {
+      for (let i = 0; i < sTokens.length - 1; i++) {
+        if (fullTextNorm.includes(`${sTokens[i]} ${sTokens[i + 1]}`)) {
+          score += 45;
+        }
+      }
+    }
 
     if (s.course) {
-      const cNorm = s.course.toLowerCase().replace(/[^a-z0-9]/g, "");
-      const cShort = cNorm.replace("basico", "").replace("medio", "");
-      if (normalizedText.includes(cNorm) || (cShort.length >= 2 && normalizedText.includes(cShort))) {
-        score += 40;
+      const sCourseNorm = normalizeText(s.course).replace(/[^a-z0-9]/g, "");
+      if (promptCourseNorm && sCourseNorm.includes(promptCourseNorm)) {
+        score += 120;
+      } else if (promptCourseNorm) {
+        score -= 70;
       }
     }
 
     if (score > maxScore) {
       maxScore = score;
-      bestMatch = s;
+      bestStudent = s;
     }
   }
 
-  return maxScore >= 40 ? bestMatch : null;
+  return maxScore >= 40 ? bestStudent : null;
 }
 
 function postProcessRosterMatches(
@@ -617,10 +631,20 @@ function postProcessRosterMatches(
 ) {
   if (!result || !roster || roster.length === 0) return;
 
-  // 1. Resolve involvedStudents deterministically against full roster
-  if (Array.isArray(result.involvedStudents) && result.involvedStudents.length > 0) {
+  const resolved = resolveStudentFromPrompt(userMessage, "", roster);
+
+  if (resolved) {
+    result.involvedStudents = [
+      {
+        studentId: resolved.id,
+        studentName: resolved.name,
+        confidence: 0.98,
+        evidence: userMessage.slice(0, 120),
+      },
+    ];
+  } else if (Array.isArray(result.involvedStudents) && result.involvedStudents.length > 0) {
     result.involvedStudents = result.involvedStudents.map((inv: any) => {
-      const match = matchStudentInRoster(inv.studentName || inv.evidence || "", userMessage, roster);
+      const match = resolveStudentFromPrompt(inv.studentName || inv.evidence || "", userMessage, roster);
       if (match) {
         return {
           ...inv,
@@ -631,37 +655,17 @@ function postProcessRosterMatches(
       }
       return inv;
     });
-  } else {
-    // If Gemini didn't populate involvedStudents but user prompt mentions a student
-    const match = matchStudentInRoster(userMessage, userMessage, roster);
-    if (match) {
-      result.involvedStudents = [
-        {
-          studentId: match.id,
-          studentName: match.name,
-          confidence: 0.98,
-          evidence: userMessage.slice(0, 100),
-        },
-      ];
-    }
   }
 
-  // Primary involved student resolved for this message/story
   const primaryInvolved = result.involvedStudents?.[0];
   const primaryStudent = primaryInvolved?.studentId
     ? roster.find((s) => s.id === primaryInvolved.studentId)
-    : null;
+    : resolved;
 
-  // 2. Bind ALL studentRecords to the primary involved student (or specific involved student)
   if (Array.isArray(result.studentRecords)) {
-    result.studentRecords = result.studentRecords.map((rec: any, idx: number) => {
-      // Check if another involved student is explicitly named in this specific record description
-      const specificInv = (result.involvedStudents || []).find((inv: any) =>
-        inv.studentName && (rec.description || "").toLowerCase().includes(inv.studentName.toLowerCase())
-      );
-      const targetStudent = specificInv
-        ? roster.find((s) => s.id === specificInv.studentId)
-        : primaryStudent;
+    result.studentRecords = result.studentRecords.map((rec: any) => {
+      const specificMatch = resolveStudentFromPrompt(rec.title + " " + (rec.description || ""), userMessage, roster);
+      const targetStudent = specificMatch || primaryStudent;
 
       if (targetStudent) {
         return {
@@ -674,12 +678,7 @@ function postProcessRosterMatches(
     });
   }
 
-  // 3. Clean up erroneous disclaimer notes
-  if (typeof result.notes === "string" && result.notes.includes("Se ha asumido que")) {
-    if (primaryStudent) {
-      result.notes = `Estudiante identificado: ${primaryStudent.name}${primaryStudent.course ? ` (${primaryStudent.course})` : ""}.`;
-    } else {
-      result.notes = "";
-    }
+  if (primaryStudent) {
+    result.notes = `Estudiante identificado: ${primaryStudent.name}${primaryStudent.course ? ` (${primaryStudent.course})` : ""}.`;
   }
 }
