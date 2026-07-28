@@ -65,6 +65,35 @@ export async function GET() {
     if (institutionError) throw institutionError;
     if (!institution?.id) return NextResponse.json({ classes: [] }, { headers: { "Cache-Control": "no-store" } });
 
+    // Esta vista es pública (profesores sin sesión). Las observaciones son texto
+    // libre, así que se omiten si nombran a un estudiante: los datos de menores
+    // no pueden quedar expuestos a cualquiera con el enlace.
+    const studentNames: string[] = [];
+    for (let page = 0; ; page += 1) {
+      const { data, error } = await supabase
+        .from("app_records")
+        .select("data")
+        .eq("institution_id", institution.id)
+        .eq("entity", "students")
+        .range(page * 1000, page * 1000 + 999);
+      if (error) throw error;
+      const batch = (data as Array<{ data: Record<string, unknown> }> | null) || [];
+      batch.forEach((row) => {
+        const full = normalize(str(row.data?.fullName));
+        const parts = full.split(" ").filter(Boolean);
+        // Nombre + primer apellido: suficiente para identificar y evitar falsos
+        // positivos con nombres de pila muy comunes.
+        if (parts.length >= 2) studentNames.push(`${parts[0]} ${parts[1]}`);
+      });
+      if (batch.length < 1000) break;
+    }
+    const uniqueStudentNames = Array.from(new Set(studentNames));
+    const mentionsStudent = (text: string) => {
+      if (!text) return false;
+      const haystack = normalize(text);
+      return uniqueStudentNames.some((name) => haystack.includes(name));
+    };
+
     const classes: PublicClassRecord[] = [];
     const pageSize = 1000;
     let from = 0;
@@ -108,7 +137,7 @@ export async function GET() {
           teacherLink: isLink(teacherLink) ? teacherLink : "",
           planificacionLink,
           driveLink,
-          notes: normalize(notes) === normalize(topic) ? "" : notes,
+          notes: normalize(notes) === normalize(topic) || mentionsStudent(notes) ? "" : notes,
           updatedAt: row.updated_at,
         });
       });

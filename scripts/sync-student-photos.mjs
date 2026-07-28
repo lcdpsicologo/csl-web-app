@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -8,9 +8,15 @@ import sharp from "sharp";
 
 const scriptDirectory = path.dirname(fileURLToPath(import.meta.url));
 const projectDirectory = path.resolve(scriptDirectory, "..");
-const photosDirectory = path.resolve(projectDirectory, "..", "Fotos de estudiantes");
+// La carpeta vive junto a "Tiza Education", en Documentos.
+const photosDirectory = process.env.PHOTOS_DIR
+  || path.resolve(projectDirectory, "..", "..", "Fotos de estudiantes");
 const applyChanges = process.argv.includes("--apply");
 const verifyLocal = process.argv.includes("--verify-local");
+
+// Las fotos van a Supabase Storage y en la ficha solo queda la URL: incrustar
+// las imágenes en el registro infla el store y rompe la sincronización.
+const PHOTO_BUCKET = "student-photos";
 
 const COURSE_FOLDERS = {
   "PK°A": "Prekínder A",
@@ -27,6 +33,23 @@ const COURSE_FOLDERS = {
   "3°B": "3° Básico B",
   "4°A": "4° Básico A",
   "4°B": "4° Básico B",
+  "5°A": "5° Básico A",
+  "5°B": "5° Básico B",
+  "6°A": "6° Básico A",
+  "6°B": "6° Básico B",
+  "7°A": "7° Básico A",
+  "7°B": "7° Básico B",
+  "8°A": "8° Básico A",
+  "8°B": "8° Básico B",
+  "1° Medio A": "I° Medio A",
+  "1° Medio B": "I° Medio B",
+  "2° Medio A": "II° Medio A",
+  "2° Medio B": "II° Medio B",
+  // Los cursos TP comparten ficha con su nivel en la base institucional.
+  "3° Medio A": "III° Medio A",
+  "3° Medio TP A": "III° Medio A",
+  "4° Medio A": "IV° Medio A",
+  "4° Medio TP A": "IV° Medio A",
 };
 
 const normalize = (value) =>
@@ -115,7 +138,12 @@ const loadEnvironment = async () => {
 };
 
 const imageFilesIn = async (directory) => {
-  const entries = await readdir(directory, { withFileTypes: true });
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch {
+    return []; // carpeta de curso inexistente: se ignora
+  }
   return entries
     .filter((entry) => entry.isFile() && /\.(jpe?g|png|webp)$/i.test(entry.name))
     .map((entry) => path.join(directory, entry.name));
@@ -182,8 +210,19 @@ const buildMatches = (photos, rows) => {
     for (const student of courseStudents) {
       const bestPhoto = uniqueBest(coursePhotos.map((photo) => ({ photo, score: matchScore(photo.shortName, student.name) })));
       if (!bestPhoto) continue;
-      const bestStudent = uniqueBest(courseStudents.map((candidate) => ({ student: candidate, score: matchScore(bestPhoto.photo.shortName, candidate.name) })));
-      if (bestStudent?.student.record_id === student.record_id) matches.push({ student, photo: bestPhoto.photo, score: bestPhoto.score });
+      const scored = courseStudents
+        .map((candidate) => ({ student: candidate, score: matchScore(bestPhoto.photo.shortName, candidate.name) }))
+        .filter((candidate) => candidate.score > 0)
+        .sort((left, right) => right.score - left.score);
+      const topScore = scored[0]?.score ?? 0;
+      const tied = scored.filter((candidate) => candidate.score === topScore);
+      // Un empate entre fichas del mismo nombre son duplicados de la nómina:
+      // la foto es de esa persona, así que se asigna a todas sus fichas.
+      const sameStudentDuplicated = tied.length > 1
+        && tied.every((candidate) => normalize(candidate.student.name) === normalize(tied[0].student.name));
+      const isBest = tied.some((candidate) => candidate.student.record_id === student.record_id)
+        && (tied.length === 1 || sameStudentDuplicated);
+      if (isBest) matches.push({ student, photo: bestPhoto.photo, score: bestPhoto.score });
       else ambiguousStudents.push({ course, student: student.name, photo: bestPhoto.photo.shortName });
     }
   }
@@ -191,13 +230,49 @@ const buildMatches = (photos, rows) => {
   return { students, matches, ambiguousStudents };
 };
 
-const photoDataUrl = async (filePath) => {
-  const buffer = await sharp(filePath)
-    .rotate()
-    .resize(384, 384, { fit: "cover", position: "attention", withoutEnlargement: false })
-    .webp({ quality: 82, effort: 5, smartSubsample: true })
-    .toBuffer();
-  return `data:image/webp;base64,${buffer.toString("base64")}`;
+const photoBuffer = (filePath) => sharp(filePath)
+  .rotate()
+  .resize(384, 384, { fit: "cover", position: "attention", withoutEnlargement: false })
+  .webp({ quality: 82, effort: 5, smartSubsample: true })
+  .toBuffer();
+
+// Sube la foto con un nombre aleatorio y devuelve un enlace firmado. Se evita
+// derivar el nombre del identificador de la ficha: al venir del RUT, hacía que
+// las URLs fueran adivinables.
+const SIGNED_URL_TTL = 60 * 60 * 24 * 365; // 1 año
+
+const uploadPhoto = async (supabase, _recordId, filePath) => {
+  const buffer = await photoBuffer(filePath);
+  const objectPath = `${randomBytes(16).toString("hex")}.webp`;
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(objectPath, buffer, {
+    contentType: "image/webp",
+    upsert: true,
+    cacheControl: "31536000",
+  });
+  if (error) throw error;
+  const { data, error: signError } = await supabase.storage
+    .from(PHOTO_BUCKET).createSignedUrl(objectPath, SIGNED_URL_TTL);
+  if (signError) throw signError;
+  return data.signedUrl;
+};
+
+// El bucket es privado: las fotos de menores no deben quedar accesibles a
+// cualquiera que dé con la dirección.
+const ensureBucket = async (supabase) => {
+  const { data: buckets, error } = await supabase.storage.listBuckets();
+  if (error) throw error;
+  const options = {
+    public: false,
+    fileSizeLimit: 2 * 1024 * 1024,
+    allowedMimeTypes: ["image/webp", "image/jpeg", "image/png"],
+  };
+  if (buckets.some((bucket) => bucket.name === PHOTO_BUCKET)) {
+    const { error: updateError } = await supabase.storage.updateBucket(PHOTO_BUCKET, options);
+    if (updateError) throw updateError;
+    return;
+  }
+  const { error: createError } = await supabase.storage.createBucket(PHOTO_BUCKET, options);
+  if (createError) throw createError;
 };
 
 const verifyBundledMatching = async () => {
@@ -284,18 +359,20 @@ const main = async () => {
 
   if (!applyChanges || pending.length === 0) return;
 
+  await ensureBucket(supabase);
   const prepared = [];
   for (let index = 0; index < pending.length; index += 1) {
     const match = pending[index];
+    const publicUrl = await uploadPhoto(supabase, match.student.record_id, match.photo.filePath);
     prepared.push({
       institution_id: institution.id,
       entity: "students",
       record_id: match.student.record_id,
-      data: { ...match.student.data, profilePhoto: await photoDataUrl(match.photo.filePath) },
+      data: { ...match.student.data, profilePhoto: publicUrl },
       created_at: match.student.created_at,
       updated_at: new Date().toISOString(),
     });
-    if ((index + 1) % 25 === 0 || index + 1 === pending.length) console.error(`Preparadas ${index + 1}/${pending.length} fotos`);
+    if ((index + 1) % 25 === 0 || index + 1 === pending.length) console.error(`Subidas ${index + 1}/${pending.length} fotos`);
   }
 
   const batchSize = 25;

@@ -305,11 +305,13 @@ Lo que puedes hacer:
 - Responder cualquier pregunta o consulta sobre los datos del colegio: cuántos casos hay, qué estudiantes tienen alertas, qué entrevistas hay esta semana, cómo está el curso X, qué intervenciones se hicieron para Y, comparativas, ranking, búsquedas. Para esto te paso un RESUMEN DE DATOS con conteos, casos recientes, entrevistas recientes y estadísticas. Úsalo libremente para responder con datos reales.
 - Si hay un ARCHIVO DE AUDIO adjunto, es un mensaje de voz del usuario: transcríbelo y trátalo exactamente igual que si lo hubiera escrito (responde la pregunta o crea los registros que dicte). No digas "recibí un audio" — actúa directamente sobre su contenido.
 - Conversar sobre orientación, convivencia escolar, sugerencias, recomendaciones, redacción de correos a apoderados, planificación de clases de orientación, etc.
-- Ayudar a crear registros cuando el usuario pega correos, mensajes, tablas, o adjunta archivos: detectas qué crear y devuelves las propuestas.
+- Procesar relatos, tareas "Por Hacer", correos copiados o mensajes del equipo: si el usuario relata una situación o tarea por realizar (ej. "Tengo este caso que debo revisar hoy mismo: Gabriel Reyes 2°B... debo entrevistarlo..."), detecta automáticamente al estudiante y propone una Entrevista Agendada (entity: "interviews", status: "Agendada") para que quede como tarea pendiente "Por Hacer", y un Caso (entity: "cases", status: "Abierto").
+- Si el usuario pega un correo recibido (de un profesor o apoderado), interpreta de qué se trata y genera las propuestas hacia interviews, cases, logs o meetings.
+- PREGUNTAS ACLARATORIAS INTERACTIVAS: En "answer", explica lo detectado, confirma que dejaste las propuestas listas para guardar y formula las preguntas aclaratorias necesarias si hay ambigüedad (ej. "¿La entrevista la realizarás tú o derivamos a Convivencia/Psicología?", "¿Fijamos fecha para hoy mismo?").
 - Si el usuario adjunta o pega una nómina/listado/planilla de estudiantes de un curso, interpreta columnas aunque tengan nombres distintos (Nombre, Estudiante, Alumno, Curso, RUT, RUN, Apoderado, Teléfono, Correo, Observaciones). Propón bulk_import hacia "students" con fields compatibles: fullName, course, rut, guardianName, guardianPhone, guardianEmail, relevantInfo, supportNeeds, notes, tags.
 - Si el archivo es una captura de pantalla con una tabla o listado, lee visualmente la información y propón una importación revisable. Si algún dato no se ve claro, indícalo en notes en vez de inventarlo.
 
-REGLA CLAVE: si el usuario hace una PREGUNTA o pide información, NO le digas que "tu función es generar registros". Respondele directamente usando el RESUMEN DE DATOS y tu conocimiento del rol de orientador. Solo creas registros si el usuario explícitamente pide guardar/agregar algo o si pegó contenido que claramente debe convertirse en registros (un correo de la profe jefe, una tabla de talleres, etc.).
+REGLA CLAVE: si el usuario hace una PREGUNTA o pide información, NO le digas que "tu función es generar registros". Respondele directamente usando el RESUMEN DE DATOS y tu conocimiento del rol de orientador. Solo creas registros si el usuario explícitamente pide guardar/agregar algo o si pegó contenido que claramente debe convertirse en registros (un correo de la profe jefe, un caso por revisar, etc.).
 
 DEVOLVÉ SIEMPRE un único JSON válido con esta estructura. Todos los campos son obligatorios — usa array vacío [] o string vacío "" cuando no apliquen:
 
@@ -447,7 +449,7 @@ async function handle(request: Request) {
   }
 
   const hasFiles = extracted.length > 0;
-  const rosterTrimmed = roster.slice(0, hasFiles ? 300 : 500);
+  const rosterTrimmed = roster.slice(0, 2500);
   const rosterTable = rosterTrimmed.map((s) => `${s.id}|${s.name}|${s.course || ""}|${s.rut || ""}`).join("\n");
   const coursesList = courses.slice(0, 80).map((c) => `${c.name}${c.cycle ? ` (${c.cycle})` : ""}`).join("\n");
 
@@ -538,10 +540,145 @@ async function handle(request: Request) {
   if (!parsed) {
     return NextResponse.json({ error: `Gemini no respondió. Último: ${lastStatus} ${lastMsg}` }, { status: 503 });
   }
+
+  postProcessRosterMatches(parsed, message, roster);
+
   return NextResponse.json({
     ok: true,
     result: parsed,
     model: usedModel,
     filesProcessed: extracted.map((e) => ({ name: e.name, kind: e.inlinePart ? "binary" : "text" })),
   });
+}
+
+function extractCourseFromText(text: string): string | null {
+  const norm = normalizeText(text);
+  const m = norm.match(/\b([1-8])\s*°?\s*(b|basico\s*b|a|basico\s*a|c|basico\s*c)\b/) ||
+            norm.match(/\b([1-4])\s*°?\s*(m|medio\s*a|medio\s*b|medio\s*c)\b/) ||
+            norm.match(/\b(kinder|prekinder)\s*([a-c])?\b/);
+  if (!m) return null;
+  const num = m[1];
+  const rest = m[2] || "";
+  const isMedio = norm.includes("medio") || rest.startsWith("m");
+  const letter = rest.slice(-1).toUpperCase();
+  if (isMedio) return `${num}° Medio ${letter || "A"}`;
+  return `${num}° Básico ${letter || "A"}`;
+}
+
+function resolveStudentFromPrompt(
+  userMessage: string,
+  extraContext: string,
+  roster: Array<{ id: string; name: string; course?: string; rut?: string }>
+): { id: string; name: string; course?: string; rut?: string } | null {
+  if (!roster || roster.length === 0) return null;
+
+  const fullTextNorm = normalizeText(`${userMessage} ${extraContext}`);
+  const detectedCourse = extractCourseFromText(fullTextNorm);
+  const promptCourseNorm = detectedCourse ? normalizeText(detectedCourse).replace(/[^a-z0-9]/g, "") : "";
+
+  let bestStudent: { id: string; name: string; course?: string; rut?: string } | null = null;
+  let maxScore = -999;
+
+  for (const s of roster) {
+    if (!s.name) continue;
+    const sNameNorm = normalizeText(s.name);
+    const sTokens = sNameNorm.split(/\s+/).filter((t) => t.length > 2);
+
+    if (sTokens.length === 0) continue;
+
+    let matchedTokens = 0;
+    for (const token of sTokens) {
+      const reg = new RegExp(`\\b${token}\\b`, "i");
+      if (reg.test(fullTextNorm)) {
+        matchedTokens += 1;
+      }
+    }
+
+    if (matchedTokens === 0) continue;
+
+    let score = (matchedTokens / sTokens.length) * 100 + (matchedTokens * 35);
+
+    if (sTokens.length >= 2) {
+      for (let i = 0; i < sTokens.length - 1; i++) {
+        if (fullTextNorm.includes(`${sTokens[i]} ${sTokens[i + 1]}`)) {
+          score += 45;
+        }
+      }
+    }
+
+    if (s.course) {
+      const sCourseNorm = normalizeText(s.course).replace(/[^a-z0-9]/g, "");
+      if (promptCourseNorm && sCourseNorm.includes(promptCourseNorm)) {
+        score += 120;
+      } else if (promptCourseNorm) {
+        score -= 70;
+      }
+    }
+
+    if (score > maxScore) {
+      maxScore = score;
+      bestStudent = s;
+    }
+  }
+
+  return maxScore >= 40 ? bestStudent : null;
+}
+
+function postProcessRosterMatches(
+  result: any,
+  userMessage: string,
+  roster: Array<{ id: string; name: string; course?: string; rut?: string }>
+) {
+  if (!result || !roster || roster.length === 0) return;
+
+  const resolved = resolveStudentFromPrompt(userMessage, "", roster);
+
+  if (resolved) {
+    result.involvedStudents = [
+      {
+        studentId: resolved.id,
+        studentName: resolved.name,
+        confidence: 0.98,
+        evidence: userMessage.slice(0, 120),
+      },
+    ];
+  } else if (Array.isArray(result.involvedStudents) && result.involvedStudents.length > 0) {
+    result.involvedStudents = result.involvedStudents.map((inv: any) => {
+      const match = resolveStudentFromPrompt(inv.studentName || inv.evidence || "", userMessage, roster);
+      if (match) {
+        return {
+          ...inv,
+          studentId: match.id,
+          studentName: match.name,
+          confidence: 0.98,
+        };
+      }
+      return inv;
+    });
+  }
+
+  const primaryInvolved = result.involvedStudents?.[0];
+  const primaryStudent = primaryInvolved?.studentId
+    ? roster.find((s) => s.id === primaryInvolved.studentId)
+    : resolved;
+
+  if (Array.isArray(result.studentRecords)) {
+    result.studentRecords = result.studentRecords.map((rec: any) => {
+      const specificMatch = resolveStudentFromPrompt(rec.title + " " + (rec.description || ""), userMessage, roster);
+      const targetStudent = specificMatch || primaryStudent;
+
+      if (targetStudent) {
+        return {
+          ...rec,
+          studentId: targetStudent.id,
+          title: rec.title || `Intervención · ${targetStudent.name}`,
+        };
+      }
+      return rec;
+    });
+  }
+
+  if (primaryStudent) {
+    result.notes = `Estudiante identificado: ${primaryStudent.name}${primaryStudent.course ? ` (${primaryStudent.course})` : ""}.`;
+  }
 }

@@ -361,7 +361,7 @@ const normalize = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
-const getCleanRecordTitle = (rec: Record<string, any>): string => {
+const getCleanRecordTitle = (rec: DataRecord): string => {
   const explicitTitle = (rec.title || "").trim();
   if (explicitTitle && explicitTitle.length < 90 && !explicitTitle.includes("\n")) {
     return explicitTitle;
@@ -3702,6 +3702,238 @@ function EmptyState({ onAdd, onImport, entity }: { onAdd: () => void; onImport: 
           <Upload className="h-4 w-4" /> Importar planilla
         </button>
       </div>
+    </div>
+  );
+}
+
+function CasesWorkspaceView({
+  store,
+  onAdd,
+  onEdit,
+  onDelete,
+  onExport,
+  onImport,
+  onOpenStudent,
+}: {
+  store: DataStore;
+  onAdd: () => void;
+  onEdit: (record: DataRecord) => void;
+  onDelete: (id: string) => void;
+  onExport: () => void;
+  onImport: () => void;
+  onOpenStudent: (studentId: string, focusField?: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+
+  const cases = store.cases || [];
+  const searchable = normalize(query);
+
+  const filtered = cases.filter((record) => {
+    const matchesSearch =
+      !searchable ||
+      Object.values(record).some((v) => normalize(String(v || "")).includes(searchable));
+
+    const recStatus = (record.status || record.estado || "").toLowerCase();
+    const matchesStatus =
+      statusFilter === "all" ||
+      (statusFilter === "abierto" && (/abiert|agendad|pendient/i.test(recStatus) || !recStatus)) ||
+      (statusFilter === "seguimiento" && /seguim/i.test(recStatus)) ||
+      (statusFilter === "cerrado" && /cerrad|resuelt/i.test(recStatus));
+
+    const recPriority = (record.priority || record.prioridad || "").toLowerCase();
+    const matchesPriority =
+      priorityFilter === "all" ||
+      (priorityFilter === "alta" && /alta|critic|urgente/i.test(recPriority)) ||
+      (priorityFilter === "media" && /media/i.test(recPriority)) ||
+      (priorityFilter === "baja" && /baja/i.test(recPriority));
+
+    return matchesSearch && matchesStatus && matchesPriority;
+  });
+
+  return (
+    <div className="tz-fade space-y-4">
+      {/* Header sobrio y profesional */}
+      <div className="flex flex-col justify-between gap-4 xl:flex-row xl:items-end">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white shadow-xs">
+              <FileText className="h-4 w-4" />
+            </div>
+            <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Casos</h1>
+          </div>
+          <p className="mt-1.5 max-w-3xl text-sm text-slate-600">
+            Casos individuales o grupales con prioridad, estado y trazabilidad. Clic en cualquier estudiante para abrir su perfil.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex min-w-[240px] flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-xs xl:w-72 xl:flex-none">
+            <Search className="h-4 w-4 text-slate-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar en casos..."
+              className="w-full bg-transparent text-sm outline-none placeholder:text-slate-500 font-medium"
+            />
+            {query ? (
+              <button onClick={() => setQuery("")} className="rounded p-0.5 text-slate-400 hover:bg-slate-100">
+                <X className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+          <button onClick={onImport} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <Upload className="h-4 w-4" /> Importar
+          </button>
+          <button onClick={onExport} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
+            <ArrowDownToLine className="h-4 w-4" /> Exportar
+          </button>
+          <button onClick={onAdd} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-3.5 py-2 text-sm font-semibold text-white shadow-xs">
+            <Plus className="h-4 w-4" /> Agregar
+          </button>
+        </div>
+      </div>
+
+      {/* Listado Principal de Casos en Filas Sobrias */}
+      {cases.length === 0 ? (
+        <EmptyState entity={entityConfigs.cases} onAdd={onAdd} onImport={onImport} />
+      ) : (
+        <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-3 text-xs font-semibold text-slate-600 bg-slate-50/50">
+            <span>
+              Mostrando <span className="tabular-nums font-bold text-slate-900">{filtered.length}</span> de <span className="tabular-nums font-bold text-slate-900">{cases.length}</span> registros
+            </span>
+            <div className="flex items-center gap-2">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none"
+              >
+                <option value="all">Estado: Todos</option>
+                <option value="abierto">Abiertos</option>
+                <option value="seguimiento">En seguimiento</option>
+                <option value="cerrado">Cerrados</option>
+              </select>
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none"
+              >
+                <option value="all">Prioridad: Todas</option>
+                <option value="alta">Alta / Crítica</option>
+                <option value="media">Media</option>
+                <option value="baja">Baja</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="divide-y divide-slate-100">
+            {filtered.map((record) => {
+              const student =
+                store.students.find((s) => s.id === record.studentId) ||
+                store.students.find((s) => studentMatches(record, s));
+
+              const title = record.title || record.reason || record.motivo || "Caso";
+              const category = record.category || record.categoria || "Convivencia";
+              const status = record.status || record.estado || "Abierto";
+              const priority = record.priority || record.prioridad || "Alta";
+              const description = record.description || record.summary || record.notes || "";
+              const isHighPriority = /alta|critic|urgente/i.test(priority);
+
+              return (
+                <article
+                  key={record.id}
+                  className="flex flex-col gap-3 px-5 py-3.5 transition hover:bg-slate-50/70 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  {/* Estudiante con foto y link directo a ficha */}
+                  <div className="flex items-center gap-3 min-w-[240px] sm:w-1/3">
+                    {student ? (
+                      <button
+                        onClick={() => onOpenStudent(student.id)}
+                        className="group flex items-center gap-3 text-left outline-none"
+                        title={`Abrir perfil completo de ${student.fullName}`}
+                      >
+                        <div className={`relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full bg-gradient-to-br ${avatarTone(student.id)} text-[11px] font-bold text-white shadow-xs group-hover:ring-2 group-hover:ring-blue-400 transition`}>
+                          <StudentPhoto student={student} sizes="36px" fallback={initialsOf(student.fullName)} />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-bold text-slate-900 group-hover:text-blue-700 transition truncate text-sm">
+                            {student.fullName}
+                          </p>
+                          <p className="text-[11px] text-slate-500 truncate">
+                            {student.course || record.course || "Sin curso"}{student.rut ? ` · ${formatRutValue(student.rut)}` : ""}
+                          </p>
+                        </div>
+                      </button>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <div className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-200 text-slate-600 text-xs font-bold">
+                          <UserRound className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900 text-sm">{record.student || title}</p>
+                          <p className="text-[11px] text-slate-500">{record.course || "Sin curso"}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Datos del Caso */}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      <span className="font-bold text-slate-900 text-sm truncate max-w-md">{title}</span>
+                      <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold text-violet-700 ring-1 ring-violet-200/60">
+                        {category}
+                      </span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                        isHighPriority ? "bg-rose-50 text-rose-700 ring-1 ring-rose-200" : "bg-amber-50 text-amber-700 ring-1 ring-amber-200"
+                      }`}>
+                        Prioridad: {priority}
+                      </span>
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-emerald-200">
+                        Estado: {status}
+                      </span>
+                    </div>
+                    {description ? (
+                      <p className="text-xs text-slate-600 line-clamp-1 font-normal">{description}</p>
+                    ) : null}
+                    <p className="text-[10px] text-slate-400">
+                      Actualizado: {record.updatedAt ? new Date(record.updatedAt).toLocaleString("es-CL", { dateStyle: "short", timeStyle: "short" }) : "—"}
+                    </p>
+                  </div>
+
+                  {/* Acciones */}
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                    {student ? (
+                      <button
+                        onClick={() => onOpenStudent(student.id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-bold text-blue-700 hover:bg-blue-100 transition shadow-2xs"
+                        title="Ver Ficha / Perfil del Estudiante"
+                      >
+                        <UserRound className="h-3.5 w-3.5 text-blue-600" /> Ver Perfil
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={() => onEdit(record)}
+                      title="Ver o editar datos del caso"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Ver / editar
+                    </button>
+                    <button
+                      onClick={() => onDelete(record.id)}
+                      title="Eliminar caso"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-rose-200 bg-white px-2 py-1.5 text-xs font-bold text-rose-600 hover:bg-rose-50 transition"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
     </div>
   );
 }
@@ -12205,7 +12437,6 @@ function PieImportConfirmationView({
 function DashboardAgenda({
   store,
   courseSchedule,
-  staffSchedule,
   calendarEvents,
   calendarLoading,
   calendarIcalUrl,
@@ -12224,7 +12455,6 @@ function DashboardAgenda({
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
 
-  // Combine calendar events + app entries (interviews, classes) into a unified timeline.
   type AgendaItem = {
     key: string;
     start: Date;
@@ -12312,134 +12542,129 @@ function DashboardAgenda({
   };
 
   const dateLong = today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
-  const in7 = new Date(today.getTime() + 7 * 86400000).toISOString().slice(0, 10);
-  const protocolsDue = store.protocols.filter((r) => r.dueDate && r.dueDate >= todayStr && r.dueDate <= in7 && r.status !== "Cerrado");
-  const criticalCases = store.cases.filter((r) => /abierto|seguimiento|activad/i.test(r.status || "") && /crítica|alta/i.test(r.priority || ""));
   const schoolDay = today.toLocaleDateString("es-CL", { weekday: "long" }).toLowerCase();
   const nowMinutes = today.getHours() * 60 + today.getMinutes();
   const toMinutes = (time: string) => {
-    const [hours, minutes] = time.split(":").map(Number);
-    return hours * 60 + minutes;
+    const [hours, minutes] = String(time || "").split(":").map(Number);
+    return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
   };
-  const currentStaffSlots = staffSchedule
-    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
-    .sort((a, b) => a.staffName.localeCompare(b.staffName, "es"))
-    .slice(0, 6);
-  const currentCourseSlots = courseSchedule
-    .filter((slot) => slot.day === schoolDay && toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime))
-    .sort((a, b) => a.course.localeCompare(b.course, "es"))
-    .slice(0, 6);
-  const miniStats: Array<[string, number, LucideIcon, ViewId, string]> = [
-    ["Agenda", items.length, CalendarDays, "today", "bg-blue-50 text-blue-700"],
-    ["Protocolos", protocolsDue.length, ShieldCheck, "protocols", "bg-amber-50 text-amber-700"],
-    ["Críticos", criticalCases.length, AlertTriangle, "cases", "bg-rose-50 text-rose-700"],
-    ["Ahora", currentStaffSlots.length + currentCourseSlots.length, MapPin, "today", "bg-emerald-50 text-emerald-700"],
-  ];
+
+  // Calculate live state for the 14 courses of 1er Ciclo
+  const firstCycleLiveStates = officialCourses
+    .filter((c) => c.cycle === "I Ciclo")
+    .map((c) => {
+      const courseKey = schoolScheduleCourseKey(c.name);
+      const slots = courseSchedule.filter((slot) => schoolScheduleCourseKey(slot.course) === courseKey && slot.day === schoolDay);
+      const activeSlot = slots.find((slot) => toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime));
+
+      let activity = "Sin clase activa";
+      let progress = 0;
+      let remaining = 0;
+      let isLive = false;
+
+      if (activeSlot) {
+        isLive = true;
+        activity = activeSlot.activity || "En clase";
+        const start = toMinutes(activeSlot.startTime);
+        const end = toMinutes(activeSlot.endTime);
+        const duration = Math.max(1, end - start);
+        const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
+        progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
+        remaining = Math.max(0, end - nowMinutes);
+      } else if (slots.length > 0) {
+        const nextSlot = slots.find((slot) => toMinutes(slot.startTime) > nowMinutes);
+        if (nextSlot) {
+          activity = `Próxima: ${nextSlot.activity} (${nextSlot.startTime})`;
+        } else {
+          activity = "Clases finalizadas por hoy";
+        }
+      }
+
+      return {
+        courseName: c.name,
+        activity,
+        isLive,
+        progress,
+        remaining,
+      };
+    });
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-gradient-to-r from-slate-50 via-blue-50/40 to-white px-3 py-2.5">
-        <div className="flex items-center gap-3">
-          <div className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-blue-600 to-violet-600 text-white shadow-sm">
-            <CalendarDays className="h-4 w-4" />
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs space-y-6 p-5">
+      {/* Encabezado Principal de Cada Curso Ahora */}
+      <div>
+        <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white shadow-xs">
+              <BookOpen className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-950">Cada curso ahora · 1er Ciclo</h2>
+              <p className="text-xs text-slate-500 capitalize">{dateLong} · Estado en vivo de los 14 cursos</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-sm font-semibold text-slate-950">Mi día · resumen operativo</h2>
-            <p className="text-[11px] capitalize text-slate-500">{dateLong}</p>
-          </div>
-          {calendarLoading ? <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" /> : null}
+          <button
+            onClick={() => onNavigate("courses")}
+            className="tz-press inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Ver todos los cursos
+          </button>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">{items.length} {items.length === 1 ? "actividad" : "actividades"}</span>
-          {calendarIcalUrl ? (
-            <button onClick={onReloadCalendar} className="tz-press rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">Recargar</button>
-          ) : null}
-        </div>
-      </header>
 
-      <div className="space-y-3 p-3">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {miniStats.map(([label, value, Icon, view, tone]) => (
-            <button key={label} onClick={() => onNavigate(view)} className={`tz-press flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left ${tone} ring-1 ring-inset ring-black/5 hover:-translate-y-0.5`}>
-              <span className="flex min-w-0 items-center gap-2">
-                <Icon className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate text-[11px] font-bold uppercase tracking-wide">{label}</span>
-              </span>
-              <span className="text-base font-black tabular-nums">{value}</span>
-            </button>
+        {/* Grilla sobria de los 14 cursos de Primer Ciclo */}
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {firstCycleLiveStates.map((state) => (
+            <div
+              key={state.courseName}
+              className="group relative flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/40 p-3 transition hover:bg-white hover:border-slate-300 hover:shadow-xs"
+            >
+              <div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-slate-950 text-xs truncate">{state.courseName}</span>
+                  {state.isLive ? (
+                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 tabular-nums">
+                      🟢 {state.progress}% ({state.remaining}m)
+                    </span>
+                  ) : (
+                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                      Pausa / Sin clase
+                    </span>
+                  )}
+                </div>
+                <p className="mt-1 text-xs font-medium text-slate-700 truncate">{state.activity}</p>
+              </div>
+
+              {state.isLive ? (
+                <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-500"
+                    style={{ width: `${state.progress}%` }}
+                  />
+                </div>
+              ) : null}
+            </div>
           ))}
         </div>
+      </div>
 
-        <div className="grid gap-3 xl:grid-cols-2">
-          <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500"><MapPin className="h-3.5 w-3.5 text-emerald-600" /> Ahora en el colegio</p>
-              <span className="text-[10px] text-slate-400">{SCHOOL_SCHEDULE_SUMMARY.teacherEntries} bloques</span>
-            </div>
-            {currentStaffSlots.length === 0 ? (
-              <p className="rounded-md bg-slate-50 p-2 text-xs text-slate-500">Sin bloques activos de funcionarios en este momento.</p>
-            ) : (
-              <ul className="tz-thin-scroll tz-stagger-list max-h-32 space-y-1 overflow-y-auto pr-1">
-                {currentStaffSlots.map((slot, index) => (
-                  <li key={`${slot.staffName}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs transition hover:bg-emerald-50/50">
-                    <span className="min-w-0">
-                      <strong className="block truncate text-slate-900">{slot.staffName}</strong>
-                      <span className="block truncate text-slate-500">{slot.activity}{slot.courseHint ? ` · ${slot.courseHint}` : ""}</span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          <div className="rounded-lg border border-slate-200 bg-white p-2.5">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-slate-500"><BookOpen className="h-3.5 w-3.5 text-blue-600" /> Cursos ahora</p>
-              <span className="text-[10px] text-slate-400">{SCHOOL_SCHEDULE_SUMMARY.courseEntries} bloques</span>
-            </div>
-            {currentCourseSlots.length === 0 ? (
-              <p className="rounded-md bg-slate-50 p-2 text-xs text-slate-500">Sin cursos activos en este momento.</p>
-            ) : (
-              <ul className="tz-thin-scroll tz-stagger-list max-h-32 space-y-1 overflow-y-auto pr-1">
-                {currentCourseSlots.map((slot, index) => (
-                  <li key={`${slot.course}-${slot.startTime}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-slate-100 px-2 py-1.5 text-xs transition hover:bg-blue-50/50">
-                    <span className="min-w-0">
-                      <strong className="block truncate text-slate-900">{slot.course}</strong>
-                      <span className="block truncate text-slate-500">{slot.activity}</span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">{slot.startTime}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+      {/* Sección Secundaria: Agenda de Hoy */}
+      <div className="pt-2 border-t border-slate-100">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-slate-600" /> Agenda de hoy
+          </h3>
+          {calendarIcalUrl ? (
+            <button onClick={onReloadCalendar} className="tz-press text-xs font-bold text-blue-700 hover:underline">
+              Recargar calendario
+            </button>
+          ) : null}
         </div>
 
-        {!calendarIcalUrl && items.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-blue-200 bg-blue-50/40 p-3 text-center">
-            <CalendarDays className="mx-auto h-5 w-5 text-blue-600" />
-            <p className="mt-1 text-sm font-semibold text-slate-900">Conecta tu Google Calendar</p>
-            <p className="mt-1 text-xs text-slate-600">Verás tus clases, reuniones, entrevistas y compromisos del día integrados aquí.</p>
-            <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
-              Conectar ahora
-            </button>
-          </div>
-        ) : items.length === 0 ? (
-          <div className="rounded-lg bg-slate-50 p-3 text-center">
-            <p className="text-sm font-semibold text-slate-700">Sin actividades para hoy</p>
-            <p className="mt-1 text-xs text-slate-500">Disfruta un día despejado, o revisa lo pendiente en Hoy.</p>
-            <button onClick={() => onNavigate("today")} className="tz-press mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-              Ver resumen del día
-            </button>
-          </div>
+        {items.length === 0 ? (
+          <p className="rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-500">No hay actividades programadas para hoy.</p>
         ) : (
-          <div className="rounded-lg border border-slate-200 bg-white">
-            <div className="flex items-center justify-between gap-2 border-b border-slate-100 px-3 py-2">
-              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Agenda de hoy</p>
-              <button onClick={() => onNavigate("today")} className="text-[11px] font-bold text-blue-700 hover:underline">Abrir detalle</button>
-            </div>
-            <ul className="tz-thin-scroll max-h-64 divide-y divide-slate-100 overflow-y-auto">
+          <div className="rounded-xl border border-slate-200 overflow-hidden">
+            <ul className="divide-y divide-slate-100 max-h-48 overflow-y-auto">
               {agendaRows.map((item) => {
                 const Icon = item.icon;
                 const isPast = !item.allDay && (item.end ? item.end.getTime() : item.start.getTime()) < nowMs;
@@ -12448,29 +12673,22 @@ function DashboardAgenda({
                   <li key={item.key}>
                     <button
                       onClick={() => item.href ? onNavigate(item.href) : onNavigate("today")}
-                      className={`grid w-full grid-cols-[76px_minmax(0,1fr)_auto] items-center gap-2 px-3 py-2 text-left transition hover:bg-blue-50/50 ${isPast && !isNext ? "opacity-60" : ""}`}
+                      className={`grid w-full grid-cols-[80px_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 text-left transition hover:bg-slate-50 ${isPast && !isNext ? "opacity-60" : ""}`}
                     >
-                      <span className={`rounded-md px-2 py-1 text-center text-[11px] font-black tabular-nums ${isNext ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-600"}`}>
+                      <span className={`rounded-md px-2 py-1 text-center text-[11px] font-bold tabular-nums ${isNext ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700"}`}>
                         {agendaTimeLabel(item)}
                       </span>
                       <span className="min-w-0">
-                        <span className="block truncate text-sm font-semibold text-slate-950">{item.title}</span>
-                        <span className="block truncate text-xs text-slate-500">{item.typeLabel}{item.location ? ` · ${item.location}` : ""}</span>
+                        <span className="block truncate text-xs font-bold text-slate-950">{item.title}</span>
+                        <span className="block truncate text-[11px] text-slate-500">{item.typeLabel}{item.location ? ` · ${item.location}` : ""}</span>
                       </span>
-                      <span className={`grid h-7 w-7 place-items-center rounded-md bg-gradient-to-br ${item.color} text-white`}>
+                      <span className={`grid h-6 w-6 place-items-center rounded-md bg-gradient-to-br ${item.color} text-white`}>
                         <Icon className="h-3.5 w-3.5" />
                       </span>
                     </button>
                   </li>
                 );
               })}
-              {items.length > agendaRows.length ? (
-                <li>
-                  <button onClick={() => onNavigate("today")} className="w-full px-3 py-2 text-center text-xs font-bold text-blue-700 hover:bg-blue-50">
-                    Ver {items.length - agendaRows.length} actividades más
-                  </button>
-                </li>
-              ) : null}
             </ul>
           </div>
         )}
@@ -12488,105 +12706,40 @@ function OperationsPanel({
   onNavigate: (view: ViewId) => void;
   onQuickAdd: (entity: EntityId) => void;
 }) {
-  const currentDate = new Date();
-  const today = currentDate.toISOString().slice(0, 10);
-  const weekEndDate = new Date(currentDate);
-  weekEndDate.setDate(weekEndDate.getDate() + 7);
-  const weekEnd = weekEndDate.toISOString().slice(0, 10);
-  const todayClasses = store.orientation.filter((record) => (record.date || "").slice(0, 10) === today);
-  const upcomingClasses = store.orientation
-    .filter((record) => record.date && record.date >= today && record.date <= weekEnd)
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .slice(0, 5);
-  const workshopsWeek = store.workshops
-    .filter((record) => record.date && record.date >= today && record.date <= weekEnd)
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .slice(0, 5);
-  const unplannedClasses = store.orientation
-    .filter((record) => record.date && record.date >= today && record.date <= weekEnd && !(record.planificacion || record.objective || "").trim())
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .slice(0, 5);
-  const openCases = store.cases.filter((record) => !/cerrad/i.test(record.status || ""));
-  const pendingInterviews = store.interviews
-    .filter((record) => !/realizada|cerrada/i.test(record.status || "") && (!record.date || record.date >= today))
-    .sort((a, b) => String(a.date || a.updatedAt).localeCompare(String(b.date || b.updatedAt)))
-    .slice(0, 5);
+  const openCasesCount = store.cases.filter((record) => !/cerrad/i.test(record.status || "")).length;
+  const upcomingInterviewsCount = store.interviews.filter((record) => !/realizada|cerrada/i.test(record.status || "")).length;
+  const activeProtocolsCount = store.protocols.filter((record) => record.status !== "Cerrado").length;
+  const totalLogsCount = store.logs.length;
 
-  const quickActions: Array<{ label: string; detail: string; icon: LucideIcon; action: () => void; tone: string }> = [
-    { label: "Registrar clase", detail: "Orientacion semanal", icon: ClipboardList, action: () => onNavigate("orientation"), tone: "bg-blue-600" },
-    { label: "Nuevo taller", detail: "Planificar y pasar lista", icon: GraduationCap, action: () => onNavigate("workshops"), tone: "bg-emerald-600" },
-    { label: "Bitacora", detail: "Seguimiento breve", icon: FileText, action: () => onQuickAdd("logs"), tone: "bg-violet-600" },
-    { label: "Entrevista", detail: "Acta y acuerdos", icon: MessageSquareText, action: () => onQuickAdd("interviews"), tone: "bg-sky-600" },
-    { label: "Caso", detail: "Abrir seguimiento", icon: AlertTriangle, action: () => onQuickAdd("cases"), tone: "bg-amber-600" },
-    { label: "Importar", detail: "Planillas y datos", icon: FileSpreadsheet, action: () => onNavigate("import"), tone: "bg-slate-900" },
-  ];
-
-  const workLists: Array<{ title: string; count: number; view: ViewId; empty: string; records: DataRecord[]; icon: LucideIcon }> = [
-    { title: "Clases proximas", count: upcomingClasses.length, view: "orientation", empty: "No hay clases registradas para los proximos 7 dias.", records: upcomingClasses, icon: ClipboardList },
-    { title: "Talleres proximos", count: workshopsWeek.length, view: "workshops", empty: "No hay talleres programados para esta semana.", records: workshopsWeek, icon: GraduationCap },
-    { title: "Falta planificacion", count: unplannedClasses.length, view: "orientation", empty: "Las clases de la semana tienen planificacion.", records: unplannedClasses, icon: Bell },
-    { title: "Entrevistas pendientes", count: pendingInterviews.length, view: "interviews", empty: "No hay entrevistas pendientes visibles.", records: pendingInterviews, icon: MessageSquareText },
+  const globalMetrics = [
+    { label: "Casos Abiertos", count: openCasesCount, detail: "En seguimiento activo", view: "cases" as ViewId },
+    { label: "Entrevistas Próximas", count: upcomingInterviewsCount, detail: "Agendadas o pendientes", view: "interviews" as ViewId },
+    { label: "Protocolos Activos", count: activeProtocolsCount, detail: "En proceso o revisión", view: "protocols" as ViewId },
+    { label: "Bitácoras Totales", count: totalLogsCount, detail: "Registros históricos", view: "logs" as ViewId },
   ];
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Centro operativo</p>
-          <h2 className="mt-1 text-xl font-semibold text-slate-950">Registrar, revisar y cerrar la semana</h2>
-          <p className="mt-1 max-w-2xl text-sm text-slate-600">
-            Accesos directos para el trabajo real: clases de orientacion, talleres, bitacoras, entrevistas y casos.
-          </p>
+    <section className="space-y-4">
+      {/* Barra Horizontal Minimalista de Datos */}
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="mb-3 px-1">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Métricas y Estado General del Establecimiento</h3>
         </div>
-        <div className="grid grid-cols-3 gap-2 text-center text-xs font-semibold">
-          <div className="rounded-xl bg-blue-50 px-3 py-2 text-blue-700 ring-1 ring-blue-100"><strong className="block text-lg">{todayClasses.length}</strong> hoy</div>
-          <div className="rounded-xl bg-amber-50 px-3 py-2 text-amber-700 ring-1 ring-amber-100"><strong className="block text-lg">{openCases.length}</strong> casos</div>
-          <div className="rounded-xl bg-rose-50 px-3 py-2 text-rose-700 ring-1 ring-rose-100"><strong className="block text-lg">{unplannedClasses.length}</strong> sin plan</div>
-        </div>
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {quickActions.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button key={item.label} onClick={item.action} className="group rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
-              <div className={`mb-3 grid h-9 w-9 place-items-center rounded-lg ${item.tone} text-white shadow-sm`}>
-                <Icon className="h-4 w-4" />
+        <div className="grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 lg:grid-cols-4">
+          {globalMetrics.map((metric) => (
+            <button
+              key={metric.label}
+              onClick={() => onNavigate(metric.view)}
+              className="flex items-center justify-between gap-3 p-3 text-left transition hover:bg-slate-50/80 rounded-xl"
+            >
+              <div>
+                <span className="block text-xs font-semibold text-slate-700">{metric.label}</span>
+                <span className="block text-[11px] text-slate-500">{metric.detail}</span>
               </div>
-              <strong className="block text-sm text-slate-950">{item.label}</strong>
-              <span className="mt-1 block text-xs text-slate-500">{item.detail}</span>
+              <span className="text-2xl font-bold text-slate-950 tabular-nums">{metric.count}</span>
             </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 grid gap-3 xl:grid-cols-4">
-        {workLists.map((list) => {
-          const Icon = list.icon;
-          return (
-            <article key={list.title} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <h3 className="flex min-w-0 items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-                  <Icon className="h-3.5 w-3.5" />
-                  <span className="truncate">{list.title}</span>
-                </h3>
-                <button onClick={() => onNavigate(list.view)} className="text-[11px] font-bold text-blue-700 hover:underline">{list.count}</button>
-              </div>
-              {list.records.length === 0 ? (
-                <p className="rounded-lg bg-white p-2 text-xs text-slate-500 ring-1 ring-slate-100">{list.empty}</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {list.records.map((record) => (
-                    <li key={record.id} className="rounded-lg bg-white px-2.5 py-2 text-xs ring-1 ring-slate-100">
-                      <strong className="block truncate text-slate-900">{record.topic || record.title || record.reason || "Registro"}</strong>
-                      <span className="mt-0.5 block truncate text-slate-500">{record.date || record.dueDate || "Sin fecha"}{record.course ? ` - ${record.course}` : ""}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </article>
-          );
-        })}
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -12661,45 +12814,19 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
               <button onClick={() => onNavigate("today")} className="tz-press inline-flex items-center gap-2 rounded-xl tz-btn-primary px-4 py-2.5 text-sm font-semibold text-white shadow-md">
                 <CalendarDays className="h-4 w-4" /> Ver mi día
               </button>
-              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-sm hover:bg-cyan-50">
+              <button onClick={() => onNavigate("triage")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-cyan-200 bg-white px-4 py-2.5 text-sm font-semibold text-cyan-800 shadow-xs hover:bg-cyan-50">
                 <TizaIaIcon className="h-4 w-4" /> Tiza-IA
               </button>
-              <button onClick={() => onNavigate("games")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-sm hover:bg-emerald-50">
+              <button onClick={() => onNavigate("games")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 text-sm font-semibold text-emerald-800 shadow-xs hover:bg-emerald-50">
                 <Gamepad2 className="h-4 w-4" /> Juegos Vinculares
               </button>
-              <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+              <button onClick={() => onNavigate("students")} className="tz-press inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-xs hover:bg-slate-50">
                 <UserRound className="h-4 w-4" /> Estudiantes
               </button>
             </div>
           </div>
-
-          <div className="grid w-full grid-cols-2 gap-3 sm:max-w-md lg:w-auto lg:grid-cols-1 lg:gap-2">
-            {([
-              ["Casos abiertos", store.cases.filter((c) => !/cerrad/i.test(c.status || "")).length, "from-amber-500 to-orange-500", "cases" as ViewId, FileText],
-              ["Entrevistas próximas", store.interviews.filter((r) => r.date && r.date >= now.toISOString().slice(0, 10)).length, "from-sky-500 to-blue-600", "interviews" as ViewId, MessageSquareText],
-              ["Protocolos activos", store.protocols.filter((r) => !/cerrad/i.test(r.status || "")).length, "from-rose-500 to-pink-600", "protocols" as ViewId, ShieldCheck],
-              ["Bitácoras totales", store.logs.length, "from-violet-500 to-purple-600", "logs" as ViewId, ClipboardList],
-            ] as Array<[string, number, string, ViewId, LucideIcon]>).map(([label, value, tone, view, Icon]) => (
-              <button
-                key={label}
-                onClick={() => onNavigate(view)}
-                className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-2.5 text-left shadow-sm backdrop-blur transition hover:border-slate-300 hover:shadow-md lg:w-56"
-              >
-                <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-gradient-to-br ${tone} text-white shadow-sm`}>
-                  <Icon className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{label}</p>
-                  <p className="text-xl font-semibold tabular-nums text-slate-950">{value.toLocaleString("es-CL")}</p>
-                </div>
-                <ChevronDown className="-rotate-90 h-4 w-4 text-slate-300 transition group-hover:text-slate-500" />
-              </button>
-            ))}
-          </div>
         </div>
       </section>
-
-      <OperationsPanel store={store} onNavigate={onNavigate} onQuickAdd={onQuickAdd} />
 
       <DashboardAgenda
         store={store}
@@ -12711,6 +12838,35 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
         onReloadCalendar={onReloadCalendar}
         onNavigate={onNavigate}
       />
+
+      {/* Barra Horizontal Minimalista de Datos (Casos Abiertos, Entrevistas Próximas, Protocolos Activos, Bitácoras Totales) */}
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="mb-3 px-1 border-b border-slate-100 pb-2">
+          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Métricas y Trazabilidad del Establecimiento</h3>
+        </div>
+        <div className="grid grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 lg:grid-cols-4">
+          {[
+            { label: "Casos abiertos", value: store.cases.filter((c) => !/cerrad/i.test(c.status || "")).length, detail: "En seguimiento activo", view: "cases" as ViewId },
+            { label: "Entrevistas próximas", value: store.interviews.filter((r) => !/realizada|cerrada/i.test(r.status || "")).length, detail: "Agendadas o pendientes", view: "interviews" as ViewId },
+            { label: "Protocolos activos", value: store.protocols.filter((r) => !/cerrad/i.test(r.status || "")).length, detail: "En proceso de revisión", view: "protocols" as ViewId },
+            { label: "Bitácoras totales", value: store.logs.length, detail: "Registros almacenados", view: "logs" as ViewId },
+          ].map((item) => (
+            <button
+              key={item.label}
+              onClick={() => onNavigate(item.view)}
+              className="flex items-center justify-between gap-3 p-3.5 text-left transition hover:bg-slate-50/80 rounded-xl"
+            >
+              <div>
+                <span className="block text-xs font-bold text-slate-900">{item.label}</span>
+                <span className="block text-[11px] font-medium text-slate-500">{item.detail}</span>
+              </div>
+              <span className="text-2xl font-black text-slate-950 tabular-nums">{item.value}</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <OperationsPanel store={store} onNavigate={onNavigate} onQuickAdd={onQuickAdd} />
 
       <section className="tz-card rounded-2xl border border-emerald-100 bg-gradient-to-br from-white via-emerald-50 to-cyan-50 p-5">
         <div className="flex flex-wrap items-center justify-between gap-4">
@@ -12975,32 +13131,34 @@ function MeetingsAndInterviewsView({
   }, [store.students, store.courses]);
 
   // Combine meetings and interviews
-  const allRecords = useMemo(() => {
+  // Registro del centro unificado: conserva de qué entidad proviene.
+  type HubRecord = DataRecord & { _entity: "meetings" | "interviews" };
+  const allRecords = useMemo<HubRecord[]>(() => {
     const meetingsList = (store.meetings || []).map((r) => ({ ...r, _entity: "meetings" as const }));
     const interviewsList = (store.interviews || []).map((r) => ({ ...r, _entity: "interviews" as const }));
-    return [...meetingsList, ...interviewsList].sort((a: any, b: any) =>
+    return [...meetingsList, ...interviewsList].sort((a: DataRecord, b: DataRecord) =>
       String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))
     );
   }, [store.meetings, store.interviews]);
 
-  const isGpMeeting = (rec: Record<string, any>) => {
+  const isGpMeeting = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.category || "").toLowerCase();
     const title = String(rec.title || rec.reason || "").toLowerCase();
     return type.includes("gp") || type.includes("gestión") || title.includes("gp") || rec._entity === "meetings";
   };
 
-  const isStudentInterview = (rec: Record<string, any>) => {
+  const isStudentInterview = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.type || "").toLowerCase();
     return type.includes("estudiante") || (rec._entity === "interviews" && !type.includes("apoderado"));
   };
 
-  const isParentInterview = (rec: Record<string, any>) => {
+  const isParentInterview = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.type || "").toLowerCase();
     const participant = String(rec.participant || "").toLowerCase();
     return type.includes("apoderado") || type.includes("padre") || type.includes("tutor") || participant.includes("apoderad");
   };
 
-  const isEmailOrInfo = (rec: Record<string, any>) => {
+  const isEmailOrInfo = (rec: DataRecord) => {
     const type = String(rec.meetingType || rec.category || "").toLowerCase();
     const source = String(rec.source || "").toLowerCase();
     return type.includes("correo") || type.includes("información") || source.includes("email") || rec.category === "Correo";
@@ -13008,7 +13166,7 @@ function MeetingsAndInterviewsView({
 
   const filteredRecords = useMemo(() => {
     return allRecords.filter((recItem) => {
-      const rec = recItem as Record<string, any>;
+      const rec = recItem as DataRecord;
       // Course filter
       if (courseFilter !== "todos") {
         const recCourse = String(rec.course || rec.cycle || rec.title || rec.reason || "");
@@ -13205,8 +13363,8 @@ function MeetingsAndInterviewsView({
     });
   };
 
-  const handleEditRecord = (recItem: any) => {
-    const rec = recItem as Record<string, any>;
+  const handleEditRecord = (recItem: HubRecord) => {
+    const rec = recItem as DataRecord;
     setEditingItem({ entity: recItem._entity, id: recItem.id });
     if (recItem._entity === "meetings") {
       const studentObj = sortedStudents.find((s) => normalize(rec.relatedStudents || rec.student || "").includes(normalize(s.fullName || "")));
@@ -13249,14 +13407,14 @@ function MeetingsAndInterviewsView({
   const categorizedGroups = useMemo(() => {
     if (activeTab === "gp") {
       const groups = [
-        { id: "formativo", title: "GP Formativo", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as any[] },
-        { id: "interdisciplinario", title: "GP Interdisciplinario", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as any[] },
-        { id: "tecnico", title: "GP Técnico / Docente", icon: ClipboardList, color: "bg-blue-600 text-white", badgeBg: "bg-blue-50 text-blue-700 ring-1 ring-blue-200", records: [] as any[] },
-        { id: "otras", title: "Otras Reuniones GP", icon: NotebookPen, color: "bg-slate-800 text-white", badgeBg: "bg-slate-100 text-slate-700 ring-1 ring-slate-200", records: [] as any[] },
+        { id: "formativo", title: "GP Formativo", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as DataRecord[] },
+        { id: "interdisciplinario", title: "GP Interdisciplinario", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as DataRecord[] },
+        { id: "tecnico", title: "GP Técnico / Docente", icon: ClipboardList, color: "bg-blue-600 text-white", badgeBg: "bg-blue-50 text-blue-700 ring-1 ring-blue-200", records: [] as DataRecord[] },
+        { id: "otras", title: "Otras Reuniones GP", icon: NotebookPen, color: "bg-slate-800 text-white", badgeBg: "bg-slate-100 text-slate-700 ring-1 ring-slate-200", records: [] as DataRecord[] },
       ];
 
       filteredRecords.forEach((recItem) => {
-        const rec = recItem as Record<string, any>;
+        const rec = recItem as DataRecord;
         const mType = normalize(rec.meetingType || "");
         if (mType.includes("formativo")) groups[0].records.push(recItem);
         else if (mType.includes("interdisciplinario")) groups[1].records.push(recItem);
@@ -13264,14 +13422,14 @@ function MeetingsAndInterviewsView({
         else groups[3].records.push(recItem);
       });
 
-      groups.forEach((g) => g.records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
+      groups.forEach((g) => g.records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
       return groups.filter((g) => g.records.length > 0 || (gpFilter !== "todas" && gpFilter === g.id));
     }
 
     if (activeTab === "entrevistas_estudiantes" || activeTab === "entrevistas_apoderados") {
-      const map = new Map<string, any[]>();
+      const map = new Map<string, DataRecord[]>();
       filteredRecords.forEach((recItem) => {
-        const rec = recItem as Record<string, any>;
+        const rec = recItem as DataRecord;
         const courseKey = rec.course || rec.cycle || "Sin Curso Asignado";
         if (!map.has(courseKey)) map.set(courseKey, []);
         map.get(courseKey)!.push(recItem);
@@ -13285,7 +13443,7 @@ function MeetingsAndInterviewsView({
       return Array.from(map.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "es"))
         .map(([courseName, records]) => {
-          records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+          records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
           return {
             id: `course-${normalize(courseName)}`,
             title: `Curso / Ciclo: ${courseName}`,
@@ -13298,9 +13456,9 @@ function MeetingsAndInterviewsView({
     }
 
     if (activeTab === "correos") {
-      const map = new Map<string, any[]>();
+      const map = new Map<string, DataRecord[]>();
       filteredRecords.forEach((recItem) => {
-        const rec = recItem as Record<string, any>;
+        const rec = recItem as DataRecord;
         const catKey = rec.category || "Información General";
         if (!map.has(catKey)) map.set(catKey, []);
         map.get(catKey)!.push(recItem);
@@ -13309,7 +13467,7 @@ function MeetingsAndInterviewsView({
       return Array.from(map.entries())
         .sort((a, b) => a[0].localeCompare(b[0], "es"))
         .map(([catName, records]) => {
-          records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
+          records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt)));
           return {
             id: `email-cat-${normalize(catName)}`,
             title: catName,
@@ -13323,21 +13481,21 @@ function MeetingsAndInterviewsView({
 
     // "todas" tab -> Master section breakdown
     const masterGroups = [
-      { id: "master-gp", title: "📌 Reuniones de Gestión Pedagógica (GP)", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as any[] },
-      { id: "master-students", title: "🎓 Entrevistas a Estudiantes", icon: GraduationCap, color: "bg-emerald-600 text-white", badgeBg: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", records: [] as any[] },
-      { id: "master-parents", title: "👨‍👩‍👧 Entrevistas a Apoderados", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as any[] },
-      { id: "master-emails", title: "📧 Información y Correos", icon: Mail, color: "bg-amber-600 text-white", badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200", records: [] as any[] },
+      { id: "master-gp", title: "📌 Reuniones de Gestión Pedagógica (GP)", icon: NotebookPen, color: "bg-indigo-600 text-white", badgeBg: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200", records: [] as DataRecord[] },
+      { id: "master-students", title: "🎓 Entrevistas a Estudiantes", icon: GraduationCap, color: "bg-emerald-600 text-white", badgeBg: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200", records: [] as DataRecord[] },
+      { id: "master-parents", title: "👨‍👩‍👧 Entrevistas a Apoderados", icon: UsersRound, color: "bg-purple-600 text-white", badgeBg: "bg-purple-50 text-purple-700 ring-1 ring-purple-200", records: [] as DataRecord[] },
+      { id: "master-emails", title: "📧 Información y Correos", icon: Mail, color: "bg-amber-600 text-white", badgeBg: "bg-amber-50 text-amber-800 ring-1 ring-amber-200", records: [] as DataRecord[] },
     ];
 
     filteredRecords.forEach((recItem) => {
-      const rec = recItem as Record<string, any>;
+      const rec = recItem as DataRecord;
       if (isEmailOrInfo(rec)) masterGroups[3].records.push(recItem);
       else if (isGpMeeting(rec)) masterGroups[0].records.push(recItem);
       else if (isParentInterview(rec)) masterGroups[2].records.push(recItem);
       else masterGroups[1].records.push(recItem);
     });
 
-    masterGroups.forEach((g) => g.records.sort((a: any, b: any) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
+    masterGroups.forEach((g) => g.records.sort((a: DataRecord, b: DataRecord) => String(b.date || b.updatedAt).localeCompare(String(a.date || a.updatedAt))));
 
     return masterGroups.filter((g) => g.records.length > 0);
   }, [filteredRecords, activeTab, gpFilter]);
@@ -13513,7 +13671,7 @@ function MeetingsAndInterviewsView({
             type="button"
             onClick={() => {
               if (expandedRecordIds.length > 0) setExpandedRecordIds([]);
-              else setExpandedRecordIds(filteredRecords.map((r: any) => r.id));
+              else setExpandedRecordIds(filteredRecords.map((r: DataRecord) => r.id));
             }}
             className="tz-press rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
           >
@@ -13708,7 +13866,7 @@ function MeetingsAndInterviewsView({
                 {!isCollapsed && (
                   <div className="p-4 flex flex-col gap-3.5 w-full">
                     {group.records.map((recItem) => {
-                      const rec = recItem as Record<string, any> & { _entity: "meetings" | "interviews"; id: string };
+                      const rec = recItem as DataRecord & { _entity: "meetings" | "interviews"; id: string };
                       const isGp = isGpMeeting(rec);
                       const isEmail = isEmailOrInfo(rec);
 
@@ -13991,7 +14149,7 @@ function MeetingsAndInterviewsView({
             </div>
 
             <p className="text-xs text-slate-700 leading-relaxed bg-slate-50 p-3 rounded-xl border border-slate-200">
-              ¿Estás seguro de eliminar el registro <strong>"{deleteCandidateItem.title}"</strong>?
+              ¿Estás seguro de eliminar el registro <strong>&quot;{deleteCandidateItem.title}&quot;</strong>?
             </p>
 
             <div className="flex items-center justify-end gap-2 pt-2">
@@ -15914,7 +16072,7 @@ function AIChatMode({
       const fd = new FormData();
       fd.append("message", userMessage);
       fd.append("today", new Date().toISOString().slice(0, 10));
-      const roster = store.students.slice(0, 500).map((s) => ({ id: s.id, name: s.fullName || "", course: s.course || "", rut: s.rut || "" }));
+      const roster = store.students.slice(0, 2500).map((s) => ({ id: s.id, name: s.fullName || "", course: s.course || "", rut: s.rut || "" }));
       fd.append("roster", JSON.stringify(roster));
       const coursesSeed = officialCourses.map((c) => ({ name: c.name, cycle: c.cycle }));
       fd.append("courses", JSON.stringify(coursesSeed));
@@ -15971,18 +16129,30 @@ function AIChatMode({
 
     (r.studentRecords || []).forEach((rec, i) => {
       if (!acc[`sr-${i}`]) return;
-      const student = store.students.find((s) => s.id === rec.studentId);
-      if (!student) return;
+      // Match by studentId, or by involvedStudents, or by student name lookup
+      const student = store.students.find((s) => s.id === rec.studentId) ||
+        (r.involvedStudents && r.involvedStudents[i] ? store.students.find((s) => s.id === r.involvedStudents?.[i]?.studentId) : undefined) ||
+        store.students.find((s) => normalize(s.fullName || "") === normalize(r.involvedStudents?.[0]?.studentName || "")) ||
+        store.students.find((s) => normalize(s.fullName || "").includes(normalize(rec.title || "")));
+
+      const studentName = student ? (student.fullName || "") : (r.involvedStudents?.[0]?.studentName || "Estudiante");
+      const studentCourse = student ? (student.course || "") : "";
+
       onAddRecord(rec.entity, {
         id: uid(), createdAt: nowIso(), updatedAt: nowIso(),
-        student: student.fullName || "", course: student.course || "",
+        student: studentName,
+        course: studentCourse,
+        relatedStudents: studentName,
         date: rec.date || new Date().toISOString().slice(0, 10),
-        title: rec.title || "Registro IA",
-        category: rec.category || "", priority: rec.priority || "",
-        status: rec.status || (rec.entity === "cases" ? "Abierto" : ""),
-        type: rec.type || "", description: rec.description || "",
-        participant: rec.entity === "interviews" ? (rec.title || student.fullName || "") : "",
-        reason: rec.entity === "interviews" ? (rec.title || "") : "",
+        title: rec.title || (rec.entity === "interviews" ? "Entrevista Agendada" : "Registro IA"),
+        category: rec.category || (rec.entity === "cases" ? "Socioemocional" : "Convivencia"),
+        priority: rec.priority || "Media",
+        status: rec.status || (rec.entity === "interviews" ? "Agendada" : rec.entity === "cases" ? "Abierto" : ""),
+        type: rec.type || (rec.entity === "interviews" ? "Entrevista Estudiante" : "Seguimiento"),
+        description: rec.description || "",
+        detail: rec.description || "",
+        participant: rec.entity === "interviews" ? studentName : "",
+        reason: rec.entity === "interviews" ? (rec.title || "Entrevista de seguimiento") : "",
       });
       count += 1;
     });
@@ -16366,16 +16536,25 @@ function ChatResultRenderer({
           <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">Registros propuestos</p>
           <div className="space-y-1.5">
             {(result.studentRecords || []).map((rec, i) => {
-              const student = store.students.find((s) => s.id === rec.studentId);
+              const student = store.students.find((s) => s.id === rec.studentId) ||
+                (result.involvedStudents && result.involvedStudents[i] ? store.students.find((s) => s.id === result.involvedStudents?.[i]?.studentId) : undefined) ||
+                (result.involvedStudents && result.involvedStudents[0] ? store.students.find((s) => s.id === result.involvedStudents?.[0]?.studentId) : undefined);
               const config = entityConfigs[rec.entity as EntityId];
               return (
                 <label key={i} className="flex gap-2 rounded-lg border border-slate-200 p-2 text-xs hover:bg-slate-50">
                   <input type="checkbox" checked={!!accepted[`sr-${i}`]} onChange={() => onToggle(`sr-${i}`)} className="mt-0.5 h-4 w-4" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-violet-700">{config?.label || rec.entity}</span>
-                      {rec.priority ? <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">{rec.priority}</span> : null}
-                      {student ? <span className="text-[10px] text-slate-500">→ {student.fullName}</span> : null}
+                      <span className="rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase text-violet-700">{config?.label || rec.entity}</span>
+                      {rec.status ? (
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          /agendad|pendient/i.test(rec.status) ? "bg-amber-100 text-amber-900 ring-1 ring-amber-300" : "bg-emerald-100 text-emerald-800"
+                        }`}>
+                          {/agendad|pendient/i.test(rec.status) ? "📌 Por Hacer (Agendada)" : rec.status}
+                        </span>
+                      ) : null}
+                      {rec.priority ? <span className="rounded-full bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">{rec.priority}</span> : null}
+                      {student ? <span className="text-[10px] font-bold text-slate-600">→ {student.fullName} ({student.course || "Sin curso"})</span> : null}
                     </div>
                     <p className="mt-0.5 font-semibold text-slate-900">{rec.title}</p>
                     {rec.description ? <p className="text-slate-600 line-clamp-2">{rec.description}</p> : null}
@@ -18135,16 +18314,17 @@ export default function TizaEducationApp() {
         />
       );
     }
-    if (activeView === "meetings" || activeView === "interviews") {
+    if (activeView === "cases") {
       return (
         <MeetingsAndInterviewsView
           key={`${activeView}-${activeView === "interviews" ? "entrevistas" : "gp"}`}
           store={store}
-          onAddRecord={addRecord}
-          onUpdateRecord={updateRecord}
-          onDeleteRecord={deleteRecord}
+          onAdd={() => openNewRecord("cases")}
+          onEdit={(record) => openExistingRecord("cases", record.id)}
+          onDelete={(id) => deleteRecord("cases", id)}
+          onExport={() => exportEntity("cases")}
+          onImport={() => setActiveView("triage")}
           onOpenStudent={openStudent}
-          initialTab={activeView === "interviews" ? "entrevistas_estudiantes" : "gp"}
         />
       );
     }
