@@ -624,8 +624,12 @@ function resolveStudentFromPrompt(
   return maxScore >= 40 ? bestStudent : null;
 }
 
+type InvolvedStudent = { studentId?: string; studentName?: string; confidence?: number; evidence?: string };
+type StudentRecordProposal = { entity?: string; studentId?: string; title?: string; description?: string; [key: string]: unknown };
+type AiResult = { involvedStudents?: InvolvedStudent[]; studentRecords?: StudentRecordProposal[]; notes?: string };
+
 function postProcessRosterMatches(
-  result: any,
+  result: AiResult,
   userMessage: string,
   roster: Array<{ id: string; name: string; course?: string; rut?: string }>
 ) {
@@ -643,7 +647,7 @@ function postProcessRosterMatches(
       },
     ];
   } else if (Array.isArray(result.involvedStudents) && result.involvedStudents.length > 0) {
-    result.involvedStudents = result.involvedStudents.map((inv: any) => {
+    result.involvedStudents = result.involvedStudents.map((inv: InvolvedStudent) => {
       const match = resolveStudentFromPrompt(inv.studentName || inv.evidence || "", userMessage, roster);
       if (match) {
         return {
@@ -663,7 +667,7 @@ function postProcessRosterMatches(
     : resolved;
 
   if (Array.isArray(result.studentRecords)) {
-    result.studentRecords = result.studentRecords.map((rec: any) => {
+    result.studentRecords = result.studentRecords.map((rec: StudentRecordProposal) => {
       const specificMatch = resolveStudentFromPrompt(rec.title + " " + (rec.description || ""), userMessage, roster);
       const targetStudent = specificMatch || primaryStudent;
 

@@ -15062,6 +15062,7 @@ function TodayView({
   staffSchedule,
   onOpenStudent,
   onNavigate,
+  onCompleteInterview,
   calendarIcalUrl,
   onConnectCalendar,
 }: {
@@ -15070,6 +15071,7 @@ function TodayView({
   staffSchedule: StaffScheduleEntry[];
   onOpenStudent: (studentId: string) => void;
   onNavigate: (view: ViewId) => void;
+  onCompleteInterview: (recordId: string) => void;
   calendarIcalUrl?: string;
   onConnectCalendar: (url: string) => void;
 }) {
@@ -15083,6 +15085,16 @@ function TodayView({
     .sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || ""));
   const openCases = store.cases.filter((r) => /abierto|seguimiento|activad/i.test(r.status || ""));
   const criticalCases = openCases.filter((r) => /crítica|alta/i.test(r.priority || ""));
+  // Entrevistas comprometidas y aún no realizadas: son el "Por hacer". Se
+  // incluyen las atrasadas, que de otro modo desaparecen al pasar su fecha.
+  const pendingInterviews = store.interviews
+    .filter((record) => /agendad|pendient|reprogramad/i.test(record.status || ""))
+    .map((record) => ({ record, overdue: Boolean(record.date) && record.date.slice(0, 10) < todayStr }))
+    .sort((a, b) => {
+      if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+      return (a.record.date || "9999").localeCompare(b.record.date || "9999");
+    });
+  const overdueInterviewsCount = pendingInterviews.filter((item) => item.overdue).length;
   const healthStudents = store.students.filter((s) => (s.healthAlerts || "").trim()).slice(0, 8);
   const unplannedClasses = store.orientation.filter((r) => !(r.planificacion || "").trim() && r.date && r.date >= todayStr && r.date <= in7);
 
@@ -15289,6 +15301,40 @@ function TodayView({
       )}
 
       <div className="grid gap-4 xl:grid-cols-2">
+        <TodaySection title="Por hacer · entrevistas comprometidas" icon={ClipboardList} count={pendingInterviews.length} view="interviews" onNavigate={onNavigate}>
+          {pendingInterviews.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin entrevistas pendientes. Todo al día.</p>
+          ) : (
+            <>
+              {overdueInterviewsCount > 0 ? (
+                <p className="mb-1.5 rounded-lg bg-rose-50 px-2 py-1 text-[11px] font-bold text-rose-700 ring-1 ring-rose-100">
+                  {overdueInterviewsCount} con fecha vencida
+                </p>
+              ) : null}
+              <ul className="tz-thin-scroll tz-stagger-list max-h-56 space-y-1.5 overflow-y-auto pr-1">
+                {pendingInterviews.map(({ record, overdue }) => (
+                  <li key={record.id} className={`flex items-start justify-between gap-2 rounded-lg border p-2 text-xs transition ${overdue ? "border-rose-200 bg-rose-50/60" : "border-slate-200 hover:bg-slate-50"}`}>
+                    <button onClick={() => onNavigate("interviews")} className="min-w-0 flex-1 text-left">
+                      <strong className="block truncate text-slate-950">{record.reason || record.title || "Entrevista"}</strong>
+                      <span className="block truncate text-slate-600">{record.student || record.participant || "—"}{record.course ? ` · ${record.course}` : ""}</span>
+                      <span className={`text-[10px] font-bold ${overdue ? "text-rose-700" : "text-slate-500"}`}>
+                        {overdue ? "Vencida · " : ""}{record.date ? formatDateCL(record.date) : "Sin fecha"}
+                      </span>
+                    </button>
+                    <button
+                      onClick={() => onCompleteInterview(record.id)}
+                      title="Marcar la entrevista como realizada"
+                      className="shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </TodaySection>
+
         <TodaySection title="Entrevistas de hoy" icon={MessageSquareText} count={interviewsToday.length} view="interviews" onNavigate={onNavigate}>
           {interviewsToday.length === 0 ? (
             <p className="rounded-lg bg-slate-50 p-2 text-xs text-slate-500">Sin entrevistas agendadas para hoy.</p>
@@ -18210,7 +18256,7 @@ export default function TizaEducationApp() {
     // Este retorno conserva el estrechamiento exhaustivo del tipo para TypeScript.
     if (activeView === "attendanceCart") return null;
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={openNewRecord} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} />;
-    if (activeView === "today") return <TodayView store={store} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} onOpenStudent={openStudent} onNavigate={setActiveView} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
+    if (activeView === "today") return <TodayView store={store} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} onOpenStudent={openStudent} onNavigate={setActiveView} onCompleteInterview={(recordId) => { updateRecord("interviews", recordId, { status: "Realizada" }); setToast("Entrevista marcada como realizada"); }} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
     if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "games") return <GamesView />;
