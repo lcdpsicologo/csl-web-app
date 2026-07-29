@@ -11730,6 +11730,18 @@ type CommandResult = {
   score: number;
 };
 
+// Avatar del buscador: miniatura del estudiante cuando tiene foto (StudentPhoto
+// resuelve los distintos campos y cae en el fallback si la imagen falla); si no,
+// sus iniciales sobre el color de siempre, o el ícono de la sección.
+function PaletteAvatar({ record, title, isStudent, icon: Icon }: { record: DataRecord; title: string; isStudent: boolean; icon: LucideIcon }) {
+  const fallback = isStudent ? initialsOf(title) : <Icon className="h-4 w-4" />;
+  return (
+    <div className={`relative grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-gradient-to-br ${avatarTone(record.id)} text-sm font-bold text-white shadow-sm`}>
+      {isStudent ? <StudentPhoto student={record} fallback={fallback} alt={title} /> : fallback}
+    </div>
+  );
+}
+
 function CommandPalette({
   store,
   onClose,
@@ -11803,16 +11815,18 @@ function CommandPalette({
   });
 
   // Reconcile recents against the live store so renamed / deleted records don't appear.
+  // También toma la foto actual del estudiante para la miniatura.
+  type LiveRecent = RecentEntry & { record: DataRecord };
   const liveRecents = recents
-    .map((r) => {
+    .map((r): LiveRecent | null => {
       const list = store[r.entity];
       const found = list?.find((rec) => rec.id === r.id);
       if (!found) return null;
       const config = entityConfigs[r.entity];
       const titleField = config.fields.find((f) => f.required)?.key || config.fields[0].key;
-      return { ...r, title: String(found[titleField] || r.title) };
+      return { ...r, title: String(found[titleField] || r.title), record: found };
     })
-    .filter((r): r is RecentEntry => r !== null)
+    .filter((r): r is LiveRecent => r !== null)
     .slice(0, 8);
 
   const pushRecent = (result: CommandResult) => {
@@ -11934,9 +11948,12 @@ function CommandPalette({
                           onClick={() => openRecent(entry)}
                           className="group flex items-center gap-3 rounded-lg px-3 py-2 text-left transition hover:bg-slate-50"
                         >
-                          <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md text-sm font-bold text-white shadow-sm bg-gradient-to-br ${avatarTone(entry.id)}`}>
-                            {entry.entity === "students" ? initialsOf(entry.title) : <Icon className="h-4 w-4" />}
-                          </div>
+                          <PaletteAvatar
+                            record={entry.record}
+                            title={entry.title}
+                            isStudent={entry.entity === "students"}
+                            icon={Icon}
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold text-slate-950">{entry.title}</p>
                             <p className="truncate text-xs text-slate-500">{entry.subtitle}</p>
@@ -11995,9 +12012,12 @@ function CommandPalette({
                           onClick={() => choose(result)}
                           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition ${active ? "bg-blue-50 ring-1 ring-blue-200" : "hover:bg-slate-50"}`}
                         >
-                          <div className={`grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md text-sm font-bold text-white shadow-sm bg-gradient-to-br ${avatarTone(result.record.id)}`}>
-                            {result.entity === "students" ? initialsOf(result.title) : <Icon className="h-4 w-4" />}
-                          </div>
+                          <PaletteAvatar
+                            record={result.record}
+                            title={result.title}
+                            isStudent={result.entity === "students"}
+                            icon={Icon}
+                          />
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-sm font-semibold text-slate-950">{result.title}</p>
                             <p className="truncate text-xs text-slate-500">{result.subtitle}</p>
