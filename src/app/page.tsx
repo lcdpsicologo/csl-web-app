@@ -1172,6 +1172,36 @@ const localISODate = (date = new Date()) => {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 };
 
+// Fecha de nacimiento a Date. La nómina la trae como DD/MM/AAAA y el selector
+// de la app la guarda como AAAA-MM-DD.
+const parseBirthDate = (value: string | undefined) => {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const dmy = text.match(/^(\d{1,2})[/\-.](\d{1,2})[/\-.](\d{4})$/);
+  const iso = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  const [year, month, day] = dmy
+    ? [Number(dmy[3]), Number(dmy[2]), Number(dmy[1])]
+    : iso ? [Number(iso[1]), Number(iso[2]), Number(iso[3])] : [0, 0, 0];
+  if (!year || !month || !day) return null;
+  const date = new Date(year, month - 1, day);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+// Edad cumplida al día de la consulta.
+const ageFromBirthDate = (value: string | undefined, today = new Date()) => {
+  const birth = parseBirthDate(value);
+  if (!birth) return null;
+  let age = today.getFullYear() - birth.getFullYear();
+  const monthDiff = today.getMonth() - birth.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) age -= 1;
+  return age >= 0 && age < 120 ? age : null;
+};
+
+const birthdayIsToday = (value: string | undefined, today = new Date()) => {
+  const birth = parseBirthDate(value);
+  return Boolean(birth) && birth!.getDate() === today.getDate() && birth!.getMonth() === today.getMonth();
+};
+
 type OrientationPeriodFilter = "today" | "all" | "this-week" | "next-week" | "upcoming" | "history";
 
 const orientationWeekWindows = (todayISO: string) => {
@@ -2884,8 +2914,24 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
     fields: [
       { key: "fullName", label: "Nombre completo", required: true, aliases: ["nombre", "estudiante", "alumno", "nombre completo", "full name"] },
       { key: "course", label: "Curso", required: true, aliases: ["curso", "grado", "nivel", "class", "course"] },
-      { key: "rut", label: "RUT / ID", aliases: ["rut", "run", "id", "identificador", "matricula"] },
-      { key: "guardian", label: "Apoderado/a", aliases: ["apoderado", "apoderada", "tutor", "guardian", "madre", "padre"] },
+      { key: "rut", label: "RUT / ID", aliases: ["rut", "run", "id", "identificador"] },
+      { key: "birthDate", label: "Fecha de nacimiento", aliases: ["fecha nacimiento", "nacimiento", "fecha de nacimiento", "birthdate", "f. nac", "fnac"] },
+      { key: "gender", label: "Género", aliases: ["genero", "sexo", "gender"] },
+      { key: "enrollmentNumber", label: "N° de matrícula", aliases: ["matricula", "n matricula", "numero matricula", "n° matricula"] },
+      { key: "headTeacher", label: "Profesor/a jefe", aliases: ["profesor jefe", "profesora jefe", "pj", "jefatura"] },
+      { key: "guardian", label: "Apoderado/a", aliases: ["apoderado", "apoderada", "tutor", "guardian"] },
+      { key: "guardianRut", label: "RUT apoderado/a", aliases: ["rut apoderado", "run apoderado", "rut tutor"] },
+      { key: "guardianPhone", label: "Teléfono apoderado/a", aliases: ["telefono apoderado", "celular apoderado", "fono apoderado"] },
+      { key: "guardianEmail", label: "Correo apoderado/a", aliases: ["correo apoderado", "email apoderado", "mail apoderado"] },
+      { key: "livesWith", label: "Vive con", aliases: ["vive con", "convive", "vivienda con"] },
+      { key: "motherName", label: "Madre", aliases: ["madre", "nombre madre", "mama"] },
+      { key: "motherRut", label: "RUT madre", aliases: ["rut madre", "run madre"] },
+      { key: "motherPhone", label: "Teléfono madre", aliases: ["telefono madre", "celular madre", "fono madre"] },
+      { key: "fatherName", label: "Padre", aliases: ["padre", "nombre padre", "papa"] },
+      { key: "fatherRut", label: "RUT padre", aliases: ["rut padre", "run padre"] },
+      { key: "fatherPhone", label: "Teléfono padre", aliases: ["telefono padre", "celular padre", "fono padre"] },
+      { key: "emergencyContact", label: "Contacto de emergencia", aliases: ["contacto emergencia", "emergencia", "contacto de emergencia"] },
+      { key: "emergencyPhone", label: "Teléfono de emergencia", aliases: ["telefono emergencia", "fono emergencia"] },
       { key: "phone", label: "Teléfono", aliases: ["telefono", "celular", "fono", "phone"] },
       { key: "email", label: "Correo", aliases: ["correo", "email", "mail"] },
       { key: "relevantInfo", label: "Informacion relevante", type: "textarea", aliases: ["informacion relevante", "antecedentes relevantes", "contexto"] },
@@ -9883,7 +9929,12 @@ function StudentDetailDialog({
                     {student.profilePhoto || student.photo || student.avatar ? "Cambiar foto" : "Subir foto"}
                   </button>
                 </div>
-                <p className="mt-0.5 text-xs sm:text-sm text-slate-600">{formatRutValue(student.rut) || "Sin RUT/ID"}{student.guardian ? ` · Apoderado/a: ${student.guardian}` : ""}</p>
+                <p className="mt-0.5 text-xs sm:text-sm text-slate-600">
+                  {formatRutValue(student.rut) || "Sin RUT/ID"}
+                  {ageFromBirthDate(student.birthDate) !== null ? ` · ${ageFromBirthDate(student.birthDate)} años` : ""}
+                  {birthdayIsToday(student.birthDate) ? " 🎂" : ""}
+                  {student.guardian ? ` · Apoderado/a: ${student.guardian}` : ""}
+                </p>
                 <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
                   {student.phone ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.phone}</span> : null}
                   {student.email ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{student.email}</span> : null}
@@ -9948,10 +9999,54 @@ function StudentDetailDialog({
                       ["fullName", "Nombre completo", "sm:col-span-2"],
                       ["course", "Curso"],
                       ["rut", "RUT / ID"],
-                      ["guardian", "Apoderado/a"],
+                      ["birthDate", "Fecha de nacimiento"],
+                      ["gender", "Género"],
+                      ["enrollmentNumber", "N° de matrícula"],
+                      ["headTeacher", "Profesor/a jefe"],
                       ["phone", "Teléfono"],
-                      ["email", "Correo", "sm:col-span-2"],
+                      ["email", "Correo"],
                       ["tags", "Etiquetas (separadas por coma: PIE, beca, repitente)", "sm:col-span-2"],
+                    ].map(([key, label, span]) => (
+                      <label key={key} className={`block ${span || ""}`}>
+                        <span className="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                          {label}
+                          {key === "birthDate" && ageFromBirthDate(student.birthDate) !== null ? (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${birthdayIsToday(student.birthDate) ? "bg-amber-100 text-amber-800" : "bg-blue-50 text-blue-700"}`}>
+                              {birthdayIsToday(student.birthDate) ? "🎂 " : ""}{ageFromBirthDate(student.birthDate)} años
+                            </span>
+                          ) : null}
+                        </span>
+                        <input
+                          value={student[key] || ""}
+                          onChange={(event) => updateInfo(key, event.target.value)}
+                          onBlur={(event) => {
+                            if (key === "rut") updateInfo(key, formatRutValue(event.currentTarget.value));
+                          }}
+                          placeholder={key === "birthDate" ? "DD/MM/AAAA" : undefined}
+                          className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-slate-200 bg-white p-5">
+                  <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500">Familia y apoderados</h3>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    {[
+                      ["guardian", "Apoderado/a titular", "sm:col-span-2"],
+                      ["guardianRut", "RUT apoderado/a"],
+                      ["guardianPhone", "Teléfono apoderado/a"],
+                      ["guardianEmail", "Correo apoderado/a", "sm:col-span-2"],
+                      ["livesWith", "Vive con"],
+                      ["motherName", "Madre"],
+                      ["motherRut", "RUT madre"],
+                      ["motherPhone", "Teléfono madre"],
+                      ["fatherName", "Padre"],
+                      ["fatherRut", "RUT padre"],
+                      ["fatherPhone", "Teléfono padre"],
+                      ["emergencyContact", "Contacto de emergencia"],
+                      ["emergencyPhone", "Teléfono de emergencia"],
                     ].map(([key, label, span]) => (
                       <label key={key} className={`block ${span || ""}`}>
                         <span className="text-xs font-semibold text-slate-700">{label}</span>
@@ -9959,7 +10054,7 @@ function StudentDetailDialog({
                           value={student[key] || ""}
                           onChange={(event) => updateInfo(key, event.target.value)}
                           onBlur={(event) => {
-                            if (key === "rut") updateInfo(key, formatRutValue(event.currentTarget.value));
+                            if (/Rut$/.test(key)) updateInfo(key, formatRutValue(event.currentTarget.value));
                           }}
                           className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-blue-500"
                         />
