@@ -320,7 +320,7 @@ DEVOLVÉ SIEMPRE un único JSON válido con esta estructura. Todos los campos so
   "summary": "string corto: una oración con lo que estás haciendo. Para 'answer', puedes dejarlo vacío.",
   "answer": "RESPUESTA CONVERSACIONAL en lenguaje natural. Usa Markdown ligero (saltos de línea, listas con guión). Cuando intent=answer este es el campo principal y debe estar lleno.",
   "involvedStudents": [{"studentId": "string", "studentName": "string", "confidence": 0-1, "evidence": "string"}],
-  "studentRecords": [{"entity": "cases|interviews|logs|protocols", "studentId": "string", "title": "string", "category": "string", "priority": "string", "status": "string", "type": "string", "date": "YYYY-MM-DD", "description": "string"}],
+  "studentRecords": [{"entity": "cases|interviews|logs|protocols", "studentId": "string", "title": "string", "category": "string", "priority": "string", "status": "string", "type": "string", "date": "YYYY-MM-DD", "description": "string", "responsible": "nombre exacto del funcionario que realizará la acción, tomado de FUNCIONARIOS DEL COLEGIO; vacío si no se menciona"}],
   "courseTarget": "string",
   "teamAdditions": [{"name": "string", "role": "string", "email": "string"}],
   "ercAppend": "string",
@@ -381,10 +381,13 @@ async function handle(request: Request) {
   const rosterRaw = String(formData.get("roster") || "[]");
   const coursesRaw = String(formData.get("courses") || "[]");
   const dataContextRaw = String(formData.get("dataContext") || "");
+  const staffRaw = String(formData.get("staff") || "[]");
   let roster: Array<{ id: string; name: string; course?: string; rut?: string }> = [];
   let courses: Array<{ name: string; cycle?: string }> = [];
+  let staff: Array<{ name: string; role?: string; email?: string }> = [];
   try { roster = JSON.parse(rosterRaw); } catch { roster = []; }
   try { courses = JSON.parse(coursesRaw); } catch { courses = []; }
+  try { staff = JSON.parse(staffRaw); } catch { staff = []; }
 
   const rawFiles = formData.getAll("files");
   const files = rawFiles.filter((f): f is File => f instanceof File && f.size > 0);
@@ -452,12 +455,14 @@ async function handle(request: Request) {
   const rosterTrimmed = roster.slice(0, 2500);
   const rosterTable = rosterTrimmed.map((s) => `${s.id}|${s.name}|${s.course || ""}|${s.rut || ""}`).join("\n");
   const coursesList = courses.slice(0, 80).map((c) => `${c.name}${c.cycle ? ` (${c.cycle})` : ""}`).join("\n");
+  const staffList = staff.slice(0, 300).map((p) => `${p.name}${p.role ? ` — ${p.role}` : ""}`).join("\n");
 
   const parts: Array<{ text?: string } | { inline_data: { mime_type: string; data: string } }> = [];
   const textBlocks: string[] = [];
   textBlocks.push(`Fecha de hoy: ${today}`);
   if (dataContextRaw) textBlocks.push(`\nRESUMEN DE DATOS DEL COLEGIO (úsalo para responder consultas):\n${dataContextRaw.slice(0, hasFiles ? 7000 : 12000)}`);
   if (coursesList) textBlocks.push(`\nCURSOS DEL COLEGIO:\n${coursesList}`);
+  if (staffList) textBlocks.push(`\nFUNCIONARIOS DEL COLEGIO (nombre — cargo). Si el texto dice quién realizará la acción, copia su nombre EXACTO de esta lista en el campo "responsible":\n${staffList}`);
   if (rosterTable) textBlocks.push(`\nNÓMINA (id|nombre|curso|rut, primeros ${rosterTrimmed.length}):\n${rosterTable}`);
   if (message) textBlocks.push(`\nMENSAJE DEL USUARIO:\n"""\n${message}\n"""`);
   extracted.forEach((ex, idx) => {

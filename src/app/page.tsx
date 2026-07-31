@@ -170,6 +170,9 @@ type FieldDef = {
   required?: boolean;
   type?: "date" | "textarea" | "select";
   options?: string[];
+  // "staff": ofrece la nómina de funcionarios como sugerencias, sin impedir
+  // escribir un nombre que no esté en ella.
+  suggest?: "staff";
   aliases: string[];
 };
 
@@ -2976,6 +2979,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "category", label: "Categoría", type: "select", options: ["Convivencia", "Socioemocional", "Académico", "Asistencia", "Familiar", "PIE/NEE", "Otro"], aliases: ["categoria", "tipo", "area"] },
       { key: "priority", label: "Prioridad", type: "select", options: ["Baja", "Media", "Alta", "Crítica"], aliases: ["prioridad", "urgencia", "riesgo"] },
       { key: "status", label: "Estado", type: "select", options: ["Abierto", "En seguimiento", "Derivado", "Cerrado"], aliases: ["estado", "status"] },
+      { key: "responsible", label: "Responsable", suggest: "staff", aliases: ["responsable", "a cargo", "profesional", "deriva"] },
       { key: "responsible", label: "Responsable", aliases: ["responsable", "profesional", "asignado"] },
       { key: "description", label: "Descripción", type: "textarea", aliases: ["descripcion", "observaciones", "detalle", "relato"] },
     ],
@@ -3006,7 +3010,7 @@ const entityConfigs: Record<EntityId, EntityConfig> = {
       { key: "participant", label: "Participante principal", required: true, aliases: ["participante", "apoderado", "estudiante", "entrevistado", "entrevistador"] },
       { key: "student", label: "Estudiante asociado", aliases: ["estudiante", "alumno", "nombre alumno"] },
       { key: "course", label: "Curso", aliases: ["curso", "nivel"] },
-      { key: "interviewer", label: "Entrevistador/a", aliases: ["entrevistador", "profesional", "realiza"] },
+      { key: "interviewer", label: "Entrevistador/a (responsable)", suggest: "staff", aliases: ["entrevistador", "profesional", "realiza", "responsable", "a cargo"] },
       { key: "reason", label: "Motivo", required: true, aliases: ["motivo", "tema", "razon"] },
       { key: "status", label: "Estado", type: "select", options: ["Agendada", "Realizada", "Reprogramada", "Cerrada"], aliases: ["estado", "status"] },
       { key: "detail", label: "Desarrollo / detalle", type: "textarea", aliases: ["desarrollo", "detalle", "aspectos", "descripcion", "relato"] },
@@ -12065,11 +12069,13 @@ const recordFieldPlaceholder = (field: FieldDef) => {
 function RecordDialog({
   entity,
   initialRecord,
+  staffNames = [],
   onClose,
   onSave,
 }: {
   entity: EntityConfig;
   initialRecord?: DataRecord;
+  staffNames?: string[];
   onClose: () => void;
   onSave: (record: DataRecord) => void;
 }) {
@@ -12210,6 +12216,7 @@ function RecordDialog({
                       placeholder={field.type === "date" ? undefined : recordFieldPlaceholder(field)}
                       aria-invalid={invalid}
                       autoComplete="off"
+                      list={field.suggest === "staff" && staffNames.length ? "tz-staff-options" : undefined}
                       className={fieldClass}
                     />
                   )}
@@ -12218,6 +12225,11 @@ function RecordDialog({
               );
             })}
           </div>
+          {staffNames.length ? (
+            <datalist id="tz-staff-options">
+              {staffNames.map((name) => <option key={name} value={name} />)}
+            </datalist>
+          ) : null}
         </div>
 
         <footer className="shrink-0 border-t border-slate-200 bg-white px-5 py-4 sm:px-6">
@@ -15432,6 +15444,9 @@ function TodayView({
                     <button onClick={() => onNavigate("interviews")} className="min-w-0 flex-1 text-left">
                       <strong className="block truncate text-slate-950">{record.reason || record.title || "Entrevista"}</strong>
                       <span className="block truncate text-slate-600">{record.student || record.participant || "—"}{record.course ? ` · ${record.course}` : ""}</span>
+                      {record.interviewer || record.responsible ? (
+                        <span className="block truncate text-[10px] font-semibold text-violet-700">A cargo: {record.interviewer || record.responsible}</span>
+                      ) : null}
                       <span className={`text-[10px] font-bold ${overdue ? "text-rose-700" : "text-slate-500"}`}>
                         {overdue ? "Vencida · " : ""}{record.date ? formatDateCL(record.date) : "Sin fecha"}
                       </span>
@@ -15802,7 +15817,7 @@ type ChatResult = {
   summary?: string;
   answer?: string;
   involvedStudents?: Array<{ studentId?: string; studentName?: string; confidence?: number; evidence?: string }>;
-  studentRecords?: Array<{ entity: "cases" | "interviews" | "logs" | "protocols"; studentId?: string; title?: string; category?: string; priority?: string; status?: string; type?: string; date?: string; description?: string }>;
+  studentRecords?: Array<{ entity: "cases" | "interviews" | "logs" | "protocols"; studentId?: string; title?: string; category?: string; priority?: string; status?: string; type?: string; date?: string; description?: string; responsible?: string }>;
   courseTarget?: string;
   teamAdditions?: Array<{ name?: string; role?: string; email?: string }>;
   ercAppend?: string;
@@ -16237,6 +16252,13 @@ function AIChatMode({
       fd.append("roster", JSON.stringify(roster));
       const coursesSeed = officialCourses.map((c) => ({ name: c.name, cycle: c.cycle }));
       fd.append("courses", JSON.stringify(coursesSeed));
+      // Nómina de funcionarios: permite asignar el responsable de la acción
+      // cuando el relato o el correo dice quién la realizará.
+      const staff = store.personnel
+        .filter((person) => (person.fullName || "").trim())
+        .slice(0, 300)
+        .map((person) => ({ name: person.fullName || "", role: person.role || "", email: person.email || "" }));
+      fd.append("staff", JSON.stringify(staff));
       fd.append("dataContext", buildDataContext(store));
       submittingFiles.forEach((f) => fd.append("files", f, f.name));
       const res = await fetch("/api/ai/chat", {
@@ -16314,6 +16336,9 @@ function AIChatMode({
         detail: rec.description || "",
         participant: rec.entity === "interviews" ? studentName : "",
         reason: rec.entity === "interviews" ? (rec.title || "Entrevista de seguimiento") : "",
+        // Quién realizará la acción; si el texto no lo dice, queda el usuario.
+        responsible: rec.responsible || "",
+        interviewer: rec.entity === "interviews" ? (rec.responsible || "") : "",
       });
       count += 1;
     });
@@ -17017,6 +17042,22 @@ export default function TizaEducationApp() {
     setDialogRecordId(recordId);
     setDialogEntity(entity);
   };
+  // Nómina de funcionarios para los campos de responsable (entrevistador, a
+  // cargo del caso). Incluye al equipo institucional y a quienes ya figuren en
+  // registros previos, para no perder nombres escritos a mano.
+  const staffDirectoryNames = useMemo(() => {
+    const names = new Set<string>();
+    store.personnel.forEach((person) => {
+      const name = (person.fullName || "").trim();
+      if (name) names.add(person.role ? `${name}` : name);
+    });
+    team.forEach((member) => {
+      const name = (member.name || "").trim();
+      if (name) names.add(name);
+    });
+    return Array.from(names).sort((a, b) => a.localeCompare(b, "es"));
+  }, [store.personnel, team]);
+
   const closeRecordDialog = () => {
     setDialogEntity(null);
     setDialogRecordId("");
@@ -18626,6 +18667,7 @@ export default function TizaEducationApp() {
           key={`${dialogEntity}-${dialogRecordId || "new"}`}
           entity={entityConfigs[dialogEntity]}
           initialRecord={dialogRecordId ? store[dialogEntity].find((record) => record.id === dialogRecordId) : undefined}
+          staffNames={staffDirectoryNames}
           onClose={closeRecordDialog}
           onSave={(record) => saveDialogRecord(dialogEntity, record)}
         />
