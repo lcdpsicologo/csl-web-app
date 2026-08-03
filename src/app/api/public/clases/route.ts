@@ -110,7 +110,10 @@ export async function GET() {
       const batch = (data as Array<{ record_id: string; data: Record<string, unknown>; updated_at: string }> | null) || [];
       batch.forEach((row) => {
         const record = row.data || {};
-        const canvaLink = [str(record.canvaLink), str(record.evidence)].find(isLink) || "";
+        // Puede traer varios materiales (uno por línea, con etiqueta opcional),
+        // así que basta con que contenga enlaces; la vista los separa.
+        const hasLinks = (value: string) => /https?:\/\//i.test(value);
+        const canvaLink = [str(record.canvaLink), str(record.evidence)].find(hasLinks) || "";
         const teacherLink = str(record.teacherLink);
         const topic = str(record.topic);
         const notes = str(record.notes);

@@ -1870,6 +1870,29 @@ const canonicalOrientationStatus = (status: string | undefined) => {
 
 // Los registros importados guardan la planificación y la carpeta como nombre del
 // documento o de la semana, no como URL: en ese caso el botón abre la búsqueda de Drive.
+// Una clase puede tener más de un material (por ejemplo, el Consejo de Curso
+// común más el RICE de 4° básico). Se admite un enlace por línea, con una
+// etiqueta opcional antes de "|" o ":" para nombrar el botón.
+type ResourceLink = { label: string; url: string };
+
+const parseResourceLinks = (value: string | undefined, defaultLabel = "Canva"): ResourceLink[] => {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  return text
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/\s*[,;]\s*(?=https?:\/\/)/))
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const urlMatch = part.match(/https?:\/\/\S+/);
+      if (!urlMatch) return null;
+      const url = urlMatch[0];
+      const label = part.slice(0, part.indexOf(url)).replace(/[|:\-–—]\s*$/, "").trim();
+      return { label: label || defaultLabel, url };
+    })
+    .filter((item): item is ResourceLink => Boolean(item));
+};
+
 const orientationDocUrl = (value: string | undefined) => {
   const text = String(value || "").trim();
   if (!text) return "";
@@ -8529,6 +8552,7 @@ function OrientationCycleView({
           {renderedClasses.map((record, index) => {
             const isCalendar = record.source === "calendar";
             const canvaUrl = record.canvaLink || record.evidence || "";
+            const canvaLinks = parseResourceLinks(canvaUrl);
             const previousCanva = previousCanvaByRecordId.get(record.id);
             const folderUrl = record.folderLink || "";
             const expanded = expandedClassIds.includes(record.id);
@@ -8739,10 +8763,12 @@ function OrientationCycleView({
                   <div>
                     <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-slate-400 lg:hidden">Material</p>
                     <div className="flex flex-wrap gap-1.5">
-                    {canvaUrl ? (
-                      <a href={canvaUrl} target="_blank" rel="noopener noreferrer" title={canvaUrl} className="inline-flex items-center gap-1 rounded-lg bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
-                        <FileText className="h-3 w-3" /> Canva <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
+                    {canvaLinks.length ? (
+                      canvaLinks.map((material, materialIndex) => (
+                        <a key={`${material.url}-${materialIndex}`} href={material.url} target="_blank" rel="noopener noreferrer" title={`${material.label}: ${material.url}`} className="inline-flex items-center gap-1 rounded-lg bg-cyan-50 px-2 py-1 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 hover:bg-cyan-100">
+                          <FileText className="h-3 w-3" /> {material.label} <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      ))
                     ) : (
                       <span title="Sin link de Canva guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><FileText className="h-3 w-3" /> Canva</span>
                     )}

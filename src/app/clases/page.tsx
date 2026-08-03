@@ -92,14 +92,40 @@ const courseSortKey = (course: string) => {
   return `${String(index).padStart(2, "0")}-${value}`;
 };
 
+// Una clase puede traer más de un material (por ejemplo, la presentación común
+// del Consejo de Curso más el RICE de 4° básico): un enlace por línea, con una
+// etiqueta opcional antes de "|" o ":".
+type ResourceLink = { label: string; url: string };
+
+const parseResourceLinks = (value: string | undefined, defaultLabel = "Canva"): ResourceLink[] => {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  return text
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/\s*[,;]\s*(?=https?:\/\/)/))
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const urlMatch = part.match(/https?:\/\/\S+/);
+      if (!urlMatch) return null;
+      const url = urlMatch[0];
+      const label = part.slice(0, part.indexOf(url)).replace(/[|:\-–—]\s*$/, "").trim();
+      return { label: label || defaultLabel, url };
+    })
+    .filter((item): item is ResourceLink => Boolean(item));
+};
+
 function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "teacherLink" | "planificacionLink" | "driveLink"> }) {
   const disabledStyle = "inline-flex cursor-help items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-400";
+  const canvaLinks = parseResourceLinks(item.canvaLink);
   return (
     <div className="flex flex-wrap gap-1.5">
-      {item.canvaLink ? (
-        <a href={item.canvaLink} target="_blank" rel="noreferrer" title={item.canvaLink} className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 transition hover:bg-cyan-100">
-          <FileText className="h-3.5 w-3.5" /> Canva <ExternalLink className="h-3 w-3" />
-        </a>
+      {canvaLinks.length ? (
+        canvaLinks.map((material, index) => (
+          <a key={`${material.url}-${index}`} href={material.url} target="_blank" rel="noreferrer" title={`${material.label}: ${material.url}`} className="inline-flex items-center gap-1.5 rounded-full bg-cyan-50 px-2.5 py-1.5 text-[11px] font-bold text-cyan-700 ring-1 ring-cyan-200 transition hover:bg-cyan-100">
+            <FileText className="h-3.5 w-3.5" /> {material.label} <ExternalLink className="h-3 w-3" />
+          </a>
+        ))
       ) : <span title="Sin link de Canva guardado" className={disabledStyle}><FileText className="h-3.5 w-3.5" /> Canva</span>}
 
       {item.planificacionLink ? (
