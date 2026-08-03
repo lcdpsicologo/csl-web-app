@@ -6353,6 +6353,222 @@ function OrientationPlanDialog({
   );
 }
 
+type ProposedYearClass = {
+  course: string;
+  date: string;
+  dayName: string;
+  start: string;
+  end: string;
+  week: string;
+  order: number;
+  title: string;
+  strength: string;
+  block: string;
+  microObjective: string;
+};
+
+// Modal "Planificar el año": pide al servidor el cruce entre las clases
+// pendientes de cada curso y el horario semanal, muestra la propuesta y solo
+// crea los registros cuando el orientador confirma.
+function OrientationYearPlanDialog({
+  accessToken,
+  ownerName,
+  ownerEmail,
+  existing,
+  onConfirm,
+  onClose,
+}: {
+  accessToken: string;
+  ownerName: string;
+  ownerEmail: string;
+  existing: Array<{ course: string; topic: string; date: string }>;
+  onConfirm: (records: DataRecord[]) => void;
+  onClose: () => void;
+}) {
+  const todayISO = localISODate();
+  // Año escolar chileno: las clases corren hasta la primera semana de diciembre.
+  const defaultUntil = `${new Date().getFullYear()}-12-05`;
+  const [from, setFrom] = useState(todayISO);
+  const [until, setUntil] = useState(defaultUntil);
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [total, setTotal] = useState(0);
+  const [perCourse, setPerCourse] = useState<Array<{ course: string; scheduled: number; pending: number; unscheduled: number; firstDate: string; lastDate: string }>>([]);
+  const [proposals, setProposals] = useState<ProposedYearClass[]>([]);
+  const [saving, setSaving] = useState(false);
+
+  const preview = async () => {
+    setStatus("loading");
+    setErrorMessage("");
+    try {
+      const response = await fetch("/api/orientation/plan/schedule", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ from, until, existing }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || `Error ${response.status}`);
+      setTotal(payload.total || 0);
+      setPerCourse(payload.perCourse || []);
+      setProposals(payload.proposals || []);
+      setStatus("ready");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo calcular la planificación.");
+      setStatus("error");
+    }
+  };
+
+  const confirm = () => {
+    setSaving(true);
+    const records: DataRecord[] = proposals.map((item) => ({
+      id: uid(),
+      createdAt: nowIso(),
+      updatedAt: nowIso(),
+      date: item.date,
+      week: item.week,
+      weekNumber: "",
+      course: item.course,
+      orientationOwner: ownerName,
+      orientationEmail: ownerEmail,
+      topic: item.title,
+      classType: "Clase de orientación",
+      axis: item.strength,
+      characterStrength: item.strength,
+      status: "Planificada",
+      canvaLink: "",
+      teacherLink: "",
+      teacherSentStatus: "No enviado",
+      teacherSentAt: "",
+      evidence: "",
+      planificacion: "",
+      folderLink: "",
+      notes: "",
+      plannedColumnaTitle: item.title,
+      plannedColumnaOrder: String(item.order),
+      scheduleDay: item.dayName,
+      scheduleStart: item.start,
+      scheduleEnd: item.end,
+      source: "Plan anual orientación 2026",
+    }));
+    onConfirm(records);
+  };
+
+  const totalUnscheduled = perCourse.reduce((sum, item) => sum + item.unscheduled, 0);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="my-4 w-full max-w-3xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-cyan-700 to-cyan-900 px-5 py-4 text-white">
+          <div>
+            <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-cyan-100">
+              <CalendarDays className="h-4 w-4" /> Planificación anual
+            </p>
+            <h2 className="mt-1 text-lg font-bold">Agendar las clases pendientes hasta fin de año</h2>
+            <p className="mt-1 text-xs text-cyan-100">
+              Reparte la columna vertebral de cada curso en su horario semanal real.
+            </p>
+          </div>
+          <button onClick={onClose} title="Cerrar" className="shrink-0 rounded-lg p-2 text-cyan-100 hover:bg-white/15 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="max-h-[65vh] overflow-y-auto bg-slate-50 p-4">
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4">
+            <label className="min-w-40 flex-1">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Desde</span>
+              <input type="date" value={from} onChange={(event) => { setFrom(event.target.value); setStatus("idle"); }} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600" />
+            </label>
+            <label className="min-w-40 flex-1">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Hasta</span>
+              <input type="date" value={until} onChange={(event) => { setUntil(event.target.value); setStatus("idle"); }} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600" />
+            </label>
+            <button
+              onClick={() => void preview()}
+              disabled={status === "loading"}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-2.5 text-xs font-bold text-white hover:bg-slate-800 disabled:bg-slate-400"
+            >
+              {status === "loading" ? <><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-t-transparent" /> Calculando…</> : <>Ver propuesta</>}
+            </button>
+          </div>
+
+          {status === "idle" ? (
+            <p className="mt-3 rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+              Elige el rango y presiona <strong>Ver propuesta</strong>. No se guarda nada hasta que confirmes.
+            </p>
+          ) : null}
+
+          {status === "error" ? (
+            <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              <strong>No se pudo calcular:</strong> {errorMessage}
+            </div>
+          ) : null}
+
+          {status === "ready" ? (
+            <>
+              <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-cyan-200 bg-cyan-50 p-4">
+                <span className="text-3xl font-black tabular-nums text-cyan-800">{total}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-900">clases se van a agendar</p>
+                  <p className="text-xs text-slate-600">
+                    En {perCourse.filter((item) => item.scheduled > 0).length} cursos, entre el {from} y el {until}.
+                    {totalUnscheduled > 0 ? ` ${totalUnscheduled} clases no alcanzan a caber en el año.` : ""}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div className="hidden border-b border-slate-200 bg-slate-100/80 px-4 py-2 text-[11px] font-black uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1fr_90px_110px_110px]">
+                  <span>Curso</span>
+                  <span className="text-right">A agendar</span>
+                  <span className="text-right">Primera</span>
+                  <span className="text-right">Última</span>
+                </div>
+                {perCourse.map((item) => (
+                  <div key={item.course} className="grid gap-1 border-b border-slate-100 px-4 py-2.5 text-sm last:border-b-0 sm:grid-cols-[1fr_90px_110px_110px] sm:items-center">
+                    <span className="font-semibold text-slate-900">{item.course}</span>
+                    <span className="text-slate-700 sm:text-right">
+                      <strong className="tabular-nums">{item.scheduled}</strong>
+                      {item.unscheduled > 0 ? <span className="ml-1 text-[11px] font-bold text-amber-700">(+{item.unscheduled} sin cupo)</span> : null}
+                    </span>
+                    <span className="text-xs tabular-nums text-slate-500 sm:text-right">{item.firstDate || "—"}</span>
+                    <span className="text-xs tabular-nums text-slate-500 sm:text-right">{item.lastDate || "—"}</span>
+                  </div>
+                ))}
+              </div>
+
+              {totalUnscheduled > 0 ? (
+                <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-relaxed text-amber-900">
+                  <strong>Ojo:</strong> {totalUnscheduled} clases del programa no caben en las semanas que quedan del año.
+                  Se agendan las primeras de cada curso en orden; el resto queda pendiente para el próximo año o para
+                  reprogramar en semanas dobles.
+                </p>
+              ) : null}
+            </>
+          ) : null}
+        </div>
+
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-white px-5 py-4">
+          <p className="text-[11px] text-slate-500">
+            Las clases se crean con estado <strong>Planificada</strong> y sin materiales; los enlaces se agregan después.
+          </p>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">Cancelar</button>
+            <button
+              onClick={confirm}
+              disabled={status !== "ready" || total === 0 || saving}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-300"
+            >
+              <Save className="h-4 w-4" /> {saving ? "Creando…" : `Crear ${total || ""} clases`}
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function OrientationCycleView({
   store,
   accessToken,
@@ -6407,6 +6623,8 @@ function OrientationCycleView({
   const [feedbackRecordId, setFeedbackRecordId] = useState("");
   // Clase cuya planificación se está consultando (modal "Ver planificación").
   const [planRecord, setPlanRecord] = useState<{ course: string; topic: string; recordId: string } | null>(null);
+  // Modal "Planificar el año" (agenda las clases pendientes hasta fin de año).
+  const [yearPlanOpen, setYearPlanOpen] = useState(false);
   // Historial de feedbacks (listado consultable + reporte con Tiza-IA).
   const [feedbackHistoryOpen, setFeedbackHistoryOpen] = useState(false);
   // Panel plegable con el detalle de actividades realizadas por tipo/fortaleza.
@@ -7663,6 +7881,13 @@ function OrientationCycleView({
           <ClipboardList className="h-4 w-4" /> Feedbacks
           {ownerFeedbackCount ? <span className="ml-auto rounded-full bg-violet-200 px-1.5 py-0.5 text-[10px] font-bold text-violet-800 tabular-nums">{ownerFeedbackCount}</span> : null}
         </button>
+        <button
+          onClick={() => setYearPlanOpen(true)}
+          title="Agendar automáticamente las clases pendientes de cada curso hasta fin de año, siguiendo el horario semanal"
+          className={`${buttonBase} border-cyan-200 bg-cyan-50 text-cyan-800 hover:bg-cyan-100`}
+        >
+          <CalendarDays className="h-4 w-4" /> Planificar el año
+        </button>
         <button onClick={() => setReportPreviewOpen(true)} title={`Ver el registro integral de ${owner.name}`} className={`${buttonBase} border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}>
           <FileText className="h-4 w-4" /> Reporte integral
         </button>
@@ -8861,6 +9086,24 @@ function OrientationCycleView({
           {renderOrientationTools("rail")}
         </aside>
       </div>
+
+      {yearPlanOpen ? (
+        <OrientationYearPlanDialog
+          accessToken={accessToken}
+          ownerName={owner.name}
+          ownerEmail={owner.email}
+          existing={store.orientation.map((record) => ({
+            course: record.course || "",
+            topic: getOrientationDisplayTitle(record),
+            date: (record.date || "").slice(0, 10),
+          }))}
+          onConfirm={(records) => {
+            onAddOrientationWeekRecords(records);
+            setYearPlanOpen(false);
+          }}
+          onClose={() => setYearPlanOpen(false)}
+        />
+      ) : null}
 
       {planRecord ? (
         <OrientationPlanDialog

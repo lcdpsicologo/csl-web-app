@@ -129,12 +129,19 @@ const norm = (value: string) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+/**
+ * Normalización de CURSO sin espacios: el Excel escribe "Pre Kinder A" y la app
+ * "Prekínder A"; sin esto no calzarían. También iguala "1° Básico A" con
+ * "1 basico a".
+ */
+const normCourse = (value: string) => norm(value).replace(/\\s+/g, "");
+
 export const ORIENTATION_CLASS_PLANS: OrientationClassPlan[] = ${JSON.stringify(plans, null, 0)};
 
 /** Índice curso|título para búsqueda exacta en O(1). */
 const byKey = new Map<string, OrientationClassPlan>();
 for (const plan of ORIENTATION_CLASS_PLANS) {
-  byKey.set(\`\${norm(plan.course)}|\${norm(plan.title)}\`, plan);
+  byKey.set(\`\${normCourse(plan.course)}|\${norm(plan.title)}\`, plan);
 }
 
 /**
@@ -143,14 +150,14 @@ for (const plan of ORIENTATION_CLASS_PLANS) {
  * (los temas de la bitácora a veces traen prefijos o texto extra).
  */
 export const findClassPlan = (course: string, topic: string): OrientationClassPlan | null => {
-  const c = norm(course);
+  const c = normCourse(course);
   const t = norm(topic);
   if (!c || !t) return null;
 
   const exact = byKey.get(\`\${c}|\${t}\`);
   if (exact) return exact;
 
-  const sameCourse = ORIENTATION_CLASS_PLANS.filter((plan) => norm(plan.course) === c);
+  const sameCourse = ORIENTATION_CLASS_PLANS.filter((plan) => normCourse(plan.course) === c);
   if (!sameCourse.length) return null;
 
   // Contención en cualquier dirección, quedándose con el título más largo
@@ -168,8 +175,19 @@ export const findClassPlan = (course: string, topic: string): OrientationClassPl
 
 /** Todas las clases planificadas de un curso, en orden del programa. */
 export const plansForCourse = (course: string): OrientationClassPlan[] => {
-  const c = norm(course);
-  return ORIENTATION_CLASS_PLANS.filter((plan) => norm(plan.course) === c).sort((a, b) => a.order - b.order);
+  const c = normCourse(course);
+  return ORIENTATION_CLASS_PLANS.filter((plan) => normCourse(plan.course) === c).sort((a, b) => a.order - b.order);
+};
+
+/** Cursos presentes en la planificación, con su cantidad de clases. */
+export const planCourses = (): Array<{ course: string; classes: number }> => {
+  const counts = new Map<string, { course: string; classes: number }>();
+  for (const plan of ORIENTATION_CLASS_PLANS) {
+    const entry = counts.get(normCourse(plan.course));
+    if (entry) entry.classes += 1;
+    else counts.set(normCourse(plan.course), { course: plan.course, classes: 1 });
+  }
+  return [...counts.values()];
 };
 `;
 
