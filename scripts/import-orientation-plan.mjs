@@ -12,6 +12,7 @@ import XLSX from "xlsx";
 // Uso: node scripts/import-orientation-plan.mjs [--apply] [ruta-carpeta]
 const projectDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const applyChanges = process.argv.includes("--apply");
+const cleanDuplicates = process.argv.includes("--limpiar-duplicados");
 const planRoot = process.argv.slice(2).find((arg) => !arg.startsWith("--"))
   || path.resolve(projectDirectory, "..", "Colegio San Lucas  Orientación 2026  Segundo y Tercer Trimestre",
     "Colegio San Lucas _ Orientación 2026 _ Segundo y Tercer Trimestre");
@@ -145,23 +146,37 @@ const main = async () => {
 
   const updates = [];
   const inserts = [];
+  const duplicates = [];
   const usedRecords = new Set();
+
+  // Cada curso tiene una clase de orientación por semana: esa es la clave.
+  // Buscar por fecha exacta fallaba porque hay registros con el día equivocado,
+  // creados por distintas generaciones del plan.
+  const hasContent = (row) => Boolean(String(row.data?.canvaLink || row.data?.evidence || "").trim())
+    || /realizad/i.test(String(row.data?.status || ""));
 
   planned.forEach((item) => {
     const date = dateForClass(item.range, item.course);
     if (!date) return;
     const folder = folderFor(item);
-    // Se completa el registro que ya existe para ese curso y fecha; si no hay,
-    // se busca uno sin tema definido dentro del mismo tramo semanal.
-    const sameDay = existing.find((row) => !usedRecords.has(row.record_id)
-      && (row.data?.date || "").slice(0, 10) === date
-      && canonicalCourse(row.data?.course) === item.course);
     const monday = mondayFromRange(item.range);
-    const weekEnd = monday ? isoDate(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4)) : date;
-    const sameWeek = sameDay || existing.find((row) => !usedRecords.has(row.record_id)
+    const weekStart = isoDate(monday);
+    const weekEnd = isoDate(new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 4));
+    const inWeek = existing.filter((row) => !usedRecords.has(row.record_id)
       && canonicalCourse(row.data?.course) === item.course
-      && (row.data?.date || "") >= isoDate(monday) && (row.data?.date || "") <= weekEnd
-      && PLACEHOLDER.test(row.data?.topic || ""));
+      && (row.data?.date || "") >= weekStart && (row.data?.date || "") <= weekEnd);
+    // Si hay varios para el mismo curso y semana, se conserva el trabajado y el
+    // resto se reporta: son duplicados de generaciones anteriores.
+    const ordered = inWeek.sort((left, right) => Number(hasContent(right)) - Number(hasContent(left)));
+    const sameWeek = ordered[0] || null;
+    ordered.slice(1).forEach((row) => {
+      usedRecords.add(row.record_id);
+      // Solo se ofrecen para borrar los que no tienen nada: son restos de
+      // generaciones anteriores del plan, no clases registradas.
+      const empty = !hasContent(row) && PLACEHOLDER.test(row.data?.topic || "")
+        && !String(row.data?.planificacion || row.data?.folderLink || row.data?.notes || "").trim();
+      duplicates.push({ row, empty, label: `${row.data?.date} ${item.course} · ${row.data?.topic || "(sin tema)"}` });
+    });
 
     const patch = {
       date,
@@ -181,16 +196,20 @@ const main = async () => {
 
     if (sameWeek) {
       usedRecords.add(sameWeek.record_id);
-      // No se pisa lo ya trabajado: solo se rellenan los campos vacíos o los
-      // marcadores "por definir".
       const current = sameWeek.data || {};
+      // Una clase ya trabajada (con Canva o marcada realizada) manda sobre el
+      // plan y no se toca. En las demás, el plan maestro es la fuente válida:
+      // los temas que traían del plan anual anterior quedaron obsoletos.
+      const alreadyWorked = hasContent(sameWeek);
+      // La fecha se corrige siempre al día que el curso tiene orientación.
+      const planWins = new Set(alreadyWorked ? ["date"] : ["date", "topic", "axis", "characterStrength", "classType", "notes"]);
       const merged = { ...current };
       let changed = false;
       Object.entries(patch).forEach(([field, value]) => {
         if (!value) return;
         const currentValue = String(current[field] || "").trim();
-        const isPlaceholder = field === "topic" ? PLACEHOLDER.test(currentValue) : false;
-        if (!currentValue || isPlaceholder) {
+        const isPlaceholder = field === "topic" && PLACEHOLDER.test(currentValue);
+        if (!currentValue || isPlaceholder || planWins.has(field)) {
           if (currentValue !== value) { merged[field] = value; changed = true; }
         }
       });
@@ -212,8 +231,11 @@ const main = async () => {
     clasesConCarpetaYPlanificacion: withFolder,
     registrosACompletar: updates.length,
     registrosNuevos: inserts.length,
+    duplicadosDetectados: duplicates.length,
+    duplicadosVaciosQueSePuedenBorrar: duplicates.filter((item) => item.empty).length,
     ejemplosCompletar: updates.slice(0, 6).map((item) => item.label),
     ejemplosNuevos: inserts.slice(0, 6).map((item) => item.label),
+    ejemplosDuplicados: duplicates.slice(0, 10).map((item) => item.label),
   }, null, 2));
 
   if (!applyChanges) return;
@@ -223,6 +245,16 @@ const main = async () => {
       .update({ data: item.data, updated_at: new Date().toISOString() })
       .eq("institution_id", institution.id).eq("entity", "orientation").eq("record_id", item.row.record_id);
     if (error) throw error;
+  }
+  const removable = duplicates.filter((item) => item.empty);
+  if (cleanDuplicates && removable.length) {
+    for (let index = 0; index < removable.length; index += 100) {
+      const { error } = await supabase.from("app_records").delete()
+        .eq("institution_id", institution.id).eq("entity", "orientation")
+        .in("record_id", removable.slice(index, index + 100).map((item) => item.row.record_id));
+      if (error) throw error;
+    }
+    console.error(`Duplicados vacíos eliminados: ${removable.length}`);
   }
   for (let index = 0; index < inserts.length; index += 100) {
     const chunk = inserts.slice(index, index + 100).map((item) => ({
