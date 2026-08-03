@@ -19,6 +19,7 @@ import {
 } from "@/lib/school-schedule";
 import { orientationWeekEmailHtml, orientationWeekEmailText, type WeekEmailClass } from "@/lib/orientation-email";
 import { ORIENTATION_WEEKLY_SLOTS, mondayOfWeek, toISODate, type OrientationWeeklySlot } from "@/lib/orientation-weekly-schedule";
+import { materialsForWeek, materialForCourse, materialUpdates } from "@/lib/orientation-week-materials";
 import { games } from "@/lib/games";
 import { GameShareModal } from "@/components/GameShareModal";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
@@ -8019,6 +8020,30 @@ function OrientationCycleView({
     </section>
   ) : null;
 
+  // Aplica de una vez el taller, el Canva y la carpeta publicados para la
+  // semana sobre todas las clases ya agendadas de esos cursos.
+  const applyPublishedWeekMaterials = (weekMonday: string) => {
+    const week = materialsForWeek(weekMonday);
+    if (!week) return;
+    const classesOfWeek = ownerStoredClasses.filter((record) => weekKeyOf(record.date || "") === weekMonday);
+    let applied = 0;
+    classesOfWeek.forEach((record) => {
+      const assignment = materialForCourse(weekMonday, record.course || "");
+      if (!assignment) return;
+      onUpdateOrientationRecord(record.id, materialUpdates(assignment));
+      applied += 1;
+    });
+    const missing = week.assignments
+      .flatMap((item) => item.courses)
+      .filter((course) => !classesOfWeek.some((record) => normalize(record.course || "") === normalize(course)));
+    window.alert(
+      applied
+        ? `Materiales cargados en ${applied} clase${applied === 1 ? "" : "s"}.` +
+          (missing.length ? `\n\nSin clase agendada esta semana: ${missing.join(", ")}. Créalas con "Crear la semana" y vuelve a cargar.` : "")
+        : `Esta semana no tiene clases agendadas para esos cursos.\n\nCrea la semana primero y luego carga los materiales.`,
+    );
+  };
+
   const weekMaterialsPanel = materialsWeekKey ? (
     <section className="tz-slide-down rounded-xl border border-cyan-200 bg-cyan-50/50 p-4">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -8028,6 +8053,17 @@ function OrientationCycleView({
           <p className="mt-1 max-w-2xl text-xs leading-relaxed text-slate-600">Edita el título, la acción y los materiales de cada clase. Los enlaces pueden quedar vacíos y completarse más adelante.</p>
         </div>
         <div className="flex items-center gap-2">
+          {materialsForWeek(materialsWeekKey) ? (
+            <button
+              type="button"
+              disabled={!dataReady}
+              onClick={() => applyPublishedWeekMaterials(materialsWeekKey)}
+              title="Cargar de una vez el taller, la presentación de Canva y la carpeta de Drive publicados para esta semana"
+              className="inline-flex items-center gap-1.5 rounded-md border border-emerald-300 bg-emerald-600 px-2.5 py-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-50"
+            >
+              <ArrowDownToLine className="h-3.5 w-3.5" /> Cargar materiales publicados
+            </button>
+          ) : null}
           {weekMaterialGroups.length > 1 ? (
             <button
               type="button"
