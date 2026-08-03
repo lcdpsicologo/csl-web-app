@@ -1,7 +1,18 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import mammoth from "mammoth";
+import { createClient } from "@supabase/supabase-js";
 import { getAuthClient, authenticateRequest, getGeminiKey, DEFAULT_GEMINI_MODEL } from "@/lib/gemini";
+import { accessErrorResponse, resolveAccess } from "@/lib/authz";
+
+const getAdminClientForAuthz = () => {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!rawUrl || !key) return null;
+  return createClient(rawUrl.replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/$/, ""), key, {
+    auth: { persistSession: false },
+  });
+};
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -365,6 +376,20 @@ async function handle(request: Request) {
   if (!authClient) return NextResponse.json({ error: "Supabase no está configurado" }, { status: 503 });
   const auth = await authenticateRequest(request, authClient);
   if ("error" in auth) return auth.error;
+
+  // Tiza-IA razona sobre datos del colegio: exige estar autorizado, no sólo
+  // autenticado. El contenido que recibe ya viene filtrado por /api/records.
+  const adminClient = getAdminClientForAuthz();
+  if (!adminClient) {
+    return NextResponse.json({ error: "Supabase no está configurado" }, { status: 503 });
+  }
+  try {
+    await resolveAccess(adminClient, auth.user);
+  } catch (error) {
+    const denied = accessErrorResponse(error);
+    if (denied) return denied;
+    throw error;
+  }
 
   const contentType = request.headers.get("content-type") || "";
   if (!contentType.includes("multipart/form-data")) {

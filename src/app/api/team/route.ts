@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { accessErrorResponse, resolveAccess } from "@/lib/authz";
 
 type ProfileRow = {
   id: string;
@@ -57,49 +58,6 @@ const authenticate = async (request: Request, supabase: SupabaseClient) => {
   return { user: data.user };
 };
 
-const ensureInstitution = async (supabase: SupabaseClient, user: User) => {
-  const { data: existingProfile, error: profileError } = await supabase
-    .from("profiles")
-    .select("institution_id")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  if (profileError) throw profileError;
-  if (existingProfile?.institution_id) return existingProfile.institution_id as string;
-
-  const { data: institution, error: institutionError } = await supabase
-    .from("institutions")
-    .select("id")
-    .eq("slug", "colegio-san-lucas")
-    .maybeSingle();
-
-  if (institutionError) throw institutionError;
-
-  let institutionId = institution?.id as string | undefined;
-  if (!institutionId) {
-    const { data: createdInstitution, error: createInstitutionError } = await supabase
-      .from("institutions")
-      .insert({ name: "Colegio San Lucas", slug: "colegio-san-lucas" })
-      .select("id")
-      .single();
-
-    if (createInstitutionError) throw createInstitutionError;
-    institutionId = createdInstitution.id as string;
-  }
-
-  const { error: upsertProfileError } = await supabase
-    .from("profiles")
-    .upsert({
-      id: user.id,
-      institution_id: institutionId,
-      full_name: user.email || "",
-      role: "orientacion",
-    }, { onConflict: "id" });
-
-  if (upsertProfileError) throw upsertProfileError;
-  return institutionId;
-};
-
 export async function GET(request: Request) {
   const supabase = getAdminClient();
   const authClient = getAuthClient();
@@ -111,7 +69,7 @@ export async function GET(request: Request) {
   if (auth.error) return auth.error;
 
   try {
-    const institutionId = await ensureInstitution(supabase, auth.user);
+    const { institutionId } = await resolveAccess(supabase, auth.user);
     const { data: profiles, error: profileError } = await supabase
       .from("profiles")
       .select("id, institution_id, full_name, role")
@@ -140,6 +98,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ team });
   } catch (error) {
+    const denied = accessErrorResponse(error);
+    if (denied) return denied;
     console.error("Team load failed", error);
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Unable to load team",

@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getAuthClient, authenticateRequest, getGeminiKey, callGemini } from "@/lib/gemini";
+import { accessErrorResponse, resolveAccess } from "@/lib/authz";
 import { CLIMATE_STRATEGIES, THINKING_STRATEGIES } from "@/lib/focus-strategies";
+
+const getAdminClient = () => {
+  const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!rawUrl || !key) return null;
+  return createClient(rawUrl.replace(/\/(rest|auth)\/v1\/?$/, "").replace(/\/$/, ""), key, {
+    auth: { persistSession: false },
+  });
+};
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -77,6 +88,20 @@ export async function POST(request: Request) {
   if (!supabase) return NextResponse.json({ error: "Supabase no está configurado" }, { status: 503 });
   const auth = await authenticateRequest(request, supabase);
   if ("error" in auth) return auth.error;
+
+  // Autenticarse no basta: la pauta pertenece a Orientación.
+  const admin = getAdminClient();
+  if (!admin) return NextResponse.json({ error: "Supabase no está configurado" }, { status: 503 });
+  try {
+    const { permissions } = await resolveAccess(admin, auth.user);
+    if (!permissions.write.includes("orientation")) {
+      return NextResponse.json({ error: "Tu cargo no puede registrar feedback de clases.", forbidden: true }, { status: 403 });
+    }
+  } catch (error) {
+    const denied = accessErrorResponse(error);
+    if (denied) return denied;
+    throw error;
+  }
 
   const apiKey = getGeminiKey();
   if (!apiKey) return NextResponse.json({ error: "Falta la clave de Gemini" }, { status: 503 });

@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { accessErrorResponse, resolveAccess } from "@/lib/authz";
+import {
+  CONTACT_STUDENT_FIELDS,
+  SENSITIVE_STUDENT_FIELDS,
+  canRead,
+  canWrite,
+  permissionsFor,
+  redactRecord,
+} from "@/lib/access-control";
 
 export const maxDuration = 60;
 export const dynamic = "force-dynamic";
@@ -143,47 +152,48 @@ const readLimitedJson = async (request: Request) => {
   };
 };
 
-const ensureInstitution = async (supabase: SupabaseClient, user: User) => {
-  const { data: existingProfile, error: profileError } = await supabase
-    .from("profiles")
-    .select("institution_id")
-    .eq("id", user.id)
-    .maybeSingle();
+/**
+ * Evita que una escritura borre lo que quien la hace no tenía permiso de ver.
+ *
+ * Quien recibe la ficha censurada la devuelve sin esos campos; sin esta
+ * fusión, guardar un cambio menor borraría alertas de salud o antecedentes.
+ * Los campos ocultos se recuperan del registro ya almacenado.
+ */
+const mergePreservingHidden = async (
+  supabase: SupabaseClient,
+  institutionId: string,
+  entity: EntityId,
+  rows: Array<{ record_id: string; data: Record<string, unknown> }>,
+  permissions: ReturnType<typeof permissionsFor>,
+) => {
+  const hidden = [
+    ...(permissions.sensitiveStudentData ? [] : SENSITIVE_STUDENT_FIELDS),
+    ...(permissions.contactStudentData ? [] : CONTACT_STUDENT_FIELDS),
+  ];
+  if (entity !== "students" || !hidden.length || !rows.length) return rows;
 
-  if (profileError) throw profileError;
-  if (existingProfile?.institution_id) return existingProfile.institution_id as string;
+  const { data: existing, error } = await supabase
+    .from("app_records")
+    .select("record_id, data")
+    .eq("institution_id", institutionId)
+    .eq("entity", entity)
+    .in("record_id", rows.map((row) => row.record_id));
+  if (error) throw error;
 
-  const { data: institution, error: institutionError } = await supabase
-    .from("institutions")
-    .select("id")
-    .eq("slug", "colegio-san-lucas")
-    .maybeSingle();
+  const stored = new Map(
+    ((existing || []) as Array<{ record_id: string; data: Record<string, unknown> }>)
+      .map((row) => [row.record_id, row.data || {}]),
+  );
 
-  if (institutionError) throw institutionError;
-
-  let institutionId = institution?.id as string | undefined;
-  if (!institutionId) {
-    const { data: createdInstitution, error: createInstitutionError } = await supabase
-      .from("institutions")
-      .insert({ name: "Colegio San Lucas", slug: "colegio-san-lucas" })
-      .select("id")
-      .single();
-
-    if (createInstitutionError) throw createInstitutionError;
-    institutionId = createdInstitution.id as string;
-  }
-
-  const { error: upsertProfileError } = await supabase
-    .from("profiles")
-    .upsert({
-      id: user.id,
-      institution_id: institutionId,
-      full_name: user.email || "",
-      role: "orientacion",
-    }, { onConflict: "id" });
-
-  if (upsertProfileError) throw upsertProfileError;
-  return institutionId;
+  return rows.map((row) => {
+    const previous = stored.get(row.record_id);
+    if (!previous) return row;
+    const restored = { ...row.data };
+    for (const field of hidden) {
+      if (field in previous) restored[field] = previous[field];
+    }
+    return { ...row, data: restored };
+  });
 };
 
 export async function GET(request: Request) {
@@ -196,7 +206,7 @@ export async function GET(request: Request) {
   if (auth.error) return auth.error;
 
   try {
-    const institutionId = await ensureInstitution(supabase, auth.user);
+    const { institutionId, permissions } = await resolveAccess(supabase, auth.user);
     const store = emptyStore();
     const pageSize = 1000;
     let from = 0;
@@ -212,19 +222,23 @@ export async function GET(request: Request) {
       const batch = (data as AppRecordRow[] | null) || [];
       batch.forEach((row) => {
         if (!ENTITY_IDS.includes(row.entity)) return;
+        // El filtro va en el servidor: lo que el cargo no puede ver, no viaja.
+        if (!canRead(permissions, row.entity)) return;
         store[row.entity].push({
           id: row.record_id,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
-          ...row.data,
+          ...redactRecord(row.entity, row.data, permissions),
         });
       });
       if (batch.length < pageSize) break;
       from += pageSize;
     }
 
-    return NextResponse.json({ store, persistent: true });
+    return NextResponse.json({ store, persistent: true, permissions });
   } catch (error) {
+    const denied = accessErrorResponse(error);
+    if (denied) return denied;
     console.error("Records load failed", error);
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Unable to load records",
@@ -252,7 +266,16 @@ export async function PUT(request: Request) {
     const body = await request.json();
     const incomingStore = { ...emptyStore(), ...(body.store || {}) } as DataStore;
     const pruneMissing = body.pruneMissing === true;
-    const institutionId = await ensureInstitution(supabase, auth.user);
+    const { institutionId, permissions } = await resolveAccess(supabase, auth.user);
+    // Una restauración completa reescribe todo el colegio: sólo la puede hacer
+    // quien tiene permiso de escritura sobre todas las entidades.
+    const sinPermiso = ENTITY_IDS.filter((entity) => !canWrite(permissions, entity));
+    if (sinPermiso.length) {
+      return NextResponse.json({
+        error: "Tu cargo no puede restaurar una copia completa de los datos.",
+        forbidden: true,
+      }, { status: 403 });
+    }
     const rows = ENTITY_IDS.flatMap((entity) =>
       (incomingStore[entity] || []).map((record, index) => {
         const recordId = stableRecordId(entity, record, index);
@@ -341,6 +364,8 @@ export async function PUT(request: Request) {
 
     return NextResponse.json({ ok: true, persistent: true });
   } catch (error) {
+    const denied = accessErrorResponse(error);
+    if (denied) return denied;
     console.error("Records save failed", error);
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Unable to save records",
@@ -374,15 +399,24 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Entity and record changes are required" }, { status: 400 });
     }
 
-    const institutionId = await ensureInstitution(supabase, auth.user);
-    const rows = records.map((record, index) => ({
-      institution_id: institutionId,
+    const { institutionId, permissions } = await resolveAccess(supabase, auth.user);
+    if (!canWrite(permissions, entity)) {
+      return NextResponse.json({ error: `Tu cargo no puede modificar ${entity}.`, forbidden: true }, { status: 403 });
+    }
+    const rows = await mergePreservingHidden(
+      supabase,
+      institutionId,
       entity,
-      record_id: stableRecordId(entity, record, index),
-      data: sanitizeData(record),
-      created_by: auth.user.id,
-      updated_by: auth.user.id,
-    }));
+      records.map((record, index) => ({
+        institution_id: institutionId,
+        entity,
+        record_id: stableRecordId(entity, record, index),
+        data: sanitizeData(record),
+        created_by: auth.user.id,
+        updated_by: auth.user.id,
+      })),
+      permissions,
+    );
 
     if (rows.length) {
       const { error: upsertError } = await supabase
@@ -415,6 +449,8 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ ok: true, persistent: true, saved: rows.length, deleted: recordIds.length, receivedBytes });
   } catch (error) {
+    const denied = accessErrorResponse(error);
+    if (denied) return denied;
     if (error instanceof Error && error.message === "PAYLOAD_TOO_LARGE") {
       return NextResponse.json({ error: "La solicitud incremental supera 750 KB" }, { status: 413 });
     }
@@ -444,7 +480,10 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Entity and recordIds are required" }, { status: 400 });
     }
 
-    const institutionId = await ensureInstitution(supabase, auth.user);
+    const { institutionId, permissions } = await resolveAccess(supabase, auth.user);
+    if (!canWrite(permissions, entity)) {
+      return NextResponse.json({ error: `Tu cargo no puede eliminar ${entity}.`, forbidden: true }, { status: 403 });
+    }
     const { error: deleteError } = await supabase
       .from("app_records")
       .delete()
@@ -455,6 +494,8 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ ok: true, persistent: true, deleted: recordIds.length });
   } catch (error) {
+    const denied = accessErrorResponse(error);
+    if (denied) return denied;
     console.error("Incremental records delete failed", error);
     return NextResponse.json({
       error: error instanceof Error ? error.message : "Unable to delete records",

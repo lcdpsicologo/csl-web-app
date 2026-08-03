@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { createClient, type User } from "@supabase/supabase-js";
 import { ORIENTATION_FIRST_CYCLE_CLASSES, ORIENTATION_FIRST_CYCLE_CONFIG } from "@/lib/orientation-first-cycle";
 import { columnaCourseKey, columnaForCourse, columnaProgress, matchColumnaClass } from "@/lib/columna-vertebral";
-import { PIE_PROFESSIONALS, PIE_ROSTER } from "@/lib/pie-roster";
+import type { PieRosterEntry } from "@/lib/pie-roster";
 import {
   COURSE_SCHEDULE,
   SCHOOL_SCHEDULE_SUMMARY,
@@ -26,6 +26,7 @@ import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/fi
 import { formatRutValue } from "@/lib/student-identity";
 import { CLASSROOM_TEAMS_BY_COURSE } from "@/lib/classroom-teams";
 import { CLIMATE_STRATEGIES, THINKING_STRATEGIES, type FocusStrategy } from "@/lib/focus-strategies";
+import { PROFILE_LABELS, type Permissions as AccessPermissions } from "@/lib/access-control";
 import {
   ArrowDownToLine,
   BarChart3,
@@ -3948,6 +3949,7 @@ function Sidebar({
   onModeChange,
   onReorderNavItem,
   onResetNavOrder,
+  accessProfileLabel,
 }: {
   activeView: ViewId;
   onNavigate: (view: ViewId) => void;
@@ -3957,6 +3959,7 @@ function Sidebar({
   onModeChange: (mode: SidebarMode) => void;
   onReorderNavItem: (source: ViewId, target: ViewId, placement: "before" | "after") => void;
   onResetNavOrder: () => void;
+  accessProfileLabel: string;
 }) {
   const [draggedView, setDraggedView] = useState<ViewId | null>(null);
   const [dragOverView, setDragOverView] = useState<ViewId | null>(null);
@@ -4123,6 +4126,13 @@ function Sidebar({
             {!compact ? <div className="min-w-0 flex-1">
               <p className={`text-[10px] font-semibold uppercase tracking-wider ${activeView === "settings" ? "text-white/70" : "text-slate-500"}`}>Ajustes</p>
               <p className={`truncate text-sm font-semibold ${activeView === "settings" ? "text-white" : "text-slate-900"}`}>{schoolName}</p>
+              {/* Cada persona ve con qué perfil está entrando, para que sepa por
+                  qué hay secciones que no le aparecen. */}
+              {accessProfileLabel ? (
+                <p className={`truncate text-[10px] font-bold ${activeView === "settings" ? "text-white/60" : "text-slate-400"}`}>
+                  Acceso: {accessProfileLabel}
+                </p>
+              ) : null}
             </div> : null}
             {!compact ? <ChevronDown className={`h-4 w-4 -rotate-90 transition group-hover:translate-x-0.5 ${activeView === "settings" ? "text-white/70" : "text-slate-400"}`} /> : null}
           </div>
@@ -4135,6 +4145,23 @@ function Sidebar({
 
 // Mobile navigation: bottom tab bar with the 4 most-used views plus a "Menú"
 // button that opens a full drawer. Only rendered below the lg breakpoint.
+// Sección de la app -> entidad que necesita poder leer. Las que no aparecen
+// (inicio, reportes, ajustes) no exponen datos por sí solas.
+const NAV_REQUIRED_ENTITY: Partial<Record<ViewId, AccessPermissions["read"][number]>> = {
+  orientation: "orientation",
+  students: "students",
+  cases: "cases",
+  logs: "logs",
+  interviews: "interviews",
+  protocols: "protocols",
+  workshops: "workshops",
+  courses: "courses",
+  documents: "documents",
+  pie: "students",
+  databases: "students",
+  today: "orientation",
+};
+
 // Accesos directos de la barra inferior en móvil. Son cuatro (el quinto lugar
 // es siempre "Menú") y cada persona elige cuáles quiere ver.
 const MOBILE_PRIMARY_KEY = "tiza-mobile-primary-nav-v1";
@@ -12130,19 +12157,30 @@ function PieWorkspaceView({
     return store.students.filter((s) => isPieStudent(s) && !parsePieData(s).bajaDate);
   }, [store.students]);
 
+  // Los nombres de los especialistas PIE se derivan de la nómina de
+  // funcionarios en vez de un archivo estático: ese archivo también contenía
+  // los diagnósticos de los estudiantes y no debe llegar al navegador.
+  const pieStaffNames = useMemo(
+    () => store.personnel
+      .filter((person) => /fonoaudiolog|terapeuta ocupacional|diferencial|\bpie\b/i.test(String(person.role || "")))
+      .map((person) => String(person.name || "").trim())
+      .filter(Boolean),
+    [store.personnel],
+  );
+
   // Statistics
   const totalPieCount = pieStudents.length;
   const permanenteCount = useMemo(() => pieStudents.filter(s => getPieSituation(s).toUpperCase().includes("PERMANENTE")).length, [pieStudents]);
   const transitorioCount = useMemo(() => pieStudents.filter(s => getPieSituation(s).toUpperCase().includes("TRANSITORIO")).length, [pieStudents]);
   const specialistCount = useMemo(() => {
     const set = new Set<string>();
-    PIE_PROFESSIONALS.forEach((prof) => set.add(prof.name));
+    pieStaffNames.forEach((name) => set.add(name));
     pieStudents.forEach((s) => {
       const prof = getPieProfessional(s);
       if (prof && prof !== "Sin asignar") set.add(prof);
     });
     return set.size;
-  }, [pieStudents]);
+  }, [pieStudents, pieStaffNames]);
   const cupoCount = useMemo(() => pieStudents.filter(s => getPieCupoStatus(s) === "Cupo").length, [pieStudents]);
   const sobrecupoCount = useMemo(() => pieStudents.filter(s => getPieCupoStatus(s) === "Sobrecupo").length, [pieStudents]);
   const pendienteCount = useMemo(() => pieStudents.filter(s => getPieCupoStatus(s) === "Pendiente").length, [pieStudents]);
@@ -12173,18 +12211,18 @@ function PieWorkspaceView({
 
   const professionals = useMemo(() => {
     const set = new Set<string>();
-    PIE_PROFESSIONALS.forEach((prof) => set.add(prof.name));
+    pieStaffNames.forEach((name) => set.add(name));
     pieStudents.forEach((s) => {
       const prof = getPieProfessional(s);
       if (prof && prof !== "Sin asignar") set.add(prof);
       parsePieData(s).professionals.forEach((name) => name && set.add(name));
     });
     return Array.from(set).sort();
-  }, [pieStudents]);
+  }, [pieStudents, pieStaffNames]);
 
   const pieCatalogStaff = useMemo(() => {
     const set = new Set<string>();
-    PIE_PROFESSIONALS.forEach((prof) => set.add(prof.name));
+    pieStaffNames.forEach((name) => set.add(name));
     store.students.forEach((student) => {
       const pd = parsePieData(student);
       [pd.professional, ...pd.professionals, ...pd.evaluators, ...pd.assignedStaff].forEach((name) => {
@@ -12192,7 +12230,7 @@ function PieWorkspaceView({
       });
     });
     return Array.from(set).sort();
-  }, [store.students]);
+  }, [store.students, pieStaffNames]);
 
   const updatePieData = (student: DataRecord, updates: Partial<PieData>, toastNote?: string) => {
     const current = parsePieData(student);
@@ -18121,11 +18159,25 @@ export default function TizaEducationApp() {
   const [floatingAiOpen, setFloatingAiOpen] = useState(false);
   const [navOrder, setNavOrder] = useState<ViewId[]>(loadNavOrder);
   const [mobilePrimary, setMobilePrimary] = useState<ViewId[]>(loadMobilePrimary);
+  // Permisos resueltos en el servidor según el cargo. Mientras son null, la
+  // interfaz no asume nada: sólo muestra lo que ya validó el servidor.
+  const [permissions, setPermissions] = useState<AccessPermissions | null>(null);
+  const [accessDenied, setAccessDenied] = useState("");
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(loadSidebarMode);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [, setCalendarFetchedAt] = useState<string>("");
-  const orderedNavItems = useMemo(() => orderViewNav(navOrder), [navOrder]);
+  const orderedNavItems = useMemo(() => {
+    const all = orderViewNav(navOrder);
+    // El servidor ya filtró los datos; esto evita además ofrecer secciones que
+    // se verían vacías para el cargo. Mientras no llegan los permisos se
+    // muestra todo: el store todavía está vacío, así que no revela nada.
+    if (!permissions) return all;
+    return all.filter((item) => {
+      const required = NAV_REQUIRED_ENTITY[item.id];
+      return !required || permissions.read.includes(required);
+    });
+  }, [navOrder, permissions]);
 
   const reorderNavItem = (source: ViewId, target: ViewId, placement: "before" | "after") => {
     if (source === target) return;
@@ -18310,6 +18362,14 @@ export default function TizaEducationApp() {
       if (!nextUserId || (remoteLoadedUserRef.current && remoteLoadedUserRef.current !== nextUserId)) {
         remoteLoadedUserRef.current = "";
         setRemoteLoaded(false);
+        // Cambió la persona (o se cerró sesión). El respaldo local puede tener
+        // datos que este cargo no debe ver: en un equipo compartido eso deja a
+        // la vista fichas completas del turno anterior. Se descarta.
+        try { window.localStorage.removeItem(STORAGE_KEY); } catch { /* sin cuota */ }
+        setStore(emptyStore());
+        lastSyncedStoreRef.current = emptyStore();
+        setPermissions(null);
+        setAccessDenied("");
       }
     });
 
@@ -18365,6 +18425,18 @@ export default function TizaEducationApp() {
         });
         if (!response.ok) {
           const payload = await response.json().catch(() => null);
+          // Sin autorización no se reintenta: reintentar cada 8 segundos no va a
+          // cambiar el cargo de la persona, y deja el respaldo local a la vista.
+          if (response.status === 403 || payload?.forbidden) {
+            if (!cancelled) {
+              setStore(emptyStore());
+              lastSyncedStoreRef.current = emptyStore();
+              setPermissions(null);
+              setAccessDenied(payload?.error || "Tu cuenta no tiene acceso a los datos del colegio.");
+              setRemoteStatus("error");
+            }
+            return;
+          }
           throw new Error(payload?.error || "No se pudieron cargar los datos remotos.");
         }
         const payload = await response.json();
@@ -18372,6 +18444,7 @@ export default function TizaEducationApp() {
         const remoteStore = { ...emptyStore(), ...(payload.store || {}) } as DataStore;
         // La nómina de funcionarios viene sembrada localmente; no dejar que un remoto vacío la borre.
         if (!remoteStore.personnel?.length) remoteStore.personnel = officialPersonnelRecords;
+        if (payload.permissions) setPermissions(payload.permissions as AccessPermissions);
         setStore(remoteStore);
         lastSyncedStoreRef.current = remoteStore;
         remoteLoadedUserRef.current = authUser.id;
@@ -19266,13 +19339,29 @@ export default function TizaEducationApp() {
     }
   };
 
-  function seedPieRoster(silent = false) {
+  // La nómina se pide al servidor, que la entrega sólo si el cargo lo permite.
+  // Antes venía importada de un archivo estático que Next publicaba como chunk
+  // descargable sin autenticación, con los diagnósticos de 313 menores dentro.
+  async function seedPieRoster(silent = false) {
+    let roster: PieRosterEntry[] = [];
+    try {
+      const response = await fetch("/api/pie", { headers: { authorization: `Bearer ${accessToken}` } });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => null);
+        setToast(payload?.error || "No se pudo cargar la nómina PIE.");
+        return;
+      }
+      roster = ((await response.json()).roster || []) as PieRosterEntry[];
+    } catch {
+      setToast("No se pudo cargar la nómina PIE.");
+      return;
+    }
     const cleanRut = (r: string) => String(r || "").replace(/[^0-9kK]/g, "").toUpperCase();
     let updated = 0;
     let created = 0;
     setStore((current) => {
       const next = [...current.students];
-      PIE_ROSTER.forEach((entry) => {
+      roster.forEach((entry) => {
         const pieData = JSON.stringify({
           active: true,
           diag: entry.diag,
@@ -19574,6 +19663,23 @@ export default function TizaEducationApp() {
   };
 
   const renderView = () => {
+    // Sin autorización no se muestra la app vacía y sin explicación: se dice
+    // qué pasó y a quién recurrir.
+    if (accessDenied) {
+      return (
+        <div className="mx-auto max-w-lg px-4 py-16 text-center">
+          <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-amber-50 text-amber-600 ring-1 ring-amber-200">
+            <Lock className="h-7 w-7" />
+          </div>
+          <h1 className="mt-5 text-xl font-bold text-slate-950">Sin acceso a los datos del colegio</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-600">{accessDenied}</p>
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            El acceso se asigna según el cargo registrado en la nómina de funcionarios.
+            Si crees que es un error, escribe a Dirección o al equipo de Orientación.
+          </p>
+        </div>
+      );
+    }
     // La navegación hacia el carrito cambia de ruta antes de modificar activeView.
     // Este retorno conserva el estrechamiento exhaustivo del tipo para TypeScript.
     if (activeView === "attendanceCart") return null;
@@ -19752,6 +19858,7 @@ export default function TizaEducationApp() {
         onModeChange={setSidebarMode}
         onReorderNavItem={reorderNavItem}
         onResetNavOrder={resetNavOrder}
+        accessProfileLabel={permissions ? PROFILE_LABELS[permissions.profile] : ""}
       />
       <main className={`tz-app-root min-w-0 transition-[padding] duration-200 ${sidebarMode === "fixed" ? "lg:pl-[272px]" : "lg:pl-[76px]"}`}>
         <div className="tz-glass sticky top-0 z-30 border-b border-slate-200/80 px-4 py-3 sm:px-8">
