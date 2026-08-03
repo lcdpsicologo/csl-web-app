@@ -6114,6 +6114,245 @@ function OrientationIntegralReportModal({
   );
 }
 
+type OrientationPlanDetail = {
+  course: string;
+  order: number;
+  block: string;
+  strength: string;
+  number: string;
+  title: string;
+  priority: string;
+  comesFrom: string;
+  bridge: string;
+  preparesFor: string;
+  microObjective: string;
+  focusStrategies: string;
+  stepByStep: string;
+  script: string;
+  materials: string;
+  pptPrep: string;
+};
+
+// Modal "Ver planificación": trae bajo demanda la planificación completa de la
+// clase (objetivo, paso a paso, guion para el Canva y materiales) para poder
+// armar el material rápido y dejar el link de Canva sin salir de la bitácora.
+function OrientationPlanDialog({
+  course,
+  topic,
+  recordId,
+  accessToken,
+  currentCanvaLink,
+  onSaveCanvaLink,
+  onClose,
+}: {
+  course: string;
+  topic: string;
+  recordId: string;
+  accessToken: string;
+  currentCanvaLink: string;
+  onSaveCanvaLink: (recordId: string, link: string) => void;
+  onClose: () => void;
+}) {
+  const [plan, setPlan] = useState<OrientationPlanDetail | null>(null);
+  const [suggestions, setSuggestions] = useState<Array<{ order: number; title: string; strength: string }>>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "empty" | "error">("loading");
+  const [errorMessage, setErrorMessage] = useState("");
+  const [copied, setCopied] = useState("");
+  const [canvaDraft, setCanvaDraft] = useState(currentCanvaLink);
+  const [canvaSaved, setCanvaSaved] = useState(false);
+
+  const load = React.useCallback(async (overrideTopic?: string) => {
+    setStatus("loading");
+    setErrorMessage("");
+    try {
+      const params = new URLSearchParams({ course, topic: overrideTopic ?? topic });
+      const response = await fetch(`/api/orientation/plan?${params.toString()}`, {
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || !payload?.ok) throw new Error(payload?.error || `Error ${response.status}`);
+      if (payload.plan) {
+        setPlan(payload.plan as OrientationPlanDetail);
+        setSuggestions([]);
+        setStatus("ready");
+      } else {
+        setPlan(null);
+        setSuggestions(payload.suggestions || []);
+        setStatus("empty");
+      }
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "No se pudo cargar la planificación.");
+      setStatus("error");
+    }
+  }, [accessToken, course, topic]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const copy = async (label: string, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(label);
+      window.setTimeout(() => setCopied((current) => (current === label ? "" : current)), 1800);
+    } catch {
+      setCopied("");
+    }
+  };
+
+  const Section = ({ title, icon: Icon, text, tone = "slate", copyLabel }: { title: string; icon: LucideIcon; text: string; tone?: "slate" | "cyan" | "violet"; copyLabel?: string }) => {
+    if (!text?.trim()) return null;
+    const tones = {
+      slate: "border-slate-200 bg-white",
+      cyan: "border-cyan-200 bg-cyan-50/40",
+      violet: "border-violet-200 bg-violet-50/40",
+    } as const;
+    return (
+      <section className={`rounded-xl border p-4 ${tones[tone]}`}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h3 className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-slate-600">
+            <Icon className="h-4 w-4 text-cyan-700" /> {title}
+          </h3>
+          {copyLabel ? (
+            <button
+              onClick={() => copy(copyLabel, text)}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+            >
+              {copied === copyLabel ? <><Check className="h-3.5 w-3.5 text-emerald-600" /> Copiado</> : <><Copy className="h-3.5 w-3.5" /> Copiar</>}
+            </button>
+          ) : null}
+        </div>
+        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{text}</p>
+      </section>
+    );
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[70] flex items-start justify-center overflow-y-auto bg-slate-950/60 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div className="my-4 w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+        {/* Encabezado */}
+        <header className="flex items-start justify-between gap-4 bg-gradient-to-r from-cyan-700 to-cyan-900 px-5 py-4 text-white">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wider text-cyan-100">
+              <BookOpenText className="h-4 w-4" /> Planificación de la clase
+            </p>
+            <h2 className="mt-1 truncate text-lg font-bold">{plan?.title || topic || "Clase"}</h2>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-semibold">
+              <span className="rounded-full bg-white/20 px-2 py-0.5">{course}</span>
+              {plan?.strength ? <span className="rounded-full bg-white/20 px-2 py-0.5">{plan.strength}{plan.number ? ` · N°${plan.number}` : ""}</span> : null}
+              {plan?.block ? <span className="rounded-full bg-white/15 px-2 py-0.5 text-cyan-100">{plan.block}</span> : null}
+            </div>
+          </div>
+          <button onClick={onClose} title="Cerrar" className="shrink-0 rounded-lg p-2 text-cyan-100 hover:bg-white/15 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </header>
+
+        <div className="max-h-[70vh] space-y-3 overflow-y-auto bg-slate-50 p-4">
+          {status === "loading" ? (
+            <div className="flex items-center justify-center gap-3 py-16 text-sm font-semibold text-slate-500">
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-cyan-600 border-t-transparent" />
+              Cargando planificación…
+            </div>
+          ) : null}
+
+          {status === "error" ? (
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+              <strong>No se pudo cargar:</strong> {errorMessage}
+              <button onClick={() => void load()} className="ml-2 rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-50">Reintentar</button>
+            </div>
+          ) : null}
+
+          {status === "empty" ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm font-semibold text-amber-900">
+                No encontré una planificación que calce con “{topic}” en {course}.
+              </p>
+              {suggestions.length ? (
+                <>
+                  <p className="mt-2 text-xs font-semibold text-amber-800">Elige la clase del programa:</p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {suggestions.map((item) => (
+                      <button
+                        key={`${item.order}-${item.title}`}
+                        onClick={() => void load(item.title)}
+                        className="rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[11px] font-bold text-amber-900 hover:bg-amber-100"
+                      >
+                        {item.order}. {item.title}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          ) : null}
+
+          {status === "ready" && plan ? (
+            <>
+              <Section title="Objetivo de la clase" icon={Check} text={plan.microObjective} tone="cyan" />
+              <Section title="Estrategias Focus obligatorias" icon={Sparkles} text={plan.focusStrategies} tone="cyan" />
+
+              {plan.comesFrom || plan.preparesFor ? (
+                <section className="grid gap-2 sm:grid-cols-2">
+                  {plan.comesFrom ? (
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Viene de</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">{plan.comesFrom}</p>
+                    </div>
+                  ) : null}
+                  {plan.preparesFor ? (
+                    <div className="rounded-xl border border-slate-200 bg-white p-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">Prepara para</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-700">{plan.preparesFor}</p>
+                    </div>
+                  ) : null}
+                </section>
+              ) : null}
+
+              <Section title="Paso a paso (45 min)" icon={ClipboardList} text={plan.stepByStep} copyLabel="paso" />
+              <Section title="Guion para el Canva — diapositiva por diapositiva" icon={FileText} text={plan.script} tone="violet" copyLabel="guion" />
+              <Section title="Materiales y recursos" icon={FolderOpen} text={plan.materials} />
+              <Section title="Preparación del PPT / material" icon={Sparkles} text={plan.pptPrep} />
+            </>
+          ) : null}
+        </div>
+
+        {/* Pie: crear el Canva y dejar el link sin salir de la bitácora */}
+        <footer className="border-t border-slate-200 bg-white px-5 py-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="min-w-56 flex-1">
+              <span className="text-[11px] font-black uppercase tracking-wider text-slate-500">Link de Canva de esta clase</span>
+              <input
+                value={canvaDraft}
+                onChange={(event) => { setCanvaDraft(event.target.value); setCanvaSaved(false); }}
+                placeholder="Pega aquí el link del Canva una vez creado…"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-cyan-600"
+              />
+            </label>
+            <a
+              href="https://www.canva.com/create/presentations/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5 text-xs font-bold text-violet-700 hover:bg-violet-100"
+            >
+              <ExternalLink className="h-4 w-4" /> Abrir Canva
+            </a>
+            <button
+              onClick={() => { onSaveCanvaLink(recordId, canvaDraft.trim()); setCanvaSaved(true); }}
+              disabled={canvaDraft.trim() === currentCanvaLink.trim()}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:bg-slate-300"
+            >
+              {canvaSaved ? <><Check className="h-4 w-4" /> Guardado</> : <><Save className="h-4 w-4" /> Guardar link</>}
+            </button>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-400">
+            Copia el guion, ármalo en Canva y pega el link acá: queda guardado en la clase y visible para los profesores.
+          </p>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function OrientationCycleView({
   store,
   accessToken,
@@ -6166,6 +6405,8 @@ function OrientationCycleView({
   const [pendingStatuses, setPendingStatuses] = useState<Record<string, string>>({});
   // Registro cuyo feedback de clase (pauta de acompañamiento) está abierto.
   const [feedbackRecordId, setFeedbackRecordId] = useState("");
+  // Clase cuya planificación se está consultando (modal "Ver planificación").
+  const [planRecord, setPlanRecord] = useState<{ course: string; topic: string; recordId: string } | null>(null);
   // Historial de feedbacks (listado consultable + reporte con Tiza-IA).
   const [feedbackHistoryOpen, setFeedbackHistoryOpen] = useState(false);
   // Panel plegable con el detalle de actividades realizadas por tipo/fortaleza.
@@ -8286,6 +8527,13 @@ function OrientationCycleView({
                         <Check className="h-4 w-4" /> Guardar
                       </button>
                     ) : null}
+                    <button
+                      onClick={() => setPlanRecord({ course: record.course || "", topic: getOrientationDisplayTitle(record), recordId: record.id })}
+                      title="Ver la planificación completa de esta clase (objetivo, paso a paso, guion para el Canva y materiales)"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-2 text-xs font-bold text-cyan-800 hover:bg-cyan-100"
+                    >
+                      <BookOpenText className="h-4 w-4" /> Ver planificación
+                    </button>
                     <button onClick={() => toggleClassDetails(record)} className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                       {expanded ? "Ocultar" : "Detalles"}
                       <ChevronDown className={`h-3.5 w-3.5 transition ${expanded ? "rotate-180" : ""}`} />
@@ -8613,6 +8861,19 @@ function OrientationCycleView({
           {renderOrientationTools("rail")}
         </aside>
       </div>
+
+      {planRecord ? (
+        <OrientationPlanDialog
+          key={planRecord.recordId}
+          course={planRecord.course}
+          topic={planRecord.topic}
+          recordId={planRecord.recordId}
+          accessToken={accessToken}
+          currentCanvaLink={store.orientation.find((record) => record.id === planRecord.recordId)?.canvaLink || ""}
+          onSaveCanvaLink={(recordId, link) => onUpdateOrientationRecord(recordId, { canvaLink: link, evidence: link })}
+          onClose={() => setPlanRecord(null)}
+        />
+      ) : null}
 
       {(() => {
         const feedbackRecord = feedbackRecordId ? store.orientation.find((record) => record.id === feedbackRecordId) : undefined;
