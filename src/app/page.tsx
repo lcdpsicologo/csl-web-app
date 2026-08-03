@@ -4135,22 +4135,65 @@ function Sidebar({
 
 // Mobile navigation: bottom tab bar with the 4 most-used views plus a "Menú"
 // button that opens a full drawer. Only rendered below the lg breakpoint.
-const MOBILE_PRIMARY: ViewId[] = ["dashboard", "today", "games", "students"];
+// Accesos directos de la barra inferior en móvil. Son cuatro (el quinto lugar
+// es siempre "Menú") y cada persona elige cuáles quiere ver.
+const MOBILE_PRIMARY_KEY = "tiza-mobile-primary-nav-v1";
+const MOBILE_PRIMARY_SLOTS = 4;
+const defaultMobilePrimary: ViewId[] = ["dashboard", "orientation", "today", "students"];
+
+const sanitizeMobilePrimary = (ids: unknown): ViewId[] => {
+  const valid = new Set(viewNav.map((item) => item.id));
+  const clean = Array.isArray(ids)
+    ? (ids as ViewId[]).filter((id) => valid.has(id)).filter((id, i, arr) => arr.indexOf(id) === i)
+    : [];
+  return clean.length ? clean.slice(0, MOBILE_PRIMARY_SLOTS) : defaultMobilePrimary;
+};
+
+const loadMobilePrimary = (): ViewId[] => {
+  if (typeof window === "undefined") return defaultMobilePrimary;
+  try {
+    return sanitizeMobilePrimary(JSON.parse(window.localStorage.getItem(MOBILE_PRIMARY_KEY) || "null"));
+  } catch {
+    return defaultMobilePrimary;
+  }
+};
 
 function MobileNav({
   activeView,
   onNavigate,
   navItems,
+  primaryIds,
+  onChangePrimary,
 }: {
   activeView: ViewId;
   onNavigate: (view: ViewId) => void;
   navItems: ViewNavItem[];
+  primaryIds: ViewId[];
+  onChangePrimary: (next: ViewId[]) => void;
 }) {
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const primary = navItems.filter((item) => MOBILE_PRIMARY.includes(item.id));
-  const secondary = navItems.filter((item) => !MOBILE_PRIMARY.includes(item.id));
+  const [editing, setEditing] = useState(false);
+  // El orden de la barra lo define la elección de la persona, no el del menú.
+  const lookup = new Map(navItems.map((item) => [item.id, item]));
+  const primary = primaryIds.map((id) => lookup.get(id)).filter((item): item is ViewNavItem => Boolean(item));
+  const secondary = navItems.filter((item) => !primaryIds.includes(item.id));
+
+  const togglePrimary = (id: ViewId) => {
+    if (primaryIds.includes(id)) {
+      // Nunca dejamos la barra vacía: al menos un acceso directo se conserva.
+      if (primaryIds.length <= 1) return;
+      onChangePrimary(primaryIds.filter((item) => item !== id));
+      return;
+    }
+    // Al llegar al tope, el nuevo reemplaza al último para no bloquear el cambio.
+    onChangePrimary(primaryIds.length < MOBILE_PRIMARY_SLOTS ? [...primaryIds, id] : [...primaryIds.slice(0, MOBILE_PRIMARY_SLOTS - 1), id]);
+  };
 
   const go = (view: ViewId) => {
+    if (editing) {
+      togglePrimary(view);
+      return;
+    }
     onNavigate(view);
     setDrawerOpen(false);
   };
@@ -4166,15 +4209,18 @@ function MobileNav({
             return (
               <button
                 key={item.id}
-                onClick={() => go(item.id)}
-                className={`flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold transition ${
+                onClick={() => { onNavigate(item.id); setDrawerOpen(false); setEditing(false); }}
+                title={item.label}
+                className={`flex min-w-0 flex-col items-center gap-0.5 px-0.5 py-2 text-[10px] font-semibold transition ${
                   active ? "text-cyan-700" : "text-slate-500"
                 }`}
               >
-                <span className={`grid h-7 w-12 place-items-center rounded-full transition ${active ? "bg-cyan-50" : ""}`}>
+                <span className={`grid h-7 w-12 shrink-0 place-items-center rounded-full transition ${active ? "bg-cyan-50" : ""}`}>
                   <Icon className="h-5 w-5" />
                 </span>
-                {item.label}
+                {/* Etiquetas largas como "Juegos Vinculares" deben quedar en una
+                    línea recortada: si envuelven, empujan la barra y descuadran. */}
+                <span className="w-full truncate text-center leading-tight">{item.label}</span>
               </button>
             );
           })}
@@ -4202,33 +4248,67 @@ function MobileNav({
             className="tz-slide-up absolute inset-x-2 bottom-[calc(64px+env(safe-area-inset-bottom))] max-h-[54dvh] overflow-y-auto rounded-[22px] border border-slate-200 bg-white/98 p-2.5 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="mb-1.5 flex items-center justify-between px-1.5 py-1">
-              <p className="text-xs font-bold text-slate-700">Más secciones</p>
-              <button type="button" onClick={() => setDrawerOpen(false)} className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-slate-500" aria-label="Cerrar menú">
-                <X className="h-3.5 w-3.5" />
-              </button>
+            <div className="mb-1.5 flex items-center justify-between gap-2 px-1.5 py-1">
+              <p className="min-w-0 truncate text-xs font-bold text-slate-700">{editing ? "Toca para elegir tus accesos directos" : "Más secciones"}</p>
+              <div className="flex shrink-0 items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setEditing((value) => !value)}
+                  className={`rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wide transition ${editing ? "bg-cyan-700 text-white" : "bg-slate-100 text-slate-600"}`}
+                >
+                  {editing ? "Listo" : "Personalizar"}
+                </button>
+                <button type="button" onClick={() => { setDrawerOpen(false); setEditing(false); }} className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-slate-500" aria-label="Cerrar menú">
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
             </div>
+            {editing ? (
+              <div className="mb-1.5 flex items-center justify-between gap-2 rounded-xl bg-cyan-50 px-2.5 py-2 ring-1 ring-cyan-100">
+                <p className="text-[10px] font-semibold leading-3.5 text-cyan-900">
+                  {primary.length} de {MOBILE_PRIMARY_SLOTS} en la barra. Toca una sección para agregarla o quitarla.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onChangePrimary(defaultMobilePrimary)}
+                  className="shrink-0 rounded-full bg-white px-2.5 py-1 text-[10px] font-black text-cyan-800 ring-1 ring-cyan-200"
+                >
+                  Restaurar
+                </button>
+              </div>
+            ) : null}
             <div className="grid grid-cols-4 gap-1.5">
-              {secondary.map((item) => {
+              {(editing ? navItems : secondary).map((item) => {
                 const Icon = item.icon;
-                const active = activeView === item.id;
+                const enBarra = primaryIds.includes(item.id);
+                const active = editing ? enBarra : activeView === item.id;
                 return (
                   <button
                     key={item.id}
                     onClick={() => go(item.id)}
-                    className={`flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[10px] font-semibold leading-tight transition ${
-                      active ? "bg-slate-900 text-white shadow" : "bg-slate-50 text-slate-700 active:bg-slate-100"
+                    title={editing ? (enBarra ? `Quitar ${item.label} de la barra` : `Añadir ${item.label} a la barra`) : item.label}
+                    className={`relative flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-center text-[10px] font-semibold leading-tight transition ${
+                      active
+                        ? editing ? "bg-cyan-700 text-white shadow" : "bg-slate-900 text-white shadow"
+                        : "bg-slate-50 text-slate-700 active:bg-slate-100"
                     }`}
                   >
+                    {editing ? (
+                      <span className={`absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full text-[9px] font-black ${enBarra ? "bg-white text-cyan-700" : "bg-slate-200 text-slate-500"}`}>
+                        {enBarra ? <Check className="h-2.5 w-2.5" /> : <Plus className="h-2.5 w-2.5" />}
+                      </span>
+                    ) : null}
                     <Icon className="h-[18px] w-[18px]" />
                     <span className="line-clamp-2">{item.label}</span>
                   </button>
                 );
               })}
+              {/* Ajustes no vive en viewNav, así que nunca entra al modo de
+                  personalización: siempre navega. */}
               <button
-                onClick={() => go("settings")}
+                onClick={() => { onNavigate("settings"); setDrawerOpen(false); setEditing(false); }}
                 className={`flex min-h-[62px] flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-semibold transition ${
-                  activeView === "settings" ? "bg-slate-900 text-white shadow" : "bg-slate-50 text-slate-700 active:bg-slate-100"
+                  activeView === "settings" && !editing ? "bg-slate-900 text-white shadow" : "bg-slate-50 text-slate-700 active:bg-slate-100"
                 }`}
               >
                 <Settings className="h-[18px] w-[18px]" />
@@ -9082,22 +9162,26 @@ function OrientationCycleView({
             const ownerHasScheduleSlots = scheduleSlots.some((slot) => normalize(slot.owner) === normalize(owner.name));
             const weekHeader = startsWeekGroup ? (
               <div id={`orientation-week-${weekKey}`} className={index === 0 || startsMonthGroup ? "scroll-mt-4 px-2 pb-1 sm:px-3 lg:px-4" : "scroll-mt-4 px-2 pb-1 pt-6 sm:px-3 lg:px-4"}>
-                <div className={`flex w-full flex-wrap items-center gap-2 rounded-xl px-3 py-2.5 shadow-sm ring-1 transition sm:flex-nowrap ${isCurrentWeek ? "bg-gradient-to-r from-cyan-700 to-cyan-800 text-white ring-cyan-700" : "bg-gradient-to-r from-slate-100 to-slate-50 text-slate-900 ring-slate-200"}`}>
+                {/* En móvil el título ocupa su propia fila y las acciones bajan a
+                    otra: si comparten línea, el título se comprime y su texto se
+                    dibuja encima del contador de clases. */}
+                <div className={`flex w-full flex-col gap-2 rounded-xl px-3 py-2.5 shadow-sm ring-1 transition sm:flex-row sm:flex-nowrap sm:items-center ${isCurrentWeek ? "bg-gradient-to-r from-cyan-700 to-cyan-800 text-white ring-cyan-700" : "bg-gradient-to-r from-slate-100 to-slate-50 text-slate-900 ring-slate-200"}`}>
                   <button
                     type="button"
                     onClick={() => toggleWeekCollapsed(weekKey)}
                     title={weekCollapsed ? "Expandir esta semana" : "Contraer esta semana"}
-                    className={`flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1.5 py-1 text-left transition ${isCurrentWeek ? "hover:bg-white/10" : "hover:bg-white/70"}`}
+                    className={`flex w-full min-w-0 items-center gap-3 rounded-lg px-1.5 py-1 text-left transition sm:flex-1 ${isCurrentWeek ? "hover:bg-white/10" : "hover:bg-white/70"}`}
                   >
                     <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${isCurrentWeek ? "bg-white/15 text-white" : "bg-cyan-700 text-white"}`}><CalendarDays className="h-4 w-4" /></span>
-                    <span className="min-w-0">
+                    <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-bold">{weekRangeLabel(weekKey)}</span>
-                      {record.weekNumber ? <span className={`block text-[10px] font-bold uppercase tracking-wider ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"}`}>Semana {record.weekNumber} del plan</span> : null}
+                      {record.weekNumber ? <span className={`block truncate text-[10px] font-bold uppercase tracking-wider ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"}`}>Semana {record.weekNumber} del plan</span> : null}
                     </span>
-                    {isCurrentWeek ? <span className="hidden rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white sm:inline-flex">Semana actual</span> : null}
-                    <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums ${isCurrentWeek ? "bg-white/20 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{weekCount} {weekCount === 1 ? "clase" : "clases"}</span>
+                    {isCurrentWeek ? <span className="hidden shrink-0 rounded-full bg-white/20 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-white sm:inline-flex">Semana actual</span> : null}
+                    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-bold tabular-nums ${isCurrentWeek ? "bg-white/20 text-white" : "bg-white text-slate-600 ring-1 ring-slate-200"}`}>{weekCount} {weekCount === 1 ? "clase" : "clases"}</span>
                     <ChevronDown className={`h-4 w-4 shrink-0 transition ${isCurrentWeek ? "text-cyan-100" : "text-slate-400"} ${weekCollapsed ? "-rotate-90" : ""}`} />
                   </button>
+                  <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap">
                   {weekKey !== "sin-fecha" ? (
                     <button
                       disabled={!dataReady}
@@ -9105,7 +9189,7 @@ function OrientationCycleView({
                       onClick={() => startAfterNextPaint(() => setMaterialsWeekKey((current) => (current === weekKey ? null : weekKey)))}
                       aria-expanded={materialsWeekKey === weekKey}
                       title="Materiales de esta semana: pega cada link una vez y aplícalo a todos los cursos del taller"
-                      className={`tz-press inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-black shadow-sm transition disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${materialsWeekKey === weekKey ? "border-amber-300 bg-amber-300 text-slate-950 ring-2 ring-amber-200" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-white text-cyan-800 hover:border-cyan-400 hover:bg-cyan-50"}`}
+                      className={`tz-press inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-black shadow-sm transition disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:flex-none sm:shrink-0 ${materialsWeekKey === weekKey ? "border-amber-300 bg-amber-300 text-slate-950 ring-2 ring-amber-200" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-white text-cyan-800 hover:border-cyan-400 hover:bg-cyan-50"}`}
                     >
                       <FolderOpen className="h-3.5 w-3.5" /> Materiales
                     </button>
@@ -9116,7 +9200,7 @@ function OrientationCycleView({
                       type="button"
                       onClick={() => openWeekCreatorForKey(weekKey)}
                       title={dataReady ? "Crear las clases del horario semanal" : "Espera a que termine la sincronización inicial"}
-                      className={`tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 ${weekCreatorForThisWeek ? "border-white/40 bg-white text-cyan-800" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
+                      className={`tz-press inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm disabled:cursor-wait disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400 sm:flex-none sm:shrink-0 ${weekCreatorForThisWeek ? "border-white/40 bg-white text-cyan-800" : isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100"}`}
                     >
                       <Plus className="h-3.5 w-3.5" /> Preparar
                     </button>
@@ -9125,10 +9209,11 @@ function OrientationCycleView({
                     type="button"
                     onClick={() => sendWeekClassesEmail(weekKey)}
                     title="Abrir Gmail con las clases de esta semana ya redactadas para los profesores jefes"
-                    className={`tz-press inline-flex shrink-0 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm transition ${isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
+                    className={`tz-press inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold shadow-sm transition sm:flex-none sm:shrink-0 ${isCurrentWeek ? "border-white/30 bg-white/15 text-white hover:bg-white/25" : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"}`}
                   >
                     <Mail className="h-3.5 w-3.5" /> Enviar clases
                   </button>
+                  </div>
                 </div>
                 {weekEmailHint?.weekKey === weekKey ? (
                   <div className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] font-semibold text-emerald-900">
@@ -18035,6 +18120,7 @@ export default function TizaEducationApp() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [floatingAiOpen, setFloatingAiOpen] = useState(false);
   const [navOrder, setNavOrder] = useState<ViewId[]>(loadNavOrder);
+  const [mobilePrimary, setMobilePrimary] = useState<ViewId[]>(loadMobilePrimary);
   const [sidebarMode, setSidebarMode] = useState<SidebarMode>(loadSidebarMode);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
   const [calendarLoading, setCalendarLoading] = useState(false);
@@ -18351,6 +18437,10 @@ export default function TizaEducationApp() {
   useEffect(() => {
     setJsonLocalStorageSafely(NAV_ORDER_KEY, navOrder);
   }, [navOrder]);
+
+  useEffect(() => {
+    setJsonLocalStorageSafely(MOBILE_PRIMARY_KEY, mobilePrimary);
+  }, [mobilePrimary]);
 
   useEffect(() => {
     setLocalStorageSafely(SIDEBAR_MODE_KEY, sidebarMode);
@@ -19728,7 +19818,13 @@ export default function TizaEducationApp() {
           {renderView()}
         </div>
       </main>
-      <MobileNav activeView={activeView} onNavigate={setActiveView} navItems={orderedNavItems} />
+      <MobileNav
+        activeView={activeView}
+        onNavigate={setActiveView}
+        navItems={orderedNavItems}
+        primaryIds={mobilePrimary}
+        onChangePrimary={(next) => setMobilePrimary(sanitizeMobilePrimary(next))}
+      />
       <FloatingTizaIA
         open={floatingAiOpen}
         onOpenChange={setFloatingAiOpen}
