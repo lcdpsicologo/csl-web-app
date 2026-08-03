@@ -115,9 +115,30 @@ const parseResourceLinks = (value: string | undefined, defaultLabel = "Canva"): 
     .filter((item): item is ResourceLink => Boolean(item));
 };
 
+// La planificación y la carpeta suelen venir como nombre del documento en vez de
+// URL: en ese caso el botón abre la búsqueda de Drive con ese nombre.
+const driveSearchUrl = (value: string) =>
+  /^https?:\/\//i.test(value) ? value : `https://drive.google.com/drive/search?q=${encodeURIComponent(value)}`;
+
+const parseDocLinks = (value: string | undefined, defaultLabel: string): ResourceLink[] =>
+  String(value || "")
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/\s*[,;]\s*(?=https?:\/\/)/))
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const urlMatch = part.match(/https?:\/\/\S+/);
+      if (!urlMatch) return { label: part || defaultLabel, url: driveSearchUrl(part) };
+      const url = urlMatch[0];
+      const label = part.slice(0, part.indexOf(url)).replace(/[|:\-–—]\s*$/, "").trim();
+      return { label: label || defaultLabel, url };
+    });
+
 function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "teacherLink" | "planificacionLink" | "driveLink"> }) {
   const disabledStyle = "inline-flex cursor-help items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1.5 text-[11px] font-semibold text-slate-400";
   const canvaLinks = parseResourceLinks(item.canvaLink);
+  const planLinks = parseDocLinks(item.planificacionLink, "Planificación");
+  const folderLinks = parseDocLinks(item.driveLink, "Carpeta");
   return (
     <div className="flex flex-wrap gap-1.5">
       {canvaLinks.length ? (
@@ -128,16 +149,20 @@ function MaterialLinks({ item }: { item: Pick<PublicClassRecord, "canvaLink" | "
         ))
       ) : <span title="Sin link de Canva guardado" className={disabledStyle}><FileText className="h-3.5 w-3.5" /> Canva</span>}
 
-      {item.planificacionLink ? (
-        <a href={item.planificacionLink} target="_blank" rel="noreferrer" title={item.planificacionLink} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 transition hover:bg-indigo-100">
-          <BookOpenText className="h-3.5 w-3.5" /> Planificación <ExternalLink className="h-3 w-3" />
-        </a>
+      {planLinks.length ? (
+        planLinks.map((plan, index) => (
+          <a key={`plan-${index}`} href={plan.url} target="_blank" rel="noreferrer" title={plan.url} className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-2.5 py-1.5 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 transition hover:bg-indigo-100">
+            <BookOpenText className="h-3.5 w-3.5" /> {planLinks.length > 1 ? plan.label : "Planificación"} <ExternalLink className="h-3 w-3" />
+          </a>
+        ))
       ) : <span title="Sin link de planificación guardado" className={disabledStyle}><BookOpenText className="h-3.5 w-3.5" /> Planificación</span>}
 
-      {item.driveLink ? (
-        <a href={item.driveLink} target="_blank" rel="noreferrer" title={item.driveLink} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-100">
-          <FolderOpen className="h-3.5 w-3.5" /> Carpeta <ExternalLink className="h-3 w-3" />
-        </a>
+      {folderLinks.length ? (
+        folderLinks.map((folder, index) => (
+          <a key={`folder-${index}`} href={folder.url} target="_blank" rel="noreferrer" title={folder.url} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1.5 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 transition hover:bg-emerald-100">
+            <FolderOpen className="h-3.5 w-3.5" /> {folderLinks.length > 1 ? folder.label : "Carpeta"} <ExternalLink className="h-3 w-3" />
+          </a>
+        ))
       ) : <span title="Sin link de carpeta guardado" className={disabledStyle}><FolderOpen className="h-3.5 w-3.5" /> Carpeta</span>}
 
       {item.teacherLink && item.teacherLink !== item.canvaLink ? (

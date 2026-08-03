@@ -25,6 +25,7 @@ import { GameShareModal } from "@/components/GameShareModal";
 import { FIRST_CYCLE_COURSES, cleanRutValue, isFirstCycleCourse } from "@/lib/first-cycle-roster";
 import { formatRutValue } from "@/lib/student-identity";
 import { CLASSROOM_TEAMS_BY_COURSE } from "@/lib/classroom-teams";
+import { CLIMATE_STRATEGIES, THINKING_STRATEGIES, type FocusStrategy } from "@/lib/focus-strategies";
 import {
   ArrowDownToLine,
   BarChart3,
@@ -58,10 +59,12 @@ import {
   GraduationCap,
   History,
   Home,
+  Loader2,
   Lock,
   LogOut,
   Mail,
   MessageSquareText,
+  Mic,
   NotebookPen,
   Pencil,
   Plus,
@@ -1900,6 +1903,151 @@ const orientationDocUrl = (value: string | undefined) => {
   return `https://drive.google.com/drive/search?q=${encodeURIComponent(text)}`;
 };
 
+// La planificación y la carpeta suelen guardarse como nombre del documento en vez
+// de URL, así que aquí una entrada puede tener sólo etiqueta, sólo enlace o ambos.
+type MaterialEntry = { label: string; url: string };
+
+const parseMaterialEntries = (value: string | undefined): MaterialEntry[] =>
+  String(value || "")
+    .split(/\r?\n/)
+    .flatMap((line) => line.split(/\s*[,;]\s*(?=https?:\/\/)/))
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const urlMatch = part.match(/https?:\/\/\S+/);
+      if (!urlMatch) return { label: part, url: "" };
+      const url = urlMatch[0];
+      return { label: part.slice(0, part.indexOf(url)).replace(/[|:\-–—]\s*$/, "").trim(), url };
+    });
+
+const serializeMaterialEntries = (entries: MaterialEntry[]) =>
+  entries
+    .map(({ label, url }) => {
+      const cleanLabel = label.trim();
+      const cleanUrl = url.trim();
+      if (cleanLabel && cleanUrl) return `${cleanLabel} | ${cleanUrl}`;
+      return cleanUrl || cleanLabel;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+// Cada entrada se muestra como su propio botón: una clase puede tener más de un
+// Canva, más de una planificación o más de una carpeta.
+const materialButtons = (value: string | undefined, defaultLabel: string) =>
+  parseMaterialEntries(value)
+    .map((entry) => ({ label: entry.label || defaultLabel, url: orientationDocUrl(entry.url || entry.label) }))
+    .filter((entry) => Boolean(entry.url));
+
+// Editor de materiales de una clase: permite sumar tantos Canva, planificaciones
+// o carpetas como tenga la clase (4° básico, por ejemplo, tiene dos Canva).
+function MaterialListEditor({
+  label,
+  value,
+  onChange,
+  disabled,
+  placeholderLabel,
+  placeholderValue,
+  addLabel,
+  accent,
+  allowNameOnly = false,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+  placeholderLabel: string;
+  placeholderValue: string;
+  addLabel: string;
+  accent: "cyan" | "indigo" | "emerald";
+  allowNameOnly?: boolean;
+  hint?: string;
+}) {
+  // Las filas viven en estado local porque una fila recién añadida está vacía y
+  // no sobrevive a la serialización: derivarlas del valor haría que "Añadir" no
+  // mostrara nada. Se resincronizan sólo cuando el valor cambia desde fuera.
+  const [rows, setRows] = useState<MaterialEntry[]>(() => {
+    const parsed = parseMaterialEntries(value);
+    return parsed.length ? parsed : [{ label: "", url: "" }];
+  });
+  const lastSerializedRef = React.useRef(value);
+  useEffect(() => {
+    if (value === lastSerializedRef.current) return;
+    lastSerializedRef.current = value;
+    const parsed = parseMaterialEntries(value);
+    setRows(parsed.length ? parsed : [{ label: "", url: "" }]);
+  }, [value]);
+
+  const commit = (next: MaterialEntry[]) => {
+    setRows(next.length ? next : [{ label: "", url: "" }]);
+    const serialized = serializeMaterialEntries(next);
+    lastSerializedRef.current = serialized;
+    onChange(serialized);
+  };
+  const updateRow = (index: number, changes: Partial<MaterialEntry>) =>
+    commit(rows.map((row, i) => (i === index ? { ...row, ...changes } : row)));
+
+  const accentClasses = {
+    cyan: "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100",
+    indigo: "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
+  }[accent];
+
+  return (
+    <div className="block">
+      <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</span>
+      <div className="mt-1 space-y-2">
+        {rows.map((row, index) => {
+          const openUrl = orientationDocUrl(row.url || (allowNameOnly ? row.label : ""));
+          return (
+            <div key={index} className="flex flex-wrap items-center gap-2 sm:flex-nowrap">
+              <input
+                disabled={disabled}
+                value={row.label}
+                onChange={(event) => updateRow(index, { label: event.target.value })}
+                placeholder={placeholderLabel}
+                className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100 sm:max-w-[42%]"
+              />
+              <input
+                disabled={disabled}
+                value={row.url}
+                onChange={(event) => updateRow(index, { url: event.target.value })}
+                placeholder={placeholderValue}
+                className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100"
+              />
+              {openUrl ? (
+                <a href={openUrl} target="_blank" rel="noopener noreferrer" title={openUrl} className="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-2.5 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              ) : null}
+              {rows.length > 1 ? (
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => commit(rows.filter((_, i) => i !== index))}
+                  title="Quitar este material"
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-rose-200 bg-white px-2.5 py-2 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => commit([...rows, { label: "", url: "" }])}
+        className={`mt-2 inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold transition disabled:opacity-50 ${accentClasses}`}
+      >
+        <Plus className="h-3.5 w-3.5" /> {addLabel}
+      </button>
+      {hint ? <span className="mt-1.5 block text-[10px] font-semibold leading-4 text-slate-400">{hint}</span> : null}
+    </div>
+  );
+}
+
 // ---- Feedback de clase (pauta de acompañamiento Colegio San Lucas) ----
 
 const FEEDBACK_SECTION_CULTURE = [
@@ -1937,8 +2085,12 @@ type ClassFeedbackData = {
   comprehensionStrategies: string[];
   comprehensionEvidence: string;
   thinkingUsed: string;
+  // Nombres exactos del Kit de estrategias Focus; el detalle queda para lo que
+  // no está en el cuadernillo o para precisar cómo se aplicó.
+  thinkingStrategies: string[];
   thinkingDetail: string;
   climateUsed: string;
+  climateStrategies: string[];
   climateDetail: string;
   generalEvidence: string;
   improvements: string;
@@ -1959,8 +2111,10 @@ const emptyClassFeedback = (): ClassFeedbackData => ({
   comprehensionStrategies: [],
   comprehensionEvidence: "",
   thinkingUsed: "",
+  thinkingStrategies: [],
   thinkingDetail: "",
   climateUsed: "",
+  climateStrategies: [],
   climateDetail: "",
   generalEvidence: "",
   improvements: "",
@@ -1977,6 +2131,8 @@ const parseClassFeedback = (raw: string | undefined): ClassFeedbackData => {
       cultureItems: FEEDBACK_SECTION_CULTURE.map((_, index) => parsed.cultureItems?.[index] || ""),
       strengthItems: FEEDBACK_SECTION_STRENGTHS.map((_, index) => parsed.strengthItems?.[index] || ""),
       comprehensionStrategies: Array.isArray(parsed.comprehensionStrategies) ? parsed.comprehensionStrategies : [],
+      thinkingStrategies: Array.isArray(parsed.thinkingStrategies) ? parsed.thinkingStrategies : [],
+      climateStrategies: Array.isArray(parsed.climateStrategies) ? parsed.climateStrategies : [],
     };
   } catch {
     return base;
@@ -2001,8 +2157,10 @@ const classFeedbackSummaryText = (record: DataRecord, data: ClassFeedbackData) =
     `  a. Habilidad de comprensión: ${mark(data.comprehensionUsed)}${data.comprehensionStrategies.length ? ` (${data.comprehensionStrategies.join(", ")})` : ""}`,
   ];
   if (data.comprehensionEvidence.trim()) lines.push(`     Evidencia: ${data.comprehensionEvidence.trim()}`);
-  lines.push(`  b. Estrategias de pensamiento: ${mark(data.thinkingUsed)}${data.thinkingDetail.trim() ? ` · ${data.thinkingDetail.trim()}` : ""}`);
-  lines.push(`  c. Estrategias de clima de aula: ${mark(data.climateUsed)}${data.climateDetail.trim() ? ` · ${data.climateDetail.trim()}` : ""}`);
+  const strategyTail = (names: string[], detail: string) =>
+    `${names.length ? ` (${names.join(", ")})` : ""}${detail.trim() ? ` · ${detail.trim()}` : ""}`;
+  lines.push(`  b. Estrategias de pensamiento: ${mark(data.thinkingUsed)}${strategyTail(data.thinkingStrategies, data.thinkingDetail)}`);
+  lines.push(`  c. Estrategias de clima de aula: ${mark(data.climateUsed)}${strategyTail(data.climateStrategies, data.climateDetail)}`);
   if (data.generalEvidence.trim()) {
     lines.push("", "4. EVIDENCIA / OBSERVACIONES GENERALES", `  ${data.generalEvidence.trim()}`);
   }
@@ -2129,9 +2287,9 @@ const classFeedbackEmailHtml = (record: DataRecord, data: ClassFeedbackData) => 
     ? `<tr><td style="padding:5px 0;font-family:Arial,sans-serif;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#8a7660;width:42%;">${escapeFeedbackHtml(label)}</td><td style="padding:5px 0;font-family:Arial,sans-serif;font-size:13px;font-weight:700;color:#24384d;">${escapeFeedbackHtml(value)}</td></tr>`
     : "";
   const strengthText = record.axis || record.characterStrength || "";
-  const strategyLine = (label: string, used: string, detail: string) =>
+  const strategyLine = (label: string, used: string, names: string[], detail: string) =>
     `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;"><tr>
-        <td style="padding:12px 16px;border-top:1px solid #ece9e2;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#34404c;">${escapeFeedbackHtml(label)}${detail.trim() ? `<div style="margin-top:4px;font-size:12px;line-height:1.55;color:#66727e;">${escapeFeedbackHtml(detail.trim())}</div>` : ""}</td>
+        <td style="padding:12px 16px;border-top:1px solid #ece9e2;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#34404c;">${escapeFeedbackHtml(label)}${names.length ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#476c78;">${escapeFeedbackHtml(names.join(" · "))}</div>` : ""}${detail.trim() ? `<div style="margin-top:4px;font-size:12px;line-height:1.55;color:#66727e;">${escapeFeedbackHtml(detail.trim())}</div>` : ""}</td>
         <td style="padding:12px 16px;border-top:1px solid #ece9e2;text-align:right;white-space:nowrap;">${feedbackMarkBadge(used)}</td>
       </tr></table>`;
 
@@ -2140,8 +2298,8 @@ const classFeedbackEmailHtml = (record: DataRecord, data: ClassFeedbackData) => 
         <td style="padding:12px 16px;font-family:Arial,sans-serif;font-size:13px;line-height:1.5;color:#34404c;">Habilidad de comprensión${data.comprehensionStrategies.length ? `<div style="margin-top:4px;font-size:12px;font-weight:700;color:#476c78;">${escapeFeedbackHtml(data.comprehensionStrategies.join(" · "))}</div>` : ""}${data.comprehensionEvidence.trim() ? `<div style="margin-top:4px;font-size:12px;line-height:1.55;color:#66727e;">${escapeFeedbackHtml(data.comprehensionEvidence.trim())}</div>` : ""}</td>
         <td style="padding:12px 16px;text-align:right;white-space:nowrap;">${feedbackMarkBadge(data.comprehensionUsed)}</td>
       </tr></table>` +
-    strategyLine("b. Estrategias de pensamiento", data.thinkingUsed, data.thinkingDetail) +
-    strategyLine("c. Estrategias de clima de aula", data.climateUsed, data.climateDetail);
+    strategyLine("b. Estrategias de pensamiento", data.thinkingUsed, data.thinkingStrategies, data.thinkingDetail) +
+    strategyLine("c. Estrategias de clima de aula", data.climateUsed, data.climateStrategies, data.climateDetail);
 
   const freeText = (title: string, body: string, accent: string) => body.trim()
     ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;margin-top:20px;border-collapse:separate;border-spacing:0;border-left:4px solid ${accent};background-color:#f7f4ed;border-radius:0 12px 12px 0;"><tr><td style="padding:18px 20px;"><div style="font-family:Arial,sans-serif;font-size:9px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:${accent};">${escapeFeedbackHtml(title)}</div><div style="margin-top:8px;font-family:Georgia,'Times New Roman',serif;font-size:15px;line-height:1.7;color:#2d3a45;">${escapeFeedbackHtml(body.trim())}</div></td></tr></table>`
@@ -2205,6 +2363,135 @@ const classFeedbackEmailHtml = (record: DataRecord, data: ClassFeedbackData) => 
 };
 
 
+// Los colores de cada sección de la pauta son los mismos del correo editorial
+// que recibe la docente, para que pantalla y correo se lean como una sola pieza.
+const FEEDBACK_SECTION_ACCENTS = {
+  teal: { badge: "bg-teal-700", eyebrow: "text-teal-700", ring: "ring-teal-100", soft: "from-teal-50" },
+  violet: { badge: "bg-violet-700", eyebrow: "text-violet-700", ring: "ring-violet-100", soft: "from-violet-50" },
+  amber: { badge: "bg-amber-600", eyebrow: "text-amber-700", ring: "ring-amber-100", soft: "from-amber-50" },
+  slate: { badge: "bg-slate-700", eyebrow: "text-slate-600", ring: "ring-slate-100", soft: "from-slate-50" },
+} as const;
+
+function FeedbackSectionCard({ number, eyebrow, title, accent, children }: {
+  number: string;
+  eyebrow: string;
+  title: string;
+  accent: keyof typeof FEEDBACK_SECTION_ACCENTS;
+  children: React.ReactNode;
+}) {
+  const tone = FEEDBACK_SECTION_ACCENTS[accent];
+  return (
+    <section className={`overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ${tone.ring}`}>
+      <header className={`flex items-center gap-3 bg-gradient-to-r ${tone.soft} to-white px-4 py-3`}>
+        <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-xs font-black text-white ${tone.badge}`}>{number}</span>
+        <div className="min-w-0">
+          <p className={`text-[9px] font-black uppercase tracking-[0.14em] ${tone.eyebrow}`}>{eyebrow}</p>
+          <h3 className="truncate text-sm font-bold text-slate-900">{title}</h3>
+        </div>
+      </header>
+      <div className="px-4 py-3">{children}</div>
+    </section>
+  );
+}
+
+// Selector múltiple de estrategias del Kit Focus: se busca por nombre o por el
+// propósito de la estrategia, y las seleccionadas quedan visibles como chips.
+function StrategyMultiSelect({
+  catalog,
+  selected,
+  onChange,
+  accent,
+  emptyLabel,
+}: {
+  catalog: FocusStrategy[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  accent: "violet" | "rose";
+  emptyLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const query = normalize(search);
+  const visible = query
+    ? catalog.filter((item) => normalize(`${item.n} ${item.name} ${item.purpose}`).includes(query))
+    : catalog;
+  const toggle = (name: string) =>
+    onChange(selected.includes(name) ? selected.filter((item) => item !== name) : [...selected, name]);
+
+  const chip = accent === "violet"
+    ? "bg-violet-100 text-violet-800 ring-violet-300"
+    : "bg-rose-100 text-rose-800 ring-rose-300";
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {selected.length ? (
+          selected.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => toggle(name)}
+              title="Quitar esta estrategia"
+              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ring-1 transition hover:opacity-80 ${chip}`}
+            >
+              {name} <X className="h-3 w-3" />
+            </button>
+          ))
+        ) : (
+          <span className="text-[11px] font-semibold text-slate-400">{emptyLabel}</span>
+        )}
+      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-bold text-slate-700 transition hover:bg-slate-50"
+      >
+        <Search className="h-3.5 w-3.5" />
+        {open ? "Cerrar catálogo" : `Elegir del cuadernillo (${catalog.length})`}
+        <ChevronDown className={`h-3.5 w-3.5 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? (
+        <div className="mt-2 rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-100 p-2">
+            <input
+              autoFocus
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Buscar por nombre o propósito…"
+              className="w-full rounded-lg border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500"
+            />
+          </div>
+          <div className="max-h-64 overflow-y-auto">
+            {visible.length ? (
+              visible.map((item) => {
+                const active = selected.includes(item.name);
+                return (
+                  <button
+                    key={item.n}
+                    type="button"
+                    onClick={() => toggle(item.name)}
+                    className={`flex w-full items-start gap-2.5 border-b border-slate-50 px-3 py-2.5 text-left transition last:border-b-0 ${active ? "bg-slate-50" : "hover:bg-slate-50/60"}`}
+                  >
+                    <span className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md text-[10px] font-black ${active ? (accent === "violet" ? "bg-violet-600 text-white" : "bg-rose-600 text-white") : "bg-slate-100 text-slate-500"}`}>
+                      {active ? <Check className="h-3 w-3" /> : item.n}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-bold leading-5 text-slate-800">{item.name}</span>
+                      <span className="mt-0.5 block text-[11px] leading-4 text-slate-500">{item.purpose}</span>
+                    </span>
+                  </button>
+                );
+              })
+            ) : (
+              <p className="px-3 py-6 text-center text-xs font-semibold text-slate-400">Ninguna estrategia coincide con esa búsqueda.</p>
+            )}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function FeedbackYesNo({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   return (
     <div className="flex w-full shrink-0 gap-1.5 sm:w-auto">
@@ -2231,6 +2518,7 @@ function FeedbackYesNo({ value, onChange }: { value: string; onChange: (value: s
 function OrientationFeedbackModal({
   record,
   ownerName,
+  accessToken,
   autoObservationNumber,
   defaultStartTime,
   defaultEndTime,
@@ -2241,6 +2529,7 @@ function OrientationFeedbackModal({
 }: {
   record: DataRecord;
   ownerName: string;
+  accessToken: string;
   autoObservationNumber: string;
   defaultStartTime: string;
   defaultEndTime: string;
@@ -2395,9 +2684,137 @@ function OrientationFeedbackModal({
     window.setTimeout(() => setEmailHint(""), 12000);
   };
 
-  const sectionTitle = "text-[11px] font-bold uppercase tracking-[0.12em] text-blue-700 sm:text-xs";
+  // ---- Relato hablado: se graba la voz y Tiza-IA completa la pauta ----
+  const [voiceState, setVoiceState] = useState<"idle" | "recording" | "processing">("idle");
+  const [voiceHint, setVoiceHint] = useState("");
+  const [voiceError, setVoiceError] = useState("");
+  const [voiceSeconds, setVoiceSeconds] = useState(0);
+  const recorderRef = React.useRef<MediaRecorder | null>(null);
+  const chunksRef = React.useRef<BlobPart[]>([]);
+
+  useEffect(() => {
+    if (voiceState !== "recording") return;
+    const timer = window.setInterval(() => setVoiceSeconds((current) => current + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [voiceState]);
+
+  // Al desmontar hay que soltar el micrófono: si no, el navegador lo deja tomado.
+  useEffect(() => () => {
+    recorderRef.current?.stream.getTracks().forEach((track) => track.stop());
+  }, []);
+
+  const applyAiFeedback = (incoming: Partial<ClassFeedbackData>) => {
+    setData((current) => {
+      // La IA sólo rellena lo que quedó vacío: nunca pisa lo que ya marcaste.
+      const merge = (mine: string[], theirs: string[] | undefined) =>
+        mine.map((value, index) => value || theirs?.[index] || "");
+      const keepText = (mine: string, theirs: string | undefined) => mine.trim() || (theirs || "").trim();
+      const mergeNames = (mine: string[], theirs: string[] | undefined) =>
+        Array.from(new Set([...mine, ...(theirs || [])]));
+      return {
+        ...current,
+        cultureItems: merge(current.cultureItems, incoming.cultureItems),
+        strengthItems: merge(current.strengthItems, incoming.strengthItems),
+        comprehensionUsed: current.comprehensionUsed || incoming.comprehensionUsed || "",
+        comprehensionStrategies: mergeNames(current.comprehensionStrategies, incoming.comprehensionStrategies),
+        comprehensionEvidence: keepText(current.comprehensionEvidence, incoming.comprehensionEvidence),
+        thinkingUsed: current.thinkingUsed || incoming.thinkingUsed || "",
+        thinkingStrategies: mergeNames(current.thinkingStrategies, incoming.thinkingStrategies),
+        thinkingDetail: keepText(current.thinkingDetail, incoming.thinkingDetail),
+        climateUsed: current.climateUsed || incoming.climateUsed || "",
+        climateStrategies: mergeNames(current.climateStrategies, incoming.climateStrategies),
+        climateDetail: keepText(current.climateDetail, incoming.climateDetail),
+        generalEvidence: keepText(current.generalEvidence, incoming.generalEvidence),
+        improvements: keepText(current.improvements, incoming.improvements),
+      };
+    });
+  };
+
+  const sendToTizaIa = async (payload: { audio?: Blob; text?: string }) => {
+    setVoiceState("processing");
+    setVoiceError("");
+    setVoiceHint("Tiza-IA está escuchando el relato y completando la pauta…");
+    try {
+      const form = new FormData();
+      if (payload.audio) form.append("audio", payload.audio, "relato.webm");
+      if (payload.text) form.append("text", payload.text);
+      form.append("context", JSON.stringify({
+        course: record.course || "",
+        date: record.date || "",
+        topic: record.topic || "",
+        strength: record.axis || record.characterStrength || "",
+        teacher: data.teacher || "",
+        cultureItems: FEEDBACK_SECTION_CULTURE,
+        strengthItems: FEEDBACK_SECTION_STRENGTHS,
+      }));
+      const res = await fetch("/api/ai/feedback", {
+        method: "POST",
+        headers: { authorization: `Bearer ${accessToken}` },
+        body: form,
+      });
+      const json = await res.json();
+      if (!res.ok || !json?.feedback) throw new Error(json?.error || "Tiza-IA no pudo procesar el relato.");
+      applyAiFeedback(json.feedback as Partial<ClassFeedbackData>);
+      const filled = [...(json.feedback.cultureItems || []), ...(json.feedback.strengthItems || [])].filter(Boolean).length;
+      setVoiceHint(`Listo: Tiza-IA completó ${filled} indicadores y redactó la evidencia. Revisa y ajusta lo que falte antes de enviar.`);
+      window.setTimeout(() => setVoiceHint(""), 15000);
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : "No se pudo procesar el relato.");
+      setVoiceHint("");
+    } finally {
+      setVoiceState("idle");
+    }
+  };
+
+  const startRecording = async () => {
+    setVoiceError("");
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      setVoiceError("Este navegador no permite grabar audio. Escribe el relato en “Evidencia general” y usa el botón de redacción.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size) chunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        stream.getTracks().forEach((track) => track.stop());
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (blob.size > 1000) void sendToTizaIa({ audio: blob });
+        else { setVoiceState("idle"); setVoiceError("La grabación quedó vacía. Inténtalo de nuevo."); }
+      };
+      recorderRef.current = recorder;
+      setVoiceSeconds(0);
+      setVoiceState("recording");
+      setVoiceHint("Grabando… cuenta cómo estuvo la clase: qué hizo la docente, qué estrategias usó y qué destacarías.");
+      recorder.start();
+    } catch {
+      setVoiceError("No se pudo acceder al micrófono. Revisa los permisos del navegador.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (recorderRef.current?.state === "recording") recorderRef.current.stop();
+    setVoiceHint("");
+  };
+
+  // Cuando el relato ya está escrito a mano, la IA lo ordena y completa la pauta.
+  const improveWrittenNotes = () => {
+    const written = [data.generalEvidence, data.improvements].map((item) => item.trim()).filter(Boolean).join("\n\n");
+    if (!written) {
+      setVoiceError("Escribe primero el relato en “Evidencia general” o graba un audio.");
+      return;
+    }
+    void sendToTizaIa({ text: written });
+  };
+
   const fieldLabel = "text-[11px] font-bold uppercase tracking-wide text-slate-500";
   const inputStyle = "mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-50";
+
+  const totalIndicators = data.cultureItems.length + data.strengthItems.length + 3;
+  const answeredIndicators = [...data.cultureItems, ...data.strengthItems, data.comprehensionUsed, data.thinkingUsed, data.climateUsed]
+    .filter((value) => value === "si" || value === "no").length;
+  const progressPct = Math.round((answeredIndicators / totalIndicators) * 100);
 
   // Portal a <body>: los contenedores animados de la app crean stacking contexts
   // que dejaban el modal atrapado bajo la barra superior.
@@ -2416,8 +2833,65 @@ function OrientationFeedbackModal({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3 sm:space-y-5 sm:px-5 sm:py-4">
-          <section className="grid grid-cols-2 gap-4 rounded-2xl border border-slate-200 bg-slate-50/70 p-4 sm:p-5 lg:grid-cols-3">
+        <div className="shrink-0 border-b border-slate-100 bg-white px-4 py-2 sm:px-5">
+          <div className="flex items-center gap-3">
+            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100">
+              <div className={`h-full rounded-full transition-all duration-500 ${progressPct === 100 ? "bg-emerald-500" : "bg-blue-600"}`} style={{ width: `${progressPct}%` }} />
+            </div>
+            <span className={`shrink-0 text-[11px] font-black tabular-nums ${progressPct === 100 ? "text-emerald-600" : "text-slate-500"}`}>
+              {answeredIndicators}/{totalIndicators}
+            </span>
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto bg-slate-50/60 px-3 py-3 sm:space-y-5 sm:px-5 sm:py-4">
+          <section className="overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 p-4 shadow-md shadow-indigo-900/15 sm:p-5">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-white/15 text-white"><Sparkles className="h-4.5 w-4.5" /></span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-indigo-200">Relato hablado</p>
+                <h3 className="text-sm font-bold text-white">Cuéntale a Tiza-IA cómo estuvo la clase</h3>
+                <p className="mt-1 text-[11px] leading-4 text-indigo-100">
+                  Graba tu relato y la pauta se completa sola: marca los indicadores respaldados, reconoce las estrategias del cuadernillo Focus y redacta la evidencia. Nunca reemplaza lo que ya marcaste.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {voiceState === "recording" ? (
+                <button
+                  type="button"
+                  onClick={stopRecording}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-black text-rose-700 shadow-sm transition hover:bg-rose-50"
+                >
+                  <span className="h-2.5 w-2.5 animate-pulse rounded-sm bg-rose-600" />
+                  Detener y analizar · {String(Math.floor(voiceSeconds / 60)).padStart(2, "0")}:{String(voiceSeconds % 60).padStart(2, "0")}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={voiceState === "processing"}
+                  onClick={startRecording}
+                  className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white px-4 py-2 text-xs font-black text-indigo-700 shadow-sm transition hover:bg-indigo-50 disabled:opacity-60"
+                >
+                  {voiceState === "processing" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mic className="h-4 w-4" />}
+                  {voiceState === "processing" ? "Analizando…" : "Grabar relato"}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={voiceState !== "idle"}
+                onClick={improveWrittenNotes}
+                title="Usa lo que ya escribiste abajo para completar la pauta y mejorar la redacción"
+                className="inline-flex min-h-10 items-center gap-2 rounded-xl bg-white/10 px-3.5 py-2 text-xs font-bold text-white ring-1 ring-white/25 transition hover:bg-white/20 disabled:opacity-50"
+              >
+                <Wand2 className="h-4 w-4" /> Mejorar lo escrito
+              </button>
+            </div>
+            {voiceHint ? <p className="mt-2.5 rounded-lg bg-white/10 px-3 py-2 text-[11px] font-semibold leading-4 text-white">{voiceHint}</p> : null}
+            {voiceError ? <p className="mt-2.5 rounded-lg bg-rose-950/40 px-3 py-2 text-[11px] font-semibold leading-4 text-rose-100 ring-1 ring-rose-300/30">{voiceError}</p> : null}
+          </section>
+
+          <section className="grid grid-cols-2 gap-4 rounded-2xl bg-white p-4 shadow-sm ring-1 ring-slate-100 sm:p-5 lg:grid-cols-3">
             <label className="col-span-2 block rounded-xl border border-slate-200 bg-white p-3 shadow-sm lg:col-span-3 sm:p-4">
               <span className={fieldLabel}>Nombre docente</span>
               <select
@@ -2475,32 +2949,30 @@ function OrientationFeedbackModal({
             </label>
           </section>
 
-          <section>
-            <h3 className={sectionTitle}>1. Intervención formativa y cultura institucional</h3>
-            <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
+          <FeedbackSectionCard number="01" eyebrow="Cultura institucional" title="Intervención formativa" accent="teal">
+            <div className="divide-y divide-slate-100">
               {FEEDBACK_SECTION_CULTURE.map((item, index) => (
-                <div key={item} className="flex flex-col items-start justify-between gap-2 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5">
+                <div key={item} className="flex flex-col items-start justify-between gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-3">
                   <p className="text-[13px] leading-5 text-slate-700 sm:text-sm">{item}</p>
                   <FeedbackYesNo value={data.cultureItems[index]} onChange={(value) => updateItem("cultureItems", index, value)} />
                 </div>
               ))}
             </div>
-          </section>
+          </FeedbackSectionCard>
 
-          <section>
-            <h3 className={sectionTitle}>2. Trabajo de fortalezas del carácter en la clase</h3>
-            <div className="mt-2 divide-y divide-slate-100 rounded-xl border border-slate-200">
+          <FeedbackSectionCard number="02" eyebrow="Formación del carácter" title="Fortalezas puestas en práctica" accent="violet">
+            <div className="divide-y divide-slate-100">
               {FEEDBACK_SECTION_STRENGTHS.map((item, index) => (
-                <div key={item} className="flex flex-col items-start justify-between gap-2 px-3 py-3 sm:flex-row sm:items-center sm:gap-3 sm:py-2.5">
+                <div key={item} className="flex flex-col items-start justify-between gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-3">
                   <p className="text-[13px] leading-5 text-slate-700 sm:text-sm">{item}</p>
                   <FeedbackYesNo value={data.strengthItems[index]} onChange={(value) => updateItem("strengthItems", index, value)} />
                 </div>
               ))}
             </div>
-          </section>
+          </FeedbackSectionCard>
 
-          <section className="space-y-3">
-            <h3 className={sectionTitle}>3. Estrategias pedagógicas observadas</h3>
+          <FeedbackSectionCard number="03" eyebrow="Didáctica y ambiente" title="Estrategias pedagógicas observadas" accent="amber">
+            <div className="space-y-3">
             <div className="rounded-xl border border-slate-200 p-3">
               <div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <p className="text-sm font-semibold text-slate-800">a. ¿Se observa uso de habilidad de comprensión?</p>
@@ -2537,8 +3009,15 @@ function OrientationFeedbackModal({
                 <p className="text-sm font-semibold text-slate-800">b. ¿Utiliza estrategia de pensamiento?</p>
                 <FeedbackYesNo value={data.thinkingUsed} onChange={(value) => update({ thinkingUsed: value })} />
               </div>
+              <StrategyMultiSelect
+                catalog={THINKING_STRATEGIES}
+                selected={data.thinkingStrategies}
+                onChange={(thinkingStrategies) => update({ thinkingStrategies })}
+                accent="violet"
+                emptyLabel="Sin estrategias de pensamiento seleccionadas."
+              />
               <label className="mt-2 block">
-                <span className={fieldLabel}>¿Cuál(es)?</span>
+                <span className={fieldLabel}>Detalle o estrategia fuera del cuadernillo</span>
                 <textarea value={data.thinkingDetail} onChange={(event) => update({ thinkingDetail: event.target.value })} rows={2} className={`${inputStyle} resize-y`} />
               </label>
             </div>
@@ -2547,22 +3026,28 @@ function OrientationFeedbackModal({
                 <p className="text-sm font-semibold text-slate-800">c. ¿Utiliza estrategia de clima de aula?</p>
                 <FeedbackYesNo value={data.climateUsed} onChange={(value) => update({ climateUsed: value })} />
               </div>
+              <StrategyMultiSelect
+                catalog={CLIMATE_STRATEGIES}
+                selected={data.climateStrategies}
+                onChange={(climateStrategies) => update({ climateStrategies })}
+                accent="rose"
+                emptyLabel="Sin estrategias de clima seleccionadas."
+              />
               <label className="mt-2 block">
-                <span className={fieldLabel}>¿Cuál(es)?</span>
+                <span className={fieldLabel}>Detalle o estrategia fuera del cuadernillo</span>
                 <textarea value={data.climateDetail} onChange={(event) => update({ climateDetail: event.target.value })} rows={2} className={`${inputStyle} resize-y`} />
               </label>
             </div>
-          </section>
+            </div>
+          </FeedbackSectionCard>
 
-          <section>
-            <h3 className={sectionTitle}>4. Evidencia / observaciones generales</h3>
-            <textarea value={data.generalEvidence} onChange={(event) => update({ generalEvidence: event.target.value })} rows={4} placeholder="Registro de lo observado durante la clase." className={`${inputStyle} resize-y`} />
-          </section>
+          <FeedbackSectionCard number="04" eyebrow="Lo observado" title="Evidencia y observaciones generales" accent="slate">
+            <textarea value={data.generalEvidence} onChange={(event) => update({ generalEvidence: event.target.value })} rows={4} placeholder="Registro de lo observado durante la clase." className={`${inputStyle} mt-0 resize-y`} />
+          </FeedbackSectionCard>
 
-          <section>
-            <h3 className={sectionTitle}>5. Elementos destacados y sugerencias para la mejora</h3>
-            <textarea value={data.improvements} onChange={(event) => update({ improvements: event.target.value })} rows={4} placeholder="Lo que se destaca de la clase y las sugerencias concretas para la docente." className={`${inputStyle} resize-y`} />
-          </section>
+          <FeedbackSectionCard number="05" eyebrow="Cierre" title="Elementos destacados y sugerencias" accent="slate">
+            <textarea value={data.improvements} onChange={(event) => update({ improvements: event.target.value })} rows={4} placeholder="Lo que se destaca de la clase y las sugerencias concretas para la docente." className={`${inputStyle} mt-0 resize-y`} />
+          </FeedbackSectionCard>
         </div>
 
         {previewHtml ? (
@@ -8558,10 +9043,8 @@ function OrientationCycleView({
             const expanded = expandedClassIds.includes(record.id);
             const displayTitle = getOrientationDisplayTitle(record);
             // Con URL abre directo; con nombre busca en Drive; vacío queda desactivado.
-            const planUrl = orientationDocUrl(record.planificacion);
-            const driveUrl = orientationDocUrl(folderUrl);
-            const planTitle = /^https?:\/\//i.test((record.planificacion || "").trim()) ? record.planificacion : `Buscar en Drive: ${record.planificacion}`;
-            const driveTitle = /^https?:\/\//i.test(folderUrl.trim()) ? folderUrl : `Buscar en Drive: ${folderUrl}`;
+            const planLinks = materialButtons(record.planificacion, "Planificación");
+            const driveLinks = materialButtons(folderUrl, "Carpeta");
             const notesPreview = record.notes && normalize(record.notes) !== normalize(displayTitle) && normalize(record.notes) !== normalize(record.topic || "") ? record.notes : "";
             const pendingStatus = pendingStatuses[record.id];
             const shownStatus = pendingStatus || canonicalOrientationStatus(record.status);
@@ -8787,17 +9270,21 @@ function OrientationCycleView({
                         <History className="h-3 w-3" /> Canva clase anterior
                       </span>
                     )}
-                    {planUrl ? (
-                      <a href={planUrl} target="_blank" rel="noopener noreferrer" title={planTitle} className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
-                        <BookOpenText className="h-3 w-3" /> Planificación <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
+                    {planLinks.length ? (
+                      planLinks.map((plan, planIndex) => (
+                        <a key={`plan-${planIndex}`} href={plan.url} target="_blank" rel="noopener noreferrer" title={plan.url.includes("/drive/search?") ? `Buscar en Drive: ${plan.label}` : plan.url} className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700 ring-1 ring-indigo-200 hover:bg-indigo-100">
+                          <BookOpenText className="h-3 w-3" /> {planLinks.length > 1 ? plan.label : "Planificación"} <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      ))
                     ) : (
                       <span title="Sin link de planificación guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><BookOpenText className="h-3 w-3" /> Planificación</span>
                     )}
-                    {driveUrl ? (
-                      <a href={driveUrl} target="_blank" rel="noopener noreferrer" title={driveTitle} className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">
-                        <FolderOpen className="h-3 w-3" /> Carpeta <ExternalLink className="h-2.5 w-2.5" />
-                      </a>
+                    {driveLinks.length ? (
+                      driveLinks.map((folder, folderIndex) => (
+                        <a key={`folder-${folderIndex}`} href={folder.url} target="_blank" rel="noopener noreferrer" title={folder.url.includes("/drive/search?") ? `Buscar en Drive: ${folder.label}` : folder.url} className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2 py-1 text-[11px] font-bold text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100">
+                          <FolderOpen className="h-3 w-3" /> {driveLinks.length > 1 ? folder.label : "Carpeta"} <ExternalLink className="h-2.5 w-2.5" />
+                        </a>
+                      ))
                     ) : (
                       <span title="Sin link de carpeta guardado" className="inline-flex cursor-help items-center gap-1 rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-400"><FolderOpen className="h-3 w-3" /> Carpeta</span>
                     )}
@@ -8923,24 +9410,46 @@ function OrientationCycleView({
                         </>
                       ) : null}
 
-                      <label className="block xl:col-span-4">
-                        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Canva / evidencia</span>
-                        <div className="mt-1 flex gap-2">
-                          <input disabled={isCalendar} value={editDraft.canvaLink} onChange={(event) => updateClassEditDraft(record, { canvaLink: event.target.value, evidence: event.target.value })} placeholder="https://canva..." className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                          {canvaUrl ? <a href={canvaUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Abrir</a> : null}
-                        </div>
-                      </label>
-                      <label className="block xl:col-span-4">
-                        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Planificacion</span>
-                        <textarea disabled={isCalendar} value={editDraft.planificacion} onChange={(event) => updateClassEditDraft(record, { planificacion: event.target.value })} rows={2} placeholder="Nombre, link o breve descripcion" className="mt-1 w-full resize-y rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                      </label>
-                      <label className="block xl:col-span-4">
-                        <span className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Carpeta Drive</span>
-                        <div className="mt-1 flex gap-2">
-                          <input disabled={isCalendar} value={editDraft.folderLink} onChange={(event) => updateClassEditDraft(record, { folderLink: event.target.value })} placeholder="Drive / carpeta / semana" className="min-w-0 flex-1 rounded-md border border-slate-200 px-2.5 py-2 text-sm outline-none focus:border-blue-500 disabled:bg-slate-100" />
-                          {folderUrl.startsWith("http") ? <a href={folderUrl} target="_blank" rel="noopener noreferrer" className="inline-flex shrink-0 items-center justify-center rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100">Abrir</a> : null}
-                        </div>
-                      </label>
+                      <div className="xl:col-span-4">
+                        <MaterialListEditor
+                          label="Canva / evidencia"
+                          value={editDraft.canvaLink}
+                          onChange={(canvaLink) => updateClassEditDraft(record, { canvaLink, evidence: canvaLink })}
+                          disabled={isCalendar}
+                          placeholderLabel="Nombre (ej. Consejo de Curso)"
+                          placeholderValue="https://canva..."
+                          addLabel="Añadir otro Canva"
+                          accent="cyan"
+                        />
+                      </div>
+                      <div className="xl:col-span-4">
+                        <MaterialListEditor
+                          label="Planificación"
+                          value={editDraft.planificacion}
+                          onChange={(planificacion) => updateClassEditDraft(record, { planificacion })}
+                          disabled={isCalendar}
+                          placeholderLabel="Nombre del documento"
+                          placeholderValue="Link (opcional)"
+                          addLabel="Añadir otra planificación"
+                          accent="indigo"
+                          allowNameOnly
+                          hint="Sin link, el botón busca ese nombre en Drive."
+                        />
+                      </div>
+                      <div className="xl:col-span-4">
+                        <MaterialListEditor
+                          label="Carpeta Drive"
+                          value={editDraft.folderLink}
+                          onChange={(folderLink) => updateClassEditDraft(record, { folderLink })}
+                          disabled={isCalendar}
+                          placeholderLabel="Nombre de la carpeta"
+                          placeholderValue="Link (opcional)"
+                          addLabel="Añadir otra carpeta"
+                          accent="emerald"
+                          allowNameOnly
+                          hint="Sin link, el botón busca esa carpeta en Drive."
+                        />
+                      </div>
 
                       {(record.teacherLink || record.teacherSentStatus || record.teacherSentAt) ? (
                         <div className="grid gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-3 md:grid-cols-3 xl:col-span-12">
@@ -9203,6 +9712,7 @@ function OrientationCycleView({
             key={feedbackRecord.id}
             record={feedbackRecord}
             ownerName={owner.name}
+            accessToken={accessToken}
             autoObservationNumber={String(completedClassNumber)}
             defaultStartTime={feedbackSlot?.start || ""}
             defaultEndTime={feedbackSlot?.end || ""}

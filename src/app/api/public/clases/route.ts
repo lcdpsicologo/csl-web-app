@@ -39,14 +39,6 @@ const str = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 
 const isLink = (value: string) => /^https?:\/\//i.test(value);
 
-// La planificación y la carpeta suelen venir como nombre del documento o de la
-// semana, no como URL: en ese caso el botón abre la búsqueda de Drive.
-const docUrl = (value: string) => {
-  if (!value) return "";
-  if (isLink(value)) return value;
-  return `https://drive.google.com/drive/search?q=${encodeURIComponent(value)}`;
-};
-
 export async function GET() {
   const rawUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -121,9 +113,10 @@ export async function GET() {
         const generated = normalize(str(record.source)).includes("plan anual orientacion 2026");
         const notesAreMeaningful = Boolean(notes) && !normalize(notes).includes("fecha ajustada por feriado");
         const hasPublishedContent = Boolean(canvaLink || teacherLink || str(record.planificacion) || str(record.folderLink) || notesAreMeaningful);
-        // Con URL abre directo; con nombre busca en Drive; vacío queda desactivado.
-        const planificacionLink = docUrl(str(record.planificacion));
-        const driveLink = docUrl(str(record.folderLink));
+        // Se envían en crudo (pueden traer varias entradas, una por línea) y la
+        // vista de profesores arma un botón por cada una.
+        const planificacionLink = str(record.planificacion);
+        const driveLink = str(record.folderLink);
         if (generated && !hasPublishedContent) return;
 
         classes.push({
