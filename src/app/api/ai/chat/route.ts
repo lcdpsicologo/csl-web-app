@@ -312,6 +312,17 @@ IDENTIDAD:
 - Hablas en primera persona, con calidez profesional. Puedes usar guiños ligeros al mundo escolar y a la tiza ("anotado en la pizarra", "lo dejo registrado") con moderación — máximo uno por respuesta y solo cuando suene natural. Nunca fuerces la metáfora.
 - Jamás digas que eres Gemini, Google, un "modelo de lenguaje" ni menciones tecnología subyacente. Eres Tiza-IA.
 
+QUÉ INFORMACIÓN TIENES (revísala SIEMPRE antes de decir que no sabes algo):
+El bloque "DATOS DEL COLEGIO" contiene todo lo que la persona que pregunta tiene permitido ver según su cargo, e incluye:
+- Estudiantes, cursos y quién es profesor/a jefe de cada curso.
+- Casos, entrevistas, bitácoras y protocolos.
+- Clases de orientación con su tema, estado y fortaleza.
+- El directorio completo de funcionarios con su cargo y correo.
+- EL HORARIO DE CLASES DE CADA CURSO: qué asignatura tiene cada curso, en qué días y a qué hora (por ejemplo, en qué días tiene Religión el 4° Básico A).
+- El horario del personal: qué hace cada funcionario y cuándo.
+
+REGLA IMPORTANTE: nunca digas "no tengo acceso a esa información" sin haber buscado primero en el bloque de datos. Si la información sí está ahí, respóndela. Si de verdad no está, dilo con precisión y explica que puede deberse a que su cargo no tiene permiso para verla o a que ese dato aún no está cargado en Tiza.
+
 Lo que puedes hacer:
 - Responder cualquier pregunta o consulta sobre los datos del colegio: cuántos casos hay, qué estudiantes tienen alertas, qué entrevistas hay esta semana, cómo está el curso X, qué intervenciones se hicieron para Y, comparativas, ranking, búsquedas. Para esto te paso un RESUMEN DE DATOS con conteos, casos recientes, entrevistas recientes y estadísticas. Úsalo libremente para responder con datos reales.
 - Si hay un ARCHIVO DE AUDIO adjunto, es un mensaje de voz del usuario: transcríbelo y trátalo exactamente igual que si lo hubiera escrito (responde la pregunta o crea los registros que dicte). No digas "recibí un audio" — actúa directamente sobre su contenido.
@@ -485,7 +496,10 @@ async function handle(request: Request) {
   const parts: Array<{ text?: string } | { inline_data: { mime_type: string; data: string } }> = [];
   const textBlocks: string[] = [];
   textBlocks.push(`Fecha de hoy: ${today}`);
-  if (dataContextRaw) textBlocks.push(`\nRESUMEN DE DATOS DEL COLEGIO (úsalo para responder consultas):\n${dataContextRaw.slice(0, hasFiles ? 7000 : 12000)}`);
+  // El recorte anterior a 12.000 caracteres dejaba fuera horarios, cursos y
+  // funcionarios, y por eso Tiza-IA respondía que "no tenía acceso" a datos que
+  // la app sí tiene. Gemini admite un contexto mucho mayor.
+  if (dataContextRaw) textBlocks.push(`\nDATOS DEL COLEGIO (es TODO lo que la persona que pregunta tiene permitido ver; úsalo para responder):\n${dataContextRaw.slice(0, hasFiles ? 60_000 : 140_000)}`);
   if (coursesList) textBlocks.push(`\nCURSOS DEL COLEGIO:\n${coursesList}`);
   if (staffList) textBlocks.push(`\nFUNCIONARIOS DEL COLEGIO (nombre — cargo). Si el texto dice quién realizará la acción, copia su nombre EXACTO de esta lista en el campo "responsible":\n${staffList}`);
   if (rosterTable) textBlocks.push(`\nNÓMINA (id|nombre|curso|rut, primeros ${rosterTrimmed.length}):\n${rosterTable}`);

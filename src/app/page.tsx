@@ -1577,7 +1577,106 @@ const officialPersonnelRecords = officialPersonnelEntries.map(([fullName, role, 
   notes: "",
 }));
 
-const buildDataContext = (store: DataStore): string => {
+// Los horarios pesan más de un megabyte en bruto, así que se condensan: por
+// curso, cada asignatura con los días y horas en que se dicta. Con esto Tiza-IA
+// puede responder "qué días tiene religión el 4° A" sin recibir 12.000 bloques.
+const DAY_ORDER = ["lunes", "martes", "miércoles", "jueves", "viernes"];
+const DAY_SHORT: Record<string, string> = { lunes: "lun", martes: "mar", "miércoles": "mié", jueves: "jue", viernes: "vie" };
+
+// El horario oficial nombra los cursos como "CUARTO BÁSICO A" y el resto de la
+// app como "4° Básico A". Se emiten ambos para que la IA los reconozca igual.
+const ORDINAL_TO_NUMBER: Record<string, string> = {
+  PRIMERO: "1°", SEGUNDO: "2°", TERCERO: "3°", CUARTO: "4°",
+  QUINTO: "5°", SEXTO: "6°", "SÉPTIMO": "7°", SEPTIMO: "7°", OCTAVO: "8°",
+};
+
+const scheduleCourseLabel = (raw: string) => {
+  const name = String(raw || "").trim();
+  const match = name.match(/^([A-ZÁÉÍÓÚÑ]+)\s+(B[ÁA]SICO|MEDIO)\s+([AB])$/i);
+  if (match) {
+    const number = ORDINAL_TO_NUMBER[match[1].toUpperCase()];
+    const level = /medio/i.test(match[2]) ? "Medio" : "Básico";
+    if (number) return `${name} (= ${number} ${level} ${match[3].toUpperCase()})`;
+  }
+  if (/^pre\s*kinder/i.test(name)) return `${name} (= Prekínder ${name.slice(-1)})`;
+  if (/^kinder/i.test(name)) return `${name} (= Kínder ${name.slice(-1)})`;
+  return name;
+};
+
+// El horario del personal son ~60 KB (92 funcionarios con bloques distintos):
+// enviarlo en cada mensaje encarece y ralentiza cada consulta. Se adjunta sólo
+// cuando la pregunta habla de horarios/disponibilidad o nombra a alguien.
+const questionNeedsStaffSchedule = (question: string, staffSchedule: StaffScheduleEntry[]) => {
+  const text = normalize(question);
+  if (!text) return false;
+  if (/horario|hora|cuando|libre|disponib|reemplaz|turno|clase de|bloque/.test(text)) return true;
+  return staffSchedule.some((entry) => {
+    const name = normalize(entry.staffName || "");
+    return name.length > 5 && text.includes(name);
+  });
+};
+
+const buildScheduleContext = (courseSchedule: CourseScheduleEntry[], staffSchedule: StaffScheduleEntry[]): string => {
+  const lines: string[] = [];
+  const skip = /^(acogida|recreo|almuerzo|colaci[oó]n|salida|rutina)$/i;
+
+  const byCourse = new Map<string, Map<string, string[]>>();
+  courseSchedule.forEach((entry) => {
+    const activity = (entry.activity || "").trim();
+    if (!activity || skip.test(activity)) return;
+    const course = (entry.course || "").trim();
+    if (!course) return;
+    if (!byCourse.has(course)) byCourse.set(course, new Map());
+    const activities = byCourse.get(course)!;
+    if (!activities.has(activity)) activities.set(activity, []);
+    const slot = `${DAY_SHORT[entry.day] || entry.day} ${entry.startTime}-${entry.endTime}`;
+    if (!activities.get(activity)!.includes(slot)) activities.get(activity)!.push(slot);
+  });
+
+  if (byCourse.size) {
+    lines.push(`\nHORARIO DE CLASES POR CURSO (asignatura: días y horas en que se dicta):`);
+    Array.from(byCourse.entries()).forEach(([course, activities]) => {
+      const detail = Array.from(activities.entries())
+        .map(([activity, slots]) => {
+          const ordered = [...slots].sort((a, b) =>
+            DAY_ORDER.indexOf(Object.keys(DAY_SHORT).find((d) => DAY_SHORT[d] === a.slice(0, 3)) || "") -
+            DAY_ORDER.indexOf(Object.keys(DAY_SHORT).find((d) => DAY_SHORT[d] === b.slice(0, 3)) || ""));
+          return `${activity} (${ordered.join(", ")})`;
+        })
+        .join("; ");
+      lines.push(`- ${scheduleCourseLabel(course)}: ${detail}`);
+    });
+  }
+
+  // Se agrupa por actividad igual que los cursos: listar bloque por bloque
+  // multiplicaba por seis el tamaño del contexto sin agregar información.
+  const byStaff = new Map<string, Map<string, string[]>>();
+  staffSchedule.forEach((entry) => {
+    const name = (entry.staffName || "").trim();
+    const activity = (entry.activity || "").trim();
+    if (!name || !activity || skip.test(activity)) return;
+    if (!byStaff.has(name)) byStaff.set(name, new Map());
+    const activities = byStaff.get(name)!;
+    if (!activities.has(activity)) activities.set(activity, []);
+    const slot = `${DAY_SHORT[entry.day] || entry.day} ${entry.startTime}`;
+    if (!activities.get(activity)!.includes(slot)) activities.get(activity)!.push(slot);
+  });
+  if (byStaff.size) {
+    lines.push(`\nHORARIO DEL PERSONAL (qué hace cada funcionario y cuándo):`);
+    Array.from(byStaff.entries()).forEach(([name, activities]) => {
+      const detail = Array.from(activities.entries())
+        .map(([activity, slots]) => `${activity} (${slots.join(", ")})`)
+        .join("; ");
+      lines.push(`- ${name}: ${detail}`);
+    });
+  }
+  return lines.join("\n");
+};
+
+const buildDataContext = (
+  store: DataStore,
+  schedules?: { course: CourseScheduleEntry[]; staff: StaffScheduleEntry[]; question?: string },
+): string => {
   const lines: string[] = [];
   lines.push(`Total estudiantes: ${store.students.length}`);
   lines.push(`Cursos guardados: ${store.courses.length}`);
@@ -1650,6 +1749,32 @@ const buildDataContext = (store: DataStore): string => {
   healthAlerts.slice(0, 15).forEach((s) => {
     lines.push(`- ${s.fullName} (${s.course}): ${(s.healthAlerts || "").slice(0, 100)}`);
   });
+
+  // Cursos con su profesor jefe: permite responder "quién es la profe jefe de X".
+  if (store.courses.length) {
+    lines.push(`\nCURSOS Y PROFESOR JEFE:`);
+    store.courses.forEach((c) => {
+      lines.push(`- ${c.name || c.course || "?"}${c.headTeacher ? ` · P. jefe: ${c.headTeacher}` : ""}${c.studentsCount ? ` · ${c.studentsCount} estudiantes` : ""}`);
+    });
+  }
+
+  // Directorio de funcionarios: antes sólo se enviaba el número total.
+  if (store.personnel.length) {
+    lines.push(`\nFUNCIONARIOS (nombre · cargo · correo):`);
+    store.personnel.forEach((p) => {
+      lines.push(`- ${p.name || "?"} · ${p.role || "sin cargo"}${p.email ? ` · ${p.email}` : ""}`);
+    });
+  }
+
+  // Horarios de cursos y personal.
+  if (schedules) {
+    const includeStaff = questionNeedsStaffSchedule(schedules.question || "", schedules.staff);
+    const scheduleText = buildScheduleContext(schedules.course, includeStaff ? schedules.staff : []);
+    if (scheduleText) lines.push(scheduleText);
+    if (!includeStaff) {
+      lines.push(`\n(El horario detallado del personal está disponible: si te preguntan por la disponibilidad u horario de un funcionario, pide que lo mencionen por su nombre o que lo pregunten explícitamente y lo recibirás.)`);
+    }
+  }
 
   return lines.join("\n");
 };
@@ -17736,7 +17861,7 @@ function AIChatMode({
         .slice(0, 300)
         .map((person) => ({ name: person.fullName || "", role: person.role || "", email: person.email || "" }));
       fd.append("staff", JSON.stringify(staff));
-      fd.append("dataContext", buildDataContext(store));
+      fd.append("dataContext", buildDataContext(store, { course: COURSE_SCHEDULE, staff: STAFF_SCHEDULE, question: userMessage }));
       submittingFiles.forEach((f) => fd.append("files", f, f.name));
       const res = await fetch("/api/ai/chat", {
         method: "POST",
