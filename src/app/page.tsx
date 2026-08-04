@@ -155,6 +155,25 @@ type ClassroomTeamMember = {
   notes: string;
 };
 
+// Directiva de curso: cargos elegidos por consejo de curso (presidente, secretario…).
+type CourseCouncilOfficer = {
+  id: string;
+  role: string;
+  studentId: string;
+  studentName: string;
+  electedDate: string;
+};
+
+// Mini-bitácora de consejo de curso: acuerdos y temas de cada sesión, aparte del
+// registro de la clase en la Bitácora de Orientación.
+type CourseCouncilEvent = {
+  id: string;
+  date: string;
+  topic: string;
+  agreements: string;
+  notes: string;
+};
+
 type GenogramMember = {
   id: string;
   name: string;
@@ -1687,6 +1706,36 @@ const classroomRoles = [
   "Orientador/a",
   "Otro apoyo",
 ];
+
+const courseCouncilOfficerRoles = [
+  "Presidente/a",
+  "Vicepresidente/a",
+  "Secretario/a",
+  "Tesorero/a",
+  "Delegado/a de Convivencia",
+];
+
+const parseCourseCouncilDirectiva = (value: string | undefined): CourseCouncilOfficer[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((officer) => officer && typeof officer.role === "string" && typeof officer.studentName === "string");
+  } catch {
+    return [];
+  }
+};
+
+const parseCourseCouncilLog = (value: string | undefined): CourseCouncilEvent[] => {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((event) => event && typeof event.date === "string");
+  } catch {
+    return [];
+  }
+};
 
 const parseClassroomTeam = (value: string | undefined): ClassroomTeamMember[] => {
   if (!value) return [];
@@ -5655,6 +5704,196 @@ function WorkshopsView({
   );
 }
 
+// Directiva de curso: resumen de quién ocupa cada cargo y cuándo fue elegido.
+function CourseCouncilDirectivaModal({
+  courseName,
+  students,
+  officers,
+  onSave,
+  onClose,
+}: {
+  courseName: string;
+  students: DataRecord[];
+  officers: CourseCouncilOfficer[];
+  onSave: (officers: CourseCouncilOfficer[]) => void;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<CourseCouncilOfficer[]>(() => {
+    if (officers.length) return officers;
+    return courseCouncilOfficerRoles.map((role) => ({ id: uid(), role, studentId: "", studentName: "", electedDate: "" }));
+  });
+
+  const updateRow = (id: string, updates: Partial<CourseCouncilOfficer>) =>
+    setRows((current) => current.map((row) => (row.id === id ? { ...row, ...updates } : row)));
+
+  const setRowStudent = (id: string, studentId: string) => {
+    const student = students.find((item) => item.id === studentId);
+    updateRow(id, { studentId, studentName: student?.fullName || "" });
+  };
+
+  const addRow = () => setRows((current) => [...current, { id: uid(), role: "", studentId: "", studentName: "", electedDate: "" }]);
+  const removeRow = (id: string) => setRows((current) => current.filter((row) => row.id !== id));
+
+  const save = () => {
+    onSave(rows.filter((row) => row.role.trim() && row.studentName.trim()));
+    onClose();
+  };
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={onClose}>
+      <div className="flex h-[100dvh] w-full max-w-2xl flex-col bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-violet-50 to-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:rounded-t-2xl sm:px-5 sm:py-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Consejo de curso</p>
+            <h2 className="mt-0.5 truncate text-lg font-semibold text-slate-950">Directiva · {courseName}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Quiénes ocupan cada cargo y cuándo fueron elegidos.</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Cerrar">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-4 sm:px-5">
+          {rows.map((row) => (
+            <div key={row.id} className="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3 sm:grid-cols-[1fr_1fr_150px_auto] sm:items-center">
+              <input
+                value={row.role}
+                onChange={(event) => updateRow(row.id, { role: event.target.value })}
+                placeholder="Cargo (ej.: Presidente/a)"
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-violet-400"
+              />
+              <select
+                value={row.studentId}
+                onChange={(event) => setRowStudent(row.id, event.target.value)}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-400"
+              >
+                <option value="">Seleccionar estudiante…</option>
+                {students.map((student) => <option key={student.id} value={student.id}>{student.fullName}</option>)}
+              </select>
+              <input
+                type="date"
+                value={row.electedDate}
+                onChange={(event) => updateRow(row.id, { electedDate: event.target.value })}
+                className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-violet-400"
+              />
+              <button onClick={() => removeRow(row.id)} title="Quitar cargo" className="grid h-9 w-9 place-items-center rounded-lg text-red-500 hover:bg-red-50 sm:justify-self-center">
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+          ))}
+          <button onClick={addRow} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-300 px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50">
+            <Plus className="h-3.5 w-3.5" /> Añadir cargo
+          </button>
+        </div>
+
+        <footer className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2xl sm:px-5">
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">Cancelar</button>
+          <button onClick={save} className="tz-press inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-violet-700">
+            <Save className="h-4 w-4" /> Guardar directiva
+          </button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// Mini-bitácora de consejo de curso: actas breves de cada sesión (temas y acuerdos),
+// separada de la Bitácora de Orientación que solo registra que la clase se realizó.
+function CourseCouncilLogModal({
+  courseName,
+  events,
+  registeredClassCount,
+  onSave,
+  onClose,
+}: {
+  courseName: string;
+  events: CourseCouncilEvent[];
+  registeredClassCount: number;
+  onSave: (events: CourseCouncilEvent[]) => void;
+  onClose: () => void;
+}) {
+  const [list, setList] = useState<CourseCouncilEvent[]>(events);
+  const emptyDraft = { date: new Date().toISOString().slice(0, 10), topic: "", agreements: "", notes: "" };
+  const [draft, setDraft] = useState(emptyDraft);
+
+  const persist = (next: CourseCouncilEvent[]) => {
+    setList(next);
+    onSave(next);
+  };
+
+  const addEvent = () => {
+    if (!draft.topic.trim()) return;
+    persist([{ id: uid(), ...draft }, ...list]);
+    setDraft(emptyDraft);
+  };
+
+  const removeEvent = (id: string) => persist(list.filter((event) => event.id !== id));
+
+  const sorted = [...list].sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200] flex items-end justify-center bg-slate-900/50 backdrop-blur-[2px] sm:items-center sm:p-6" onClick={onClose}>
+      <div className="flex h-[100dvh] w-full max-w-2xl flex-col bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-2xl" onClick={(event) => event.stopPropagation()}>
+        <header className="flex items-start justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-cyan-50 to-white px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:rounded-t-2xl sm:px-5 sm:py-4">
+          <div className="min-w-0">
+            <p className="text-xs font-bold uppercase tracking-wider text-cyan-700">Consejo de curso</p>
+            <h2 className="mt-0.5 truncate text-lg font-semibold text-slate-950">Mini-bitácora · {courseName}</h2>
+            <p className="mt-0.5 text-xs text-slate-500">
+              {registeredClassCount > 0 ? `${registeredClassCount} clase${registeredClassCount === 1 ? "" : "s"} de Consejo de Curso registradas en la Bitácora de Orientación.` : "Aún no hay clases de Consejo de Curso registradas en la Bitácora de Orientación."}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Cerrar">
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
+          <section className="space-y-2 rounded-xl border border-cyan-200 bg-cyan-50/50 p-3">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-cyan-700">Nueva acta</p>
+            <div className="grid gap-2 sm:grid-cols-[150px_1fr]">
+              <input type="date" value={draft.date} onChange={(event) => setDraft((current) => ({ ...current, date: event.target.value }))} className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-500" />
+              <input value={draft.topic} onChange={(event) => setDraft((current) => ({ ...current, topic: event.target.value }))} placeholder="Tema tratado" className="rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-500" />
+            </div>
+            <textarea value={draft.agreements} onChange={(event) => setDraft((current) => ({ ...current, agreements: event.target.value }))} placeholder="Acuerdos" rows={2} className="w-full resize-y rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-500" />
+            <textarea value={draft.notes} onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))} placeholder="Notas (opcional)" rows={2} className="w-full resize-y rounded-lg border border-cyan-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-500" />
+            <button onClick={addEvent} disabled={!draft.topic.trim()} className="tz-press inline-flex items-center gap-1.5 rounded-lg bg-cyan-600 px-3 py-2 text-xs font-bold text-white shadow hover:bg-cyan-700 disabled:opacity-40">
+              <Plus className="h-3.5 w-3.5" /> Agregar acta
+            </button>
+          </section>
+
+          <section className="space-y-2">
+            {sorted.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">Sin actas registradas todavía.</p>
+            ) : (
+              sorted.map((event) => (
+                <article key={event.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-slate-400">{event.date || "Sin fecha"}</p>
+                      <p className="text-sm font-bold text-slate-950">{event.topic}</p>
+                    </div>
+                    <button onClick={() => removeEvent(event.id)} title="Eliminar acta" className="rounded-lg p-1.5 text-red-500 hover:bg-red-50">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {event.agreements ? <p className="mt-1.5 text-sm text-slate-700"><span className="font-bold text-cyan-700">Acuerdos: </span>{event.agreements}</p> : null}
+                  {event.notes ? <p className="mt-1 text-xs text-slate-500">{event.notes}</p> : null}
+                </article>
+              ))
+            )}
+          </section>
+        </div>
+
+        <footer className="flex shrink-0 items-center justify-end border-t border-slate-100 bg-slate-50 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:rounded-b-2xl sm:px-5">
+          <button onClick={onClose} className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800">Cerrar</button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function CourseWorkspaceView({
   store,
   scheduleEntries,
@@ -5695,6 +5934,8 @@ function CourseWorkspaceView({
   const [dropTargetIndex, setDropTargetIndex] = useState<number | null>(null);
   const [teamForm, setTeamForm] = useState({ name: "", role: "Profesor/a jefe", email: "" });
   const [showTeamForm, setShowTeamForm] = useState(false);
+  const [directivaModalOpen, setDirectivaModalOpen] = useState(false);
+  const [councilLogModalOpen, setCouncilLogModalOpen] = useState(false);
   const CUSTOM_ROLES_KEY = "tiza-custom-classroom-roles";
   const [customRoles, setCustomRoles] = useState<string[]>(() => {
     if (typeof window === "undefined") return [];
@@ -5806,6 +6047,9 @@ function CourseWorkspaceView({
   const missingOfficialCourses = officialCourses.filter((course) => !savedByName.has(normalize(course.name))).length;
   const classroomTeam = classroomTeamForCourse(courseName, current?.record);
   const classroomHeadTeacher = classroomTeam.find((member) => normalize(member.role || "").includes("profesor a jefe"));
+  const courseCouncilDirectiva = parseCourseCouncilDirectiva(current?.record.courseCouncilDirectiva);
+  const courseCouncilLog = parseCourseCouncilLog(current?.record.courseCouncilLog);
+  const courseCouncilClassCount = orientation.filter((record) => normalize(record.axis || record.characterStrength || record.classType || "").includes(normalize("Consejo de Curso"))).length;
   const caseCountByStudent = new Map<string, number>();
   store.cases.forEach((record) => {
     students.forEach((student) => {
@@ -6105,6 +6349,20 @@ function CourseWorkspaceView({
                     Convivencia: <strong className="font-semibold text-slate-700">{current.convivenciaCoordinator || "Sin asignar"}</strong>
                     {current.convivenciaEmail ? ` · ${current.convivenciaEmail}` : ""}
                   </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setDirectivaModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-bold text-violet-700 hover:bg-violet-100"
+                    >
+                      <UsersRound className="h-3.5 w-3.5" /> Directiva del curso{courseCouncilDirectiva.length ? ` (${courseCouncilDirectiva.length})` : ""}
+                    </button>
+                    <button
+                      onClick={() => setCouncilLogModalOpen(true)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-cyan-200 bg-cyan-50 px-3 py-1.5 text-xs font-bold text-cyan-700 hover:bg-cyan-100"
+                    >
+                      <ClipboardList className="h-3.5 w-3.5" /> Consejo de Curso{courseCouncilLog.length ? ` (${courseCouncilLog.length})` : ""}
+                    </button>
+                  </div>
                   <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
                     {[
                       ["Estudiantes", students.length],
@@ -6504,6 +6762,26 @@ function CourseWorkspaceView({
             ))}
           </div>
         </div>
+      ) : null}
+
+      {directivaModalOpen && current ? (
+        <CourseCouncilDirectivaModal
+          courseName={current.name}
+          students={students}
+          officers={courseCouncilDirectiva}
+          onSave={(officers) => onUpdateCourse(current.name, { courseCouncilDirectiva: JSON.stringify(officers) })}
+          onClose={() => setDirectivaModalOpen(false)}
+        />
+      ) : null}
+
+      {councilLogModalOpen && current ? (
+        <CourseCouncilLogModal
+          courseName={current.name}
+          events={courseCouncilLog}
+          registeredClassCount={courseCouncilClassCount}
+          onSave={(events) => onUpdateCourse(current.name, { courseCouncilLog: JSON.stringify(events) })}
+          onClose={() => setCouncilLogModalOpen(false)}
+        />
       ) : null}
     </div>
   );
