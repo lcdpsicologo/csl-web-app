@@ -29,6 +29,7 @@ import { CLIMATE_STRATEGIES, THINKING_STRATEGIES, type FocusStrategy } from "@/l
 import { PROFILE_LABELS, type Permissions as AccessPermissions } from "@/lib/access-control";
 import {
   ArrowDownToLine,
+  AudioLines,
   BarChart3,
   BookOpen,
   BookOpenText,
@@ -17475,6 +17476,46 @@ type BrowserSpeechRecognition = {
 
 type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 
+// ---- Modo conversación de Tiza-IA (manos libres) ----
+// Escuchar -> pensar -> responder en voz alta -> volver a escuchar, sin tocar
+// la pantalla. La pausa de silencio que cierra el turno la define quien habla.
+const VOICE_SILENCE_MS = 3000;
+
+// Se prefiere una voz femenina en español; los navegadores no exponen el género,
+// así que se reconoce por los nombres habituales de las voces femeninas.
+const FEMALE_VOICE_HINTS = /paulina|m[oó]nica|monica|helena|sabina|laura|elena|esperanza|luc[ií]a|marisol|female|mujer|femenin/i;
+
+const pickSpanishFemaleVoice = (): SpeechSynthesisVoice | null => {
+  if (typeof window === "undefined" || !window.speechSynthesis) return null;
+  const voices = window.speechSynthesis.getVoices().filter((voice) => /^es/i.test(voice.lang));
+  if (!voices.length) return null;
+  const chilean = voices.filter((voice) => /es[-_](CL|419|MX|US)/i.test(voice.lang));
+  return (
+    chilean.find((voice) => FEMALE_VOICE_HINTS.test(voice.name)) ||
+    voices.find((voice) => FEMALE_VOICE_HINTS.test(voice.name)) ||
+    chilean[0] ||
+    voices[0] ||
+    null
+  );
+};
+
+// El texto que se lee en voz alta no debe incluir markdown ni URLs: se escuchan
+// como ruido y alargan la respuesta sin aportar nada.
+const speakableText = (raw: string) =>
+  String(raw || "")
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/[*_`#>|]/g, "")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+
+// El límite de palabra \b no sirve aquí: "í" no es un carácter de palabra para
+// el motor de expresiones, así que "sí" a secas —la confirmación más probable—
+// no coincidía. Se cierra con fin de texto o signo de puntuación.
+const WORD_END = "(?=$|[\\s,.;!?¡¿])";
+const AFFIRMATIVE = new RegExp(`^(s[ií]|ya|dale|correcto|confirmo|confirmar|guarda|gu[aá]rdalo|gu[aá]rdala|ap[lí]icalo|aplica|hazlo|adelante|perfecto|exacto|as[ií] es|de acuerdo|ok|okey|bueno)${WORD_END}`, "i");
+const NEGATIVE = new RegExp(`^(no|nop|negativo|cancela|c[aá]ncelalo|olv[ií]dalo|d[eé]jalo|mejor no|espera)${WORD_END}`, "i");
+
 const makeChatConversation = (): ChatConversation => {
   const now = nowIso();
   return { id: uid(), title: "Nueva conversación", createdAt: now, updatedAt: now, turns: [] };
@@ -17786,16 +17827,20 @@ function AIChatMode({
     if (recordTimerRef.current) window.clearInterval(recordTimerRef.current);
   }, []);
 
-  const send = async () => {
-    if (!draft.trim() && files.length === 0) return;
+  // Devuelve el turno creado para que el modo conversación pueda leer la
+  // respuesta en voz alta y aplicar los registros propuestos.
+  const send = async (textOverride?: string): Promise<{ turnId: string; result: ChatResult } | null> => {
+    const overriding = typeof textOverride === "string";
+    if (!overriding && !draft.trim() && files.length === 0) return null;
+    if (overriding && !textOverride.trim()) return null;
     const turnId = uid();
-    const userFiles = files.map((f) => f.name);
-    const userMessage = draft.trim();
+    const userFiles = overriding ? [] : files.map((f) => f.name);
+    const userMessage = overriding ? textOverride.trim() : draft.trim();
     const submittingFiles = files;
     const submittingSize = submittingFiles.reduce((sum, file) => sum + file.size, 0);
     if (submittingSize > AI_MAX_UPLOAD_BYTES) {
       setPasteNotice(`El envío pesa ${formatFileSize(submittingSize)}. Máximo 4 MB por consulta.`);
-      return;
+      return null;
     }
     const wantsToApplyPrevious = submittingFiles.length === 0 && /(aplic|import|guardar|crear|agreg|anad)/.test(normalize(userMessage));
     const reusableTurn = wantsToApplyPrevious
@@ -17831,7 +17876,7 @@ function AIChatMode({
       }));
       setDraft("");
       setFiles([]);
-      return;
+      return { turnId, result };
     }
     setConversations((current) => current.map((conversation) => {
       if (conversation.id !== activeConversationId) return conversation;
@@ -17893,18 +17938,206 @@ function AIChatMode({
       (result.bulkRecords || []).forEach((_, i) => { accepted[`br-${i}`] = true; });
       if ((result.ercAppend || "").trim()) accepted["erc"] = true;
       setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, result, accepted } : t));
+      return { turnId, result };
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const message = rawMessage === "Failed to fetch"
         ? "No se pudo completar la conexión con Tiza-IA. Puede ser un corte temporal de la función o del modelo. Intenta reenviar el archivo; si se repite, pega el texto principal en el chat."
         : rawMessage;
       setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: message } : t));
+      return null;
     }
+  };
+
+  // ---- Modo conversación: manos libres ----
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceState, setVoiceState] = useState<"escuchando" | "pensando" | "hablando">("escuchando");
+  const [voiceHeard, setVoiceHeard] = useState("");
+  const [voiceError, setVoiceError] = useState("");
+  const voiceModeRef = React.useRef(false);
+  const voiceRecognitionRef = React.useRef<BrowserSpeechRecognition | null>(null);
+  const pendingVoiceTurnRef = React.useRef<{ turnId: string; result: ChatResult } | null>(null);
+  // El ciclo de voz corre fuera del render y puede durar varios minutos, así que
+  // lee los turnos y la función de aplicar por referencia: si se quedara con la
+  // versión inicial, guardaría registros contra un store desactualizado.
+  const turnsRef = React.useRef<ChatTurn[]>([]);
+  useEffect(() => { turnsRef.current = turns; }, [turns]);
+  const applyTurnRef = React.useRef<(turn: ChatTurn) => number>(() => 0);
+  const sendRef = React.useRef<(text: string) => Promise<{ turnId: string; result: ChatResult } | null>>(async () => null);
+
+  const stopVoiceMode = React.useCallback(() => {
+    voiceModeRef.current = false;
+    pendingVoiceTurnRef.current = null;
+    try { voiceRecognitionRef.current?.abort(); } catch { /* ya detenido */ }
+    voiceRecognitionRef.current = null;
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    setVoiceMode(false);
+    setVoiceHeard("");
+  }, []);
+
+  // Suelta el micrófono y calla la voz si el componente se desmonta.
+  useEffect(() => () => {
+    voiceModeRef.current = false;
+    try { voiceRecognitionRef.current?.abort(); } catch { /* ya detenido */ }
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+  }, []);
+
+  const speak = React.useCallback((text: string) => new Promise<void>((resolve) => {
+    const clean = speakableText(text);
+    if (!clean || typeof window === "undefined" || !window.speechSynthesis) { resolve(); return; }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(clean.slice(0, 1200));
+    const voice = pickSpanishFemaleVoice();
+    if (voice) utterance.voice = voice;
+    utterance.lang = voice?.lang || "es-CL";
+    // Un punto por debajo del tono neutro y algo más lento: suena más cálido.
+    utterance.rate = 0.98;
+    utterance.pitch = 1.12;
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+    setVoiceState("hablando");
+    window.speechSynthesis.speak(utterance);
+  }), []);
+
+  /** Escucha hasta que la persona calla el tiempo acordado y devuelve lo dicho. */
+  const listenOnce = React.useCallback(() => new Promise<string>((resolve) => {
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+    if (!Recognition) { resolve(""); return; }
+    const recognition = new Recognition();
+    voiceRecognitionRef.current = recognition;
+    recognition.lang = "es-CL";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    let transcript = "";
+    let silenceTimer = 0;
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(silenceTimer);
+      try { recognition.stop(); } catch { /* ya detenido */ }
+      voiceRecognitionRef.current = null;
+      resolve(transcript.trim());
+    };
+    const restartSilenceTimer = () => {
+      window.clearTimeout(silenceTimer);
+      // Sólo se cierra el turno si ya se dijo algo: si no, sigue esperando.
+      silenceTimer = window.setTimeout(() => { if (transcript.trim()) finish(); }, VOICE_SILENCE_MS);
+    };
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const item = event.results[i];
+        if (item.isFinal) transcript += `${item[0].transcript} `;
+        else interim += item[0].transcript;
+      }
+      setVoiceHeard(`${transcript}${interim}`.trim());
+      restartSilenceTimer();
+    };
+    recognition.onerror = () => finish();
+    recognition.onend = () => finish();
+    setVoiceState("escuchando");
+    setVoiceHeard("");
+    try { recognition.start(); } catch { finish(); }
+    restartSilenceTimer();
+  }), []);
+
+  // Resume en voz alta lo que Tiza-IA propone crear, para confirmarlo hablando.
+  const describeProposals = (result: ChatResult) => {
+    const parts: string[] = [];
+    const labels: Record<string, string> = {
+      cases: "caso", interviews: "entrevista", logs: "registro de bitácora",
+      protocols: "protocolo", students: "estudiante", meetings: "reunión",
+    };
+    (result.studentRecords || []).forEach((record) => {
+      parts.push(`${labels[record.entity] || "registro"} para ${result.involvedStudents?.[0]?.studentName || "el estudiante"}`);
+    });
+    if ((result.bulkRecords || []).length) parts.push(`${result.bulkRecords!.length} registros de importación`);
+    if ((result.courseCases || []).length) parts.push(`${result.courseCases!.length} casos de curso`);
+    if ((result.teamAdditions || []).length) parts.push(`${result.teamAdditions!.length} integrantes de equipo`);
+    return parts;
+  };
+
+  const runVoiceConversation = React.useCallback(async () => {
+    while (voiceModeRef.current) {
+      const heard = await listenOnce();
+      if (!voiceModeRef.current) return;
+      if (!heard) continue;
+
+      // Si hay algo esperando confirmación, esta respuesta decide su destino.
+      const pending = pendingVoiceTurnRef.current;
+      if (pending) {
+        pendingVoiceTurnRef.current = null;
+        if (AFFIRMATIVE.test(heard.trim())) {
+          // Se usa el turno tal como quedó en el historial: ya trae marcadas las
+          // propuestas, igual que si se hubieran aceptado desde la pantalla.
+          const storedTurn = turnsRef.current.find((turn) => turn.id === pending.turnId);
+          const count = storedTurn ? applyTurnRef.current(storedTurn) : 0;
+          await speak(count > 0 ? `Listo, guardé ${count} ${count === 1 ? "registro" : "registros"}.` : "No quedó nada por guardar.");
+          continue;
+        }
+        if (NEGATIVE.test(heard.trim())) {
+          await speak("Bien, no guardo nada. ¿En qué más te ayudo?");
+          continue;
+        }
+        // No fue sí ni no: se trata como una nueva consulta.
+      }
+
+      setVoiceState("pensando");
+      const outcome = await sendRef.current(heard);
+      if (!voiceModeRef.current) return;
+      if (!outcome) { await speak("No pude procesar eso. ¿Lo repites?"); continue; }
+
+      const proposals = describeProposals(outcome.result);
+      const answer = outcome.result.answer || outcome.result.summary || "Listo.";
+      if (proposals.length) {
+        pendingVoiceTurnRef.current = outcome;
+        await speak(`${answer} Tengo preparado ${proposals.join(", ")}. ¿Lo guardo?`);
+      } else {
+        await speak(answer);
+      }
+    }
+  }, [listenOnce, speak]);
+
+  const startVoiceMode = async () => {
+    setVoiceError("");
+    const speechWindow = window as typeof window & {
+      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
+      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
+    };
+    if (!(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition) || !window.speechSynthesis) {
+      setVoiceError("Este navegador no permite conversar por voz. Funciona en Chrome y Edge (computador y Android).");
+      return;
+    }
+    try {
+      // Pedir el micrófono antes de arrancar evita que el ciclo falle en silencio.
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach((track) => track.stop());
+    } catch {
+      setVoiceError("No se pudo acceder al micrófono. Revisa los permisos del navegador.");
+      return;
+    }
+    voiceModeRef.current = true;
+    setVoiceMode(true);
+    await speak("Hola, te escucho.");
+    void runVoiceConversation();
   };
 
   const toggleAccept = (turnId: string, key: string) => {
     setTurns((current) => current.map((t) => t.id === turnId ? { ...t, accepted: { ...(t.accepted || {}), [key]: !(t.accepted?.[key]) } } : t));
   };
+
+  // Mantiene al día las referencias que usa el modo conversación. Se asignan en
+  // un efecto (no durante el render) porque el ciclo de voz vive fuera de React
+  // y necesita siempre la última versión, no la del arranque.
+  useEffect(() => {
+    applyTurnRef.current = (turn: ChatTurn) => applyTurn(turn);
+    sendRef.current = (text: string) => send(text);
+  });
 
   function applyTurn(turn: ChatTurn) {
     if (!turn.result) return 0;
@@ -18234,6 +18467,16 @@ function AIChatMode({
                     </svg>
                   )}
                 </button>
+                <button
+                  onClick={() => { if (voiceMode) stopVoiceMode(); else void startVoiceMode(); }}
+                  title={voiceMode ? "Salir del modo conversación" : "Modo conversación: habla y Tiza-IA te responde en voz alta"}
+                  aria-label="Modo conversación"
+                  aria-pressed={voiceMode}
+                  disabled={recording}
+                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-40 ${voiceMode ? "bg-indigo-600 text-white shadow-md shadow-indigo-200" : "text-slate-600 hover:bg-slate-100"}`}
+                >
+                  {voiceMode ? <X className="h-4 w-4" /> : <AudioLines className="h-[18px] w-[18px]" />}
+                </button>
                 {recording ? (
                   <div className="flex min-w-0 items-center gap-2 pl-1 text-xs font-semibold text-rose-600" aria-live="polite">
                     <span className="flex items-end gap-0.5" aria-hidden="true">
@@ -18244,7 +18487,7 @@ function AIChatMode({
                 ) : null}
               </div>
               <button
-                onClick={send}
+                onClick={() => { void send(); }}
                 disabled={(!draft.trim() && files.length === 0) || recording}
                 className="tz-press grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-950 text-white shadow-sm transition hover:bg-cyan-900 disabled:bg-slate-200 disabled:text-slate-400"
                 title="Enviar"
@@ -18254,7 +18497,41 @@ function AIChatMode({
               </button>
             </div>
           </div>
-          <p className="mt-1.5 px-2 text-center text-[10px] text-slate-400 sm:text-[11px]">Enter envía · Shift+Enter crea una línea · El micrófono transcribe tu voz cuando el navegador lo permite.</p>
+          {voiceMode ? (
+            <div className="mt-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-700 px-4 py-3 shadow-md shadow-indigo-900/15" aria-live="polite">
+              <div className="flex items-center gap-3">
+                <span className="flex items-end gap-0.5" aria-hidden="true">
+                  {[6, 12, 8, 14, 7].map((height, index) => (
+                    <span
+                      key={index}
+                      className={`w-1 rounded-full bg-white ${voiceState === "escuchando" ? "animate-pulse" : voiceState === "hablando" ? "animate-bounce" : "opacity-50"}`}
+                      style={{ height, animationDelay: `${index * 90}ms` }}
+                    />
+                  ))}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-indigo-200">
+                    {voiceState === "escuchando" ? "Te escucho" : voiceState === "pensando" ? "Pensando" : "Hablando"}
+                  </p>
+                  <p className="truncate text-sm font-semibold text-white">
+                    {voiceHeard || (voiceState === "escuchando" ? "Habla cuando quieras; hago una pausa de 3 segundos para saber que terminaste." : "…")}
+                  </p>
+                </div>
+                <button
+                  onClick={stopVoiceMode}
+                  className="shrink-0 rounded-xl bg-white/15 px-3 py-2 text-xs font-black text-white ring-1 ring-white/25 transition hover:bg-white/25"
+                >
+                  Terminar
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {voiceError ? <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-100">{voiceError}</p> : null}
+          <p className="mt-1.5 px-2 text-center text-[10px] text-slate-400 sm:text-[11px]">
+            {voiceMode
+              ? "Puedes pedirle que cree casos, entrevistas o bitácoras: te dirá qué va a guardar y basta con responder “sí”."
+              : "Enter envía · Shift+Enter crea una línea · El micrófono transcribe tu voz cuando el navegador lo permite."}
+          </p>
         </div>
       </div>
       </div>
