@@ -14201,6 +14201,7 @@ function DashboardAgenda({
   calendarIcalUrl,
   onReloadCalendar,
   onNavigate,
+  ownerName,
 }: {
   store: DataStore;
   courseSchedule: CourseScheduleEntry[];
@@ -14210,6 +14211,7 @@ function DashboardAgenda({
   calendarIcalUrl?: string;
   onReloadCalendar: () => void;
   onNavigate: (view: ViewId) => void;
+  ownerName?: string;
 }) {
   const today = new Date();
   const todayStr = today.toISOString().slice(0, 10);
@@ -14301,113 +14303,79 @@ function DashboardAgenda({
   };
 
   const dateLong = today.toLocaleDateString("es-CL", { weekday: "long", day: "numeric", month: "long" });
-  const schoolDay = today.toLocaleDateString("es-CL", { weekday: "long" }).toLowerCase();
-  const nowMinutes = today.getHours() * 60 + today.getMinutes();
-  const toMinutes = (time: string) => {
-    const [hours, minutes] = String(time || "").split(":").map(Number);
-    return Number.isFinite(hours) && Number.isFinite(minutes) ? hours * 60 + minutes : 0;
-  };
 
-  // Calculate live state for the 14 courses of 1er Ciclo
-  const firstCycleLiveStates = officialCourses
-    .filter((c) => c.cycle === "I Ciclo")
-    .map((c) => {
-      const courseKey = schoolScheduleCourseKey(c.name);
-      const slots = courseSchedule.filter((slot) => schoolScheduleCourseKey(slot.course) === courseKey && slot.day === schoolDay);
-      const activeSlot = slots.find((slot) => toMinutes(slot.startTime) <= nowMinutes && nowMinutes < toMinutes(slot.endTime));
-
-      let activity = "Sin clase activa";
-      let progress = 0;
-      let remaining = 0;
-      let isLive = false;
-
-      if (activeSlot) {
-        isLive = true;
-        activity = activeSlot.activity || "En clase";
-        const start = toMinutes(activeSlot.startTime);
-        const end = toMinutes(activeSlot.endTime);
-        const duration = Math.max(1, end - start);
-        const elapsed = Math.min(duration, Math.max(0, nowMinutes - start));
-        progress = Math.min(100, Math.max(0, Math.round((elapsed / duration) * 100)));
-        remaining = Math.max(0, end - nowMinutes);
-      } else if (slots.length > 0) {
-        const nextSlot = slots.find((slot) => toMinutes(slot.startTime) > nowMinutes);
-        if (nextSlot) {
-          activity = `Próxima: ${nextSlot.activity} (${nextSlot.startTime})`;
-        } else {
-          activity = "Clases finalizadas por hoy";
-        }
-      }
-
-      return {
-        courseName: c.name,
-        activity,
-        isLive,
-        progress,
-        remaining,
-      };
-    });
+  // Estado en vivo de la clase de orientación de quien está usando la app ahora,
+  // con el mismo estilo de tarjeta "Actividad actual" que ya usa la sección Cursos
+  // (reutiliza liveStateForCourse/courseLivePresentation en vez de duplicar la lógica).
+  // No ocupa espacio si la persona no tiene horario de orientación cargado.
+  const ownerScheduleEntries: CourseScheduleEntry[] = ORIENTATION_WEEKLY_SLOTS
+    .filter((slot) => normalize(slot.owner) === normalize(ownerName || ""))
+    .map((slot) => ({
+      course: slot.course,
+      courseSheet: "",
+      day: slot.dayName as SchoolDay,
+      block: 0,
+      startTime: slot.start,
+      endTime: slot.end,
+      activity: slot.course,
+      source: "orientation-weekly-schedule",
+    }));
+  const ownerLiveState = liveStateForCourse(ownerScheduleEntries, today.getTime());
+  const ownerLivePresentation = courseLivePresentation(ownerLiveState.kind);
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs space-y-6 p-5">
-      {/* Encabezado Principal de Cada Curso Ahora */}
-      <div>
-        <div className="flex items-center justify-between gap-3 pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-slate-900 text-white shadow-xs">
-              <BookOpen className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-950">Cada curso ahora · 1er Ciclo</h2>
-              <p className="text-xs text-slate-500 capitalize">{dateLong} · Estado en vivo de los 14 cursos</p>
-            </div>
-          </div>
-          <button
-            onClick={() => onNavigate("courses")}
-            className="tz-press inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Ver todos los cursos
-          </button>
-        </div>
-
-        {/* Grilla sobria de los 14 cursos de Primer Ciclo */}
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {firstCycleLiveStates.map((state) => (
-            <div
-              key={state.courseName}
-              className="group relative flex flex-col justify-between rounded-xl border border-slate-200/80 bg-slate-50/40 p-3 transition hover:bg-white hover:border-slate-300 hover:shadow-xs"
+    <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs space-y-5 p-5">
+      {ownerScheduleEntries.length > 0 ? (
+        <div>
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-sm font-bold text-slate-950 capitalize">
+              <BookOpen className="h-4 w-4 text-slate-500" /> {dateLong}
+            </h2>
+            <button
+              onClick={() => onNavigate("courses")}
+              className="tz-press text-xs font-semibold text-slate-500 hover:text-slate-800 hover:underline"
             >
-              <div>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-bold text-slate-950 text-xs truncate">{state.courseName}</span>
-                  {state.isLive ? (
-                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 tabular-nums">
-                      🟢 {state.progress}% ({state.remaining}m)
-                    </span>
-                  ) : (
-                    <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                      Pausa / Sin clase
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-xs font-medium text-slate-700 truncate">{state.activity}</p>
-              </div>
-
-              {state.isLive ? (
-                <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200/70">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 transition-all duration-500"
-                    style={{ width: `${state.progress}%` }}
-                  />
-                </div>
-              ) : null}
+              Ver cursos
+            </button>
+          </div>
+          <div className={`relative overflow-hidden rounded-xl border p-3.5 text-slate-950 ${ownerLivePresentation.panel}`}>
+            <div className="flex items-center justify-between gap-3">
+              <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ring-1 ${ownerLivePresentation.badge}`}>
+                <span className="relative flex h-2.5 w-2.5">
+                  {ownerLiveState.kind === "live" || ownerLiveState.kind === "break" ? <span className={`absolute inline-flex h-full w-full animate-ping rounded-full ${ownerLivePresentation.ping} opacity-70`} /> : null}
+                  <span className={`relative inline-flex h-2.5 w-2.5 rounded-full ${ownerLivePresentation.dot}`} />
+                </span>
+                {ownerLivePresentation.label}
+              </span>
+              <span className="text-xs font-bold tabular-nums text-slate-500">{ownerLiveState.timeLabel}</span>
             </div>
-          ))}
+            <div className="mt-3 flex items-start gap-3">
+              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white text-cyan-700 shadow-sm ring-1 ring-slate-200/70">
+                {ownerLiveState.kind === "break" ? <Clock className="h-5 w-5" /> : <BookOpenText className="h-5 w-5" />}
+              </span>
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-500">{ownerLiveState.kind === "next" ? "Próxima clase de orientación" : "Clase de orientación actual"}</p>
+                <p className="mt-0.5 text-lg font-black leading-tight text-slate-950">{ownerLiveState.activity}</p>
+              </div>
+            </div>
+            {ownerLiveState.kind === "live" || ownerLiveState.kind === "break" ? (
+              <div className="mt-3">
+                <div className="mb-1.5 flex items-center justify-between text-[10px] font-bold text-slate-500">
+                  <span>{ownerLiveState.startTime}</span>
+                  <span>{Math.round(ownerLiveState.progress)}% del bloque</span>
+                  <span>{ownerLiveState.endTime}</span>
+                </div>
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/60">
+                  <div className="h-full rounded-full bg-slate-900/60 transition-all duration-500" style={{ width: `${ownerLiveState.progress}%` }} />
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Sección Secundaria: Agenda de Hoy */}
-      <div className="pt-2 border-t border-slate-100">
+      <div className={ownerScheduleEntries.length > 0 ? "pt-2 border-t border-slate-100" : ""}>
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-slate-600" /> Agenda de hoy
@@ -14596,6 +14564,7 @@ function Dashboard({ store, onNavigate, onQuickAdd, schoolName, userEmail, team,
         calendarIcalUrl={calendarIcalUrl}
         onReloadCalendar={onReloadCalendar}
         onNavigate={onNavigate}
+        ownerName={teamMatch?.name}
       />
 
       {/* Barra Horizontal Minimalista de Datos (Casos Abiertos, Entrevistas Próximas, Protocolos Activos, Bitácoras Totales) */}
@@ -15936,19 +15905,19 @@ function MeetingsAndInterviewsView({
 
       {/* Modal GP */}
       {modalType === "gp" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:p-6">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto sm:p-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
                 <NotebookPen className="h-5 w-5 text-indigo-600" />
                 {editingItem ? "Editar Reunión GP" : "Nueva Reunión de Gestión Pedagógica (GP)"}
               </h2>
-              <button onClick={() => setModalType("")} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+              <button onClick={() => setModalType("")} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveGp} className="space-y-4">
+            <form onSubmit={handleSaveGp} className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Categoría / Tipo GP *</label>
@@ -16097,19 +16066,19 @@ function MeetingsAndInterviewsView({
 
       {/* Modal Entrevista */}
       {modalType === "interview" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-sm sm:p-6">
+          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto sm:p-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2.5">
                 <MessageSquareText className="h-5 w-5 text-blue-600" />
                 {editingItem ? "Editar Entrevista" : "Nueva Entrevista"}
               </h2>
-              <button onClick={() => setModalType("")} className="rounded-lg p-1 text-slate-400 hover:bg-slate-100">
+              <button onClick={() => setModalType("")} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveInterview} className="space-y-4">
+            <form onSubmit={handleSaveInterview} className="space-y-5">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Tipo de Entrevista *</label>
