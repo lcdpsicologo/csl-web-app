@@ -5872,7 +5872,7 @@ function CourseCouncilDirectivaModal({
           <div className="min-w-0">
             <p className="text-xs font-bold uppercase tracking-wider text-violet-700">Consejo de curso</p>
             <h2 className="mt-0.5 truncate text-lg font-semibold text-slate-950">Directiva · {courseName}</h2>
-            <p className="mt-0.5 text-xs text-slate-500">Quiénes ocupan cada cargo y cuándo fueron elegidos.</p>
+            <p className="mt-0.5 text-xs text-slate-500">Quiénes ocupan cada cargo y cuándo fueron elegidos. Escribe el nombre de cada cargo libremente; añade o quita filas según la directiva de este curso.</p>
           </div>
           <button onClick={onClose} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-50" title="Cerrar">
             <X className="h-4 w-4" />
