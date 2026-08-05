@@ -1674,11 +1674,40 @@ const buildScheduleContext = (courseSchedule: CourseScheduleEntry[], staffSchedu
   return lines.join("\n");
 };
 
+const orientationWeeklySlotsText = (ownerName: string) => {
+  const dayOrder = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+  const mine = ORIENTATION_WEEKLY_SLOTS
+    .filter((slot) => normalize(slot.owner) === normalize(ownerName))
+    .sort((a, b) => a.day - b.day || a.start.localeCompare(b.start));
+  if (!mine.length) return "";
+  const byDay = new Map<string, OrientationWeeklySlot[]>();
+  mine.forEach((slot) => {
+    const list = byDay.get(slot.dayName) || [];
+    list.push(slot);
+    byDay.set(slot.dayName, list);
+  });
+  const lines = [`\nHORARIO FIJO DE CLASES DE ORIENTACIÓN DE ${ownerName.toUpperCase()} (día, hora, curso):`];
+  dayOrder.forEach((day) => {
+    (byDay.get(day) || []).forEach((slot) => lines.push(`- ${day} ${slot.start}–${slot.end}: ${slot.course}`));
+  });
+  return lines.join("\n");
+};
+
 const buildDataContext = (
   store: DataStore,
   schedules?: { course: CourseScheduleEntry[]; staff: StaffScheduleEntry[]; question?: string },
+  currentUser?: { name: string; email: string; role: string },
 ): string => {
   const lines: string[] = [];
+  if (currentUser?.name) {
+    lines.push(`USUARIO ACTUAL (quien te está hablando ahora mismo; usa su nombre y datos directamente cuando diga "yo", "mi" o "mis" — nunca le pidas que se identifique):`);
+    lines.push(`- Nombre: ${currentUser.name}`);
+    if (currentUser.role) lines.push(`- Cargo: ${currentUser.role}`);
+    if (currentUser.email) lines.push(`- Correo: ${currentUser.email}`);
+    const scheduleText = orientationWeeklySlotsText(currentUser.name);
+    if (scheduleText) lines.push(scheduleText);
+    lines.push("");
+  }
   lines.push(`Total estudiantes: ${store.students.length}`);
   lines.push(`Cursos guardados: ${store.courses.length}`);
   lines.push(`Funcionarios/base institucional: ${store.personnel.length}`);
@@ -17212,12 +17241,14 @@ function AIAssistantView({
   onAddRecord,
   onOpenStudent,
   onUpdateCourse,
+  currentUser,
 }: {
   store: DataStore;
   accessToken: string;
   onAddRecord: (entity: EntityId, record: DataRecord) => void;
   onOpenStudent: (studentId: string) => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+  currentUser?: { name: string; email: string; role: string };
 }) {
   return (
     <div className="space-y-5">
@@ -17236,7 +17267,7 @@ function AIAssistantView({
         </div>
       </div>
 
-      <AIChatMode store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} onUpdateCourse={onUpdateCourse} />
+      <AIChatMode store={store} accessToken={accessToken} onAddRecord={onAddRecord} onOpenStudent={onOpenStudent} onUpdateCourse={onUpdateCourse} currentUser={currentUser} />
     </div>
   );
 }
@@ -17249,6 +17280,7 @@ function FloatingTizaIA({
   onAddRecord,
   onOpenStudent,
   onUpdateCourse,
+  currentUser,
 }: {
   open: boolean;
   store: DataStore;
@@ -17257,6 +17289,7 @@ function FloatingTizaIA({
   onAddRecord: (entity: EntityId, record: DataRecord) => void;
   onOpenStudent: (studentId: string) => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+  currentUser?: { name: string; email: string; role: string };
 }) {
   const [buttonPosition, setButtonPosition] = useState<{ x: number; y: number } | null>(null);
   const [draggingButton, setDraggingButton] = useState(false);
@@ -17405,6 +17438,7 @@ function FloatingTizaIA({
                 onAddRecord={onAddRecord}
                 onOpenStudent={onOpenStudent}
                 onUpdateCourse={onUpdateCourse}
+                currentUser={currentUser}
                 compact
               />
             </div>
@@ -17554,6 +17588,7 @@ function AIChatMode({
   onAddRecord,
   onOpenStudent,
   onUpdateCourse,
+  currentUser,
   compact = false,
 }: {
   store: DataStore;
@@ -17561,6 +17596,7 @@ function AIChatMode({
   onAddRecord: (entity: EntityId, record: DataRecord) => void;
   onOpenStudent: (studentId: string) => void;
   onUpdateCourse: (courseName: string, updates: Record<string, string>) => void;
+  currentUser?: { name: string; email: string; role: string };
   compact?: boolean;
 }) {
   const [draft, setDraft] = useState("");
@@ -17729,13 +17765,17 @@ function AIChatMode({
         recognition.continuous = true;
         recognition.interimResults = true;
         recognition.onresult = (event) => {
+          // Se reconstruye desde el índice 0 en cada evento (no se acumula con
+          // resultIndex): ver el comentario equivalente en listenOnce.
+          let finalText = "";
           let interim = "";
-          for (let index = event.resultIndex; index < event.results.length; index += 1) {
+          for (let index = 0; index < event.results.length; index += 1) {
             const result = event.results[index];
             const transcript = result[0]?.transcript || "";
-            if (result.isFinal) speechFinalRef.current += `${transcript.trim()} `;
+            if (result.isFinal) finalText += `${transcript.trim()} `;
             else interim += transcript;
           }
+          speechFinalRef.current = finalText;
           const spokenText = `${speechFinalRef.current}${interim}`.trim();
           const base = speechBaseRef.current;
           setDraft(base && spokenText ? `${base} ${spokenText}` : base || spokenText);
@@ -17906,7 +17946,7 @@ function AIChatMode({
         .slice(0, 300)
         .map((person) => ({ name: person.fullName || "", role: person.role || "", email: person.email || "" }));
       fd.append("staff", JSON.stringify(staff));
-      fd.append("dataContext", buildDataContext(store, { course: COURSE_SCHEDULE, staff: STAFF_SCHEDULE, question: userMessage }));
+      fd.append("dataContext", buildDataContext(store, { course: COURSE_SCHEDULE, staff: STAFF_SCHEDULE, question: userMessage }, currentUser));
       submittingFiles.forEach((f) => fd.append("files", f, f.name));
       const res = await fetch("/api/ai/chat", {
         method: "POST",
@@ -18029,12 +18069,18 @@ function AIChatMode({
       silenceTimer = window.setTimeout(() => { if (transcript.trim()) finish(); }, VOICE_SILENCE_MS);
     };
     recognition.onresult = (event) => {
+      // Se reconstruye desde el índice 0 en cada evento (no se acumula con
+      // resultIndex): en varios navegadores móviles ese índice no avanza y el
+      // evento reenvía todos los resultados desde el inicio, lo que duplicaba
+      // el texto ya reconocido cada vez que se agregaba una palabra nueva.
+      let finalText = "";
       let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+      for (let i = 0; i < event.results.length; i += 1) {
         const item = event.results[i];
-        if (item.isFinal) transcript += `${item[0].transcript} `;
+        if (item.isFinal) finalText += `${item[0].transcript} `;
         else interim += item[0].transcript;
       }
+      transcript = finalText;
       setVoiceHeard(`${transcript}${interim}`.trim());
       restartSilenceTimer();
     };
@@ -18897,6 +18943,15 @@ export default function TizaEducationApp() {
   );
   const [remoteError, setRemoteError] = useState("");
   const [team, setTeam] = useState<TeamMember[]>([]);
+  // Identidad de quien está usando la app ahora mismo: se la pasamos a Tiza-IA
+  // para que responda "mi horario"/"mis clases" sin tener que pedir el nombre.
+  const currentUserProfile = useMemo(() => {
+    const email = (authUser?.email || "").toLowerCase().trim();
+    if (!email) return undefined;
+    const match = team.find((member) => (member.email || "").toLowerCase().trim() === email);
+    if (!match?.name) return undefined;
+    return { name: match.name, email: match.email || email, role: match.role || "" };
+  }, [authUser, team]);
   const [teamSeeding, setTeamSeeding] = useState(false);
   const [teamSeedNotice, setTeamSeedNotice] = useState("");
   const [replacingFirstCycleRoster, setReplacingFirstCycleRoster] = useState(false);
@@ -20365,7 +20420,7 @@ export default function TizaEducationApp() {
     if (activeView === "attendanceCart") return null;
     if (activeView === "dashboard") return <Dashboard store={store} onNavigate={setActiveView} onQuickAdd={openNewRecord} schoolName={profile.organization || "Colegio San Lucas"} userEmail={authUser?.email || ""} team={team} calendarEvents={calendarEvents} calendarLoading={calendarLoading} calendarIcalUrl={profile.calendarIcalUrl} onReloadCalendar={reloadCalendar} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} />;
     if (activeView === "today") return <TodayView store={store} courseSchedule={effectiveCourseSchedule} staffSchedule={effectiveStaffSchedule} onOpenStudent={openStudent} onNavigate={setActiveView} onCompleteInterview={(recordId) => { updateRecord("interviews", recordId, { status: "Realizada" }); setToast("Entrevista marcada como realizada"); }} calendarIcalUrl={profile.calendarIcalUrl} onConnectCalendar={(url) => { setProfile({ ...profile, calendarIcalUrl: url }); setToast("Google Calendar conectado"); }} />;
-    if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} />;
+    if (activeView === "triage") return <AIAssistantView store={store} accessToken={accessToken} onAddRecord={addRecord} onOpenStudent={openStudent} onUpdateCourse={updateCourseRecord} currentUser={currentUserProfile} />;
     if (activeView === "reports") return <ReportsView store={store} />;
     if (activeView === "games") return <GamesView />;
     if (activeView === "databases") {
@@ -20620,6 +20675,7 @@ export default function TizaEducationApp() {
         onAddRecord={addRecord}
         onOpenStudent={openStudent}
         onUpdateCourse={updateCourseRecord}
+        currentUser={currentUserProfile}
       />
       {dialogEntity ? (
         <RecordDialog
