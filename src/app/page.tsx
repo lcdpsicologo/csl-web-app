@@ -17431,6 +17431,7 @@ type ChatResult = {
   bulkEntity?: string;
   bulkRecords?: Array<{ entity?: string; fields?: Record<string, string>; studentId?: string; confidence?: number }>;
   notes?: string;
+  transcript?: string;
 };
 
 type ChatTurn = {
@@ -17488,16 +17489,26 @@ const VOICE_SILENCE_MS = 3000;
 // así que se reconoce por los nombres habituales de las voces femeninas.
 const FEMALE_VOICE_HINTS = /paulina|m[oó]nica|monica|helena|sabina|laura|elena|esperanza|luc[ií]a|marisol|female|mujer|femenin/i;
 
+// Voces de "red" (Google/Microsoft neuronales, servidas online) suenan muchísimo
+// más naturales que el motor local del dispositivo (espeak-like, robótico) que
+// el navegador usa como respaldo. Se prioriza calidad antes que nada.
+const HIGH_QUALITY_VOICE_HINTS = /google|natural|neural|wavenet|enhanced|premium|siri/i;
+
 const pickSpanishFemaleVoice = (): SpeechSynthesisVoice | null => {
   if (typeof window === "undefined" || !window.speechSynthesis) return null;
   const voices = window.speechSynthesis.getVoices().filter((voice) => /^es/i.test(voice.lang));
   if (!voices.length) return null;
   const chilean = voices.filter((voice) => /es[-_](CL|419|MX|US)/i.test(voice.lang));
+  const byQuality = (list: SpeechSynthesisVoice[]) => [...list].sort((a, b) => {
+    const score = (voice: SpeechSynthesisVoice) =>
+      (voice.localService ? 0 : 2) + (HIGH_QUALITY_VOICE_HINTS.test(voice.name) ? 1 : 0);
+    return score(b) - score(a);
+  });
   return (
-    chilean.find((voice) => FEMALE_VOICE_HINTS.test(voice.name)) ||
-    voices.find((voice) => FEMALE_VOICE_HINTS.test(voice.name)) ||
-    chilean[0] ||
-    voices[0] ||
+    byQuality(chilean).find((voice) => FEMALE_VOICE_HINTS.test(voice.name)) ||
+    byQuality(voices).find((voice) => FEMALE_VOICE_HINTS.test(voice.name)) ||
+    byQuality(chilean)[0] ||
+    byQuality(voices)[0] ||
     null
   );
 };
@@ -17838,14 +17849,17 @@ function AIChatMode({
 
   // Devuelve el turno creado para que el modo conversación pueda leer la
   // respuesta en voz alta y aplicar los registros propuestos.
-  const send = async (textOverride?: string): Promise<{ turnId: string; result: ChatResult } | null> => {
+  const send = async (textOverride?: string, audioOverride?: File): Promise<{ turnId: string; result: ChatResult } | null> => {
     const overriding = typeof textOverride === "string";
-    if (!overriding && !draft.trim() && files.length === 0) return null;
-    if (overriding && !textOverride.trim()) return null;
+    const usingAudio = Boolean(audioOverride);
+    if (!overriding && !usingAudio && !draft.trim() && files.length === 0) return null;
+    if (overriding && !usingAudio && !textOverride.trim()) return null;
     const turnId = uid();
-    const userFiles = overriding ? [] : files.map((f) => f.name);
-    const userMessage = overriding ? textOverride.trim() : draft.trim();
-    const submittingFiles = files;
+    const userFiles = usingAudio ? [audioOverride!.name] : (overriding ? [] : files.map((f) => f.name));
+    // Con audio el texto llega vacío: se completa con la transcripción de Tiza-IA
+    // una vez que responde (ver más abajo, tras recibir "result.transcript").
+    const userMessage = usingAudio ? "🎤 Transcribiendo…" : (overriding ? textOverride.trim() : draft.trim());
+    const submittingFiles = usingAudio ? [audioOverride!] : files;
     const submittingSize = submittingFiles.reduce((sum, file) => sum + file.size, 0);
     if (submittingSize > AI_MAX_UPLOAD_BYTES) {
       setPasteNotice(`El envío pesa ${formatFileSize(submittingSize)}. Máximo 4 MB por consulta.`);
@@ -17883,8 +17897,7 @@ function AIChatMode({
           turns: [...(conversation.turns || []), { id: turnId, userMessage, userFiles, loading: false, result, accepted: {} }],
         };
       }));
-      setDraft("");
-      setFiles([]);
+      if (!usingAudio) { setDraft(""); setFiles([]); }
       return { turnId, result };
     }
     setConversations((current) => current.map((conversation) => {
@@ -17897,12 +17910,13 @@ function AIChatMode({
         turns: [...(conversation.turns || []), { id: turnId, userMessage, userFiles, loading: true, accepted: {} }],
       };
     }));
-    setDraft("");
-    setFiles([]);
+    if (!usingAudio) { setDraft(""); setFiles([]); }
 
     try {
       const fd = new FormData();
-      fd.append("message", userMessage);
+      // Con audio no se manda el placeholder local ("🎤 Transcribiendo…"): que
+      // transcriba y responda solo a partir del archivo adjunto.
+      fd.append("message", usingAudio ? "" : userMessage);
       fd.append("today", new Date().toISOString().slice(0, 10));
       const roster = store.students.slice(0, 2500).map((s) => ({ id: s.id, name: s.fullName || "", course: s.course || "", rut: s.rut || "" }));
       fd.append("roster", JSON.stringify(roster));
@@ -17946,14 +17960,17 @@ function AIChatMode({
       (result.courseCases || []).forEach((_, i) => { accepted[`cc-${i}`] = true; });
       (result.bulkRecords || []).forEach((_, i) => { accepted[`br-${i}`] = true; });
       if ((result.ercAppend || "").trim()) accepted["erc"] = true;
-      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, result, accepted } : t));
+      // Con audio, el mensaje del usuario en pantalla pasa de "Transcribiendo…"
+      // a lo que Tiza-IA realmente entendió que se dijo.
+      const finalUserMessage = usingAudio ? (result.transcript || "").trim() || "🎤 Mensaje de voz" : undefined;
+      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, result, accepted, ...(finalUserMessage ? { userMessage: finalUserMessage } : {}) } : t));
       return { turnId, result };
     } catch (err) {
       const rawMessage = err instanceof Error ? err.message : String(err);
       const message = rawMessage === "Failed to fetch"
         ? "No se pudo completar la conexión con Tiza-IA. Puede ser un corte temporal de la función o del modelo. Intenta reenviar el archivo; si se repite, pega el texto principal en el chat."
         : rawMessage;
-      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: message } : t));
+      setTurns((current) => current.map((t) => t.id === turnId ? { ...t, loading: false, error: message, ...(usingAudio ? { userMessage: "🎤 Mensaje de voz" } : {}) } : t));
       return null;
     }
   };
@@ -17964,7 +17981,12 @@ function AIChatMode({
   const [voiceHeard, setVoiceHeard] = useState("");
   const [voiceError, setVoiceError] = useState("");
   const voiceModeRef = React.useRef(false);
-  const voiceRecognitionRef = React.useRef<BrowserSpeechRecognition | null>(null);
+  // Se graba el audio y se manda a transcribir+responder con Gemini (mismo modelo
+  // que ya entiende archivos de audio en el chat de texto), en vez de usar el
+  // reconocimiento de voz del navegador: entendía mal y en algunos navegadores
+  // móviles duplicaba palabras.
+  const voiceRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const voiceStreamRef = React.useRef<MediaStream | null>(null);
   const pendingVoiceTurnRef = React.useRef<{ turnId: string; result: ChatResult } | null>(null);
   // El ciclo de voz corre fuera del render y puede durar varios minutos, así que
   // lee los turnos y la función de aplicar por referencia: si se quedara con la
@@ -17972,13 +17994,15 @@ function AIChatMode({
   const turnsRef = React.useRef<ChatTurn[]>([]);
   useEffect(() => { turnsRef.current = turns; }, [turns]);
   const applyTurnRef = React.useRef<(turn: ChatTurn) => number>(() => 0);
-  const sendRef = React.useRef<(text: string) => Promise<{ turnId: string; result: ChatResult } | null>>(async () => null);
+  const sendRef = React.useRef<(input: string | File) => Promise<{ turnId: string; result: ChatResult } | null>>(async () => null);
 
   const stopVoiceMode = React.useCallback(() => {
     voiceModeRef.current = false;
     pendingVoiceTurnRef.current = null;
-    try { voiceRecognitionRef.current?.abort(); } catch { /* ya detenido */ }
-    voiceRecognitionRef.current = null;
+    try { voiceRecorderRef.current?.stop(); } catch { /* ya detenido */ }
+    voiceRecorderRef.current = null;
+    try { voiceStreamRef.current?.getTracks().forEach((track) => track.stop()); } catch { /* ya detenido */ }
+    voiceStreamRef.current = null;
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     setVoiceMode(false);
     setVoiceHeard("");
@@ -17987,7 +18011,8 @@ function AIChatMode({
   // Suelta el micrófono y calla la voz si el componente se desmonta.
   useEffect(() => () => {
     voiceModeRef.current = false;
-    try { voiceRecognitionRef.current?.abort(); } catch { /* ya detenido */ }
+    try { voiceRecorderRef.current?.stop(); } catch { /* ya detenido */ }
+    try { voiceStreamRef.current?.getTracks().forEach((track) => track.stop()); } catch { /* ya detenido */ }
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
   }, []);
 
@@ -18009,56 +18034,96 @@ function AIChatMode({
   }), []);
 
   /** Escucha hasta que la persona calla el tiempo acordado y devuelve lo dicho. */
-  const listenOnce = React.useCallback(() => new Promise<string>((resolve) => {
-    const speechWindow = window as typeof window & {
-      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    };
-    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
-    if (!Recognition) { resolve(""); return; }
-    const recognition = new Recognition();
-    voiceRecognitionRef.current = recognition;
-    recognition.lang = "es-CL";
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    let transcript = "";
-    let silenceTimer = 0;
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      window.clearTimeout(silenceTimer);
-      try { recognition.stop(); } catch { /* ya detenido */ }
-      voiceRecognitionRef.current = null;
-      resolve(transcript.trim());
-    };
-    const restartSilenceTimer = () => {
-      window.clearTimeout(silenceTimer);
-      // Sólo se cierra el turno si ya se dijo algo: si no, sigue esperando.
-      silenceTimer = window.setTimeout(() => { if (transcript.trim()) finish(); }, VOICE_SILENCE_MS);
-    };
-    recognition.onresult = (event) => {
-      // Se reconstruye desde el índice 0 en cada evento (no se acumula con
-      // resultIndex): en varios navegadores móviles ese índice no avanza y el
-      // evento reenvía todos los resultados desde el inicio, lo que duplicaba
-      // el texto ya reconocido cada vez que se agregaba una palabra nueva.
-      let finalText = "";
-      let interim = "";
-      for (let i = 0; i < event.results.length; i += 1) {
-        const item = event.results[i];
-        if (item.isFinal) finalText += `${item[0].transcript} `;
-        else interim += item[0].transcript;
+  /**
+   * Graba hasta que la persona calla el tiempo acordado y devuelve el audio
+   * (o null si no se detectó voz). Se transcribe después con Gemini en vez del
+   * reconocimiento de voz del navegador: éste entendía mal el español chileno y
+   * en navegadores móviles a veces repetía palabras.
+   */
+  const listenOnce = React.useCallback(() => new Promise<File | null>((resolve) => {
+    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      resolve(null);
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
+      voiceStreamRef.current = stream;
+      const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      const audioCtx = AudioContextCtor ? new AudioContextCtor() : null;
+      const analyser = audioCtx?.createAnalyser() || null;
+      if (audioCtx && analyser) {
+        const source = audioCtx.createMediaStreamSource(stream);
+        analyser.fftSize = 512;
+        source.connect(analyser);
       }
-      transcript = finalText;
-      setVoiceHeard(`${transcript}${interim}`.trim());
-      restartSilenceTimer();
-    };
-    recognition.onerror = () => finish();
-    recognition.onend = () => finish();
-    setVoiceState("escuchando");
-    setVoiceHeard("");
-    try { recognition.start(); } catch { finish(); }
-    restartSilenceTimer();
+      const timeData = new Uint8Array(analyser?.fftSize || 0);
+
+      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+      const mimeType = mimeCandidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      voiceRecorderRef.current = recorder;
+      const chunks: BlobPart[] = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
+
+      let hasSpoken = false;
+      let silenceTimer = 0;
+      let rafId = 0;
+      let done = false;
+
+      const teardown = () => {
+        window.clearTimeout(silenceTimer);
+        if (rafId) cancelAnimationFrame(rafId);
+        try { audioCtx?.close(); } catch { /* ya cerrado */ }
+        stream.getTracks().forEach((track) => track.stop());
+        voiceStreamRef.current = null;
+        voiceRecorderRef.current = null;
+      };
+
+      recorder.onstop = () => {
+        teardown();
+        if (!hasSpoken || !chunks.length) { resolve(null); return; }
+        const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+        resolve(new File([blob], `voz-${Date.now()}.webm`, { type: blob.type }));
+      };
+
+      const finish = () => {
+        if (done) return;
+        done = true;
+        try { recorder.stop(); } catch { teardown(); resolve(null); }
+      };
+
+      const restartSilenceTimer = () => {
+        window.clearTimeout(silenceTimer);
+        // Sólo se cierra el turno si ya se detectó voz: si no, sigue esperando.
+        silenceTimer = window.setTimeout(() => { if (hasSpoken) finish(); }, VOICE_SILENCE_MS);
+      };
+
+      // Umbral de energía (RMS sobre la forma de onda, 0–1) para distinguir voz
+      // de silencio/ruido ambiente de una sala. Conservador a propósito: es
+      // preferible seguir escuchando de más que cortar a alguien a mitad de frase.
+      const SPEECH_RMS_THRESHOLD = 0.02;
+      const tick = () => {
+        if (done) return;
+        if (analyser) {
+          analyser.getByteTimeDomainData(timeData);
+          let sumSquares = 0;
+          for (let i = 0; i < timeData.length; i += 1) {
+            const normalized = (timeData[i] - 128) / 128;
+            sumSquares += normalized * normalized;
+          }
+          const rms = Math.sqrt(sumSquares / timeData.length);
+          if (rms > SPEECH_RMS_THRESHOLD) {
+            hasSpoken = true;
+            restartSilenceTimer();
+          }
+        }
+        rafId = requestAnimationFrame(tick);
+      };
+
+      setVoiceState("escuchando");
+      setVoiceHeard("");
+      recorder.start();
+      tick();
+    }).catch(() => resolve(null));
   }), []);
 
   // Resume en voz alta lo que Tiza-IA propone crear, para confirmarlo hablando.
@@ -18079,15 +18144,24 @@ function AIChatMode({
 
   const runVoiceConversation = React.useCallback(async () => {
     while (voiceModeRef.current) {
-      const heard = await listenOnce();
+      const audio = await listenOnce();
       if (!voiceModeRef.current) return;
-      if (!heard) continue;
+      if (!audio) continue;
 
-      // Si hay algo esperando confirmación, esta respuesta decide su destino.
+      setVoiceState("pensando");
+      const outcome = await sendRef.current(audio);
+      if (!voiceModeRef.current) return;
+      if (!outcome) { await speak("No pude procesar eso. ¿Lo repites?"); continue; }
+
+      // La transcripción llega junto con la respuesta (Gemini transcribe y
+      // responde en un solo paso): se muestra y se usa para el sí/no pendiente.
+      const heardText = (outcome.result.transcript || "").trim();
+      setVoiceHeard(heardText);
+
       const pending = pendingVoiceTurnRef.current;
       if (pending) {
         pendingVoiceTurnRef.current = null;
-        if (AFFIRMATIVE.test(heard.trim())) {
+        if (AFFIRMATIVE.test(heardText)) {
           // Se usa el turno tal como quedó en el historial: ya trae marcadas las
           // propuestas, igual que si se hubieran aceptado desde la pantalla.
           const storedTurn = turnsRef.current.find((turn) => turn.id === pending.turnId);
@@ -18095,17 +18169,12 @@ function AIChatMode({
           await speak(count > 0 ? `Listo, guardé ${count} ${count === 1 ? "registro" : "registros"}.` : "No quedó nada por guardar.");
           continue;
         }
-        if (NEGATIVE.test(heard.trim())) {
+        if (NEGATIVE.test(heardText)) {
           await speak("Bien, no guardo nada. ¿En qué más te ayudo?");
           continue;
         }
-        // No fue sí ni no: se trata como una nueva consulta.
+        // No fue sí ni no: se trata como una nueva consulta, con la respuesta ya recibida.
       }
-
-      setVoiceState("pensando");
-      const outcome = await sendRef.current(heard);
-      if (!voiceModeRef.current) return;
-      if (!outcome) { await speak("No pude procesar eso. ¿Lo repites?"); continue; }
 
       const proposals = describeProposals(outcome.result);
       const answer = outcome.result.answer || outcome.result.summary || "Listo.";
@@ -18120,12 +18189,8 @@ function AIChatMode({
 
   const startVoiceMode = async () => {
     setVoiceError("");
-    const speechWindow = window as typeof window & {
-      SpeechRecognition?: BrowserSpeechRecognitionConstructor;
-      webkitSpeechRecognition?: BrowserSpeechRecognitionConstructor;
-    };
-    if (!(speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition) || !window.speechSynthesis) {
-      setVoiceError("Este navegador no permite conversar por voz. Funciona en Chrome y Edge (computador y Android).");
+    if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia || !window.speechSynthesis) {
+      setVoiceError("Este navegador no permite conversar por voz. Funciona en Chrome, Edge y Safari recientes (computador y celular).");
       return;
     }
     try {
@@ -18151,7 +18216,7 @@ function AIChatMode({
   // y necesita siempre la última versión, no la del arranque.
   useEffect(() => {
     applyTurnRef.current = (turn: ChatTurn) => applyTurn(turn);
-    sendRef.current = (text: string) => send(text);
+    sendRef.current = (input: string | File) => (input instanceof File ? send(undefined, input) : send(input));
   });
 
   function applyTurn(turn: ChatTurn) {
@@ -18529,7 +18594,13 @@ function AIChatMode({
                     {voiceState === "escuchando" ? "Te escucho" : voiceState === "pensando" ? "Pensando" : "Hablando"}
                   </p>
                   <p className="truncate text-sm font-semibold text-white">
-                    {voiceHeard || (voiceState === "escuchando" ? "Habla cuando quieras; hago una pausa de 3 segundos para saber que terminaste." : "…")}
+                    {voiceHeard
+                      ? `Escuché: "${voiceHeard}"`
+                      : voiceState === "escuchando"
+                        ? "Habla cuando quieras; hago una pausa de 3 segundos para saber que terminaste."
+                        : voiceState === "pensando"
+                          ? "Transcribiendo y pensando…"
+                          : "…"}
                   </p>
                 </div>
                 <button
