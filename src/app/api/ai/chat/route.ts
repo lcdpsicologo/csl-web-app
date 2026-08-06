@@ -326,6 +326,8 @@ REGLA IMPORTANTE: nunca digas "no tengo acceso a esa información" sin haber bus
 
 REGLA SOBRE IDENTIDAD: el nombre de USUARIO ACTUAL y los nombres del directorio de FUNCIONARIOS son personal del colegio, no estudiantes. Si el mensaje nombra a la persona que pregunta o a un funcionario, NUNCA lo agregues a "involvedStudents" ni generes "studentRecords" para él/ella por coincidencia de nombre con el listado de estudiantes — eso confunde a un adulto del colegio con un alumno. Solo agrega a involvedStudents un estudiante cuando el relato hable claramente de ese estudiante como sujeto de un caso, entrevista o bitácora.
 
+MEMORIA DE LA CONVERSACIÓN: los turnos anteriores de este chat (si los hay) vienen antes de este mensaje, en orden. Úsalos para entender de qué se viene hablando — sobre todo cuando el mensaje es una continuación breve ("respecto del mismo caso", "ahora agrégale esto", "también deriva a X", "ella", "él", un nombre de pila solo). Si además viene el bloque ESTUDIANTE(S) YA IDENTIFICADO(S) EN ESTA CONVERSACIÓN, y el mensaje se refiere de forma ambigua a un estudiante ya mencionado, usa ese id EXACTO — no vuelvas a buscar por nombre en toda la NÓMINA cuando ya sabes de quién se trataba, porque otra persona con un nombre parecido (comparte solo el segundo nombre, por ejemplo) puede aparecer como mejor coincidencia y terminarías registrando el caso de un estudiante equivocado. Ante la duda entre "sigue siendo la misma persona de antes" y "coincidencia de nombre en la nómina", prioriza siempre la continuidad de la conversación.
+
 Lo que puedes hacer:
 - Responder cualquier pregunta o consulta sobre los datos del colegio: cuántos casos hay, qué estudiantes tienen alertas, qué entrevistas hay esta semana, cómo está el curso X, qué intervenciones se hicieron para Y, comparativas, ranking, búsquedas. Para esto te paso un RESUMEN DE DATOS con conteos, casos recientes, entrevistas recientes y estadísticas. Úsalo libremente para responder con datos reales.
 - Si hay un ARCHIVO DE AUDIO adjunto, es un mensaje de voz del usuario: transcríbelo y trátalo exactamente igual que si lo hubiera escrito (responde la pregunta o crea los registros que dicte). No digas "recibí un audio" — actúa directamente sobre su contenido. Pon la transcripción literal en el campo "transcript" del JSON de respuesta (palabra por palabra, sin corregir ni resumir) — se usa para mostrarle a la persona qué entendiste que dijo.
@@ -422,12 +424,18 @@ async function handle(request: Request) {
   const coursesRaw = String(formData.get("courses") || "[]");
   const dataContextRaw = String(formData.get("dataContext") || "");
   const staffRaw = String(formData.get("staff") || "[]");
+  const historyRaw = String(formData.get("history") || "[]");
+  const recentStudentsRaw = String(formData.get("recentStudents") || "[]");
   let roster: Array<{ id: string; name: string; course?: string; rut?: string }> = [];
   let courses: Array<{ name: string; cycle?: string }> = [];
   let staff: Array<{ name: string; role?: string; email?: string }> = [];
+  let history: Array<{ role: "user" | "model"; text: string }> = [];
+  let recentStudents: Array<{ studentId?: string; studentName?: string }> = [];
   try { roster = JSON.parse(rosterRaw); } catch { roster = []; }
   try { courses = JSON.parse(coursesRaw); } catch { courses = []; }
   try { staff = JSON.parse(staffRaw); } catch { staff = []; }
+  try { history = JSON.parse(historyRaw); } catch { history = []; }
+  try { recentStudents = JSON.parse(recentStudentsRaw); } catch { recentStudents = []; }
 
   const rawFiles = formData.getAll("files");
   const files = rawFiles.filter((f): f is File => f instanceof File && f.size > 0);
@@ -507,6 +515,15 @@ async function handle(request: Request) {
   if (coursesList) textBlocks.push(`\nCURSOS DEL COLEGIO:\n${coursesList}`);
   if (staffList) textBlocks.push(`\nFUNCIONARIOS DEL COLEGIO (nombre — cargo). Si el texto dice quién realizará la acción, copia su nombre EXACTO de esta lista en el campo "responsible":\n${staffList}`);
   if (rosterTable) textBlocks.push(`\nNÓMINA (id|nombre|curso|rut, primeros ${rosterTrimmed.length}):\n${rosterTable}`);
+  if (recentStudents.length) {
+    const recentList = recentStudents
+      .filter((s) => s.studentId && s.studentName)
+      .map((s) => `${s.studentId}|${s.studentName}`)
+      .join("\n");
+    if (recentList) {
+      textBlocks.push(`\nESTUDIANTE(S) YA IDENTIFICADO(S) EN ESTA CONVERSACIÓN (id|nombre), del más reciente al más antiguo. Si el mensaje dice "ella", "él", "el mismo caso", "la misma alumna" o repite solo el primer nombre, es casi seguro uno de ESTOS — usa ese id exacto en vez de volver a buscar en toda la NÓMINA, donde otro estudiante puede compartir parte del nombre y sería un error grave asignarle el caso a la persona equivocada:\n${recentList}`);
+    }
+  }
   if (message) textBlocks.push(`\nMENSAJE DEL USUARIO:\n"""\n${message}\n"""`);
   extracted.forEach((ex, idx) => {
     if (ex.text) textBlocks.push(`\n=== ARCHIVO ${idx + 1}: ${ex.name} ===\n${ex.text}`);
@@ -516,9 +533,18 @@ async function handle(request: Request) {
   parts.push({ text: textBlocks.join("\n") });
   extracted.forEach((ex) => { if (ex.inlinePart) parts.push(ex.inlinePart); });
 
+  // Turnos previos de esta conversación (no de todas): sin esto, cada mensaje
+  // llegaba a Gemini sin memoria de lo recién dicho y "el mismo caso" o "ella"
+  // no tenían con qué resolverse. Se manda como texto natural, no como el JSON
+  // estricto que el modelo devuelve — lo único que importa aquí es que recuerde
+  // de qué se venía hablando, no que reproduzca el formato de su respuesta previa.
+  const historyContents = history
+    .filter((turn) => turn?.text && (turn.role === "user" || turn.role === "model"))
+    .map((turn) => ({ role: turn.role, parts: [{ text: turn.text.slice(0, 4000) }] }));
+
   const body = {
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
-    contents: [{ role: "user", parts }],
+    contents: [...historyContents, { role: "user", parts }],
     generationConfig: {
       temperature: 0.2,
       responseMimeType: "application/json",
@@ -589,7 +615,7 @@ async function handle(request: Request) {
     return NextResponse.json({ error: `Gemini no respondió. Último: ${lastStatus} ${lastMsg}` }, { status: 503 });
   }
 
-  postProcessRosterMatches(parsed, message, roster);
+  postProcessRosterMatches(parsed, message, roster, recentStudents);
 
   return NextResponse.json({
     ok: true,
@@ -616,7 +642,14 @@ function extractCourseFromText(text: string): string | null {
 function resolveStudentFromPrompt(
   userMessage: string,
   extraContext: string,
-  roster: Array<{ id: string; name: string; course?: string; rut?: string }>
+  roster: Array<{ id: string; name: string; course?: string; rut?: string }>,
+  // Ids ya identificados en esta conversación: reciben una bonificación fuerte
+  // para que "el mismo caso de Ainhoa" no se resuelva por puro azar de nombre
+  // contra CUALQUIER otra estudiante que también se llame Ainhoa. Un nombre
+  // completo mencionado explícitamente en el mensaje puede seguir ganándole
+  // (el bono de par consecutivo + curso ya suma más), pero un solo nombre de
+  // pila repetido ya no queda a merced del orden en que viene la nómina.
+  continuityIds?: Set<string>,
 ): { id: string; name: string; course?: string; rut?: string } | null {
   if (!roster || roster.length === 0) return null;
 
@@ -663,6 +696,8 @@ function resolveStudentFromPrompt(
       }
     }
 
+    if (continuityIds?.has(s.id)) score += 150;
+
     if (score > maxScore) {
       maxScore = score;
       bestStudent = s;
@@ -679,11 +714,14 @@ type AiResult = { involvedStudents?: InvolvedStudent[]; studentRecords?: Student
 function postProcessRosterMatches(
   result: AiResult,
   userMessage: string,
-  roster: Array<{ id: string; name: string; course?: string; rut?: string }>
+  roster: Array<{ id: string; name: string; course?: string; rut?: string }>,
+  recentStudents: Array<{ studentId?: string; studentName?: string }> = [],
 ) {
   if (!result || !roster || roster.length === 0) return;
 
-  const resolved = resolveStudentFromPrompt(userMessage, "", roster);
+  const continuityIds = new Set(recentStudents.map((s) => s.studentId).filter((id): id is string => Boolean(id)));
+
+  const resolved = resolveStudentFromPrompt(userMessage, "", roster, continuityIds);
 
   if (resolved) {
     result.involvedStudents = [
@@ -696,7 +734,7 @@ function postProcessRosterMatches(
     ];
   } else if (Array.isArray(result.involvedStudents) && result.involvedStudents.length > 0) {
     result.involvedStudents = result.involvedStudents.map((inv: InvolvedStudent) => {
-      const match = resolveStudentFromPrompt(inv.studentName || inv.evidence || "", userMessage, roster);
+      const match = resolveStudentFromPrompt(inv.studentName || inv.evidence || "", userMessage, roster, continuityIds);
       if (match) {
         return {
           ...inv,
@@ -716,7 +754,7 @@ function postProcessRosterMatches(
 
   if (Array.isArray(result.studentRecords)) {
     result.studentRecords = result.studentRecords.map((rec: StudentRecordProposal) => {
-      const specificMatch = resolveStudentFromPrompt(rec.title + " " + (rec.description || ""), userMessage, roster);
+      const specificMatch = resolveStudentFromPrompt(rec.title + " " + (rec.description || ""), userMessage, roster, continuityIds);
       const targetStudent = specificMatch || primaryStudent;
 
       if (targetStudent) {

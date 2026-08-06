@@ -17930,6 +17930,32 @@ function AIChatMode({
         .map((person) => ({ name: person.fullName || "", role: person.role || "", email: person.email || "" }));
       fd.append("staff", JSON.stringify(staff));
       fd.append("dataContext", buildDataContext(store, { course: COURSE_SCHEDULE, staff: STAFF_SCHEDULE, question: userMessage }, currentUser));
+
+      // Historial: sin esto cada mensaje llegaba a Gemini sin memoria de lo
+      // recién conversado, así que "el mismo caso de Ainhoa" no tenía forma de
+      // saber a cuál Ainhoa se refería y terminaba emparejando a otra estudiante
+      // por simple coincidencia parcial de nombre. Se manda solo la conversación
+      // activa (no todas), y acotada a los últimos intercambios.
+      const priorTurns = turns.filter((t) => !t.loading && !t.error && (t.userMessage || t.result?.answer)).slice(-8);
+      const history = priorTurns.flatMap((t) => {
+        const entries: Array<{ role: "user" | "model"; text: string }> = [];
+        if (t.userMessage) entries.push({ role: "user", text: t.userMessage });
+        const modelText = t.result?.answer || t.result?.summary || "";
+        if (modelText) entries.push({ role: "model", text: modelText });
+        return entries;
+      });
+      fd.append("history", JSON.stringify(history));
+
+      // Estudiantes mencionados recientemente: refuerzo explícito para que "ella",
+      // "el mismo caso" o un nombre de pila solo prioricen a quien ya se identificó
+      // en vez de volver a buscar en toda la nómina y calzar con otra persona.
+      const recentStudents = priorTurns
+        .flatMap((t) => t.result?.involvedStudents || [])
+        .filter((s) => s.studentId && s.studentName)
+        .reverse()
+        .filter((s, index, arr) => arr.findIndex((other) => other.studentId === s.studentId) === index)
+        .slice(0, 5);
+      fd.append("recentStudents", JSON.stringify(recentStudents));
       submittingFiles.forEach((f) => fd.append("files", f, f.name));
       const res = await fetch("/api/ai/chat", {
         method: "POST",
