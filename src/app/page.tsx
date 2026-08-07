@@ -17484,6 +17484,13 @@ type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
 // Escuchar -> pensar -> responder en voz alta -> volver a escuchar, sin tocar
 // la pantalla. La pausa de silencio que cierra el turno la define quien habla.
 const VOICE_SILENCE_MS = 3000;
+// Máximo que se deja grabar un turno aunque nunca se detecte silencio (p. ej.
+// si el análisis de volumen fallara en algún navegador): así el micrófono
+// nunca queda escuchando para siempre sin que la persona lo note.
+const VOICE_MAX_TURN_MS = 45_000;
+// Si en este tiempo no se detectó NADA de voz, se da por vacío el turno en vez
+// de seguir esperando indefinidamente (silencio real, mic sin señal, etc.).
+const VOICE_MAX_WAIT_FOR_SPEECH_MS = 20_000;
 
 // Se prefiere una voz femenina en español; los navegadores no exponen el género,
 // así que se reconoce por los nombres habituales de las voces femeninas.
@@ -18004,15 +18011,22 @@ function AIChatMode({
   // ---- Modo conversación: manos libres ----
   const [voiceMode, setVoiceMode] = useState(false);
   const [voiceState, setVoiceState] = useState<"escuchando" | "pensando" | "hablando">("escuchando");
-  const [voiceHeard, setVoiceHeard] = useState("");
   const [voiceError, setVoiceError] = useState("");
   const voiceModeRef = React.useRef(false);
   // Se graba el audio y se manda a transcribir+responder con Gemini (mismo modelo
   // que ya entiende archivos de audio en el chat de texto), en vez de usar el
   // reconocimiento de voz del navegador: entendía mal y en algunos navegadores
   // móviles duplicaba palabras.
+  // El micrófono y el AudioContext se piden UNA sola vez por sesión de voz (no en
+  // cada turno): pedirlos de nuevo en cada vuelta era un punto de falla extra y
+  // en algunos navegadores el permiso ya concedido tardaba o fallaba al repetirse.
   const voiceRecorderRef = React.useRef<MediaRecorder | null>(null);
   const voiceStreamRef = React.useRef<MediaStream | null>(null);
+  const voiceAudioCtxRef = React.useRef<AudioContext | null>(null);
+  const voiceAnalyserRef = React.useRef<AnalyserNode | null>(null);
+  // Corta la grabación actual de inmediato (botón "Enviar ahora"): respaldo
+  // manual para cuando la detección automática de silencio no dispara sola.
+  const voiceFinishTurnRef = React.useRef<(() => void) | null>(null);
   const pendingVoiceTurnRef = React.useRef<{ turnId: string; result: ChatResult } | null>(null);
   // El ciclo de voz corre fuera del render y puede durar varios minutos, así que
   // lee los turnos y la función de aplicar por referencia: si se quedara con la
@@ -18022,24 +18036,31 @@ function AIChatMode({
   const applyTurnRef = React.useRef<(turn: ChatTurn) => number>(() => 0);
   const sendRef = React.useRef<(input: string | File) => Promise<{ turnId: string; result: ChatResult } | null>>(async () => null);
 
+  const releaseVoiceResources = React.useCallback(() => {
+    try { voiceRecorderRef.current?.stop(); } catch { /* ya detenido */ }
+    voiceRecorderRef.current = null;
+    voiceFinishTurnRef.current = null;
+    try { voiceStreamRef.current?.getTracks().forEach((track) => track.stop()); } catch { /* ya detenido */ }
+    voiceStreamRef.current = null;
+    voiceAnalyserRef.current = null;
+    try { void voiceAudioCtxRef.current?.close(); } catch { /* ya cerrado */ }
+    voiceAudioCtxRef.current = null;
+  }, []);
+
   const stopVoiceMode = React.useCallback(() => {
     voiceModeRef.current = false;
     pendingVoiceTurnRef.current = null;
-    try { voiceRecorderRef.current?.stop(); } catch { /* ya detenido */ }
-    voiceRecorderRef.current = null;
-    try { voiceStreamRef.current?.getTracks().forEach((track) => track.stop()); } catch { /* ya detenido */ }
-    voiceStreamRef.current = null;
+    releaseVoiceResources();
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     setVoiceMode(false);
-    setVoiceHeard("");
-  }, []);
+  }, [releaseVoiceResources]);
 
   // Suelta el micrófono y calla la voz si el componente se desmonta.
   useEffect(() => () => {
     voiceModeRef.current = false;
-    try { voiceRecorderRef.current?.stop(); } catch { /* ya detenido */ }
-    try { voiceStreamRef.current?.getTracks().forEach((track) => track.stop()); } catch { /* ya detenido */ }
+    releaseVoiceResources();
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const speak = React.useCallback((text: string) => new Promise<void>((resolve) => {
@@ -18067,89 +18088,100 @@ function AIChatMode({
    * en navegadores móviles a veces repetía palabras.
    */
   const listenOnce = React.useCallback(() => new Promise<File | null>((resolve) => {
-    if (typeof window === "undefined" || !navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+    const stream = voiceStreamRef.current;
+    const analyser = voiceAnalyserRef.current;
+    if (!stream || !stream.active || typeof MediaRecorder === "undefined") {
       resolve(null);
       return;
     }
-    navigator.mediaDevices.getUserMedia({ audio: true }).then((stream) => {
-      voiceStreamRef.current = stream;
-      const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      const audioCtx = AudioContextCtor ? new AudioContextCtor() : null;
-      const analyser = audioCtx?.createAnalyser() || null;
-      if (audioCtx && analyser) {
-        const source = audioCtx.createMediaStreamSource(stream);
-        analyser.fftSize = 512;
-        source.connect(analyser);
-      }
-      const timeData = new Uint8Array(analyser?.fftSize || 0);
 
-      const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
-      const mimeType = mimeCandidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
-      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      voiceRecorderRef.current = recorder;
-      const chunks: BlobPart[] = [];
-      recorder.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
+    const timeData = new Uint8Array(analyser?.fftSize || 0);
+    const mimeCandidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/aac"];
+    const mimeType = mimeCandidates.find((type) => MediaRecorder.isTypeSupported(type)) || "";
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+    } catch {
+      resolve(null);
+      return;
+    }
+    voiceRecorderRef.current = recorder;
+    const chunks: BlobPart[] = [];
+    recorder.ondataavailable = (event) => { if (event.data.size > 0) chunks.push(event.data); };
 
-      let hasSpoken = false;
-      let silenceTimer = 0;
-      let rafId = 0;
-      let done = false;
+    let hasSpoken = false;
+    let silenceTimer = 0;
+    let noSpeechTimer = 0;
+    let maxDurationTimer = 0;
+    let rafId = 0;
+    let done = false;
 
-      const teardown = () => {
-        window.clearTimeout(silenceTimer);
-        if (rafId) cancelAnimationFrame(rafId);
-        try { audioCtx?.close(); } catch { /* ya cerrado */ }
-        stream.getTracks().forEach((track) => track.stop());
-        voiceStreamRef.current = null;
-        voiceRecorderRef.current = null;
-      };
+    const teardown = () => {
+      window.clearTimeout(silenceTimer);
+      window.clearTimeout(noSpeechTimer);
+      window.clearTimeout(maxDurationTimer);
+      if (rafId) cancelAnimationFrame(rafId);
+      voiceRecorderRef.current = null;
+      voiceFinishTurnRef.current = null;
+    };
 
-      recorder.onstop = () => {
-        teardown();
-        if (!hasSpoken || !chunks.length) { resolve(null); return; }
-        const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
-        resolve(new File([blob], `voz-${Date.now()}.webm`, { type: blob.type }));
-      };
+    recorder.onstop = () => {
+      teardown();
+      if (!hasSpoken || !chunks.length) { resolve(null); return; }
+      const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+      resolve(new File([blob], `voz-${Date.now()}.webm`, { type: blob.type }));
+    };
+    recorder.onerror = () => { teardown(); resolve(null); };
 
-      const finish = () => {
-        if (done) return;
-        done = true;
-        try { recorder.stop(); } catch { teardown(); resolve(null); }
-      };
+    const finish = () => {
+      if (done) return;
+      done = true;
+      try { recorder.stop(); } catch { teardown(); resolve(null); }
+    };
+    // Botón "Enviar ahora" en pantalla: corta la grabación sin esperar el silencio.
+    voiceFinishTurnRef.current = finish;
 
-      const restartSilenceTimer = () => {
-        window.clearTimeout(silenceTimer);
-        // Sólo se cierra el turno si ya se detectó voz: si no, sigue esperando.
-        silenceTimer = window.setTimeout(() => { if (hasSpoken) finish(); }, VOICE_SILENCE_MS);
-      };
+    const restartSilenceTimer = () => {
+      window.clearTimeout(silenceTimer);
+      // Sólo se cierra el turno si ya se detectó voz: si no, sigue esperando.
+      silenceTimer = window.setTimeout(() => { if (hasSpoken) finish(); }, VOICE_SILENCE_MS);
+    };
 
-      // Umbral de energía (RMS sobre la forma de onda, 0–1) para distinguir voz
-      // de silencio/ruido ambiente de una sala. Conservador a propósito: es
-      // preferible seguir escuchando de más que cortar a alguien a mitad de frase.
-      const SPEECH_RMS_THRESHOLD = 0.02;
-      const tick = () => {
-        if (done) return;
-        if (analyser) {
-          analyser.getByteTimeDomainData(timeData);
-          let sumSquares = 0;
-          for (let i = 0; i < timeData.length; i += 1) {
-            const normalized = (timeData[i] - 128) / 128;
-            sumSquares += normalized * normalized;
-          }
-          const rms = Math.sqrt(sumSquares / timeData.length);
-          if (rms > SPEECH_RMS_THRESHOLD) {
-            hasSpoken = true;
-            restartSilenceTimer();
-          }
+    // Umbral de energía (RMS sobre la forma de onda, 0–1) para distinguir voz
+    // de silencio/ruido ambiente de una sala. Conservador a propósito: es
+    // preferible seguir escuchando de más que cortar a alguien a mitad de frase.
+    const SPEECH_RMS_THRESHOLD = 0.02;
+    const tick = () => {
+      if (done) return;
+      if (analyser && timeData.length) {
+        analyser.getByteTimeDomainData(timeData);
+        let sumSquares = 0;
+        for (let i = 0; i < timeData.length; i += 1) {
+          const normalized = (timeData[i] - 128) / 128;
+          sumSquares += normalized * normalized;
         }
-        rafId = requestAnimationFrame(tick);
-      };
+        const rms = Math.sqrt(sumSquares / timeData.length);
+        if (rms > SPEECH_RMS_THRESHOLD) {
+          if (!hasSpoken) { hasSpoken = true; window.clearTimeout(noSpeechTimer); }
+          restartSilenceTimer();
+        }
+      }
+      rafId = requestAnimationFrame(tick);
+    };
 
-      setVoiceState("escuchando");
-      setVoiceHeard("");
+    setVoiceState("escuchando");
+    try {
       recorder.start();
-      tick();
-    }).catch(() => resolve(null));
+    } catch {
+      teardown();
+      resolve(null);
+      return;
+    }
+    tick();
+    // Respaldos: si nunca se detecta voz, o si se habla pero jamás llega el
+    // silencio (p. ej. ruido de fondo sostenido), el turno igual se cierra solo.
+    noSpeechTimer = window.setTimeout(() => { if (!hasSpoken) finish(); }, VOICE_MAX_WAIT_FOR_SPEECH_MS);
+    maxDurationTimer = window.setTimeout(finish, VOICE_MAX_TURN_MS);
   }), []);
 
   // Resume en voz alta lo que Tiza-IA propone crear, para confirmarlo hablando.
@@ -18169,10 +18201,23 @@ function AIChatMode({
   };
 
   const runVoiceConversation = React.useCallback(async () => {
+    let consecutiveEmpty = 0;
     while (voiceModeRef.current) {
       const audio = await listenOnce();
       if (!voiceModeRef.current) return;
-      if (!audio) continue;
+      if (!audio) {
+        // Sin esto, un micrófono roto o sin permiso quedaba "escuchando" para
+        // siempre en un bucle silencioso: tras varios turnos vacíos seguidos se
+        // avisa y se sale del modo voz en vez de fingir que sigue funcionando.
+        consecutiveEmpty += 1;
+        if (consecutiveEmpty >= 3) {
+          setVoiceError("No estoy captando el micrófono. Revisa los permisos o vuelve a intentar.");
+          stopVoiceMode();
+          return;
+        }
+        continue;
+      }
+      consecutiveEmpty = 0;
 
       setVoiceState("pensando");
       const outcome = await sendRef.current(audio);
@@ -18182,7 +18227,6 @@ function AIChatMode({
       // La transcripción llega junto con la respuesta (Gemini transcribe y
       // responde en un solo paso): se muestra y se usa para el sí/no pendiente.
       const heardText = (outcome.result.transcript || "").trim();
-      setVoiceHeard(heardText);
 
       const pending = pendingVoiceTurnRef.current;
       if (pending) {
@@ -18211,7 +18255,7 @@ function AIChatMode({
         await speak(answer);
       }
     }
-  }, [listenOnce, speak]);
+  }, [listenOnce, speak, stopVoiceMode]);
 
   const startVoiceMode = async () => {
     setVoiceError("");
@@ -18220,10 +18264,28 @@ function AIChatMode({
       return;
     }
     try {
-      // Pedir el micrófono antes de arrancar evita que el ciclo falle en silencio.
+      // El micrófono y el AudioContext se piden una vez y quedan abiertos para
+      // toda la sesión de voz (releaseVoiceResources los cierra al terminar).
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((track) => track.stop());
+      voiceStreamRef.current = stream;
+      const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (AudioContextCtor) {
+        const audioCtx = new AudioContextCtor();
+        // Varios navegadores (sobre todo iOS/Safari) crean el AudioContext
+        // "suspendido" hasta reanudarlo explícitamente: si se queda así, el
+        // analizador de volumen nunca detecta nada y la grabación se queda
+        // "escuchando" para siempre sin avisar. Por eso antes no funcionaba.
+        if (audioCtx.state === "suspended") {
+          try { await audioCtx.resume(); } catch { /* se sigue igual; el respaldo de tiempo máximo cubre este caso */ }
+        }
+        voiceAudioCtxRef.current = audioCtx;
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 512;
+        audioCtx.createMediaStreamSource(stream).connect(analyser);
+        voiceAnalyserRef.current = analyser;
+      }
     } catch {
+      releaseVoiceResources();
       setVoiceError("No se pudo acceder al micrófono. Revisa los permisos del navegador.");
       return;
     }
@@ -18604,44 +18666,42 @@ function AIChatMode({
             </div>
           </div>
           {voiceMode ? (
-            <div className="mt-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-700 px-4 py-3 shadow-md shadow-indigo-900/15" aria-live="polite">
-              <div className="flex items-center gap-3">
-                <span className="flex items-end gap-0.5" aria-hidden="true">
-                  {[6, 12, 8, 14, 7].map((height, index) => (
-                    <span
-                      key={index}
-                      className={`w-1 rounded-full bg-white ${voiceState === "escuchando" ? "animate-pulse" : voiceState === "hablando" ? "animate-bounce" : "opacity-50"}`}
-                      style={{ height, animationDelay: `${index * 90}ms` }}
-                    />
-                  ))}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[10px] font-black uppercase tracking-[0.14em] text-indigo-200">
-                    {voiceState === "escuchando" ? "Te escucho" : voiceState === "pensando" ? "Pensando" : "Hablando"}
-                  </p>
-                  <p className="truncate text-sm font-semibold text-white">
-                    {voiceHeard
-                      ? `Escuché: "${voiceHeard}"`
-                      : voiceState === "escuchando"
-                        ? "Habla cuando quieras; hago una pausa de 3 segundos para saber que terminaste."
-                        : voiceState === "pensando"
-                          ? "Transcribiendo y pensando…"
-                          : "…"}
-                  </p>
-                </div>
-                <button
-                  onClick={stopVoiceMode}
-                  className="shrink-0 rounded-xl bg-white/15 px-3 py-2 text-xs font-black text-white ring-1 ring-white/25 transition hover:bg-white/25"
-                >
-                  Terminar
-                </button>
-              </div>
+            <div className="mt-2 flex flex-col items-center gap-2.5 rounded-3xl bg-gradient-to-b from-slate-950 via-indigo-950 to-slate-950 px-4 py-5 shadow-lg shadow-indigo-950/40" aria-live="polite">
+              <button
+                type="button"
+                onClick={() => { if (voiceState === "escuchando") voiceFinishTurnRef.current?.(); }}
+                title={voiceState === "escuchando" ? "Toca para enviar ahora" : undefined}
+                className="relative grid h-24 w-24 shrink-0 place-items-center focus:outline-none"
+              >
+                {voiceState === "escuchando" ? (
+                  <>
+                    <span className="tz-orb-ring absolute inset-0 rounded-full border border-indigo-400/50" aria-hidden="true" />
+                    <span className="tz-orb-ring absolute inset-0 rounded-full border border-violet-400/50" style={{ animationDelay: "0.7s" }} aria-hidden="true" />
+                  </>
+                ) : null}
+                <span
+                  aria-hidden="true"
+                  className={`absolute inset-2 rounded-full bg-gradient-to-br from-indigo-400 via-violet-500 to-fuchsia-500 blur-md ${
+                    voiceState === "hablando" ? "tz-orb-speak" : voiceState === "pensando" ? "tz-orb-spin" : "tz-orb-breathe"
+                  }`}
+                />
+                <span aria-hidden="true" className="relative h-12 w-12 rounded-full bg-gradient-to-br from-white via-indigo-100 to-violet-200 shadow-inner" />
+              </button>
+              <p className="text-[11px] font-black uppercase tracking-[0.24em] text-indigo-200">
+                {voiceState === "escuchando" ? "Escuchando" : voiceState === "pensando" ? "Pensando" : "Hablando"}
+              </p>
+              <button
+                onClick={stopVoiceMode}
+                className="rounded-xl bg-white/10 px-3.5 py-1.5 text-[11px] font-black text-white ring-1 ring-white/20 transition hover:bg-white/20"
+              >
+                Terminar
+              </button>
             </div>
           ) : null}
           {voiceError ? <p className="mt-2 rounded-lg bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700 ring-1 ring-rose-100">{voiceError}</p> : null}
           <p className="mt-1.5 px-2 text-center text-[10px] text-slate-400 sm:text-[11px]">
             {voiceMode
-              ? "Puedes pedirle que cree casos, entrevistas o bitácoras: te dirá qué va a guardar y basta con responder “sí”."
+              ? "Habla cuando quieras. Toca el ícono si quieres enviar sin esperar la pausa; basta con decir “sí” para confirmar lo que proponga."
               : "Enter envía · Shift+Enter crea una línea · El micrófono transcribe tu voz cuando el navegador lo permite."}
           </p>
         </div>

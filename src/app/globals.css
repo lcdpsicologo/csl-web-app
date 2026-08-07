@@ -845,6 +845,45 @@ textarea::-moz-selection {
   border: 2px solid transparent;
 }
 
+/* Orbe del modo conversación de Tiza-IA: sin texto en vivo, solo un ícono que
+   respira/piensa/habla, como el modo de voz de ChatGPT. */
+@keyframes tzOrbBreathe {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+@keyframes tzOrbSpeak {
+  0%, 100% { transform: scale(0.92); }
+  30% { transform: scale(1.08); }
+  55% { transform: scale(0.97); }
+  80% { transform: scale(1.12); }
+}
+
+@keyframes tzOrbRing {
+  0% { transform: scale(0.82); opacity: 0.55; }
+  100% { transform: scale(1.65); opacity: 0; }
+}
+
+.tz-orb-breathe {
+  animation: tzOrbBreathe 2.6s var(--ease-in-out-quart) infinite;
+}
+
+.tz-orb-speak {
+  animation: tzOrbSpeak 0.85s ease-in-out infinite;
+}
+
+.tz-orb-spin {
+  animation: tzOrbSpin 2.4s linear infinite;
+}
+
+@keyframes tzOrbSpin {
+  to { transform: rotate(360deg); }
+}
+
+.tz-orb-ring {
+  animation: tzOrbRing 1.8s ease-out infinite;
+}
+
 @media print {
   body { background: white !important; }
   .no-print, button, nav, aside, footer, .tz-glass, .tz-backdrop { display: none !important; }
