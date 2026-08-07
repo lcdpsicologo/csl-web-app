@@ -3447,7 +3447,9 @@ function FeedbackHistoryModal({
                   <Copy className="h-3.5 w-3.5" /> {copied ? "¡Copiado!" : "Copiar"}
                 </button>
               </div>
-              <div className="max-h-80 overflow-y-auto whitespace-pre-wrap px-4 py-3 text-sm leading-relaxed text-slate-800">{report}</div>
+              <div className="max-h-80 overflow-y-auto px-4 py-3 text-sm leading-relaxed text-slate-800">
+                <MarkdownLite text={report} />
+              </div>
             </section>
           ) : null}
 
@@ -7269,7 +7271,7 @@ function OrientationPlanDialog({
             </button>
           ) : null}
         </div>
-        <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{text}</p>
+        <MarkdownLite text={text} className="space-y-1.5 text-sm leading-relaxed text-slate-700" />
       </section>
     );
   };
@@ -17418,6 +17420,56 @@ function FloatingTizaIA({
   );
 }
 
+function renderMarkdownInline(text: string, keyPrefix: string): React.ReactNode {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return (
+        <strong key={`${keyPrefix}-b${i}`} className="font-semibold text-slate-900">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    return <React.Fragment key={`${keyPrefix}-t${i}`}>{part}</React.Fragment>;
+  });
+}
+
+// Gemini suele responder con markdown ligero (**negrita**, listas con * o -);
+// esto lo traduce a JSX en vez de mostrar los símbolos crudos en pantalla.
+function MarkdownLite({ text, className }: { text?: string; className?: string }) {
+  if (!text) return null;
+  const lines = text.split("\n");
+  const blocks: React.ReactNode[] = [];
+  let listItems: string[] = [];
+  const flushList = () => {
+    if (listItems.length) {
+      blocks.push(
+        <ul key={`ul-${blocks.length}`} className="list-disc space-y-1 pl-5">
+          {listItems.map((item, i) => (
+            <li key={i}>{renderMarkdownInline(item, `li-${blocks.length}-${i}`)}</li>
+          ))}
+        </ul>,
+      );
+      listItems = [];
+    }
+  };
+  lines.forEach((line, idx) => {
+    const bulletMatch = line.match(/^\s*[*\-•]\s+(.*)$/);
+    if (bulletMatch) {
+      listItems.push(bulletMatch[1]);
+      return;
+    }
+    flushList();
+    if (line.trim()) {
+      blocks.push(
+        <p key={`p-${idx}`}>{renderMarkdownInline(line, `p-${idx}`)}</p>,
+      );
+    }
+  });
+  flushList();
+  return <div className={className || "space-y-1.5"}>{blocks}</div>;
+}
+
 type ChatResult = {
   intent?: "student_triage" | "course_update" | "bulk_import" | "file_analysis" | "answer";
   summary?: string;
@@ -17490,7 +17542,10 @@ const VOICE_SILENCE_MS = 3000;
 const VOICE_MAX_TURN_MS = 45_000;
 // Si en este tiempo no se detectó NADA de voz, se da por vacío el turno en vez
 // de seguir esperando indefinidamente (silencio real, mic sin señal, etc.).
-const VOICE_MAX_WAIT_FOR_SPEECH_MS = 20_000;
+// Corto a propósito: si el micrófono está roto o el navegador no entrega señal,
+// mejor avisar pronto que dejar a la persona mirando "Escuchando" sin saber
+// si de verdad está funcionando.
+const VOICE_MAX_WAIT_FOR_SPEECH_MS = 9_000;
 
 // Se prefiere una voz femenina en español; los navegadores no exponen el género,
 // así que se reconoce por los nombres habituales de las voces femeninas.
@@ -18202,57 +18257,69 @@ function AIChatMode({
 
   const runVoiceConversation = React.useCallback(async () => {
     let consecutiveEmpty = 0;
-    while (voiceModeRef.current) {
-      const audio = await listenOnce();
-      if (!voiceModeRef.current) return;
-      if (!audio) {
-        // Sin esto, un micrófono roto o sin permiso quedaba "escuchando" para
-        // siempre en un bucle silencioso: tras varios turnos vacíos seguidos se
-        // avisa y se sale del modo voz en vez de fingir que sigue funcionando.
-        consecutiveEmpty += 1;
-        if (consecutiveEmpty >= 3) {
-          setVoiceError("No estoy captando el micrófono. Revisa los permisos o vuelve a intentar.");
-          stopVoiceMode();
-          return;
-        }
-        continue;
-      }
-      consecutiveEmpty = 0;
-
-      setVoiceState("pensando");
-      const outcome = await sendRef.current(audio);
-      if (!voiceModeRef.current) return;
-      if (!outcome) { await speak("No pude procesar eso. ¿Lo repites?"); continue; }
-
-      // La transcripción llega junto con la respuesta (Gemini transcribe y
-      // responde en un solo paso): se muestra y se usa para el sí/no pendiente.
-      const heardText = (outcome.result.transcript || "").trim();
-
-      const pending = pendingVoiceTurnRef.current;
-      if (pending) {
-        pendingVoiceTurnRef.current = null;
-        if (AFFIRMATIVE.test(heardText)) {
-          // Se usa el turno tal como quedó en el historial: ya trae marcadas las
-          // propuestas, igual que si se hubieran aceptado desde la pantalla.
-          const storedTurn = turnsRef.current.find((turn) => turn.id === pending.turnId);
-          const count = storedTurn ? applyTurnRef.current(storedTurn) : 0;
-          await speak(count > 0 ? `Listo, guardé ${count} ${count === 1 ? "registro" : "registros"}.` : "No quedó nada por guardar.");
+    // Todo el cuerpo va en try/catch: sin esto, cualquier excepción inesperada
+    // (red caída, JSON raro, lo que sea) rompía el while por dentro y dejaba la
+    // pantalla congelada en "Escuchando" o "Pensando" para siempre, sin volver
+    // a intentar ni avisar nada.
+    try {
+      while (voiceModeRef.current) {
+        const audio = await listenOnce();
+        if (!voiceModeRef.current) return;
+        if (!audio) {
+          // Sin esto, un micrófono roto o sin permiso quedaba "escuchando" para
+          // siempre en un bucle silencioso: tras un par de turnos vacíos
+          // seguidos se avisa y se sale del modo voz en vez de fingir que
+          // sigue funcionando.
+          consecutiveEmpty += 1;
+          if (consecutiveEmpty >= 2) {
+            setVoiceError("No estoy captando el micrófono. Revisa los permisos del navegador (candado junto a la URL) y vuelve a intentar.");
+            stopVoiceMode();
+            return;
+          }
           continue;
         }
-        if (NEGATIVE.test(heardText)) {
-          await speak("Bien, no guardo nada. ¿En qué más te ayudo?");
-          continue;
-        }
-        // No fue sí ni no: se trata como una nueva consulta, con la respuesta ya recibida.
-      }
+        consecutiveEmpty = 0;
 
-      const proposals = describeProposals(outcome.result);
-      const answer = outcome.result.answer || outcome.result.summary || "Listo.";
-      if (proposals.length) {
-        pendingVoiceTurnRef.current = outcome;
-        await speak(`${answer} Tengo preparado ${proposals.join(", ")}. ¿Lo guardo?`);
-      } else {
-        await speak(answer);
+        setVoiceState("pensando");
+        const outcome = await sendRef.current(audio);
+        if (!voiceModeRef.current) return;
+        if (!outcome) { await speak("No pude procesar eso. ¿Lo repites?"); continue; }
+
+        // La transcripción llega junto con la respuesta (Gemini transcribe y
+        // responde en un solo paso): se muestra y se usa para el sí/no pendiente.
+        const heardText = (outcome.result.transcript || "").trim();
+
+        const pending = pendingVoiceTurnRef.current;
+        if (pending) {
+          pendingVoiceTurnRef.current = null;
+          if (AFFIRMATIVE.test(heardText)) {
+            // Se usa el turno tal como quedó en el historial: ya trae marcadas las
+            // propuestas, igual que si se hubieran aceptado desde la pantalla.
+            const storedTurn = turnsRef.current.find((turn) => turn.id === pending.turnId);
+            const count = storedTurn ? applyTurnRef.current(storedTurn) : 0;
+            await speak(count > 0 ? `Listo, guardé ${count} ${count === 1 ? "registro" : "registros"}.` : "No quedó nada por guardar.");
+            continue;
+          }
+          if (NEGATIVE.test(heardText)) {
+            await speak("Bien, no guardo nada. ¿En qué más te ayudo?");
+            continue;
+          }
+          // No fue sí ni no: se trata como una nueva consulta, con la respuesta ya recibida.
+        }
+
+        const proposals = describeProposals(outcome.result);
+        const answer = outcome.result.answer || outcome.result.summary || "Listo.";
+        if (proposals.length) {
+          pendingVoiceTurnRef.current = outcome;
+          await speak(`${answer} Tengo preparado ${proposals.join(", ")}. ¿Lo guardo?`);
+        } else {
+          await speak(answer);
+        }
+      }
+    } catch {
+      if (voiceModeRef.current) {
+        setVoiceError("Algo falló en la conversación por voz. Intenta de nuevo.");
+        stopVoiceMode();
       }
     }
   }, [listenOnce, speak, stopVoiceMode]);
@@ -18263,20 +18330,25 @@ function AIChatMode({
       setVoiceError("Este navegador no permite conversar por voz. Funciona en Chrome, Edge y Safari recientes (computador y celular).");
       return;
     }
+    // El AudioContext se crea y reanuda ANTES de pedir el micrófono (todavía
+    // dentro del mismo gesto de clic, sin ningún await de por medio): en Safari
+    // e iOS, si media un "await" antes de resume(), el navegador ya no lo
+    // considera parte del gesto del usuario y el contexto queda "suspendido"
+    // para siempre. Eso dejaba el analizador de volumen sin señal y el turno
+    // se quedaba "escuchando" indefinidamente sin avisar nunca del error.
+    const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const audioCtx = AudioContextCtor ? new AudioContextCtor() : null;
+    if (audioCtx?.state === "suspended") {
+      try { await audioCtx.resume(); } catch { /* se sigue igual; el respaldo de tiempo máximo cubre este caso */ }
+    }
     try {
       // El micrófono y el AudioContext se piden una vez y quedan abiertos para
       // toda la sesión de voz (releaseVoiceResources los cierra al terminar).
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       voiceStreamRef.current = stream;
-      const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (AudioContextCtor) {
-        const audioCtx = new AudioContextCtor();
-        // Varios navegadores (sobre todo iOS/Safari) crean el AudioContext
-        // "suspendido" hasta reanudarlo explícitamente: si se queda así, el
-        // analizador de volumen nunca detecta nada y la grabación se queda
-        // "escuchando" para siempre sin avisar. Por eso antes no funcionaba.
+      if (audioCtx) {
         if (audioCtx.state === "suspended") {
-          try { await audioCtx.resume(); } catch { /* se sigue igual; el respaldo de tiempo máximo cubre este caso */ }
+          try { await audioCtx.resume(); } catch { /* se sigue igual */ }
         }
         voiceAudioCtxRef.current = audioCtx;
         const analyser = audioCtx.createAnalyser();
@@ -18285,6 +18357,7 @@ function AIChatMode({
         voiceAnalyserRef.current = analyser;
       }
     } catch {
+      try { void audioCtx?.close(); } catch { /* ya cerrado */ }
       releaseVoiceResources();
       setVoiceError("No se pudo acceder al micrófono. Revisa los permisos del navegador.");
       return;
@@ -18746,8 +18819,8 @@ function ChatResultRenderer({
         <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${meta.tone}`}>{meta.label}</span>
         {result.courseTarget ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{result.courseTarget}</span> : null}
       </div>
-      {result.summary ? <p className="text-slate-800">{result.summary}</p> : null}
-      {result.answer ? <p className="whitespace-pre-wrap text-slate-700">{result.answer}</p> : null}
+      {result.summary ? <MarkdownLite text={result.summary} className="space-y-1.5 text-slate-800" /> : null}
+      {result.answer ? <MarkdownLite text={result.answer} className="space-y-1.5 text-slate-700" /> : null}
       {result.notes ? <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800"><strong>⚠</strong> {result.notes}</p> : null}
 
       {(result.involvedStudents || []).length > 0 ? (
